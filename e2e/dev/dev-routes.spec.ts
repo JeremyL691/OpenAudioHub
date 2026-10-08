@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// F24 (PLAN §7) in development: the demo workstation and the Plaud introspection route.
+// F24 in development: the demo workstation and the Plaud introspection route.
 // Runs under `next dev` (playwright.dev.config.ts, pnpm e2e:dev). The production build
 // returns 404 for both (e2e/regressions/dev-routes-production.spec.ts).
 // The first request in dev mode compiles the route, so the page loads get a longer timeout.

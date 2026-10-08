@@ -28,7 +28,7 @@ export function transcriptStatus(flags: {
 /**
  * Plaud recordings carry a device serial number. Uploaded files do not: the
  * upload route stores the sentinel "local" in that column (its schema is NOT NULL),
- * so it counts as no device (D-158).
+ * so it counts as no device.
  */
 export function recordingSource(
     deviceSn: string | null | undefined,

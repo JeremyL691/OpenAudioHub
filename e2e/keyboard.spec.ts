@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "./characterization/helpers";
 
-// Keyboard-only flows (PLAN §6 P7 T7.2). Each step uses keys, not the pointer.
+// Keyboard-only flows. Each step uses keys, not the pointer.
 
 // Opens the seeded long recording on the full page and waits for its audio.
 async function openLongRecordingByKeyboard(page: Page): Promise<void> {

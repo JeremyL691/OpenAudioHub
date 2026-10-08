@@ -96,7 +96,7 @@ describe("GET /api/export (regression: summary decryption)", () => {
     });
 });
 
-describe("GET /api/export (regression B-001: saved default format)", () => {
+describe("GET /api/export (regression: saved default format)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         (requireApiSession as unknown as Mock).mockResolvedValue({

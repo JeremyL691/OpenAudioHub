@@ -118,7 +118,7 @@ async def test_submit_accepts_exact_24_hour_limit_and_rejects_one_ms_over(
 
 
 async def test_legacy_riffado_job_id_field_is_still_accepted(tmp_path: Path, monkeypatch) -> None:
-    # Core builds from before the rename send `riffado_job_id` (D-025).
+    # Core builds from before the rename send `riffado_job_id`.
     monkeypatch.setenv("AUDIO_PIPELINE_DATA_DIR", str(tmp_path / "default-app"))
     from audio_pipeline.app import create_app
 

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OPENCODE_GO_SESSION_ID } from "@/lib/brand/legacy";
 
 const openAiCtor = vi.hoisted(() => vi.fn());
 
@@ -13,6 +12,7 @@ import {
 } from "@/lib/ai/provider-client";
 import {
     isTranscriptionModel,
+    OPENCODE_GO_DEFAULT_SESSION_ID,
     supportsTranscription,
 } from "@/lib/ai/provider-presets";
 
@@ -33,8 +33,28 @@ describe("createProviderClient", () => {
             expect.objectContaining({
                 baseURL: "https://opencode.ai/zen/go/v1",
                 defaultHeaders: {
-                    "x-opencode-session": OPENCODE_GO_SESSION_ID,
+                    "x-opencode-session": OPENCODE_GO_DEFAULT_SESSION_ID,
                 },
+            }),
+        );
+    });
+
+    it("uses OPENCODE_GO_SESSION_ID for the session header when set", () => {
+        vi.stubEnv("OPENCODE_GO_SESSION_ID", "my-session");
+        try {
+            createProviderClient(
+                {
+                    provider: "OpenCode Go",
+                    baseUrl: "https://opencode.ai/zen/go/v1",
+                },
+                "key",
+            );
+        } finally {
+            vi.unstubAllEnvs();
+        }
+        expect(openAiCtor).toHaveBeenCalledWith(
+            expect.objectContaining({
+                defaultHeaders: { "x-opencode-session": "my-session" },
             }),
         );
     });

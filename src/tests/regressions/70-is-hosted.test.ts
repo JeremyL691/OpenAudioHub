@@ -1,6 +1,6 @@
 /**
  * Issue #70 (IS_HOSTED env contract). The hosted switch and its billing,
- * Mynah, and admin variables were removed with the hosted surface (T1.4).
+ * Mynah, and admin variables were removed with the hosted surface.
  * The env schema must neither define nor read them.
  *
  * NEXT_PHASE is set so importing env.ts skips the runtime validation

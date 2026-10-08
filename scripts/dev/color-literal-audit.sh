@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Colour literal audit (PLAN §12.6). The interface takes its colors from the Chalk tokens in
+# Colour literal audit. The interface takes its colors from the Chalk tokens in
 # src/app/globals.css. A color literal may appear only in these sources:
 #   src/app/globals.css                                      the token definitions
 #   src/lib/notifications/email-templates/brand-colors.ts    the fixed colors (email palette, mark gradient, theme color)

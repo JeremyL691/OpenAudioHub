@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local Postgres for integration tests (PLAN T0.5).
+# Local Postgres for integration tests.
 #   up      start postgres:16 on 127.0.0.1:54329 and wait until healthy
 #   down    stop and remove the stack and its data
 #   status  show container state

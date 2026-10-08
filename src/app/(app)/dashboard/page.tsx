@@ -20,7 +20,7 @@ interface DashboardPageProps {
 
 /**
  * `/dashboard` is the overview. `?settings=<section>` still forwards to that
- * settings section (D-136). That mapping came from the onboarding link.
+ * settings section. That mapping came from the onboarding link.
  */
 export default async function DashboardPage({
     searchParams,

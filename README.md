@@ -8,6 +8,7 @@
 
 OpenAudioHub is a self-hosted web app for Plaud recordings. It syncs your recordings from your Plaud account, keeps the audio on storage you control, and produces transcripts and summaries with AI providers you choose. An optional audio pipeline prepares long recordings and processes them in durable, resumable chunks. When you decide to leave, you can export everything.
 
+[![CI](https://github.com/JeremyL691/OpenAudioHub/actions/workflows/ci.yml/badge.svg)](https://github.com/JeremyL691/OpenAudioHub/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Documentation](#documentation) · [Attribution](#attribution)
@@ -17,8 +18,8 @@ OpenAudioHub is self-hosted software. This project does not operate a hosted ser
 ## Features
 
 - **Plaud sync.** A background worker and open browser tabs pull new recordings from your Plaud account. Sync is idempotent, so an interrupted run resumes without creating duplicates. Plaud Note, Note Pro, and NotePin are supported.
-- **Transcription with the providers you choose.** OpenAI, Groq, OpenRouter, Together AI, Google Gemini, ElevenLabs Scribe with speaker labels, LM Studio, Ollama, and any other OpenAI-compatible endpoint. Browser transcription runs Whisper on your device and needs no API key.
-- **Summaries.** Built-in and custom prompts, a provider choice for each recording, and optional summaries generated automatically after transcription.
+- **Transcription with the providers you choose.** OpenAI, Groq, OpenRouter, Together AI, Google Gemini, ElevenLabs Scribe with speaker labels, SiliconFlow (China), LM Studio, Ollama, and any other OpenAI-compatible endpoint. OpenCode Go can write summaries and titles. Browser transcription runs Whisper on your device and needs no API key.
+- **Summaries.** Markdown templates for meeting minutes, interviews, calls, lectures, brainstorms, and voice memos, plus your own prompts. Choose the output language for each run (Chinese, English, Japanese, Korean, or the transcript's own), copy the result, or download it as Markdown or TXT. Summaries can also be generated automatically after transcription.
 - **Long-audio pipeline (optional).** Speech is detected locally with Silero VAD, long silences are skipped, and the audio is processed in chunks. Jobs keep checkpoints, support retry and cancellation, and resume after a restart. Transcript segments link back to the original audio.
 - **Your storage.** Audio can live on the local filesystem or in any S3-compatible bucket, including AWS S3, Cloudflare R2, MinIO, and Backblaze B2.
 - **Notifications.** Bark for iOS push, browser notifications, and email over SMTP.

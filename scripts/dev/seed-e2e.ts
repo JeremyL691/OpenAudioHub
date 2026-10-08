@@ -1,4 +1,4 @@
-// Seeds the E2E account and six recordings (PLAN T0.7).
+// Seeds the E2E account and six recordings.
 // The account, AI provider, API key, and webhook go through the running app's own
 // routes. Recordings, transcripts, summaries, and pipeline jobs are written with the
 // app's Drizzle schema and field encryption, so the app reads them as it reads user

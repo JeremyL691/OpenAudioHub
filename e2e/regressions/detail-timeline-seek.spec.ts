@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "../characterization/helpers";
 
-// Regression guard for defect fix ① (T5.3b): the full recording page wires its
+// Regression guard for defect fix ①: the full recording page wires its
 // timeline to the player. A click seeks the audio, the highlight moves with the
 // playback position, and with Follow playback on the active segment stays in view.
 

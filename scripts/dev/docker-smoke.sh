@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Docker smoke stack for the long-audio run (PLAN T7.4).
+# Docker smoke stack for the long-audio run.
 #   env     create .dev-artifacts/oah-e2e.env with generated secrets (values are not printed)
 #   up      build and start the stack on 127.0.0.1:3100 and wait until healthy
 #   down    stop the stack and remove its volumes (oah-e2e_* only)

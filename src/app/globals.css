@@ -5,8 +5,10 @@
 
 /*
  * Design tokens. The Chalk theme comes from TweakCN (tweakcn.com/themes/...).
- * The brand, waveform, transcript, and status tokens extend it (docs/dev/DESIGN.md).
- * Brand colors are used only where docs/dev/DESIGN.md lists them.
+ * The brand, waveform, transcript, and status tokens extend it. The brand
+ * gradient is kept to the logo, the waveform, the active transcript line, the
+ * pipeline progress bar, the landing hero, empty-state art, and onboarding
+ * steps. Everything else uses the Chalk primary.
  */
 :root {
     --background: oklch(0.9745 0.0079 253.8524);

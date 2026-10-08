@@ -170,7 +170,7 @@ export function SyncButton({
                     )}
                     {/* Icon only up to lg: at md the library's header also holds
                         the search and upload buttons, and would overflow the
-                        content column (D-154). The button keeps its aria-label. */}
+                        content column. The button keeps its aria-label. */}
                     <span className="hidden lg:inline">{label}</span>
                 </Button>
             </TooltipTrigger>

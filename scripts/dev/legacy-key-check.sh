@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks that a legacy `op_` API key authenticates on a migrated instance (PLAN §12.5).
+# Checks that a legacy `op_` API key authenticates on a migrated instance.
 #
 # A user's real key cannot be read here, and the source database held no legacy key
 # rows at export time. So the check mints its own legacy-shaped key and hashes it inside

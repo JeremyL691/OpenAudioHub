@@ -36,7 +36,7 @@ test.describe("library", () => {
         page,
     }) => {
         // The seeded "Processing now" recording has a running pipeline job in
-        // the transcribing phase, and "Paused for disk" a paused one (D-203).
+        // the transcribing phase, and "Paused for disk" a paused one.
         const list = page.getByTestId("recording-list");
         const processingRow = page
             .getByTestId("recording-row")

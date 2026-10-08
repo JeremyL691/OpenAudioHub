@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Migrate an existing Riffado stack into an OpenAudioHub deployment (PLAN §6 P8, T8.2).
+# Migrate an existing Riffado stack into an OpenAudioHub deployment.
 #
 #   1. preflight (read-only): the old database is healthy and no pipeline job is still active
 #      (waits up to WAIT_JOBS_SECONDS, then exits). A combined run also needs the old app healthy.

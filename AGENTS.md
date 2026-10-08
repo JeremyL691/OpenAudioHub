@@ -1,17 +1,5 @@
 # OpenAudioHub Agent Guidelines
 
-## Program rules
-
-This repository is the OpenAudioHub rebuild. The plan, task list, decisions, and handoff state live in `docs/dev/`, starting with `docs/dev/PLAN.md`. These rules apply to every agent working here and take precedence over the general rules below.
-
-1. **Resume first.** Before any work, follow the RESUME protocol in `docs/dev/PLAN.md` §9.5. Read `docs/dev/HANDOFF.md`, `docs/dev/TASKS.md`, the end of `docs/dev/PROGRESS_LOG.md`, the titles in `docs/dev/DECISIONS.md`, and `docs/dev/BLOCKERS.md`. Then reconcile git state with the handoff.
-2. **Authorized actions.** Local commits, `pnpm dev`, `pnpm build`, `pnpm db:generate` (including `--custom`), tests, and `docker compose up` and `down` for the project names `oah-test`, `oah-e2e`, and `openaudiohub-rehearsal` do not need separate confirmation.
-3. **Forbidden.** `git push`; creating remote repositories; `git reset --hard`, `git clean -fd`, `git stash`, and `git checkout .`; `git commit --no-verify`; force pushes; history rewrites. Stage explicit paths only, never `git add -A` or `git add .`. Do not modify the legacy checkout or its Docker volumes and containers. Read-only dumps and archives are allowed. Do not stop the legacy stack or take its port before the gated cutover in `docs/dev/PLAN.md` (T8.4).
-4. **Approved removals and renames.** Removal of hosted-only code, renames of public protocols without aliases, and the custom-migration exception (D-024) are approved. Never remove a feature that self-hosters can reach. For anything the plan does not cover, choose the most conservative option, record it in `docs/dev/DECISIONS.md` as `D-1xx`, then continue.
-5. **Gates.** Creating a GitHub repository, pushing, the production cutover, and deleting data volumes are gated. Record them as `[GATE]` in `docs/dev/BLOCKERS.md`, and do not perform them.
-6. **Commit trailers.** Commit messages follow `docs/dev/PLAN.md` §9.4.
-7. **Secrets.** Never print values from `.env` in logs, commits, or output. Refer to variable names only.
-
 ## First task
 
 If the user did not give a concrete task, read this file, `README.md`, and `BRANCHING.md`. Then ask which area to work on: sync, transcription, AI, storage, UI, settings, onboarding, notifications, the audio pipeline, or docs.
@@ -110,7 +98,7 @@ Agents do not cut releases. Maintainers do. The procedure is in [BRANCHING.md](B
 The deploy surface is a contract with self-hosters. It covers the database schema, environment variables, `docker-compose.yml`, the image tags, and the installer.
 
 - **Schema changes are additive by default.** Dropping a column or table needs a user-impact assessment and a migration plan. See the database migrations rules below.
-- **Environment variable renames.** Either keep the old name working for one release, with a deprecation warning, or record the decision in `docs/dev/DECISIONS.md` and document the break in `docs/MIGRATION_FROM_RIFFADO.md` and `CHANGELOG.md`.
+- **Environment variable renames.** Either keep the old name working for one release, with a deprecation warning, or document the break in `docs/MIGRATION_FROM_RIFFADO.md` and `CHANGELOG.md`.
 - **`docker-compose.yml` is a user contract.** Breaking structural changes need a changelog migration note.
 - **The installer is part of the deploy surface.** `scripts/install.sh` ships as a release asset, and `src/lib/install-commands.ts` points users at it. Breaking changes need a changelog note.
 - **Sync changes need a real-account test.** Test against a real Plaud account before you ship anything that touches `src/lib/sync/` or `src/lib/plaud/`.
@@ -171,7 +159,7 @@ Edit `src/db/schema.ts` first, then run `pnpm db:generate` to produce the migrat
 
 The same rule covers rebases, conflict resolution, and renumbering. Rerun `pnpm db:generate` against the rebased schema. Never edit `meta/_journal.json` or the snapshots by hand. Never delete or merge migrations that Drizzle has already produced, even unreleased ones. Stacked changes in one release ship as separate files.
 
-If `drizzle-kit` generates SQL that re-adds columns that already exist, the snapshots have drifted from reality. Fix the drift. Do not patch around it by hand. Open items are listed in `docs/dev/BLOCKERS.md`.
+If `drizzle-kit` generates SQL that re-adds columns that already exist, the snapshots have drifted from reality. Fix the drift. Do not patch around it by hand.
 
 ## Architecture notes
 
@@ -229,4 +217,3 @@ Each backend is a file in `src/lib/notifications/`, such as `bark.ts` or `email.
 - [CHANGELOG.md](CHANGELOG.md): version history.
 - [SECURITY.md](SECURITY.md): vulnerability reporting.
 - [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md): upgrading an earlier installation.
-- [docs/dev/PLAN.md](docs/dev/PLAN.md): the rebuild plan, and the source of the program rules above.

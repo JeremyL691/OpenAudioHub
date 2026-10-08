@@ -263,7 +263,7 @@ class JobStore:
 
 
 def _rename_legacy_job_column(db: sqlite3.Connection) -> None:
-    """Renames jobs.riffado_job_id to core_job_id on databases created before the rename (D-025)."""
+    """Renames jobs.riffado_job_id to core_job_id on databases created before the rename."""
     columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
     if "riffado_job_id" in columns and "core_job_id" not in columns:
         db.execute("ALTER TABLE jobs RENAME COLUMN riffado_job_id TO core_job_id")

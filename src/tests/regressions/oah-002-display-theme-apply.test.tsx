@@ -11,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DisplaySection } from "@/components/settings-sections/display-section";
 import { ThemeProvider } from "@/components/theme-provider";
 
-// Regression for defect fix ② (PLAN D-018, T5.5): choosing a display theme
-// applies it to the page at once. Before T5.5 the section kept its own copy of
+// Regression for defect fix ②: choosing a display theme
+// applies it to the page at once. Before the fix the section kept its own copy of
 // the choice, so the page changed only after a reload.
 
 let fetchMock: ReturnType<typeof vi.fn>;

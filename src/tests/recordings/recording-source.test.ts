@@ -7,7 +7,7 @@ describe("recordingSource", () => {
     });
 
     it("labels an uploaded file as Upload, including the upload sentinel", () => {
-        // The upload route stores "local" in the NOT NULL device column (D-158).
+        // The upload route stores "local" in the NOT NULL device column.
         expect(recordingSource("local")).toBe("Upload");
         expect(recordingSource("")).toBe("Upload");
         expect(recordingSource(null)).toBe("Upload");

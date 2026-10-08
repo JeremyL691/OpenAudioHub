@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "../characterization/helpers";
 
-// Full-page screenshot matrix: route x width x colour scheme (PLAN §6 P0.8).
+// Full-page screenshot matrix: route x width x colour scheme.
 // Output lands in .dev-artifacts/screenshots/<SHOT_SET>/ (git-ignored). SHOT_SET
 // defaults to "before"; the redesign phases write "after" with the same matrix.
 const SHOT_SET = process.env.SHOT_SET ?? "before";

@@ -67,6 +67,9 @@ services:
       AUDIO_PIPELINE_BASE_URL: ${AUDIO_PIPELINE_BASE_URL:-http://audio-pipeline:8100}
       AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:?Set AUDIO_PIPELINE_TOKEN in .env}
 
+      # OpenCode Go session header (optional; defaults to "openaudiohub")
+      OPENCODE_GO_SESSION_ID: ${OPENCODE_GO_SESSION_ID:-}
+
       # SMTP (optional: password reset + email notifications)
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}

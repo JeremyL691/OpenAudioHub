@@ -1,10 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "./characterization/helpers";
 
-// No page scrolls sideways from a 320 px phone to a 1440 px desktop (PLAN §6 P7
-// T7.2). A page overflows when its content is wider than the viewport.
+// No page scrolls sideways from a 320 px phone to a 1440 px desktop. A page overflows when its content is wider than the viewport.
 
-// 1280 is a common laptop width. The detail page overflowed there (D-158), which the
+// 1280 is a common laptop width. The detail page overflowed there, which the
 // other widths did not reveal.
 const WIDTHS = [320, 360, 768, 1024, 1280, 1440];
 

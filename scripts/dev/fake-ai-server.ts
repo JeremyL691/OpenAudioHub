@@ -1,4 +1,4 @@
-// Deterministic OpenAI-compatible stub for E2E and the long-audio smoke run (PLAN T0.7).
+// Deterministic OpenAI-compatible stub for E2E and the long-audio smoke run.
 // Serves GET /v1/models, POST /v1/audio/transcriptions (verbose_json), and
 // POST /v1/chat/completions. Responses do not depend on the request body.
 // Listens on 127.0.0.1 only; nothing here calls out to the network.
