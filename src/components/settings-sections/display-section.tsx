@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { type Theme, useTheme } from "@/hooks/use-theme";
 
 const dateTimeFormatOptions = [
     {
@@ -56,7 +57,8 @@ export function DisplaySection() {
     const [recordingListSortOrder, setRecordingListSortOrder] =
         useState("newest");
     const [itemsPerPage, setItemsPerPage] = useState(50);
-    const [theme, setTheme] = useState("system");
+    // The theme applies to the page at once and is saved to the account.
+    const { theme, setTheme } = useTheme("system");
     const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
     useEffect(() => {
@@ -70,7 +72,6 @@ export function DisplaySection() {
                         data.recordingListSortOrder ?? "newest",
                     );
                     setItemsPerPage(data.itemsPerPage ?? 50);
-                    setTheme(data.theme ?? "system");
                 }
             } catch (error) {
                 console.error("Failed to fetch settings:", error);
@@ -94,7 +95,6 @@ export function DisplaySection() {
             dateTimeFormat?: string;
             recordingListSortOrder?: string;
             itemsPerPage?: number;
-            theme?: string;
         },
         debounceMs?: number,
     ) => {
@@ -110,10 +110,6 @@ export function DisplaySection() {
         if (updates.itemsPerPage !== undefined) {
             previousValues.itemsPerPage = itemsPerPage;
             setItemsPerPage(updates.itemsPerPage);
-        }
-        if (updates.theme !== undefined) {
-            previousValues.theme = theme;
-            setTheme(updates.theme);
         }
 
         if (saveTimeoutRef.current) {
@@ -144,10 +140,6 @@ export function DisplaySection() {
                 if (updates.itemsPerPage !== undefined) {
                     const prev = previousValues.itemsPerPage;
                     if (typeof prev === "number") setItemsPerPage(prev);
-                }
-                if (updates.theme !== undefined) {
-                    const prev = previousValues.theme;
-                    if (typeof prev === "string") setTheme(prev);
                 }
                 toast.error("Failed to save settings. Changes reverted.");
             }
@@ -281,8 +273,7 @@ export function DisplaySection() {
                     <Select
                         value={theme}
                         onValueChange={(value) => {
-                            setTheme(value);
-                            handleDisplaySettingChange({ theme: value });
+                            setTheme(value as Theme);
                         }}
                         disabled={isSavingSettings}
                     >

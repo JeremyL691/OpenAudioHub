@@ -311,10 +311,10 @@ function ProvidersList({
                 return (
                     <div
                         key={provider.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+                        className="flex flex-col gap-3 p-4 border rounded-lg hover:bg-accent transition-colors sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <h3 className="font-semibold">
                                     {provider.provider}
                                 </h3>
@@ -340,12 +340,13 @@ function ProvidersList({
                                 </p>
                             )}
                         </div>
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-4">
                             {!provider.isDefaultTranscription && (
                                 <Button
                                     onClick={() => onSetDefault(provider.id)}
                                     variant="outline"
                                     size="sm"
+                                    className="h-10 sm:h-8"
                                 >
                                     Use for transcription
                                 </Button>
@@ -354,6 +355,7 @@ function ProvidersList({
                                 onClick={() => onEdit(provider)}
                                 variant="outline"
                                 size="icon"
+                                className="size-10 sm:size-9"
                             >
                                 <Pencil className="size-4" />
                             </Button>
@@ -361,6 +363,7 @@ function ProvidersList({
                                 onClick={() => onDelete(provider.id)}
                                 variant="outline"
                                 size="icon"
+                                className="size-10 sm:size-9"
                                 disabled={deletingId === provider.id}
                             >
                                 {deletingId === provider.id ? (
