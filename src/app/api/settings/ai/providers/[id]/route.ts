@@ -4,10 +4,8 @@ import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
 import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
-import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
-import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { validateElevenLabsBaseUrl } from "@/lib/transcription/elevenlabs-transcribe";
 
@@ -51,21 +49,8 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    // On hosted, the app process can't reach the user's machine — reject
-    // localhost / loopback baseUrls (e.g. LM Studio, Ollama) with a clear
-    // message. Self-host accepts everything.
-    const baseUrlCheck = validateAiBaseUrl(baseUrl, {
-        isHosted: env.IS_HOSTED,
-    });
-    if (!baseUrlCheck.ok) {
-        throw new AppError(ErrorCode.INVALID_INPUT, baseUrlCheck.message, 400, {
-            field: "baseUrl",
-        });
-    }
     if (existing.provider === "ElevenLabs") {
-        const elevenLabsBaseUrlCheck = validateElevenLabsBaseUrl(baseUrl, {
-            isHosted: env.IS_HOSTED,
-        });
+        const elevenLabsBaseUrlCheck = validateElevenLabsBaseUrl(baseUrl);
         if (!elevenLabsBaseUrlCheck.ok) {
             throw new AppError(
                 ErrorCode.INVALID_INPUT,

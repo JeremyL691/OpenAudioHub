@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 vi.mock("@/lib/env", () => ({
     env: {
         APP_URL: "https://riffado.example",
-        IS_HOSTED: false,
         WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined,
     },
 }));

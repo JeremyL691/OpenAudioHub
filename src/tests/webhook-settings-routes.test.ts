@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/lib/env", () => ({
     env: {
-        IS_HOSTED: false,
         WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined,
     },
 }));

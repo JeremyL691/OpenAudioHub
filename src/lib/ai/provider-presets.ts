@@ -107,26 +107,8 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
     },
 ] as const;
 
-export const LOCAL_PRESET_NAMES: ReadonlySet<string> = new Set([
-    "LM Studio",
-    "Ollama",
-]);
-
-export function getVisiblePresets({
-    isHosted,
-}: {
-    isHosted: boolean;
-}): readonly ProviderPreset[] {
-    if (!isHosted) return PROVIDER_PRESETS;
-    return PROVIDER_PRESETS.filter((p) => !LOCAL_PRESET_NAMES.has(p.name));
-}
-
 export function findPreset(name: string): ProviderPreset | undefined {
     return PROVIDER_PRESETS.find((p) => p.name === name);
-}
-
-export function isLocalPreset(name: string): boolean {
-    return LOCAL_PRESET_NAMES.has(name);
 }
 
 export function getTranscriptionStyle(

@@ -1,11 +1,7 @@
-import {
-    HostedAuthChrome,
-    SelfHostAuthChrome,
-} from "@/components/auth/auth-chrome";
+import { SelfHostAuthChrome } from "@/components/auth/auth-chrome";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 import { resetPasswordMode } from "@/lib/auth/reset-password-mode";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
-import { env } from "@/lib/env";
 
 interface ResetPasswordPageProps {
     // Next.js delivers query params as `string | string[] | undefined` --
@@ -38,14 +34,6 @@ export default async function ResetPasswordPage({
         mode === "invalid"
             ? "This link is missing or has expired."
             : "Choose a password you don't use anywhere else.";
-
-    if (env.IS_HOSTED) {
-        return (
-            <HostedAuthChrome title={title} subtitle={subtitle}>
-                <ResetPasswordForm token={token} error={error} />
-            </HostedAuthChrome>
-        );
-    }
 
     return (
         <SelfHostAuthChrome title={title} subtitle={subtitle}>

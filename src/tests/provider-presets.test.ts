@@ -2,35 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
     findPreset,
     getTranscriptionStyle,
-    getVisiblePresets,
-    isLocalPreset,
-    LOCAL_PRESET_NAMES,
     PROVIDER_PRESETS,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
 
 describe("provider-presets", () => {
-    describe("visibility", () => {
-        it("shows all presets on self-host and only non-local presets on hosted", () => {
-            expect(getVisiblePresets({ isHosted: false })).toEqual(
-                PROVIDER_PRESETS,
-            );
-            expect(getVisiblePresets({ isHosted: true })).toEqual(
-                PROVIDER_PRESETS.filter((p) => !LOCAL_PRESET_NAMES.has(p.name)),
-            );
-        });
-    });
-
-    describe("isLocalPreset", () => {
-        it("matches LOCAL_PRESET_NAMES", () => {
-            for (const preset of PROVIDER_PRESETS) {
-                expect(isLocalPreset(preset.name)).toBe(
-                    LOCAL_PRESET_NAMES.has(preset.name),
-                );
-            }
-        });
-    });
-
     describe("findPreset", () => {
         it("returns the preset by name", () => {
             expect(findPreset("OpenAI")?.defaultModel).toBe("whisper-1");
@@ -80,15 +56,6 @@ describe("provider-presets", () => {
             expect(preset?.transcriptionStyle).toBe("elevenlabs");
             expect(preset?.defaultModel).toBe("scribe_v2");
             expect(preset?.knownTranscriptionModels).toContain("scribe_v1");
-        });
-
-        it("is not a local preset and stays visible on hosted", () => {
-            expect(isLocalPreset("ElevenLabs")).toBe(false);
-            expect(
-                getVisiblePresets({ isHosted: true }).some(
-                    (p) => p.name === "ElevenLabs",
-                ),
-            ).toBe(true);
         });
     });
 

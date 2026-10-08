@@ -31,7 +31,6 @@ interface SettingsContentProps {
     activeSection: SettingsSection;
     initialProviders?: Provider[];
     onReRunOnboarding?: () => void;
-    isHosted?: boolean;
     /** Forwarded to `PlaudAccountSection`; see its prop doc. */
     onPlaudReconnected?: () => void;
 }
@@ -40,17 +39,11 @@ export function SettingsContent({
     activeSection,
     initialProviders = EMPTY_PROVIDERS,
     onReRunOnboarding,
-    isHosted = false,
     onPlaudReconnected,
 }: SettingsContentProps) {
     switch (activeSection) {
         case "providers":
-            return (
-                <ProvidersSection
-                    initialProviders={initialProviders}
-                    isHosted={isHosted}
-                />
-            );
+            return <ProvidersSection initialProviders={initialProviders} />;
         case "api-keys":
             return <ApiKeysSection />;
         case "webhooks":
@@ -72,7 +65,7 @@ export function SettingsContent({
         case "export":
             return <ExportSection onReRunOnboarding={onReRunOnboarding} />;
         case "storage":
-            return <StorageSection isHosted={isHosted} />;
+            return <StorageSection />;
         case "dev":
             if (process.env.NODE_ENV === "production") return null;
             return <DevSection />;

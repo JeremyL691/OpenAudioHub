@@ -10,7 +10,6 @@ import {
 } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
-import { env } from "@/lib/env";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
 import { serializeRecording } from "@/types/recording";
 
@@ -124,7 +123,6 @@ export default async function DashboardPage() {
             userEmail={session.user.email ?? null}
             initialSettings={initialSettings}
             plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
-            isHosted={env.IS_HOSTED}
         />
     );
 }

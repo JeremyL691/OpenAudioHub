@@ -35,10 +35,6 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/entitlements", () => ({
-    isHostedLockedOut: vi.fn().mockResolvedValue(false),
-}));
-
 vi.mock("@/lib/env", () => ({
     env: {
         WHISPER_MAX_BYTES: 24 * 1024 * 1024,
@@ -449,21 +445,6 @@ describe("Transcription", () => {
             );
             return { tx, txInsert, txInsertValues, txUpdate, txUpdateSet };
         }
-
-        it("returns HOSTED_LOCKED_OUT (not TRANSCRIPTION_FAILED) when the account is lapsed", async () => {
-            const { isHostedLockedOut } = await import("@/lib/entitlements");
-            (isHostedLockedOut as Mock).mockResolvedValueOnce(true);
-            const result = await storeBrowserTranscription({
-                userId: mockUserId,
-                recordingId: mockRecordingId,
-                text: "hello world",
-                detectedLanguage: "en",
-                model: "whisper-base",
-            });
-            expect(result.success).toBe(false);
-            expect(result.errorCode).toBe("HOSTED_LOCKED_OUT");
-            expect(emitEvent).not.toHaveBeenCalled();
-        });
 
         it("returns RECORDING_NOT_FOUND when recording does not exist or is tombstoned", async () => {
             mockOwnershipLookup([]);

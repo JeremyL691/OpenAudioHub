@@ -10,7 +10,6 @@ import {
 } from "@/db/schema";
 import { sniffAudio } from "@/lib/audio/sniff";
 import { encryptText } from "@/lib/encryption/fields";
-import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
@@ -56,7 +55,7 @@ interface SyncResult {
      * message for the client, but these aren't bugs -- the caller uses
      * this to skip exception capture for them.
      */
-    skipped?: "no_connection" | "suspended" | "locked_out";
+    skipped?: "no_connection" | "suspended";
     /** True when this call coalesced into an already-running in-process sync. */
     inProgress?: boolean;
     /**
@@ -262,22 +261,11 @@ async function hasUnseenPlaudContentGaps(
     return Boolean(row);
 }
 
-/**
- * Mutable per-sync-run flag. Once a new recording is blocked by the
- * storage cap, every subsequent new recording in the same run is skipped
- * without re-querying the user's byte total (new recordings only grow
- * storage, so once over cap it stays over within the run).
- */
-interface CapState {
-    blocked: boolean;
-}
-
 async function processRecording(
     plaudRecording: PlaudRecording,
     context: SyncContext,
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
-    capState: CapState,
     seenRecordingIds: Set<string>,
 ): Promise<{
     status: "new" | "updated" | "skipped" | "error";
@@ -285,7 +273,6 @@ async function processRecording(
     filename?: string;
     error?: string;
     importCandidate?: ImportCandidate;
-    capExceeded?: boolean;
 }> {
     try {
         const [existingRecording] = await db
@@ -336,15 +323,6 @@ async function processRecording(
         // Tombstone: suppress resurrection of user-deleted recordings (#56).
         if (existingRecording?.deletedAt) {
             return { status: "skipped" };
-        }
-
-        // Storage cap: gate NEW recordings before spending Plaud egress.
-        // Updates replace an existing blob (roughly size-neutral) and are
-        // left untouched so a near-cap user can still receive edits.
-        if (!existingRecording) {
-            if (capState.blocked) {
-                return { status: "skipped", capExceeded: true };
-            }
         }
 
         const audioBuffer = await plaudClient.downloadRecording(
@@ -473,7 +451,6 @@ async function processBatch(
     context: SyncContext,
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
-    capState: CapState,
     seenRecordingIds: Set<string>,
 ): Promise<{
     newCount: number;
@@ -482,7 +459,6 @@ async function processBatch(
     newRecordingIds: string[];
     newRecordingNames: string[];
     importCandidates: ImportCandidate[];
-    capExceeded: boolean;
 }> {
     const results = await Promise.allSettled(
         batch.map((rec) =>
@@ -491,7 +467,6 @@ async function processBatch(
                 context,
                 plaudClient,
                 storage,
-                capState,
                 seenRecordingIds,
             ),
         ),
@@ -499,7 +474,6 @@ async function processBatch(
 
     let newCount = 0;
     let updatedCount = 0;
-    let capExceeded = false;
     const errors: string[] = [];
     const newRecordingIds: string[] = [];
     const newRecordingNames: string[] = [];
@@ -507,15 +481,8 @@ async function processBatch(
 
     for (const result of results) {
         if (result.status === "fulfilled") {
-            const {
-                status,
-                recordingId,
-                filename,
-                error,
-                importCandidate,
-                capExceeded: ce,
-            } = result.value;
-            if (ce) capExceeded = true;
+            const { status, recordingId, filename, error, importCandidate } =
+                result.value;
             if (status === "new" && recordingId) {
                 newCount++;
                 newRecordingIds.push(recordingId);
@@ -538,14 +505,12 @@ async function processBatch(
         newRecordingIds,
         newRecordingNames,
         importCandidates,
-        capExceeded,
     };
 }
 
 /** Paginated, batched sync. Coalesces concurrent same-user calls in-process. */
 export async function syncRecordingsForUser(
     userId: string,
-    _trigger: "manual" | "background" = "manual",
 ): Promise<SyncResult> {
     const inFlight = inFlightSyncs.get(userId);
     if (inFlight) {
@@ -625,17 +590,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             return result;
         }
 
-        // Hosted lockout: a lapsed account is read-only. Existing data
-        // stays reachable; no new recordings are pulled until the user
-        // subscribes again. No-op on self-host.
-        if (await isHostedLockedOut(userId)) {
-            result.errors.push(
-                "Your hosted plan has lapsed. Subscribe to resume sync, or export your data.",
-            );
-            result.skipped = "locked_out";
-            return result;
-        }
-
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
@@ -656,7 +610,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
-        const capState: CapState = { blocked: false };
         const seenRecordingIds = new Set<string>();
 
         let page = 0;
@@ -697,7 +650,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     context,
                     plaudClient,
                     storage,
-                    capState,
                     seenRecordingIds,
                 );
 
@@ -714,11 +666,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 importCandidates.push(...batchResult.importCandidates);
             }
 
-            // Once over the storage cap, every further new recording is a
-            // no-op; stop paginating to save Plaud API calls.
-            if (capState.blocked) {
-                hasMore = false;
-            } else if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
+            if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
                 hasMore = false;
             } else if (
                 pageNew === 0 &&
@@ -748,12 +696,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             }
 
             page++;
-        }
-
-        if (capState.blocked) {
-            result.errors.push(
-                "Storage limit reached: some recordings were not synced. Upgrade or free up space to continue.",
-            );
         }
 
         const resolvedWorkspaceId = plaudClient.workspaceId;

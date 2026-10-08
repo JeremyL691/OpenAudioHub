@@ -1,7 +1,6 @@
 import {
     Bell,
     Bot,
-    CreditCard,
     Download,
     FileText,
     HardDrive,
@@ -30,7 +29,7 @@ export type NavItem = {
  * Lives at module scope so the array reference is stable across
  * renders (would otherwise bust memoization on every dialog mount).
  */
-const baseSettingsNavGroups: { label: string; items: NavItem[] }[] = [
+export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     {
         label: "AI",
         items: [
@@ -85,38 +84,12 @@ const baseSettingsNavGroups: { label: string; items: NavItem[] }[] = [
 ];
 
 /**
- * Build the settings nav. `isHosted` toggles the Billing group, which
- * is meaningless on self-host.
+ * Flat list of every nav item. Keep this the single source of truth for
+ * keyboard nav / hash routing / localStorage. Changing the group structure
+ * must not break index-based iteration.
  */
-export function buildSettingsNavGroups(opts: {
-    isHosted: boolean;
-}): { label: string; items: NavItem[] }[] {
-    return [
-        ...(opts.isHosted
-            ? [
-                  {
-                      label: "Account",
-                      items: [
-                          {
-                              name: "Billing",
-                              id: "billing" as SettingsSection,
-                              icon: CreditCard,
-                          },
-                      ],
-                  },
-              ]
-            : []),
-        ...baseSettingsNavGroups,
-    ];
-}
-
-/**
- * Flat list keyed by `isHosted`. Keep this the single source of truth
- * for keyboard nav / hash routing / localStorage. Changing the group
- * structure must not break index-based iteration.
- */
-export function buildSettingsNav(opts: { isHosted: boolean }): NavItem[] {
-    return buildSettingsNavGroups(opts).flatMap((g) => g.items);
-}
+export const SETTINGS_NAV: NavItem[] = SETTINGS_NAV_GROUPS.flatMap(
+    (g) => g.items,
+);
 
 export const SETTINGS_STORAGE_KEY = "settings-last-section";

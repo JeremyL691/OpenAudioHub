@@ -11,17 +11,12 @@
 import { z } from "zod";
 
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1";
-const OFFICIAL_ELEVENLABS_ORIGINS = [
-    "https://api.elevenlabs.io",
-    "https://api.eu.elevenlabs.io",
-] as const;
 const MAX_RETRIES = 2;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 5_000_000;
 const MAX_WORDS = 500_000;
-
 // ElevenLabs advertises a 5 GB request limit. Riffado uses a much lower cap
 // for predictable disk, network, and provider-cost exposure. The storage path
 // is spooled to a bounded temporary file; this check also protects direct
@@ -145,8 +140,6 @@ export interface ElevenLabsTranscribeArgs {
     file: File;
     /** Base URL from the stored credential; falls back to the public API. */
     baseUrl?: string | null;
-    /** Hosted mode only permits ElevenLabs' official API endpoint. */
-    isHosted?: boolean;
     /** ISO language code. Omit/undefined for auto-detect. */
     language?: string;
     diarize: boolean;
@@ -170,9 +163,6 @@ export interface ElevenLabsTranscribeResult {
     }> | null;
 }
 
-export const ELEVENLABS_HOSTED_BASE_URL_MESSAGE =
-    "Hosted ElevenLabs transcription only supports ElevenLabs' official API (https://api.elevenlabs.io/v1 or https://api.eu.elevenlabs.io/v1). Self-host Riffado to use a custom proxy.";
-
 export const ELEVENLABS_BASE_URL_MESSAGE =
     "ElevenLabs base URL must be an http(s) URL without credentials.";
 
@@ -195,20 +185,6 @@ function parseOptionalElevenLabsBaseUrl(
     }
 }
 
-function isOfficialElevenLabsBaseUrl(url: URL): boolean {
-    const pathname = url.pathname.replace(/\/+$/, "");
-    return (
-        (OFFICIAL_ELEVENLABS_ORIGINS as readonly string[]).includes(
-            url.origin,
-        ) &&
-        pathname === "/v1" &&
-        url.username === "" &&
-        url.password === "" &&
-        url.search === "" &&
-        url.hash === ""
-    );
-}
-
 function isAllowedSelfHostElevenLabsBaseUrl(url: URL): boolean {
     return (
         (url.protocol === "https:" || url.protocol === "http:") &&
@@ -227,36 +203,24 @@ function speechToTextUrl(baseUrl: string): string {
 
 export function resolveElevenLabsBaseUrl(
     input: unknown,
-    { isHosted }: { isHosted: boolean },
 ): { ok: true; baseUrl: string } | { ok: false; message: string } {
     const parsed = parseOptionalElevenLabsBaseUrl(input);
     if (parsed.kind === "invalid") {
-        return {
-            ok: false,
-            message: isHosted
-                ? ELEVENLABS_HOSTED_BASE_URL_MESSAGE
-                : ELEVENLABS_BASE_URL_MESSAGE,
-        };
+        return { ok: false, message: ELEVENLABS_BASE_URL_MESSAGE };
     }
     if (parsed.kind === "default") {
         return { ok: true, baseUrl: DEFAULT_BASE_URL };
-    }
-    if (isHosted) {
-        return isOfficialElevenLabsBaseUrl(parsed.url)
-            ? { ok: true, baseUrl: normalizeElevenLabsBaseUrl(parsed.url) }
-            : { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
     }
     return isAllowedSelfHostElevenLabsBaseUrl(parsed.url)
         ? { ok: true, baseUrl: normalizeElevenLabsBaseUrl(parsed.url) }
         : { ok: false, message: ELEVENLABS_BASE_URL_MESSAGE };
 }
 
-/** Validate the ElevenLabs endpoint without weakening self-host proxy support. */
+/** Validate a user-supplied ElevenLabs endpoint. Self-host proxies are allowed. */
 export function validateElevenLabsBaseUrl(
     input: unknown,
-    { isHosted }: { isHosted: boolean },
 ): { ok: true } | { ok: false; message: string } {
-    const resolved = resolveElevenLabsBaseUrl(input, { isHosted });
+    const resolved = resolveElevenLabsBaseUrl(input);
     return resolved.ok ? { ok: true } : resolved;
 }
 
@@ -489,7 +453,6 @@ export async function elevenLabsTranscribe(
         model,
         file,
         baseUrl,
-        isHosted = false,
         language,
         diarize,
         numSpeakers,
@@ -531,7 +494,7 @@ export async function elevenLabsTranscribe(
         );
     }
 
-    const resolvedBaseUrl = resolveElevenLabsBaseUrl(baseUrl, { isHosted });
+    const resolvedBaseUrl = resolveElevenLabsBaseUrl(baseUrl);
     if (!resolvedBaseUrl.ok) {
         throw new ElevenLabsTranscribeError(400, resolvedBaseUrl.message);
     }

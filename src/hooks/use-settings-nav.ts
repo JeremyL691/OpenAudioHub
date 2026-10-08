@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-    buildSettingsNav,
+    SETTINGS_NAV,
     SETTINGS_STORAGE_KEY,
 } from "@/components/settings-nav-config";
 import type { SettingsSection } from "@/types/settings";
@@ -17,15 +17,8 @@ import type { SettingsSection } from "@/types/settings";
  * keydown listener whenever `open` is true, mirroring the original
  * component's behavior exactly.
  */
-export function useSettingsNav(
-    open: boolean,
-    onClose: () => void,
-    isHosted: boolean,
-) {
-    const settingsNav = useMemo(
-        () => buildSettingsNav({ isHosted }),
-        [isHosted],
-    );
+export function useSettingsNav(open: boolean, onClose: () => void) {
+    const settingsNav = SETTINGS_NAV;
     const [activeSection, setActiveSection] =
         useState<SettingsSection>("providers");
     const [keyboardSelectedIndex, setKeyboardSelectedIndex] = useState(0);

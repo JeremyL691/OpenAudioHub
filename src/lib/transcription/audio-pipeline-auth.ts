@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 
 export function isAudioPipelineServiceRequest(request: Request): boolean {
     const expected = env.AUDIO_PIPELINE_TOKEN;
-    if (!env.AUDIO_PIPELINE_ENABLED || env.IS_HOSTED || !expected) return false;
+    if (!env.AUDIO_PIPELINE_ENABLED || !expected) return false;
     const authorization = request.headers.get("authorization") ?? "";
     const supplied = authorization.startsWith("Bearer ")
         ? authorization.slice("Bearer ".length)

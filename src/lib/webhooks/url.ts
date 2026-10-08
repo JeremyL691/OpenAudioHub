@@ -21,7 +21,7 @@ export type PublicWebhookTarget = {
 };
 
 export function webhookTargetsRequirePublic(): boolean {
-    return env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS ?? env.IS_HOSTED;
+    return env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS ?? false;
 }
 
 function assertHttpOrHttpsWebhookUrl(url: URL): void {

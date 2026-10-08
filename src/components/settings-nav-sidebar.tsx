@@ -1,10 +1,9 @@
 "use client";
 
 import { Settings as SettingsIcon } from "lucide-react";
-import { useMemo } from "react";
 import {
-    buildSettingsNav,
-    buildSettingsNavGroups,
+    SETTINGS_NAV,
+    SETTINGS_NAV_GROUPS,
 } from "@/components/settings-nav-config";
 import {
     Sidebar,
@@ -21,7 +20,6 @@ interface Props {
     activeSection: SettingsSection;
     keyboardSelectedIndex: number;
     onSectionChange: (section: SettingsSection) => void;
-    isHosted: boolean;
 }
 
 /**
@@ -34,16 +32,7 @@ export function SettingsNavSidebar({
     activeSection,
     keyboardSelectedIndex,
     onSectionChange,
-    isHosted,
 }: Props) {
-    const settingsNavGroups = useMemo(
-        () => buildSettingsNavGroups({ isHosted }),
-        [isHosted],
-    );
-    const settingsNav = useMemo(
-        () => buildSettingsNav({ isHosted }),
-        [isHosted],
-    );
     return (
         // Sidebar needs an explicit height to match <main>'s h-[600px],
         // otherwise SidebarContent's overflow-y-auto has no bound to
@@ -76,7 +65,7 @@ export function SettingsNavSidebar({
                     data-testid="settings-nav"
                     className="space-y-4"
                 >
-                    {settingsNavGroups.map((group) => (
+                    {SETTINGS_NAV_GROUPS.map((group) => (
                         <SidebarGroup key={group.label} className="space-y-1">
                             <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                                 {group.label}
@@ -89,9 +78,10 @@ export function SettingsNavSidebar({
                                         // still indexes a flat list)
                                         // stays in sync with what's
                                         // rendered.
-                                        const flatIndex = settingsNav.findIndex(
-                                            (n) => n.id === item.id,
-                                        );
+                                        const flatIndex =
+                                            SETTINGS_NAV.findIndex(
+                                                (n) => n.id === item.id,
+                                            );
                                         return (
                                             <SidebarMenuItem key={item.id}>
                                                 <SidebarMenuButton

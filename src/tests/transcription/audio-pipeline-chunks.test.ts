@@ -36,7 +36,7 @@ vi.mock("@/lib/encryption", () => ({
 }));
 
 vi.mock("@/lib/env", () => ({
-    env: { IS_HOSTED: false, WHISPER_REQUEST_TIMEOUT_MS: 5000 },
+    env: { WHISPER_REQUEST_TIMEOUT_MS: 5000 },
 }));
 
 vi.mock("@/lib/transcription/audio-file", () => ({
@@ -160,7 +160,6 @@ describe("audio-pipeline chunk provider bridge", () => {
                 diarize: true,
                 numSpeakers: 3,
                 baseUrl: "https://provider.invalid/v1",
-                isHosted: false,
             }),
         );
         expect(mocks.openAIConstructed).not.toHaveBeenCalled();

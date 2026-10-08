@@ -72,7 +72,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
-      SMTP_MARKETING_FROM: ${SMTP_MARKETING_FROM:-}
       SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
     volumes:
       # Official compose defaults LOCAL_STORAGE_PATH to /app/audio.

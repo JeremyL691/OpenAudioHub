@@ -66,10 +66,6 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/entitlements", () => ({
-    isHostedLockedOut: vi.fn().mockResolvedValue(false),
-}));
-
 vi.mock("@/lib/env", () => ({
     env: {
         WHISPER_MAX_BYTES: 24 * 1024 * 1024,
@@ -88,7 +84,6 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 
 import { OpenAI } from "openai";
 import { db } from "@/db";
-import { isHostedLockedOut } from "@/lib/entitlements";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 
 const USER_ID = "user-dedup";
@@ -167,8 +162,6 @@ describe("transcribeRecording — in-flight dedup", () => {
         (db.select as Mock).mockReset();
         (db.transaction as Mock).mockReset();
         (db.delete as Mock).mockReset();
-        (isHostedLockedOut as Mock).mockReset();
-        (isHostedLockedOut as Mock).mockResolvedValue(false);
         audioCreate.mockReset();
         chatCreate.mockReset();
         // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
@@ -199,39 +192,6 @@ describe("transcribeRecording — in-flight dedup", () => {
         expect(resA.success).toBe(true);
         expect(resB.success).toBe(true);
         expect(resA).toBe(resB);
-        expect(audioCreate).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not let a force Retry inherit an in-flight auto-transcribe skip", async () => {
-        const lockout = createDeferred<boolean>();
-        (isHostedLockedOut as Mock)
-            .mockImplementationOnce(() => lockout.promise)
-            .mockResolvedValue(false);
-        audioCreate.mockResolvedValue({
-            text: "forced retranscription",
-            language: "en",
-        });
-        installSelectStub({ existingText: "already transcribed" });
-
-        const auto = transcribeRecording(USER_ID, "rec-skip", {
-            trigger: "sync",
-        });
-        await Promise.resolve();
-
-        const retry = transcribeRecording(USER_ID, "rec-skip", {
-            force: true,
-            trigger: "manual",
-        });
-        await vi.waitFor(() => expect(audioCreate).toHaveBeenCalledTimes(1));
-
-        lockout.resolve(false);
-        const [autoRes, retryRes] = await Promise.all([auto, retry]);
-
-        expect(autoRes.success).toBe(true);
-        expect(autoRes.text).toBe("already transcribed");
-        expect(retryRes.success).toBe(true);
-        expect(retryRes.text).toBe("forced retranscription");
-        expect(retryRes).not.toBe(autoRes);
         expect(audioCreate).toHaveBeenCalledTimes(1);
     });
 

@@ -18,9 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { findPreset } from "@/lib/ai/provider-presets";
-import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
-import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 interface ModelOption {
@@ -60,16 +58,6 @@ export const POST = apiHandler(async (request: Request) => {
             "provider and apiKey are required",
             400,
         );
-    }
-
-    // Same hosted-mode loopback guard the credential routes apply, so the
-    // hosted app process can't be tricked into probing internal endpoints
-    // via a crafted baseUrl.
-    const urlCheck = validateAiBaseUrl(baseUrl, { isHosted: env.IS_HOSTED });
-    if (!urlCheck.ok) {
-        throw new AppError(ErrorCode.INVALID_INPUT, urlCheck.message, 400, {
-            field: "baseUrl",
-        });
     }
 
     const preset = findPreset(provider);

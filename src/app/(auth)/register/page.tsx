@@ -1,10 +1,6 @@
 import { redirect } from "next/navigation";
-import {
-    HostedAuthChrome,
-    SelfHostAuthChrome,
-} from "@/components/auth/auth-chrome";
+import { SelfHostAuthChrome } from "@/components/auth/auth-chrome";
 import { RegisterForm } from "@/components/auth/register-form";
-import { emailVerificationRequired } from "@/lib/auth";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 
@@ -19,27 +15,12 @@ export default async function RegisterPage() {
         redirect("/login");
     }
 
-    if (env.IS_HOSTED) {
-        return (
-            <HostedAuthChrome
-                title="Create your account"
-                subtitle="Free to start. Upgrade only when you outgrow it."
-            >
-                <RegisterForm
-                    requireEmailVerification={emailVerificationRequired}
-                />
-            </HostedAuthChrome>
-        );
-    }
-
     return (
         <SelfHostAuthChrome
             title="Create your account"
             subtitle="The first account on a new Riffado instance becomes the admin."
         >
-            <RegisterForm
-                requireEmailVerification={emailVerificationRequired}
-            />
+            <RegisterForm />
         </SelfHostAuthChrome>
     );
 }

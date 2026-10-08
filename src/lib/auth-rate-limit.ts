@@ -140,8 +140,7 @@ export async function enforceAuthRateLimit(
     // burns the shared bucket and locks everyone out. Failing open on the IP
     // dimension here is the safer default -- the per-email cap below is
     // IP-independent and still guards the SMTP-burn vector, and operators who
-    // want per-IP auth throttling set `RATE_LIMIT_TRUST_PROXY_HEADERS=true`
-    // (already required under `IS_HOSTED`).
+    // want per-IP auth throttling set `RATE_LIMIT_TRUST_PROXY_HEADERS=true`.
     const clientIp = getClientIp(request);
     if (clientIp !== "unknown") {
         const ipResult = await consumeRateLimitBucket(

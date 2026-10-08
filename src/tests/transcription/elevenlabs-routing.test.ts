@@ -98,16 +98,11 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/entitlements", () => ({
-    isHostedLockedOut: vi.fn().mockResolvedValue(false),
-}));
-
 vi.mock("@/lib/env", () => ({
     env: {
         WHISPER_MAX_BYTES: 24 * 1024 * 1024,
         WHISPER_COMPRESS_BITRATE_KBPS: 12,
         WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000,
-        IS_HOSTED: false,
     },
 }));
 
@@ -285,7 +280,6 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         expect(args.diarize).toBe(true);
         expect(args.language).toBeUndefined();
         expect(args.model).toBe("scribe_v2");
-        expect(args.isHosted).toBe(false);
     });
 
     it("uses the ElevenLabs preset model when the credential has no default", async () => {

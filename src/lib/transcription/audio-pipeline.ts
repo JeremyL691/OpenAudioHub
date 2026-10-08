@@ -170,7 +170,7 @@ let workerRunning = false;
 let workerTimer: ReturnType<typeof setInterval> | undefined;
 
 export function startAudioPipelineWorker(): void {
-    if (workerStarted || !env.AUDIO_PIPELINE_ENABLED || env.IS_HOSTED) return;
+    if (workerStarted || !env.AUDIO_PIPELINE_ENABLED) return;
     workerStarted = true;
     void runWorkerPass();
     workerTimer = setInterval(() => void runWorkerPass(), 5_000);
@@ -182,7 +182,7 @@ function wakeAudioPipelineWorker(): void {
 }
 
 async function runWorkerPass(): Promise<void> {
-    if (workerRunning || !env.AUDIO_PIPELINE_ENABLED || env.IS_HOSTED) return;
+    if (workerRunning || !env.AUDIO_PIPELINE_ENABLED) return;
     workerRunning = true;
     try {
         await reconcilePipelineFinalization().catch((error) => {

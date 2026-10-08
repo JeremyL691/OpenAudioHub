@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import {
     findPreset,
-    getVisiblePresets,
+    PROVIDER_PRESETS,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
 
@@ -30,21 +30,13 @@ interface AddProviderDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSuccess: () => void;
-    /**
-     * When true, hide the LM Studio / Ollama presets and show a hint that
-     * localhost base URLs aren't reachable from the hosted app. The server
-     * also rejects them — this is just a friendlier UI.
-     */
-    isHosted?: boolean;
 }
 
 export function AddProviderDialog({
     open,
     onOpenChange,
     onSuccess,
-    isHosted = false,
 }: AddProviderDialogProps) {
-    const visiblePresets = getVisiblePresets({ isHosted });
     const [provider, setProvider] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -134,7 +126,7 @@ export function AddProviderDialog({
                                 <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent>
-                                {visiblePresets.map((preset) => (
+                                {PROVIDER_PRESETS.map((preset) => (
                                     <SelectItem
                                         key={preset.name}
                                         value={preset.name}
@@ -172,18 +164,6 @@ export function AddProviderDialog({
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
-                        {isHosted && (
-                            <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
-                                <code className="font-mono">
-                                    docker compose up
-                                </code>
-                                ).
-                            </p>
-                        )}
                     </div>
 
                     <TranscriptionModelPicker

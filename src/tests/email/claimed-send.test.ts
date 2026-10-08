@@ -35,9 +35,9 @@ vi.mock("nodemailer", () => ({
     },
 }));
 
-import { sendWelcomeHostedProEmail } from "@/lib/notifications/email";
+import { sendExportReadyEmail } from "@/lib/notifications/email";
 
-describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
+describe("sendClaimedEmail (via sendExportReadyEmail)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         renderMock.renderEmailHtml.mockResolvedValue("<html></html>");
@@ -46,17 +46,14 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
     const input = {
         userId: "u1",
         email: "u1@example.com",
-        dashboardUrl: "https://app/dashboard",
-        settingsUrl: "https://app/settings",
-        foundingMember: false,
-        amountValue: "5.00",
-        amountCurrency: "USD",
-        interval: "month" as const,
+        jobId: "job-1",
+        downloadUrl: "https://app/exports/job-1",
     };
+    const claim = { userId: "u1", kind: "export_ready:job-1" };
 
     it("does not send (and claims nothing further) when the kind is already claimed", async () => {
         emailLogMock.claimEmailSend.mockResolvedValue(false);
-        const sent = await sendWelcomeHostedProEmail(input);
+        const sent = await sendExportReadyEmail(input);
         expect(sent).toBe(false);
         expect(emailLogMock.releaseEmailSend).not.toHaveBeenCalled();
     });
@@ -65,13 +62,10 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
         emailLogMock.claimEmailSend.mockResolvedValue(true);
         smtpMock.isSmtpConfigured.mockReturnValue(false);
 
-        const sent = await sendWelcomeHostedProEmail(input);
+        const sent = await sendExportReadyEmail(input);
 
         expect(sent).toBe(false);
-        expect(emailLogMock.releaseEmailSend).toHaveBeenCalledWith({
-            userId: "u1",
-            kind: "welcome_hosted_pro",
-        });
+        expect(emailLogMock.releaseEmailSend).toHaveBeenCalledWith(claim);
     });
 
     it("releases the claim and rethrows when rendering the template throws", async () => {
@@ -80,13 +74,10 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
             new Error("render exploded"),
         );
 
-        await expect(sendWelcomeHostedProEmail(input)).rejects.toThrow(
+        await expect(sendExportReadyEmail(input)).rejects.toThrow(
             "render exploded",
         );
-        expect(emailLogMock.releaseEmailSend).toHaveBeenCalledWith({
-            userId: "u1",
-            kind: "welcome_hosted_pro",
-        });
+        expect(emailLogMock.releaseEmailSend).toHaveBeenCalledWith(claim);
     });
 
     it("does not release the claim on a successful send", async () => {
@@ -94,7 +85,7 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
         smtpMock.isSmtpConfigured.mockReturnValue(true);
         nodemailerMock.sendMail.mockResolvedValue({ messageId: "m1" });
 
-        const sent = await sendWelcomeHostedProEmail(input);
+        const sent = await sendExportReadyEmail(input);
 
         expect(sent).toBe(true);
         expect(emailLogMock.releaseEmailSend).not.toHaveBeenCalled();

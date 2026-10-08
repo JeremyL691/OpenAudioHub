@@ -5,7 +5,6 @@ const { dbMock, envMock, syncMock } = vi.hoisted(() => ({
         select: vi.fn(),
     },
     envMock: {
-        IS_HOSTED: true,
         BACKGROUND_SYNC_ENABLED: true,
         BACKGROUND_SYNC_INTERVAL_MS: 5 * 60 * 1000,
     },
@@ -48,7 +47,6 @@ function stubClaimQuery(rows: { userId: string }[]) {
 describe("claimUsersForSync", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        envMock.IS_HOSTED = true;
     });
 
     it("returns user IDs from the query", async () => {
@@ -63,16 +61,7 @@ describe("claimUsersForSync", () => {
         expect(result).toEqual([]);
     });
 
-    it("filters on hosted_pro when IS_HOSTED is true", async () => {
-        envMock.IS_HOSTED = true;
-        const where = stubClaimQuery([]);
-        await claimUsersForSync();
-        // 3 conditions: suspendedAt, lastSync staleness, plan === hosted_pro
-        expect(where).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not filter on plan when IS_HOSTED is false (self-host)", async () => {
-        envMock.IS_HOSTED = false;
+    it("does not filter on plan (every user with a stale connection is eligible)", async () => {
         stubClaimQuery([{ userId: "self-host-user" }]);
         const result = await claimUsersForSync();
         expect(result).toEqual(["self-host-user"]);
@@ -83,7 +72,6 @@ describe("startBackgroundSyncWorker", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
-        envMock.IS_HOSTED = false;
         envMock.BACKGROUND_SYNC_ENABLED = true;
         envMock.BACKGROUND_SYNC_INTERVAL_MS = 5 * 60 * 1000;
         stubClaimQuery([]);

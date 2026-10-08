@@ -43,7 +43,6 @@ vi.mock("@/lib/env", () => ({
         AUDIO_PIPELINE_BASE_URL: "http://pipeline.internal",
         AUDIO_PIPELINE_ENABLED: true,
         AUDIO_PIPELINE_TOKEN: "controlled-test-token",
-        IS_HOSTED: false,
     },
 }));
 

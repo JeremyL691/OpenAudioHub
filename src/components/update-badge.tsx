@@ -5,10 +5,8 @@ import { fetchLatestReleaseTag } from "@/lib/install-script";
 import { APP_VERSION, compareSemver, releaseUrlFor } from "@/lib/version";
 
 /**
- * Self-host-only "update available" indicator. Renders nothing on the
- * hosted instance (operators control deploys there -- a badge would be
- * noise + leak of internal state) and nothing when the operator opts
- * out via `DISABLE_UPDATE_CHECK=true`.
+ * Self-host "update available" indicator. Renders nothing when the operator
+ * opts out via `DISABLE_UPDATE_CHECK=true`.
  *
  * Failure modes degrade silently to "no badge":
  *   - GitHub API down / rate-limited      -> fetchLatestReleaseTag() returns null
@@ -19,12 +17,11 @@ import { APP_VERSION, compareSemver, releaseUrlFor } from "@/lib/version";
  * The fetch is cached 5 minutes (Next `revalidate: 300`) so this runs
  * at most ~12 times/hour per server, regardless of traffic.
  *
- * Server component on purpose: `env.IS_HOSTED` and `env.DISABLE_UPDATE_CHECK`
- * are server-only, and we don't want the badge to hydrate / flash on
+ * Server component on purpose: `env.DISABLE_UPDATE_CHECK` is server-only, and
+ * we don't want the badge to hydrate / flash on
  * the client.
  */
 export async function UpdateBadge() {
-    if (env.IS_HOSTED) return null;
     if (env.DISABLE_UPDATE_CHECK) return null;
 
     const latestTag = await fetchLatestReleaseTag();

@@ -9,13 +9,6 @@ const nextConfig: NextConfig = {
     // never emits `.js.map` files at all, so there's nothing a self-host
     // build could accidentally ship publicly-servable.
     productionBrowserSourceMaps: Boolean(process.env.POSTHOG_CLI_API_KEY),
-    // The PostHog same-origin proxy (`/psthg/*`) used to live here as a
-    // static rewrite, but `rewrites()` is resolved once at `next build`
-    // time and baked into the shared standalone image -- it can't gate on
-    // `IS_HOSTED` (a deployment-time-only var) at container runtime.
-    // Moved to route handlers under `src/app/psthg/` (see
-    // `src/lib/posthog/proxy.ts`), which run per-request and read live
-    // env, same pattern as other hosted-only proxies.
     skipTrailingSlashRedirect: true,
     // `scripts/install.sh` is read from disk at request time by the
     // /install.sh routes; declare it so the standalone tracer ships it.

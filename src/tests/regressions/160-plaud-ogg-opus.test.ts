@@ -34,10 +34,6 @@ vi.mock("@/db", () => ({
     },
 }));
 
-vi.mock("@/lib/entitlements", () => ({
-    isHostedLockedOut: vi.fn().mockResolvedValue(false),
-}));
-
 vi.mock("@/lib/plaud/client-factory", () => ({
     createPlaudClient: vi.fn(),
 }));

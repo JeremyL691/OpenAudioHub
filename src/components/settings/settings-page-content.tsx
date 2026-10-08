@@ -8,12 +8,10 @@ const EMPTY_PROVIDERS: Provider[] = [];
 
 interface SettingsPageContentProps {
     initialProviders?: Provider[];
-    isHosted?: boolean;
 }
 
 export function SettingsPageContent({
     initialProviders = EMPTY_PROVIDERS,
-    isHosted = false,
 }: SettingsPageContentProps) {
     const { push } = useRouter();
     const [open, setOpen] = useState(true);
@@ -31,7 +29,6 @@ export function SettingsPageContent({
             open={open}
             onOpenChange={handleOpenChange}
             initialProviders={initialProviders}
-            isHosted={isHosted}
         />
     );
 }

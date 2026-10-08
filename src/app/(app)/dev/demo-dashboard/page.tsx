@@ -6,7 +6,6 @@ import {
     buildDemoTranscriptions,
     DEMO_INITIAL_SETTINGS,
 } from "@/lib/demo/fixtures";
-import { env } from "@/lib/env";
 
 /**
  * Dev-only screenshot route.
@@ -48,7 +47,6 @@ export default async function DemoDashboardPage() {
             userEmail={session.user.email ?? null}
             initialSettings={DEMO_INITIAL_SETTINGS}
             plaudNeedsReconnect={false}
-            isHosted={env.IS_HOSTED}
         />
     );
 }

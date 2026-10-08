@@ -9,15 +9,9 @@ const STALE_THRESHOLD_MS = 4 * 60 * 1000;
 const MAX_USERS_PER_TICK = 20;
 
 /**
- * Claim users due for a server-side sync tick.
- *
- * On hosted, only `hosted_pro` users are eligible -- background sync is a
- * paid-plan perk there, and `hosted_free`/lapsed accounts are read-only
- * (enforced separately by `isHostedLockedOut` inside `syncRecordingsForUser`).
- * On self-host, `users.plan` is always NULL (there's no billing concept), so
- * every user with a Plaud connection is eligible -- self-host has no tiers
- * to gate on, and unattended background sync is the whole point of running
- * the container without a browser open (#159).
+ * Claim users due for a server-side sync tick: every user with a Plaud
+ * connection whose last sync is stale. Unattended background sync is the
+ * whole point of running the container without a browser open (#159).
  *
  * Exported for testing.
  */
@@ -31,9 +25,6 @@ export async function claimUsersForSync(): Promise<string[]> {
             lt(plaudConnections.lastSync, staleThreshold),
         ),
     ];
-    if (env.IS_HOSTED) {
-        conditions.push(eq(users.plan, "hosted_pro"));
-    }
 
     const rows = await db
         .select({ userId: plaudConnections.userId })
@@ -60,7 +51,7 @@ async function tick(): Promise<void> {
         let errors = 0;
         for (const userId of userIds) {
             try {
-                await syncRecordingsForUser(userId, "background");
+                await syncRecordingsForUser(userId);
                 synced++;
             } catch (error) {
                 errors++;
@@ -85,9 +76,9 @@ let started = false;
 let running = false;
 
 /**
- * Start the server-side background sync worker. Runs on both hosted (Pro
- * users only) and self-host (all users), syncing recordings independently of
- * any open browser tab or the client-side `useAutoSync` polling. Tick
+ * Start the server-side background sync worker. Syncs recordings for all
+ * users independently of any open browser tab or the client-side
+ * `useAutoSync` polling. Tick
  * interval is configurable via `BACKGROUND_SYNC_INTERVAL_MS` (default 5
  * min); the whole worker can be disabled via `BACKGROUND_SYNC_ENABLED=false`.
  * Safe to call more than once.

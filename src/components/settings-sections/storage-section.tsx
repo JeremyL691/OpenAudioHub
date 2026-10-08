@@ -13,10 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 
-interface StorageSectionProps {
-    isHosted?: boolean;
-}
-
 interface StorageUsage {
     storageType: string;
     usedBytes: number;
@@ -33,7 +29,7 @@ interface StorageUsage {
     quotaBytes: number | null;
 }
 
-export function StorageSection({ isHosted = false }: StorageSectionProps) {
+export function StorageSection() {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoDeleteRecordings, setAutoDeleteRecordings] = useState(false);
@@ -247,20 +243,18 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                 </div>
             )}
 
-            {!isHosted && (
-                <div className="rounded-lg border bg-card/40 px-4 py-3 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Backend</span>
-                        <span className="font-medium capitalize">
-                            {usage?.storageType ?? "local"}
-                        </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Storage backend is configured at the instance level via
-                        environment variables.
-                    </p>
+            <div className="rounded-lg border bg-card/40 px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Backend</span>
+                    <span className="font-medium capitalize">
+                        {usage?.storageType ?? "local"}
+                    </span>
                 </div>
-            )}
+                <p className="text-xs text-muted-foreground">
+                    Storage backend is configured at the instance level via
+                    environment variables.
+                </p>
+            </div>
 
             <SettingsCard
                 title="Auto-delete old recordings"

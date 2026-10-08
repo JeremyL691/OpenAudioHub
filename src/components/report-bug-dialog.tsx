@@ -1,6 +1,5 @@
 "use client";
 
-import { Mail } from "lucide-react";
 import { useState } from "react";
 import { Github } from "@/components/icons/icons";
 import { Button } from "@/components/ui/button";
@@ -12,14 +11,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import {
-    buildReportBugBodyPreview,
-    buildReportBugMailto,
-    buildReportBugUrl,
-} from "@/lib/report-bug";
+import { buildReportBugBodyPreview, buildReportBugUrl } from "@/lib/report-bug";
 
 interface ReportBugDialogProps {
-    isHosted: boolean;
     /** Optional correlation id from `details.errorId` on a 5xx response. */
     errorId?: string;
     /** Optional one-line summary of what the user was doing. */
@@ -29,18 +23,12 @@ interface ReportBugDialogProps {
 }
 
 /**
- * Renders the bug-report dialog with two action buttons:
- *   - "Report on GitHub" \u2014 always.
- *   - "Email us" \u2014 hosted only. Self-hosters aren't our customers and
- *     `support@riffado.com` would just confuse them; they should file
- *     on GitHub.
+ * Renders the bug-report dialog with a single "Report on GitHub" action.
  *
  * The preview is shown so users see exactly what gets sent before
- * clicking. Both buttons open in a new tab via `<a target="_blank">`
- * (the mailto opens the user's mail client; effectively the same UX).
+ * clicking. The button opens in a new tab via `<a target="_blank">`.
  */
 export function ReportBugDialog({
-    isHosted,
     errorId,
     errorContext,
     open,
@@ -48,9 +36,8 @@ export function ReportBugDialog({
 }: ReportBugDialogProps) {
     const page =
         typeof window !== "undefined" ? window.location.pathname : undefined;
-    const opts = { isHosted, errorId, errorContext, page };
+    const opts = { errorId, errorContext, page };
     const githubUrl = buildReportBugUrl(opts);
-    const mailtoUrl = buildReportBugMailto(opts);
     const preview = buildReportBugBodyPreview(opts);
 
     return (
@@ -60,8 +47,8 @@ export function ReportBugDialog({
                     <DialogTitle>Report a bug</DialogTitle>
                     <DialogDescription>
                         {errorId
-                            ? "Something went wrong. The details below will be pre-filled \u2014 add what you were doing and we'll take a look."
-                            : "Pick how you'd like to report this. Your version and deployment mode are pre-filled to save you typing."}
+                            ? "Something went wrong. The details below will be pre-filled — add what you were doing and we'll take a look."
+                            : "Your version and deployment mode are pre-filled to save you typing."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -75,18 +62,6 @@ export function ReportBugDialog({
                 </div>
 
                 <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-                    {isHosted ? (
-                        <Button variant="outline" asChild>
-                            <a
-                                href={mailtoUrl}
-                                rel="noopener noreferrer"
-                                onClick={() => onOpenChange(false)}
-                            >
-                                <Mail className="size-4" />
-                                Email us
-                            </a>
-                        </Button>
-                    ) : null}
                     <Button asChild>
                         <a
                             href={githubUrl}
@@ -105,8 +80,7 @@ export function ReportBugDialog({
 }
 
 interface ReportBugButtonProps {
-    isHosted: boolean;
-    /** Optional className for the trigger \u2014 lets the footer style it inline. */
+    /** Optional className for the trigger — lets the footer style it inline. */
     className?: string;
 }
 
@@ -122,7 +96,7 @@ interface ReportBugButtonProps {
 const RESET_BUTTON_CLASSES =
     "appearance-none border-0 bg-transparent p-0 m-0 font-inherit text-inherit cursor-pointer";
 
-export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
+export function ReportBugButton({ className }: ReportBugButtonProps) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -134,11 +108,7 @@ export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
             >
                 Report a bug
             </button>
-            <ReportBugDialog
-                isHosted={isHosted}
-                open={open}
-                onOpenChange={setOpen}
-            />
+            <ReportBugDialog open={open} onOpenChange={setOpen} />
         </>
     );
 }

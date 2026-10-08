@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import { buildSettingsNav } from "@/components/settings-nav-config";
+import { SETTINGS_NAV } from "@/components/settings-nav-config";
 import {
     Select,
     SelectContent,
@@ -14,7 +13,6 @@ import type { SettingsSection } from "@/types/settings";
 interface Props {
     activeSection: SettingsSection;
     onSectionChange: (section: SettingsSection) => void;
-    isHosted: boolean;
 }
 
 /**
@@ -22,16 +20,10 @@ interface Props {
  * sidebar (hidden at that breakpoint) so users on small screens
  * still have a way to switch sections without a separate route.
  */
-export function SettingsNavMobile({
-    activeSection,
-    onSectionChange,
-    isHosted,
-}: Props) {
-    const settingsNav = useMemo(
-        () => buildSettingsNav({ isHosted }),
-        [isHosted],
+export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
+    const activeNavItem = SETTINGS_NAV.find(
+        (item) => item.id === activeSection,
     );
-    const activeNavItem = settingsNav.find((item) => item.id === activeSection);
 
     return (
         <div className="md:hidden">
@@ -50,7 +42,7 @@ export function SettingsNavMobile({
                     </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                    {settingsNav.map((item) => (
+                    {SETTINGS_NAV.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                             <div className="flex items-center gap-2">
                                 <item.icon className="size-4" />
