@@ -49,8 +49,7 @@ vi.mock("@/lib/auth", () => ({
 // Routes go through requireApiSession (auth + suspension check) which
 // throws AppError on failure. The tests reuse the same
 // `auth.api.getSession` mock and forward through here. Suspension is
-// treated as never-set in these regression tests; admin-side behavior
-// is covered by src/tests/admin/*.
+// treated as never-set in these regression tests.
 vi.mock("@/lib/auth-server", async () => {
     const { auth } = await import("@/lib/auth");
     const { AppError, ErrorCode } = await import("@/lib/errors");

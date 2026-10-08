@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 const FORBIDDEN_PATTERNS: readonly { pattern: RegExp; reason: string }[] = [
     {
         pattern: /crossSubDomainCookies/,
-        reason: "crossSubDomainCookies scopes cookies to the parent domain, which would leak customer sessions to admin.riffado.com once ADMIN_HOSTNAME is set.",
+        reason: "crossSubDomainCookies scopes cookies to the parent domain, which would share sessions with every other subdomain of the instance.",
     },
     {
         pattern: /\bdomain\s*:\s*['"`][.\w-]+['"`]/,
-        reason: "A `domain:` cookie attribute scopes cookies to a parent domain. Riffado keeps cookies host-only so the customer host and admin host have isolated sessions.",
+        reason: "A `domain:` cookie attribute scopes cookies to a parent domain. Riffado keeps cookies host-only so sessions stay bound to the instance host.",
     },
 ];
 
