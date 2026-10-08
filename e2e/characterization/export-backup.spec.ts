@@ -36,13 +36,13 @@ test.describe("export and backup", () => {
         await page.getByTestId("export-format").click();
         await page.getByRole("option", { name: /^TXT\b/ }).click();
 
-        // Two Toasters are mounted (src/app/layout.tsx and (app)/layout.tsx), so the
-        // message renders twice. The duplicate is removed in T4.2; assert the first.
-        await expect(
-            page
-                .getByText("Failed to save settings. Changes reverted.")
-                .first(),
-        ).toBeVisible();
+        // Only the root layout mounts a Toaster (the duplicate in (app)/layout.tsx
+        // was removed in T4.2), so the message renders once.
+        const message = page.getByText(
+            "Failed to save settings. Changes reverted.",
+        );
+        await expect(message).toHaveCount(1);
+        await expect(message).toBeVisible();
         await expect(page.getByTestId("export-format")).toContainText("JSON");
     });
 

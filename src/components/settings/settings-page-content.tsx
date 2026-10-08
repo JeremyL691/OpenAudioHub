@@ -1,34 +1,31 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { type Provider, SettingsDialog } from "@/components/settings-dialog";
+import { useEffect, useRef } from "react";
+import { useDialogs } from "@/components/app-shell/providers";
 
-const EMPTY_PROVIDERS: Provider[] = [];
-
-interface SettingsPageContentProps {
-    initialProviders?: Provider[];
-}
-
-export function SettingsPageContent({
-    initialProviders = EMPTY_PROVIDERS,
-}: SettingsPageContentProps) {
+/**
+ * /settings is still a dialog page: it opens the settings dialog, which the
+ * app shell mounts, and returns to the dashboard when that dialog closes.
+ * T4.3 replaces it with a full settings page. Only one settings dialog exists,
+ * so the top-bar Settings item and the `,` key behave the same here.
+ */
+export function SettingsPageContent() {
     const { push } = useRouter();
-    const [open, setOpen] = useState(true);
+    const { settingsOpen, setSettingsOpen } = useDialogs();
+    const wasOpen = useRef(false);
 
-    const handleOpenChange = (newOpen: boolean) => {
-        setOpen(newOpen);
-        if (!newOpen) {
-            // Navigate back to dashboard when dialog closes
+    useEffect(() => {
+        setSettingsOpen(true);
+    }, [setSettingsOpen]);
+
+    useEffect(() => {
+        if (settingsOpen) {
+            wasOpen.current = true;
+        } else if (wasOpen.current) {
             push("/dashboard");
         }
-    };
+    }, [settingsOpen, push]);
 
-    return (
-        <SettingsDialog
-            open={open}
-            onOpenChange={handleOpenChange}
-            initialProviders={initialProviders}
-        />
-    );
+    return null;
 }

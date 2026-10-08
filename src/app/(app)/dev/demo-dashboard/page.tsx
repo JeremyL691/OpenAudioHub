@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { AppShellProviders } from "@/components/app-shell/providers";
 import { Workstation } from "@/components/dashboard/workstation";
 import { requireAuth } from "@/lib/auth-server";
 import {
@@ -36,20 +35,17 @@ export default async function DemoDashboardPage() {
         notFound();
     }
 
-    const session = await requireAuth();
+    await requireAuth();
 
     const recordings = buildDemoRecordings(new Date());
     const transcriptions = buildDemoTranscriptions();
 
     return (
-        <AppShellProviders initialSettings={DEMO_INITIAL_SETTINGS}>
-            <Workstation
-                recordings={recordings}
-                transcriptions={transcriptions}
-                userEmail={session.user.email ?? null}
-                initialSettings={DEMO_INITIAL_SETTINGS}
-                plaudNeedsReconnect={false}
-            />
-        </AppShellProviders>
+        <Workstation
+            recordings={recordings}
+            transcriptions={transcriptions}
+            initialSettings={DEMO_INITIAL_SETTINGS}
+            plaudNeedsReconnect={false}
+        />
     );
 }
