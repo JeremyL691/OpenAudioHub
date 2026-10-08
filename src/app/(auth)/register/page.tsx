@@ -18,7 +18,7 @@ export default async function RegisterPage() {
     return (
         <SelfHostAuthChrome
             title="Create your account"
-            subtitle="The first account on a new Riffado instance becomes the admin."
+            subtitle="The first account on a new OpenAudioHub instance becomes the admin."
         >
             <RegisterForm />
         </SelfHostAuthChrome>

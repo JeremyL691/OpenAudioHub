@@ -1,7 +1,7 @@
 /**
  * Regression: issue #160
  *
- * Plaud labels downloads `.mp3` and Riffado used to store them as
+ * Plaud labels downloads `.mp3` and OpenAudioHub used to store them as
  * `audio/mpeg`, but the bytes are Ogg/Opus (`OggS`, vendor PALUD.AI).
  * OpenRouter chat-style transcription then rejected `audio/ogg`.
  *

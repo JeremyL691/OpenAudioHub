@@ -9,7 +9,7 @@ const FORBIDDEN_PATTERNS: readonly { pattern: RegExp; reason: string }[] = [
     },
     {
         pattern: /\bdomain\s*:\s*['"`][.\w-]+['"`]/,
-        reason: "A `domain:` cookie attribute scopes cookies to a parent domain. Riffado keeps cookies host-only so sessions stay bound to the instance host.",
+        reason: "A `domain:` cookie attribute scopes cookies to a parent domain. OpenAudioHub keeps cookies host-only so sessions stay bound to the instance host.",
     },
 ];
 

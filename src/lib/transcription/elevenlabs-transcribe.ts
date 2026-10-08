@@ -17,7 +17,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 5_000_000;
 const MAX_WORDS = 500_000;
-// ElevenLabs advertises a 5 GB request limit. Riffado uses a much lower cap
+// ElevenLabs advertises a 5 GB request limit. OpenAudioHub uses a much lower cap
 // for predictable disk, network, and provider-cost exposure. The storage path
 // is spooled to a bounded temporary file; this check also protects direct
 // callers that hand in an already-created File.
@@ -47,7 +47,7 @@ function retryAfterMs(header: string | null): number | null {
 }
 
 // ISO 639-3 (and other non-standard codes ElevenLabs may return) mapped to
-// the ISO 639-1 codes the rest of Riffado stores/displays
+// the ISO 639-1 codes the rest of OpenAudioHub stores/displays
 // (`transcriptions.detectedLanguage`, the language badge, the settings
 // dropdown). Unknown codes pass through unchanged.
 const LANGUAGE_CODE_MAP: Record<string, string> = {

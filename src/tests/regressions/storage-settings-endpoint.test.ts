@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const envState = {
     DEFAULT_STORAGE_TYPE: "local" as "local" | "s3",
-    LOCAL_STORAGE_PATH: "/tmp/riffado-test-nonexistent-storage-path",
+    LOCAL_STORAGE_PATH: "/tmp/openaudiohub-test-nonexistent-storage-path",
 };
 
 vi.mock("@/lib/env", () => ({

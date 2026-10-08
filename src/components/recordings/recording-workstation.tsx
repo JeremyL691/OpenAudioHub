@@ -253,9 +253,9 @@ export function RecordingWorkstation({
                         <DialogTitle>Delete this recording?</DialogTitle>
                         <DialogDescription>
                             This permanently removes the audio file,
-                            transcription, and AI summary from Riffado. The
+                            transcription, and AI summary from OpenAudioHub. The
                             recording on your Plaud account is not affected, but
-                            it will not be re-synced to Riffado.
+                            it will not be re-synced to OpenAudioHub.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

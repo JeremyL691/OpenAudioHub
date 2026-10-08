@@ -15,7 +15,7 @@ export default async function LoginPage() {
     return (
         <SelfHostAuthChrome
             title="Sign in"
-            subtitle="Sign in to your Riffado instance."
+            subtitle="Sign in to your OpenAudioHub instance."
         >
             <LoginForm {...formProps} />
         </SelfHostAuthChrome>

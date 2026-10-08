@@ -47,7 +47,7 @@ function databaseUrlFor(adminUrl: string, databaseName: string): string {
 function makeDatabaseName(label: string): string {
     const safeLabel = label.toLowerCase().replace(/[^a-z0-9_]/g, "_");
     const suffix = randomBytes(6).toString("hex");
-    return `riffado_test_${safeLabel}_${process.pid}_${suffix}`;
+    return `openaudiohub_test_${safeLabel}_${process.pid}_${suffix}`;
 }
 
 export async function createMigratedTestDatabase(

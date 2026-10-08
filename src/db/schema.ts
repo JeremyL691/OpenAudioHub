@@ -280,7 +280,7 @@ export const recordings = pgTable(
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
         deviceSn: varchar("device_sn", { length: 255 }).notNull(),
-        // Unique ID from Plaud API, scoped per Riffado user.
+        // Unique ID from Plaud API, scoped per OpenAudioHub user.
         plaudFileId: varchar("plaud_file_id", { length: 255 }).notNull(),
         filename: text("filename").notNull(),
         duration: integer("duration").notNull(), // milliseconds
@@ -308,7 +308,7 @@ export const recordings = pgTable(
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
         // Soft-delete tombstone. Set when the user deletes a recording from
-        // Riffado's UI. Sync skips tombstoned rows so re-syncing from Plaud
+        // OpenAudioHub's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.
@@ -381,7 +381,7 @@ export const transcriptions = pgTable(
     }),
 );
 
-/** Durable association between a Riffado transcript run and the private pipeline. */
+/** Durable association between a OpenAudioHub transcript run and the private pipeline. */
 export const audioPipelineJobs = pgTable(
     "audio_pipeline_jobs",
     {

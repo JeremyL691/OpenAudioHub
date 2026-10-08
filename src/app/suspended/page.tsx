@@ -6,7 +6,7 @@ import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
-    title: "Account suspended | Riffado",
+    title: "Account suspended | OpenAudioHub",
     robots: { index: false, follow: false },
 };
 
@@ -42,11 +42,8 @@ export default async function SuspendedPage() {
                     while we review your account.
                 </p>
                 <p className="text-sm text-muted-foreground">
-                    Reach out at{" "}
-                    <a href="mailto:support@riffado.com" className="underline">
-                        support@riffado.com
-                    </a>{" "}
-                    if you think this is a mistake.
+                    Contact the administrator of this instance if you think this
+                    is a mistake.
                 </p>
                 <form
                     action="/api/auth/sign-out"

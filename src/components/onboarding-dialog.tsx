@@ -138,7 +138,7 @@ export function OnboardingDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-2xl" hidden>
-                        Welcome to Riffado
+                        Welcome to OpenAudioHub
                     </DialogTitle>
                 </DialogHeader>
 

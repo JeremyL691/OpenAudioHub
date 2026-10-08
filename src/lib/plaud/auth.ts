@@ -156,7 +156,7 @@ export function decodeAccessTokenExpiry(token: string): Date | null {
 /**
  * True if `token` is a Plaud workspace token (WT) rather than a user token
  * (UT). WTs are workspace-scoped (`ut_ref`/`wid` claims) and short-lived
- * (~24h). Riffado must store the long-lived UT: minting a fresh WT requires
+ * (~24h). OpenAudioHub must store the long-lived UT: minting a fresh WT requires
  * a UT, so a connection built on a pasted WT cannot be refreshed and dies
  * within a day. web.plaud.ai puts the WT on the data requests users tend to
  * inspect (`/device/list`, `/file/simple/web`), which is why users paste it
