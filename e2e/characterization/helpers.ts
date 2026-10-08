@@ -8,6 +8,7 @@ export const RECORDINGS = {
     needsAlignment: "Needs alignment",
     processing: "Processing now",
     untranscribed: "Untranscribed memo",
+    pausedDisk: "Paused for disk",
 } as const;
 
 // Reuses the stored session from global setup (e2e/global-setup.ts). Signs in

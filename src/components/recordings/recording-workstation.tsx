@@ -123,6 +123,14 @@ export function RecordingWorkstation({
         onTranscribeComplete: refresh,
     });
     const hasTranscript = Boolean(transcript.activeTranscript?.text);
+    // Without a transcript, the transcript card shows the pipeline state itself (with its
+    // own controls). The banner above is hidden in those states so there is one status surface.
+    const cardShowsPipelineStatus =
+        !hasTranscript &&
+        (isTranscribing ||
+            Boolean(transcript.isPipelineRunning) ||
+            transcript.activeJob?.status === "paused" ||
+            transcript.activeJob?.status === "failed");
     const transcriptBusy =
         isTranscribing || Boolean(transcript.isPipelineActive);
 
@@ -231,21 +239,23 @@ export function RecordingWorkstation({
                         onRegisterSeek={handleRegisterSeek}
                         onPlaybackTimeChange={setPlaybackTimeMs}
                     />
-                    <PipelineStatus
-                        variant="inline"
-                        job={transcript.activeJob}
-                        isTranscribing={isTranscribing}
-                        isPipelineRunning={Boolean(
-                            transcript.isPipelineRunning,
-                        )}
-                        busy={transcript.pipelineBusy}
-                        onCancel={() =>
-                            void transcript.performPipelineAction("cancel")
-                        }
-                        onRetry={() =>
-                            void transcript.performPipelineAction("retry")
-                        }
-                    />
+                    {!cardShowsPipelineStatus && (
+                        <PipelineStatus
+                            variant="inline"
+                            job={transcript.activeJob}
+                            isTranscribing={isTranscribing}
+                            isPipelineRunning={Boolean(
+                                transcript.isPipelineRunning,
+                            )}
+                            busy={transcript.pipelineBusy}
+                            onCancel={() =>
+                                void transcript.performPipelineAction("cancel")
+                            }
+                            onRetry={() =>
+                                void transcript.performPipelineAction("retry")
+                            }
+                        />
+                    )}
                     {transcript.activeJob?.status === "needs_alignment" && (
                         <p className="text-sm text-muted-foreground">
                             This transcript was saved without timestamps. The
