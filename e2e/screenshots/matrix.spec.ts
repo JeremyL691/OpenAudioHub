@@ -47,6 +47,14 @@ const TARGETS: Target[] = [
         },
     },
     {
+        slug: "library",
+        authed: true,
+        open: async (page) => {
+            await page.goto("/recordings");
+            await expect(page.getByTestId("recording-list")).toBeVisible();
+        },
+    },
+    {
         slug: "recording-detail",
         authed: true,
         open: async (page) => {

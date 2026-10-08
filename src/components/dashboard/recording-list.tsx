@@ -18,6 +18,7 @@ import {
     type ListDensity,
     RecordingListToolbar,
     type SortOrder,
+    type StatusFilter,
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +30,7 @@ export type { PendingUpload } from "@/components/dashboard/pending-upload-row";
 export type {
     ListDensity,
     SortOrder,
+    StatusFilter,
 } from "@/components/dashboard/recording-list-toolbar";
 
 interface TranscriptionData {
@@ -44,6 +46,7 @@ interface RecordingListProps {
     inFlightActions: Map<string, "transcribing" | "summarizing">;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    onTranscribe?: (recording: Recording) => void;
     initialDateTimeFormat: DateTimeFormat;
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
@@ -76,7 +79,7 @@ function transcriptSnippet(
         .trim();
     if (!stripped) return null;
     if (stripped.length <= maxChars) return stripped;
-    return `${stripped.slice(0, maxChars - 1).trimEnd()}\u2026`;
+    return `${stripped.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
 export function RecordingList({
@@ -87,6 +90,7 @@ export function RecordingList({
     inFlightActions,
     onSelect,
     onDelete,
+    onTranscribe,
     initialDateTimeFormat,
     initialSortOrder,
     initialDensity,
@@ -97,6 +101,7 @@ export function RecordingList({
     const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
     const [density, setDensity] = useState<ListDensity>(initialDensity);
     const [query, setQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
     const [hasHydrated, setHasHydrated] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
@@ -127,13 +132,29 @@ export function RecordingList({
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const base = q
+        const searched = q
             ? recordings.filter((r) => {
                   if (r.filename.toLowerCase().includes(q)) return true;
                   const t = transcriptions.get(r.id);
                   return !!t?.text && t.text.toLowerCase().includes(q);
               })
             : recordings;
+
+        // Status chips filter the loaded list; they do not refetch.
+        const base = searched.filter((r) => {
+            const transcribed =
+                r.hasTranscript === true || transcriptions.has(r.id);
+            switch (statusFilter) {
+                case "transcribed":
+                    return transcribed;
+                case "untranscribed":
+                    return !transcribed;
+                case "processing":
+                    return inFlightActions.has(r.id);
+                default:
+                    return true;
+            }
+        });
 
         const sorted = [...base];
         switch (sortOrder) {
@@ -156,7 +177,14 @@ export function RecordingList({
                 break;
         }
         return sorted;
-    }, [recordings, transcriptions, query, sortOrder]);
+    }, [
+        recordings,
+        transcriptions,
+        inFlightActions,
+        query,
+        statusFilter,
+        sortOrder,
+    ]);
 
     const visible = filtered.slice(0, visibleCount);
 
@@ -264,6 +292,8 @@ export function RecordingList({
                     searchRef={searchRef}
                     filteredCount={filtered.length}
                     totalCount={recordings.length}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
                     sortOrder={sortOrder}
                     onSortOrderChange={setSortOrderPersisted}
                     density={density}
@@ -313,6 +343,7 @@ export function RecordingList({
                                         dateTimeFormat={dateTimeFormat}
                                         onSelect={onSelect}
                                         onDelete={onDelete}
+                                        onTranscribe={onTranscribe}
                                         registerRef={registerRowRef}
                                     />
                                 ))}
@@ -326,7 +357,9 @@ export function RecordingList({
                             <p className="text-sm text-muted-foreground">
                                 {query
                                     ? "No recordings match your search."
-                                    : "No recordings yet."}
+                                    : statusFilter !== "all"
+                                      ? "No recordings match this filter."
+                                      : "No recordings yet."}
                             </p>
                         </div>
                     )}

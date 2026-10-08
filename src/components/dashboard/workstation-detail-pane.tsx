@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
@@ -93,6 +94,23 @@ export function WorkstationDetailPane({
             </Button>
             {currentRecording ? (
                 <>
+                    <div className="flex justify-end">
+                        <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1 px-2"
+                            data-testid="open-full-view"
+                        >
+                            <Link href={`/recordings/${currentRecording.id}`}>
+                                Open full view
+                                <ArrowUpRight
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                            </Link>
+                        </Button>
+                    </div>
                     <RecordingPlayer
                         recording={currentRecording}
                         initialPlaybackSpeed={initialPlaybackSpeed}

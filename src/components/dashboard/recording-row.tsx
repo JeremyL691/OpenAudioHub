@@ -1,7 +1,16 @@
 "use client";
 
-import { Download, Loader2, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import {
+    Download,
+    Loader2,
+    MoreHorizontal,
+    Play,
+    Sparkles,
+    Trash2,
+} from "lucide-react";
+import { StatusBadge } from "@/components/app/status-badge";
 import { useConfirm } from "@/components/confirm-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -13,6 +22,10 @@ import {
 import { formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
+import {
+    recordingSource,
+    transcriptStatus,
+} from "@/lib/recordings/transcript-status";
 import { cn } from "@/lib/utils";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
@@ -27,6 +40,7 @@ export function RecordingRow({
     dateTimeFormat,
     onSelect,
     onDelete,
+    onTranscribe,
     registerRef,
 }: {
     recording: Recording;
@@ -38,6 +52,7 @@ export function RecordingRow({
     dateTimeFormat: DateTimeFormat;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    onTranscribe?: (recording: Recording) => void;
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
 }) {
     const confirm = useConfirm();
@@ -65,10 +80,10 @@ export function RecordingRow({
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <h3 className="truncate text-sm font-medium">
+                        <h3 className="min-w-0 truncate text-sm font-medium">
                             {recording.filename}
                         </h3>
-                        {inFlight && (
+                        {inFlight ? (
                             <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
                                 <Loader2
                                     className="size-3 animate-spin"
@@ -78,32 +93,42 @@ export function RecordingRow({
                                     ? "Transcribing"
                                     : "Summarizing"}
                             </span>
+                        ) : (
+                            <span className="ml-auto shrink-0">
+                                <StatusBadge
+                                    status={transcriptStatus({
+                                        hasTranscript: recording.hasTranscript,
+                                        hasSummary: recording.hasSummary,
+                                    })}
+                                />
+                            </span>
                         )}
                     </div>
-                    {snippet ? (
-                        <p
-                            className={cn(
-                                "truncate text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
-                            )}
+                    <div
+                        className={cn(
+                            "flex min-w-0 items-center gap-2 text-xs text-muted-foreground",
+                            isCompact ? "mt-0.5" : "mt-1",
+                        )}
+                    >
+                        <Badge
+                            variant="outline"
+                            className="shrink-0 px-1.5 py-0 text-[10px] font-normal"
                         >
-                            {snippet}
-                        </p>
-                    ) : (
-                        <p
-                            className={cn(
-                                "text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
+                            {recordingSource(recording.deviceSn)}
+                        </Badge>
+                        <span className="min-w-0 truncate">
+                            {snippet ?? (
+                                <>
+                                    {formatDurationMs(recording.duration)}
+                                    {" · "}
+                                    {formatDateTime(
+                                        recording.startTime,
+                                        dateTimeFormat,
+                                    )}
+                                </>
                             )}
-                        >
-                            {formatDurationMs(recording.duration)}
-                            {" \u00b7 "}
-                            {formatDateTime(
-                                recording.startTime,
-                                dateTimeFormat,
-                            )}
-                        </p>
-                    )}
+                        </span>
+                    </div>
                 </div>
             </button>
             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
@@ -123,6 +148,15 @@ export function RecordingRow({
                             <Play />
                             Open
                         </DropdownMenuItem>
+                        {onTranscribe ? (
+                            <DropdownMenuItem
+                                onSelect={() => onTranscribe(recording)}
+                                disabled={inFlight === "transcribing"}
+                            >
+                                <Sparkles />
+                                Transcribe
+                            </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem
                             onSelect={() => {
                                 window.location.assign(

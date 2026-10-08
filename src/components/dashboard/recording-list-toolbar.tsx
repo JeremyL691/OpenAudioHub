@@ -12,9 +12,22 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export type SortOrder = "newest" | "oldest" | "name";
 export type ListDensity = "comfortable" | "compact";
+export type StatusFilter =
+    | "all"
+    | "transcribed"
+    | "processing"
+    | "untranscribed";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "transcribed", label: "Transcribed" },
+    { value: "processing", label: "Processing" },
+    { value: "untranscribed", label: "Not transcribed" },
+];
 
 export function RecordingListToolbar({
     query,
@@ -23,6 +36,8 @@ export function RecordingListToolbar({
     searchRef,
     filteredCount,
     totalCount,
+    statusFilter,
+    onStatusFilterChange,
     sortOrder,
     onSortOrderChange,
     density,
@@ -34,6 +49,8 @@ export function RecordingListToolbar({
     searchRef: React.RefObject<HTMLInputElement | null>;
     filteredCount: number;
     totalCount: number;
+    statusFilter: StatusFilter;
+    onStatusFilterChange: (next: StatusFilter) => void;
     sortOrder: SortOrder;
     onSortOrderChange: (next: SortOrder) => void;
     density: ListDensity;
@@ -69,10 +86,34 @@ export function RecordingListToolbar({
                     </button>
                 )}
             </div>
+            <fieldset className="m-0 flex flex-wrap gap-1.5 border-0 p-0">
+                <legend className="sr-only">Filter recordings</legend>
+                {STATUS_FILTERS.map((option) => {
+                    const active = statusFilter === option.value;
+                    return (
+                        <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={active}
+                            data-testid={`recording-filter-${option.value}`}
+                            onClick={() => onStatusFilterChange(option.value)}
+                            className={cn(
+                                "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                                active
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:text-foreground",
+                            )}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
+            </fieldset>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
                     {filteredCount}
-                    {query ? " matching" : ""} of {totalCount} recording
+                    {query || statusFilter !== "all" ? " matching" : ""} of{" "}
+                    {totalCount} recording
                     {totalCount !== 1 ? "s" : ""}
                 </span>
                 <div className="flex items-center gap-1">
