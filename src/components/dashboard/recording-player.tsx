@@ -1,6 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect } from "react";
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { useMiniPlayerSlot } from "@/components/app-shell/mini-player-slot";
+import {
+    PlayerMiniBar,
+    shouldShowMiniPlayer,
+} from "@/components/dashboard/player-mini-bar";
 import { RecordingPlayerControls } from "@/components/dashboard/recording-player-controls";
 import { RecordingPlayerHeader } from "@/components/dashboard/recording-player-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,8 +45,9 @@ interface RecordingPlayerProps {
  * Audio playback card for a single recording. State is owned by
  * usePlaybackEngine (audio element + transport state); keyboard
  * shortcuts by usePlaybackKeyboard; waveform peaks by useWaveform.
- * This component is the composition root + the hidden <audio>
- * element that the engine writes to.
+ * This component is the composition root, the hidden <audio> element
+ * the engine writes to, and the compact bar that appears once the card
+ * scrolls out of view. The compact bar reuses the same engine.
  */
 export function RecordingPlayer({
     recording,
@@ -112,41 +125,83 @@ export function RecordingPlayer({
         autoStart: scrubberStyle === "waveform",
     });
 
-    return (
-        <Card data-testid="player">
-            <RecordingPlayerHeader
-                recording={recording}
-                duration={duration}
-                scrubberStyle={scrubberStyle}
-                waveformStatus={waveformStatus}
-                onDecodeWaveform={triggerWaveformDecode}
-                onRenamed={onRenamed}
-            />
-            <CardContent>
-                <RecordingPlayerControls
-                    isPlaying={isPlaying}
-                    onTogglePlay={togglePlayPause}
-                    currentTime={currentTime}
-                    duration={duration}
-                    onSeekRatio={seekToRatio}
-                    playbackSpeed={playbackSpeed}
-                    onCycleSpeed={cycleSpeed}
-                    volume={volume}
-                    onVolumeChange={setVolume}
-                    onToggleMute={toggleMute}
-                    scrubberStyle={scrubberStyle}
-                    waveformPeaks={waveformPeaks}
-                />
+    // The compact bar appears once the card scrolls out of view. The card is
+    // also hidden on phones while the list is showing. `offsetParent` is null
+    // then, so the bar stays hidden too.
+    const cardRef = useRef<HTMLDivElement>(null);
+    const [playerInView, setPlayerInView] = useState(true);
+    const [playerRendered, setPlayerRendered] = useState(false);
+    useEffect(() => {
+        const el = cardRef.current;
+        if (!el || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setPlayerInView(entry.isIntersecting);
+                setPlayerRendered(el.offsetParent !== null);
+            },
+            { threshold: 0 },
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+    const miniPlayerSlot = useMiniPlayerSlot();
+    const showMiniPlayer =
+        miniPlayerSlot !== null &&
+        shouldShowMiniPlayer({
+            hasRecording: Boolean(recording.id),
+            playerRendered,
+            playerInView,
+        });
 
-                <audio
-                    ref={audioRef}
-                    src={`/api/recordings/${recording.id}/audio`}
-                    preload="metadata"
-                    className="hidden"
-                >
-                    <track kind="captions" />
-                </audio>
-            </CardContent>
-        </Card>
+    return (
+        <>
+            <Card data-testid="player" ref={cardRef}>
+                <RecordingPlayerHeader
+                    recording={recording}
+                    duration={duration}
+                    scrubberStyle={scrubberStyle}
+                    waveformStatus={waveformStatus}
+                    onDecodeWaveform={triggerWaveformDecode}
+                    onRenamed={onRenamed}
+                />
+                <CardContent>
+                    <RecordingPlayerControls
+                        isPlaying={isPlaying}
+                        onTogglePlay={togglePlayPause}
+                        currentTime={currentTime}
+                        duration={duration}
+                        onSeekRatio={seekToRatio}
+                        playbackSpeed={playbackSpeed}
+                        onCycleSpeed={cycleSpeed}
+                        volume={volume}
+                        onVolumeChange={setVolume}
+                        onToggleMute={toggleMute}
+                        scrubberStyle={scrubberStyle}
+                        waveformPeaks={waveformPeaks}
+                    />
+
+                    <audio
+                        ref={audioRef}
+                        src={`/api/recordings/${recording.id}/audio`}
+                        preload="metadata"
+                        className="hidden"
+                    >
+                        <track kind="captions" />
+                    </audio>
+                </CardContent>
+            </Card>
+            {showMiniPlayer && miniPlayerSlot
+                ? createPortal(
+                      <PlayerMiniBar
+                          title={recording.filename}
+                          isPlaying={isPlaying}
+                          currentTime={currentTime}
+                          duration={duration}
+                          onToggle={togglePlayPause}
+                      />,
+                      miniPlayerSlot,
+                  )
+                : null}
+        </>
     );
 }
