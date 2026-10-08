@@ -302,6 +302,9 @@ export function Workstation({
                                         setMobileView("detail");
                                     }}
                                     onDelete={handleDelete}
+                                    onTranscribe={(recording) => {
+                                        void transcribeById(recording.id);
+                                    }}
                                     initialDateTimeFormat={
                                         initialSettings.dateTimeFormat
                                     }

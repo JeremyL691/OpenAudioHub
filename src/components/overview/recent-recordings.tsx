@@ -1,17 +1,9 @@
 import Link from "next/link";
-import {
-    StatusBadge,
-    type StatusBadgeStatus,
-} from "@/components/app/status-badge";
+import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDurationMs } from "@/lib/format-duration";
+import { transcriptStatus } from "@/lib/recordings/transcript-status";
 import type { Recording } from "@/types/recording";
-
-function transcriptStatus(recording: Recording): StatusBadgeStatus {
-    if (recording.hasSummary) return "summary_ready";
-    if (recording.hasTranscript) return "transcript_ready";
-    return "transcript_missing";
-}
 
 /** The newest recordings, each linking to its place in the library. */
 export function RecentRecordings({ items }: { items: Recording[] }) {
