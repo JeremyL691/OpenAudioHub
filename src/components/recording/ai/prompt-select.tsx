@@ -18,7 +18,10 @@ interface PromptSelectProps {
 export function PromptSelect({ value, options, onChange }: PromptSelectProps) {
     return (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectTrigger
+                className="w-[160px] h-8 text-xs"
+                aria-label="Summary prompt"
+            >
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -144,9 +144,11 @@ export function SyncButton({
                         // Subtle destructive accent on failure: keeps
                         // the outline shape (so the header doesn't get
                         // a loud filled red button) but tints the
-                        // border + text.
+                        // border + text. In dark mode the outline's translucent
+                        // input fill lowers the red's contrast, so use the page
+                        // background there.
                         failed &&
-                            "border-destructive/40 text-destructive hover:bg-destructive/10",
+                            "border-destructive/40 text-destructive hover:bg-destructive/10 dark:bg-background",
                         className,
                     )}
                     aria-label={ariaLabel}

@@ -322,7 +322,7 @@ export function RecordingList({
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
                         >
                             {group.label && (
-                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                     {group.label}
                                 </div>
                             )}

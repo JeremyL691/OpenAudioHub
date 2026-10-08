@@ -90,7 +90,6 @@ export function RecordingsGroup({
     inFlightActions,
     dateTimeFormat,
     onSelectRecording,
-    onTranscribeRecording,
     runAction,
 }: {
     recordings: Recording[];
@@ -99,7 +98,6 @@ export function RecordingsGroup({
     inFlightActions: Map<string, "transcribing" | "summarizing">;
     dateTimeFormat: DateTimeFormat;
     onSelectRecording: (r: Recording) => void;
-    onTranscribeRecording: (id: string) => void;
     runAction: (fn: () => void) => () => void;
 }) {
     if (recordings.length === 0) return null;
@@ -166,22 +164,13 @@ export function RecordingsGroup({
                         </span>
                     );
                 } else if (!r.hasTranscript) {
-                    // stopPropagation: the row is a selectable item, so the
-                    // pointer-down on this button must not select the row.
+                    // A hint, not a control: a button inside this option would be
+                    // nested-interactive. ⌘↵ transcribes the highlighted recording.
                     accessory = (
-                        <button
-                            type="button"
-                            className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onTranscribeRecording(r.id);
-                            }}
-                            aria-label={`Transcribe ${r.filename}`}
-                        >
-                            <Sparkles className="size-3" aria-hidden="true" />
+                        <span className={PILL_CLASS}>
+                            <Kbd>⌘↵</Kbd>
                             Transcribe
-                        </button>
+                        </span>
                     );
                 } else if (isCurrent) {
                     accessory = (

@@ -115,6 +115,7 @@ export function RecordingPlayerControls({
                     />
                 ) : (
                     <Slider
+                        aria-label="Seek"
                         value={[progress]}
                         onValueChange={(value) =>
                             onSeekRatio((value[0] ?? 0) / 100)

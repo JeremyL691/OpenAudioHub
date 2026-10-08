@@ -219,6 +219,7 @@ export function PlaybackSection() {
                         </div>
                         <Slider
                             id="default-volume"
+                            aria-label="Default volume"
                             value={[defaultVolume]}
                             onValueChange={(value) => {
                                 const volume = value[0] ?? 75;
