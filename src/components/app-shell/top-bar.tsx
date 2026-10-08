@@ -1,7 +1,7 @@
 "use client";
 
 import { Command, Upload } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
     useDialogs,
     useSyncStatus,
@@ -19,9 +19,9 @@ import {
 } from "@/components/ui/tooltip";
 
 const TITLES: [prefix: string, title: string][] = [
+    ["/recordings", "Recordings"],
     ["/dashboard", "Recordings"],
     ["/dev/demo-dashboard", "Recordings"],
-    ["/recordings", "Recordings"],
     ["/settings", "Settings"],
 ];
 
@@ -43,12 +43,8 @@ interface TopBarProps {
  */
 export function TopBar({ userEmail, initialTheme }: TopBarProps) {
     const pathname = usePathname();
-    const {
-        paletteAvailable,
-        setPaletteOpen,
-        setSettingsOpen,
-        setShortcutsOpen,
-    } = useDialogs();
+    const { push } = useRouter();
+    const { paletteAvailable, setPaletteOpen, setShortcutsOpen } = useDialogs();
     const {
         isAutoSyncing,
         lastSyncTime,
@@ -142,7 +138,7 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                 <UserMenu
                     initialTheme={initialTheme}
                     userEmail={userEmail}
-                    onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenSettings={() => push("/settings")}
                     onOpenShortcuts={() => setShortcutsOpen(true)}
                 />
             </div>

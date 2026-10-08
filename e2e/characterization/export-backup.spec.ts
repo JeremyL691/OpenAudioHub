@@ -10,7 +10,7 @@ const EXPORT_FORMATS = ["json", "txt", "srt", "vtt"] as const;
 async function openExportSection(page: Page): Promise<void> {
     await page.getByTestId("user-menu").click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
-    await page.getByRole("button", { name: "Export/Backup settings" }).click();
+    await page.getByRole("link", { name: "Export/Backup settings" }).click();
     await expect(page.getByTestId("export-format")).toBeVisible();
 }
 

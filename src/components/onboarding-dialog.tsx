@@ -157,8 +157,7 @@ export function OnboardingDialog({
                             hasIncludedProvider={hasIncludedProvider}
                             onGoToSettings={() => {
                                 onOpenChange(false);
-                                window.location.href =
-                                    "/dashboard?settings=providers";
+                                window.location.href = "/settings/providers";
                             }}
                         />
                     )}

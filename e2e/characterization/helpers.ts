@@ -19,7 +19,7 @@ export async function signIn(page: Page): Promise<void> {
         await page.getByLabel("Email").fill(process.env.E2E_EMAIL ?? "");
         await page.getByLabel("Password").fill(process.env.E2E_PASSWORD ?? "");
         await page.getByRole("button", { name: /sign in|log ?in/i }).click();
-        await page.waitForURL("**/dashboard");
+        await page.waitForURL("**/recordings");
     }
     await expect(page.getByTestId("recording-list")).toBeVisible();
 }
