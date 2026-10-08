@@ -35,8 +35,15 @@ vi.mock("@/db/schema", () => {
         audioPipelineJobs: columns("audioPipelineJobs"),
         recordings: columns("recordings"),
         transcriptions: columns("transcriptions"),
+        userSettings: columns("userSettings"),
     };
 });
+
+vi.mock("@/lib/rate-limit", () => ({ consumeRateLimitBucket: vi.fn() }));
+
+vi.mock("@/lib/summary/generate-summary", () => ({
+    generateSummaryForRecording: vi.fn(),
+}));
 
 vi.mock("@/lib/env", () => ({
     env: {
@@ -157,7 +164,13 @@ describe("audio pipeline coordinator recovery", () => {
         });
 
         let selectCount = 0;
-        mocks.select.mockImplementation(() => {
+        mocks.select.mockImplementation((fields?: Record<string, unknown>) => {
+            // The auto-summary setting read is not part of the replay sequence.
+            if (fields && "autoSummarize" in fields) {
+                return queryResult([
+                    { autoSummarize: false, autoSummarizePreset: null },
+                ]);
+            }
             selectCount += 1;
             if (selectCount === 2) {
                 return queryResult([
