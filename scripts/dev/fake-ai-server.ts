@@ -5,6 +5,9 @@
 import { SHORT_SEGMENTS, SUMMARY } from "./e2e-fixtures";
 
 const PORT = Number(process.env.FAKE_AI_PORT ?? 3299);
+// Optional delay for transcription requests (default 0). The Docker long-audio smoke sets it so a
+// pipeline restart can land mid-job; the E2E run leaves it at 0, so its timing is unchanged.
+const LATENCY_MS = Number(process.env.FAKE_AI_LATENCY_MS ?? 0);
 
 function json(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), {
@@ -34,6 +37,7 @@ Bun.serve({
             pathname === "/v1/audio/transcriptions"
         ) {
             await request.arrayBuffer();
+            if (LATENCY_MS > 0) await Bun.sleep(LATENCY_MS);
             const last = SHORT_SEGMENTS[SHORT_SEGMENTS.length - 1];
             return json({
                 task: "transcribe",
