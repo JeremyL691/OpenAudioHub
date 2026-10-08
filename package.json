@@ -31,6 +31,9 @@
         "start": "next start",
         "test": "vitest run",
         "test:watch": "vitest",
+        "e2e": "bun scripts/dev/e2e-prepare.ts && playwright test",
+        "e2e:prepare": "bun scripts/dev/e2e-prepare.ts",
+        "e2e:smoke": "bun scripts/dev/e2e-prepare.ts && playwright test --grep @smoke",
         "type-check": "tsc --noEmit",
         "format-and-lint": "biome check .",
         "format-and-lint:fix": "biome check . --write",
@@ -87,7 +90,9 @@
         "zod": "^4.1.12"
     },
     "devDependencies": {
+        "@axe-core/playwright": "^4.13.0",
         "@biomejs/biome": "^2.3.7",
+        "@playwright/test": "^1.63.0",
         "@react-email/render": "^2.0.0",
         "@tailwindcss/postcss": "^4",
         "@testing-library/react": "16.3.2",

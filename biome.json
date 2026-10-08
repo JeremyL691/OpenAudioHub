@@ -9,6 +9,8 @@
         "ignoreUnknown": true,
         "includes": [
             "src/**/*.{js,jsx,ts,tsx,json,css}",
+            "e2e/**/*.{ts,tsx}",
+            "scripts/dev/**/*.{ts,mjs}",
             "*.{js,jsx,ts,tsx,json}",
             "!src/db/migrations",
             "!src/.source"
