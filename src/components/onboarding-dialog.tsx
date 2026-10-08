@@ -28,6 +28,13 @@ const STEP_ORDER: OnboardingStep[] = [
     "complete",
 ];
 
+const STEP_LABELS: Record<OnboardingStep, string> = {
+    welcome: "Welcome",
+    plaud: "Plaud",
+    "ai-provider": "AI provider",
+    complete: "Finish",
+};
+
 interface OnboardingDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -42,6 +49,48 @@ interface OnboardingDialogProps {
     mandatory?: boolean;
 }
 
+/**
+ * Four steps, shown as a brand-gradient bar above the step content. Filled
+ * segments are the steps reached so far, including the current one.
+ */
+function OnboardingProgress({
+    labels,
+    currentIndex,
+}: {
+    labels: string[];
+    currentIndex: number;
+}) {
+    const label = `Step ${currentIndex + 1} of ${labels.length}`;
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{label}</span>
+                <span>{labels[currentIndex]}</span>
+            </div>
+            <div
+                role="progressbar"
+                aria-label="Onboarding progress"
+                aria-valuemin={1}
+                aria-valuemax={labels.length}
+                aria-valuenow={currentIndex + 1}
+                aria-valuetext={label}
+                className="flex gap-1.5"
+            >
+                {labels.map((stepLabel, index) => (
+                    <span
+                        key={stepLabel}
+                        className={`h-1.5 flex-1 rounded-full transition-colors ${
+                            index <= currentIndex
+                                ? "bg-brand-gradient"
+                                : "bg-muted"
+                        }`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function OnboardingDialog({
     open,
     onOpenChange,
@@ -52,7 +101,6 @@ export function OnboardingDialog({
     const [step, setStep] = useState<OnboardingStep>("welcome");
     const [hasPlaudConnection, setHasPlaudConnection] = useState(false);
     const [hasOwnProvider, setHasOwnProvider] = useState(false);
-    const [hasIncludedProvider, setHasIncludedProvider] = useState(false);
 
     // Probe whether the user already finished the Plaud connection in
     // a previous session, so re-entering the flow doesn't make them
@@ -76,12 +124,8 @@ export function OnboardingDialog({
         if (open && step === "ai-provider") {
             fetch("/api/settings/ai/providers")
                 .then((res) => res.json())
-                .then((data: { providers?: Array<{ managed?: boolean }> }) => {
-                    const providers = data.providers ?? [];
-                    // The included Mynah provider (managed) shouldn't count as
-                    // the user having brought their own — it's complimentary.
-                    setHasOwnProvider(providers.some((p) => !p.managed));
-                    setHasIncludedProvider(providers.some((p) => p.managed));
+                .then((data: { providers?: unknown[] }) => {
+                    setHasOwnProvider((data.providers ?? []).length > 0);
                 })
                 .catch(() => {});
         }
@@ -94,7 +138,6 @@ export function OnboardingDialog({
             setStep("welcome");
             setHasPlaudConnection(false);
             setHasOwnProvider(false);
-            setHasIncludedProvider(false);
         }
     }, [open]);
 
@@ -143,6 +186,11 @@ export function OnboardingDialog({
                 </DialogHeader>
 
                 <div className="space-y-6">
+                    <OnboardingProgress
+                        labels={STEP_ORDER.map((name) => STEP_LABELS[name])}
+                        currentIndex={stepIndex}
+                    />
+
                     {step === "welcome" && <OnboardingStepWelcome />}
                     {step === "plaud" && (
                         <OnboardingStepPlaud
@@ -154,21 +202,16 @@ export function OnboardingDialog({
                     {step === "ai-provider" && (
                         <OnboardingStepAiProvider
                             hasOwnProvider={hasOwnProvider}
-                            hasIncludedProvider={hasIncludedProvider}
                             onGoToSettings={() => {
                                 onOpenChange(false);
                                 window.location.href = "/settings/providers";
                             }}
                         />
                     )}
-                    {step === "complete" && (
-                        <OnboardingStepComplete
-                            hasIncludedProvider={hasIncludedProvider}
-                        />
-                    )}
+                    {step === "complete" && <OnboardingStepComplete />}
 
-                    <DialogFooter className="gap-2 sm:gap-3 relative">
-                        <div className="flex gap-2 flex-1">
+                    <DialogFooter className="gap-2 sm:gap-3">
+                        <div className="flex flex-1 gap-2">
                             {prevStep && (
                                 <Button
                                     variant="outline"
@@ -180,26 +223,7 @@ export function OnboardingDialog({
                             )}
                         </div>
 
-                        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 mt-0.5">
-                            {STEP_ORDER.map((stepName, index) => {
-                                const completed = index < stepIndex;
-                                const current = index === stepIndex;
-                                return (
-                                    <div
-                                        key={stepName}
-                                        className={`size-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                                            completed || current
-                                                ? "bg-primary text-primary-foreground"
-                                                : "border-2 border-muted-foreground/30 text-muted-foreground"
-                                        }`}
-                                    >
-                                        {index + 1}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        <div className="flex gap-2 flex-1 justify-end">
+                        <div className="flex flex-1 justify-end gap-2">
                             {canSkip && nextStep && (
                                 <Button
                                     variant="ghost"

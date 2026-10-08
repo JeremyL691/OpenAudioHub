@@ -1,6 +1,5 @@
 "use client";
 
-import { Command } from "cmdk";
 import {
     FileText,
     Keyboard,
@@ -15,6 +14,8 @@ import {
     Upload,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { Kbd as UiKbd } from "@/components/ui/kbd";
 import { type DateTimeFormat, formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
 import type { Recording } from "@/types/recording";
@@ -42,6 +43,9 @@ export function transcriptSnippet(
     return `${stripped.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
+const PILL_CLASS =
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground";
+
 export function Row({
     icon,
     title,
@@ -58,21 +62,25 @@ export function Row({
             <span aria-hidden="true" className="shrink-0">
                 {icon}
             </span>
-            <span className="cmd-body">
-                <span className="cmd-title">{title}</span>
+            <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">{title}</span>
                 {subtitle ? (
-                    <span className="cmd-subtitle">{subtitle}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                        {subtitle}
+                    </span>
                 ) : null}
             </span>
             {accessory ? (
-                <span className="cmd-accessory">{accessory}</span>
+                <span className="ml-auto flex shrink-0 items-center gap-2">
+                    {accessory}
+                </span>
             ) : null}
         </>
     );
 }
 
 export function Kbd({ children }: { children: ReactNode }) {
-    return <kbd className="cmd-kbd">{children}</kbd>;
+    return <UiKbd>{children}</UiKbd>;
 }
 
 export function RecordingsGroup({
@@ -98,7 +106,7 @@ export function RecordingsGroup({
     const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
 
     return (
-        <Command.Group heading="Recent">
+        <CommandGroup heading="Recent">
             {recordings.map((r) => {
                 const snippet = transcriptSnippet(
                     transcriptions.get(r.id)?.text,
@@ -145,24 +153,25 @@ export function RecordingsGroup({
                 let accessory: ReactNode = null;
                 if (inFlight === "transcribing") {
                     accessory = (
-                        <span className="cmd-pill">
+                        <span className={PILL_CLASS}>
                             <Loader2 className="size-3 animate-spin" />
                             Transcribing
                         </span>
                     );
                 } else if (inFlight === "summarizing") {
                     accessory = (
-                        <span className="cmd-pill">
+                        <span className={PILL_CLASS}>
                             <Loader2 className="size-3 animate-spin" />
                             Summarizing
                         </span>
                     );
                 } else if (!r.hasTranscript) {
-                    // stopPropagation: cmdk treats inner pointerdown as selection.
+                    // stopPropagation: the row is a selectable item, so the
+                    // pointer-down on this button must not select the row.
                     accessory = (
                         <button
                             type="button"
-                            className="cmd-row-action"
+                            className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent"
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -176,7 +185,7 @@ export function RecordingsGroup({
                     );
                 } else if (isCurrent) {
                     accessory = (
-                        <span className="cmd-pill">
+                        <span className={PILL_CLASS}>
                             <span
                                 aria-hidden="true"
                                 className="inline-block size-1.5 rounded-full bg-primary"
@@ -187,7 +196,7 @@ export function RecordingsGroup({
                 }
 
                 return (
-                    <Command.Item
+                    <CommandItem
                         key={r.id}
                         value={searchValue}
                         onSelect={runAction(() => onSelectRecording(r))}
@@ -202,16 +211,16 @@ export function RecordingsGroup({
                             subtitle={subtitle}
                             accessory={accessory}
                         />
-                    </Command.Item>
+                    </CommandItem>
                 );
             })}
             {overflowCount > 0 && (
-                <div className="cmd-more-hint">
+                <div className="px-2 py-2 text-xs text-muted-foreground">
                     +{overflowCount} more · refine your search to narrow the
                     list
                 </div>
             )}
-        </Command.Group>
+        </CommandGroup>
     );
 }
 
@@ -229,36 +238,36 @@ export function ActionsGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <Command.Group heading="Actions">
-            <Command.Item onSelect={runAction(onSync)}>
+        <CommandGroup heading="Actions">
+            <CommandItem onSelect={runAction(onSync)}>
                 <Row
                     icon={
                         <RefreshCw className="size-4 text-muted-foreground" />
                     }
                     title="Sync device"
                 />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onUpload)}>
+            </CommandItem>
+            <CommandItem onSelect={runAction(onUpload)}>
                 <Row
                     icon={<Upload className="size-4 text-muted-foreground" />}
                     title="Upload audio"
                 />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenSettings)}>
+            </CommandItem>
+            <CommandItem onSelect={runAction(onOpenSettings)}>
                 <Row
                     icon={<Settings className="size-4 text-muted-foreground" />}
                     title="Open settings"
                     accessory={<Kbd>,</Kbd>}
                 />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenShortcuts)}>
+            </CommandItem>
+            <CommandItem onSelect={runAction(onOpenShortcuts)}>
                 <Row
                     icon={<Keyboard className="size-4 text-muted-foreground" />}
                     title="Keyboard shortcuts"
                     accessory={<Kbd>?</Kbd>}
                 />
-            </Command.Item>
-        </Command.Group>
+            </CommandItem>
+        </CommandGroup>
     );
 }
 
@@ -272,41 +281,41 @@ export function ThemeGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <Command.Group heading="Theme">
-            <Command.Item onSelect={runAction(() => onSetTheme("light"))}>
+        <CommandGroup heading="Theme">
+            <CommandItem onSelect={runAction(() => onSetTheme("light"))}>
                 <Row
                     icon={<Sun className="size-4 text-muted-foreground" />}
                     title="Light"
                     accessory={
                         currentTheme === "light" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className={PILL_CLASS}>Active</span>
                         ) : null
                     }
                 />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("dark"))}>
+            </CommandItem>
+            <CommandItem onSelect={runAction(() => onSetTheme("dark"))}>
                 <Row
                     icon={<Moon className="size-4 text-muted-foreground" />}
                     title="Dark"
                     accessory={
                         currentTheme === "dark" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className={PILL_CLASS}>Active</span>
                         ) : null
                     }
                 />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("system"))}>
+            </CommandItem>
+            <CommandItem onSelect={runAction(() => onSetTheme("system"))}>
                 <Row
                     icon={<Monitor className="size-4 text-muted-foreground" />}
                     title="Auto"
                     accessory={
                         currentTheme === "system" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className={PILL_CLASS}>Active</span>
                         ) : null
                     }
                 />
-            </Command.Item>
-        </Command.Group>
+            </CommandItem>
+        </CommandGroup>
     );
 }
 
@@ -316,30 +325,30 @@ export function PaletteFooter({
     showTranscribeHint: boolean;
 }) {
     return (
-        <div className="cmd-footer">
-            <div className="cmd-footer-group">
-                <span className="cmd-footer-hint">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-3 py-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-1">
                     <Kbd>↑</Kbd>
                     <Kbd>↓</Kbd>
                     navigate
                 </span>
-                <span className="cmd-footer-hint">
+                <span className="inline-flex items-center gap-1">
                     <Kbd>↵</Kbd>
                     select
                 </span>
-                <span className="cmd-footer-hint">
+                <span className="inline-flex items-center gap-1">
                     <Kbd>esc</Kbd>
                     close
                 </span>
                 {showTranscribeHint && (
-                    <span className="cmd-footer-hint">
+                    <span className="inline-flex items-center gap-1">
                         <Kbd>⌘</Kbd>
                         <Kbd>↵</Kbd>
                         transcribe
                     </span>
                 )}
             </div>
-            <span className="cmd-footer-hint">
+            <span className="inline-flex items-center gap-1">
                 <Kbd>⌘K</Kbd>
                 toggle
             </span>

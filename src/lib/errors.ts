@@ -297,11 +297,9 @@ export function mapErrorToAppError(error: unknown): AppError {
 
         // NOTE: message-substring matching below is fragile by
         // construction -- an error whose message happens to contain both
-        // "storage" and "transcription" (e.g. a Mynah storage-config
-        // error) will match whichever check runs first, not necessarily
-        // the correct category. Known limitation; prefer throwing a typed
-        // error (see MynahBudgetExhaustedError above) over adding more
-        // substrings here.
+        // "storage" and "transcription" will match whichever check runs
+        // first, not necessarily the correct category. Known limitation;
+        // prefer throwing a typed error over adding more substrings here.
         if (error.message.includes("storage")) {
             return new AppError(
                 ErrorCode.STORAGE_ERROR,

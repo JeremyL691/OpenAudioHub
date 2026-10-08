@@ -1,21 +1,23 @@
 "use client";
 
-import { Command } from "cmdk";
-import { Search } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
     ActionsGroup,
-    Kbd,
     PaletteFooter,
     RECORDING_CAP,
     RecordingsGroup,
     ThemeGroup,
     transcriptSnippet,
 } from "@/components/dashboard/command-palette-parts";
+import {
+    Command,
+    CommandEmpty,
+    CommandInput,
+    CommandList,
+} from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { DateTimeFormat } from "@/lib/format-date";
 import type { Recording } from "@/types/recording";
-import "@/components/dashboard/command-palette.css";
 
 interface TranscriptionData {
     text?: string;
@@ -130,28 +132,20 @@ export function CommandPalette({
             >
                 <DialogTitle className="sr-only">Command palette</DialogTitle>
                 <Command
-                    className="command-palette"
                     label="Command palette"
                     value={activeValue}
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
                 >
-                    <div className="cmd-input-row">
-                        <Search
-                            className="cmd-input-icon size-4"
-                            aria-hidden="true"
-                        />
-                        <Command.Input placeholder="Search recordings, transcripts, or actions…" />
-                        <Kbd>⌘K</Kbd>
-                    </div>
+                    <CommandInput placeholder="Search recordings, transcripts, or actions…" />
 
-                    <Command.List className="max-h-[60vh] overflow-y-auto p-2">
-                        <Command.Empty>
+                    <CommandList className="max-h-[60vh] overflow-y-auto p-2">
+                        <CommandEmpty>
                             No matches.
-                            <div className="cmd-empty-hint">
+                            <div className="mt-1 text-xs text-muted-foreground">
                                 Try searching by something you talked about.
                             </div>
-                        </Command.Empty>
+                        </CommandEmpty>
 
                         <RecordingsGroup
                             recordings={visibleRecordings}
@@ -177,7 +171,7 @@ export function CommandPalette({
                             onSetTheme={onSetTheme}
                             runAction={runAction}
                         />
-                    </Command.List>
+                    </CommandList>
 
                     <PaletteFooter
                         showTranscribeHint={transcribeTargets.size > 0}
