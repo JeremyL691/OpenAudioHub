@@ -21,7 +21,7 @@ export function SettingsNavSidebar({ activeSection }: Props) {
         >
             {SETTINGS_NAV_GROUPS.map((group) => (
                 <div key={group.label} className="flex flex-col gap-1">
-                    <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {group.label}
                     </div>
                     {group.items.map((item) => {

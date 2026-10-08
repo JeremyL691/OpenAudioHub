@@ -1,6 +1,7 @@
 import type { DocsLayoutProps } from "fumadocs-ui/layouts/docs";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 import Image from "next/image";
+import { Github } from "@/components/icons/icons";
 import { BRAND } from "@/lib/brand";
 
 export const baseOptions: BaseLayoutProps = {
@@ -25,7 +26,19 @@ export const baseOptions: BaseLayoutProps = {
         ),
         url: "/docs",
     },
-    githubUrl: BRAND.repoUrl,
+    // The GitHub link is built here, not with `githubUrl`: fumadocs' own icon
+    // is an untitled svg with role="img", which axe reports. The app's Github
+    // icon hides its svg and the link carries the label.
+    links: [
+        {
+            type: "icon",
+            url: BRAND.repoUrl,
+            text: "GitHub",
+            label: "GitHub",
+            icon: <Github />,
+            external: true,
+        },
+    ],
 };
 
 export const docsTabs: NonNullable<DocsLayoutProps["tabs"]> = [

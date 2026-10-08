@@ -271,7 +271,7 @@ function ProvidersList({
                                     </span>
                                 )}
                                 {provider.isDefaultEnhancement && (
-                                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded border border-purple-500/20">
+                                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded border border-purple-500/20">
                                         Enhancement
                                     </span>
                                 )}
@@ -300,6 +300,7 @@ function ProvidersList({
                             )}
                             <Button
                                 onClick={() => onEdit(provider)}
+                                aria-label="Edit provider"
                                 variant="outline"
                                 size="icon"
                                 className="size-10 sm:size-9"
@@ -308,6 +309,7 @@ function ProvidersList({
                             </Button>
                             <Button
                                 onClick={() => onDelete(provider.id)}
+                                aria-label="Delete provider"
                                 variant="outline"
                                 size="icon"
                                 className="size-10 sm:size-9"

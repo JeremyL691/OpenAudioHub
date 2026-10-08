@@ -154,7 +154,6 @@ export function CommandPalette({
                             inFlightActions={inFlightActions}
                             dateTimeFormat={dateTimeFormat}
                             onSelectRecording={onSelectRecording}
-                            onTranscribeRecording={onTranscribeRecording}
                             runAction={runAction}
                         />
 

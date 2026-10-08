@@ -96,7 +96,7 @@ export function UserMenu({
                 </div>
 
                 <div className="border-t px-3 py-2">
-                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Theme
                     </div>
                     <div

@@ -35,7 +35,7 @@ export function SourceSwitcher({
                     className={`px-3 py-1 text-xs rounded-md transition-colors ${
                         t.source === activeSource
                             ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:text-foreground"
+                            : "bg-muted text-foreground hover:text-foreground"
                     }`}
                 >
                     {transcriptSourceLabel(t.source)}
