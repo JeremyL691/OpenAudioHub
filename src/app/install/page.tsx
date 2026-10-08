@@ -3,24 +3,12 @@ import Link from "next/link";
 import { CopyableCommand } from "@/components/copyable-command";
 import { Footer } from "@/components/footer";
 import { LogoWordmark } from "@/components/icons/logo";
-import { LandingFooter } from "@/components/landing-footer";
-import { env } from "@/lib/env";
 import { INSTALL_ONELINER, pinnedInstallCommand } from "@/lib/install-commands";
-import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 import { APP_VERSION_TAG } from "@/lib/version";
 
 /**
- * Public "how do I self-host this?" page. Linked from the landing
- * footer (Resources → Install script) and intended as a friendlier
- * landing than dumping `/install.sh` straight into the browser.
- *
- * Reachable in both deployment modes -- the page content is just
- * project docs that are useful to anyone considering self-host,
- * whether they found it via the hosted marketing site or via a
- * self-host operator sharing their own instance. Only the surrounding
- * footer chrome differs: hosted gets the rich `LandingFooter`
- * (matches the rest of the marketing surface); self-host gets the
- * minimal `Footer` (no marketing sitemap on a self-host instance).
+ * Public "how do I self-host this?" page. A friendlier entry point than
+ * dumping `/install.sh` straight into the browser.
  *
  * Deliberately a server component -- the only interactive bit is the
  * Copy button inside `<CopyableCommand>` (a small client island).
@@ -28,22 +16,11 @@ import { APP_VERSION_TAG } from "@/lib/version";
  * below always matches the running build.
  */
 
-// force-dynamic: `env.IS_HOSTED` is the only condition this page branches
-// on, and it's read at runtime -- without this, Next.js sees no dynamic
-// API in use and statically prerenders the page during `next build`,
-// baking in whatever IS_HOSTED evaluated to in the *build* environment
-// (unset in this project's Dockerfile) rather than the real value the
-// deployed container is configured with. Confirmed live on riffado.com:
-// the self-host branch (plain `<Footer>`) was frozen into the cached
-// static output instead of the hosted `<LandingFooter>`.
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = marketingMetadata({
+export const metadata: Metadata = {
     title: "Install Riffado | Self-host in one command",
     description:
         "Self-host Riffado with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
-    path: "/install",
-});
+};
 
 const ONE_LINER = INSTALL_ONELINER;
 const PINNED_LINER = pinnedInstallCommand(APP_VERSION_TAG);
@@ -60,20 +37,6 @@ export default function InstallPage() {
                     >
                         <LogoWordmark className="h-7 w-auto" />
                     </Link>
-                    {/* The marketing landing only exists on hosted
-                        (`/` redirects to `/login` on self-host), so
-                        "Back to landing" is hosted-only chrome. Hiding
-                        rather than rewriting the href -- on a
-                        self-host instance there is no landing to go
-                        back to. */}
-                    {env.IS_HOSTED ? (
-                        <Link
-                            href="/#deploy"
-                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            ← Back to landing
-                        </Link>
-                    ) : null}
                 </div>
             </header>
 
@@ -227,7 +190,7 @@ export default function InstallPage() {
                 </section>
             </main>
 
-            {env.IS_HOSTED ? <LandingFooter /> : <Footer />}
+            <Footer />
         </div>
     );
 }

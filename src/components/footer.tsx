@@ -67,19 +67,6 @@ export function Footer() {
                         >
                             {APP_VERSION_TAG}
                         </Link>
-                        {/* Hosted-only "What's new" link to the public,
-                            plain-language changelog. Self-host already
-                            has the version tag above which points at
-                            the GitHub release notes, so adding it
-                            there would just duplicate the entry point. */}
-                        {env.IS_HOSTED ? (
-                            <Link
-                                href="/changelog"
-                                className="hover:text-foreground transition-colors"
-                            >
-                                What&apos;s new
-                            </Link>
-                        ) : null}
                         <Link
                             href="/docs"
                             className="hover:text-foreground transition-colors"
