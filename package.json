@@ -42,6 +42,7 @@
         "format-and-lint:fix": "biome check . --write",
         "brand:audit": "bash scripts/dev/brand-audit.sh",
         "docs:check": "node scripts/dev/check-doc-links.mjs",
+        "contrast:check": "node scripts/dev/contrast-check.ts",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "bun src/db/migrate.ts",
         "db:studio": "drizzle-kit studio",

@@ -63,6 +63,9 @@ jobs:
       - name: Check documentation links
         run: pnpm docs:check
 
+      - name: Check color contrast
+        run: pnpm contrast:check
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
