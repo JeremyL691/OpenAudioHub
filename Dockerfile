@@ -27,26 +27,12 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# PostHog source-map upload credentials. Empty by default -- only the
-# canonical riffado/riffado GitHub Actions build passes these (from repo
-# secrets, see .github/workflows/docker.yml). A self-hosted `docker build .`
-# or a fork's build gets empty strings here, which short-circuits the guarded
-# step below entirely: no `productionBrowserSourceMaps` in next.config.ts, no
-# posthog-cli install, no network call, no Riffado credentials required.
-ARG POSTHOG_CLI_API_KEY
-ARG POSTHOG_CLI_PROJECT_ID
-ARG POSTHOG_CLI_HOST=https://eu.posthog.com
-ENV POSTHOG_CLI_API_KEY=$POSTHOG_CLI_API_KEY
-ENV POSTHOG_CLI_PROJECT_ID=$POSTHOG_CLI_PROJECT_ID
-ENV POSTHOG_CLI_HOST=$POSTHOG_CLI_HOST
-
 # `fumadocs-mdx`'s `lastModified` plugin shells out to `git log` for every
-# MDX page (see source.config.ts). `curl` installs `posthog-cli` for the
-# guarded source-map step below. The pinned `oven/bun:1.4.0` image is
-# Debian slim and ships without either, so install them here.
+# MDX page (see source.config.ts). The pinned `oven/bun:1.4.0` image is
+# Debian slim and ships without git, so install it here.
 # Builder-stage only -- the `runner` stage below does not inherit this layer.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl \
+    && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
 # Compile MDX docs into `src/.source/` before `next build` -- this is what
@@ -54,27 +40,10 @@ RUN apt-get update \
 RUN bunx fumadocs-mdx source.config.ts src/.source
 RUN bun run build
 
-# Source map upload -- only runs when POSTHOG_CLI_API_KEY was passed as a
-# build arg. `next build` only emitted `.js.map` files in the first place if
-# `productionBrowserSourceMaps` was true (next.config.ts gates that on the
-# same var), so this is a true no-op, not just a skipped upload, when unset.
-# Injects release/chunk metadata into the built assets and uploads them to
-# PostHog. Deliberately non-fatal (`||`) -- a CLI download hiccup or a
-# PostHog outage must never block shipping a release. The trailing `find`
-# runs unconditionally and deletes any `.js.map` regardless of how far the
-# step got (inject-only, upload failure, or full success with
-# `--delete-after` already having run), since that cleanup -- not the
-# upload -- is what guarantees raw source maps never reach the `runner`
-# stage's COPY below.
-RUN if [ -n "$POSTHOG_CLI_API_KEY" ]; then \
-        ( \
-            curl --proto '=https' --tlsv1.2 -LsSf https://download.posthog.com/cli | sh && \
-            export PATH="$HOME/.local/bin:/usr/local/bin:$PATH" && \
-            posthog-cli sourcemap inject --directory .next && \
-            posthog-cli sourcemap upload --directory .next --release-name riffado --delete-after \
-        ) || echo "[docker-build] posthog-cli source-map step failed; continuing without it"; \
-        find .next -name '*.js.map' -delete; \
-    fi
+# Raw client source maps must never reach the `runner` stage's COPY below.
+# next.config.ts does not emit them (productionBrowserSourceMaps is false), so
+# this cleanup is defense in depth only.
+RUN find .next -name '*.js.map' -delete
 
 # Bundle idempotent migration script with all dependencies
 RUN bun build src/db/migrate-idempotent.ts --target=bun --outfile=migrate-idempotent.js

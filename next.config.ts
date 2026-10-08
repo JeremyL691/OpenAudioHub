@@ -3,12 +3,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     output: "standalone",
-    // Client source maps are only ever generated when the build is going
-    // to inject+upload+delete them (see the guarded `posthog-cli` step in
-    // the Dockerfile builder stage). Without `POSTHOG_CLI_API_KEY`, Next
-    // never emits `.js.map` files at all, so there's nothing a self-host
-    // build could accidentally ship publicly-servable.
-    productionBrowserSourceMaps: Boolean(process.env.POSTHOG_CLI_API_KEY),
+    // Client source maps are never published. The image ships no `.js.map`
+    // files (the Dockerfile also deletes any that appear).
+    productionBrowserSourceMaps: false,
     skipTrailingSlashRedirect: true,
     // `scripts/install.sh` is read from disk at request time by the
     // /install.sh routes; declare it so the standalone tracer ships it.
