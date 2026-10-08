@@ -11,6 +11,7 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 ### Fixed
 
 - The one-line installer works. The audio pipeline is now published as `ghcr.io/jeremyl691/openaudiohub-audio-pipeline`, and `docker-compose.yml` pulls it instead of building it from source, so an installation needs no source checkout. To build both images from a checkout, add `docker-compose.dev.yml`.
+- `docker-compose.yml` drops the obsolete `version` attribute, which Compose v2 warns about.
 
 ## [1.0.0]
 
