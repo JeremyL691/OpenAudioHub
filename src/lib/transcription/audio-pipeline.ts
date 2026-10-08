@@ -20,6 +20,7 @@ import {
 } from "@/db/schema";
 import { encryptJsonField, encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
+import { maybeAutoSummarize } from "@/lib/transcription/auto-summary";
 import { postProcessPipelineTranscription } from "@/lib/transcription/postprocess";
 import { OWN_SOURCE, OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -426,6 +427,18 @@ export async function processJob(job: ClaimedJob): Promise<void> {
                     "[audio-pipeline] transcription event failed:",
                     error,
                 );
+            }
+            // The auto-summary runs once per committed generation. The
+            // transaction above moved this job out of submitted/running, so a
+            // replay or reconcile sees committed === false and never gets here.
+            try {
+                await maybeAutoSummarize(
+                    job.recordingId,
+                    job.userId,
+                    "pipeline",
+                );
+            } catch (error) {
+                console.error("[audio-pipeline] auto-summary failed:", error);
             }
             await acknowledgePipelineJob(job.id);
         } else {
