@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
@@ -123,14 +123,9 @@ export function RegisterForm() {
                     />
                 </div>
 
-                <MetalButton
-                    type="submit"
-                    className="w-full"
-                    variant="cyan"
-                    disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Creating account..." : "Create Account"}
-                </MetalButton>
+                </Button>
             </form>
 
             <div className="text-center text-sm">

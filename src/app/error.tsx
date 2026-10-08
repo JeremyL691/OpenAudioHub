@@ -1,6 +1,6 @@
 "use client";
 
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 
 /**
  * App Router error boundary. Catches render errors thrown below the root
@@ -13,7 +13,7 @@ export default function ErrorBoundary({ reset }: { reset: () => void }) {
             <p className="text-sm text-muted-foreground">
                 Try again, or reload the page if it keeps happening.
             </p>
-            <MetalButton onClick={() => reset()}>Try again</MetalButton>
+            <Button onClick={() => reset()}>Try again</Button>
         </div>
     );
 }

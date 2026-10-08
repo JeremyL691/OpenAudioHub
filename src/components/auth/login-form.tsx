@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
@@ -114,14 +114,9 @@ export function LoginForm({
                     />
                 </div>
 
-                <MetalButton
-                    type="submit"
-                    className="w-full"
-                    variant="cyan"
-                    disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Signing in..." : "Sign In"}
-                </MetalButton>
+                </Button>
             </form>
 
             {registrationEnabled && (

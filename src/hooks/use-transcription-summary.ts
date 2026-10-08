@@ -60,7 +60,7 @@ interface UseTranscriptionSummaryOptions {
  *
  * Returns flat state + handlers; callers compose their own JSX so the
  * dashboard's shadcn `Card`/`Button` look and the recording page's
- * `Panel`/`MetalButton` look stay distinct on purpose.
+ * `Card`/`Button` look stay distinct on purpose.
  */
 export function useTranscriptionSummary({
     recordingId,

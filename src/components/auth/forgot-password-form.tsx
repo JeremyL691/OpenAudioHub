@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "@/lib/auth-client";
@@ -111,14 +111,13 @@ export function ForgotPasswordForm({
                         />
                     </div>
 
-                    <MetalButton
+                    <Button
                         type="submit"
                         className="w-full"
-                        variant="cyan"
                         disabled={isLoading}
                     >
                         {isLoading ? "Sending..." : "Send reset link"}
-                    </MetalButton>
+                    </Button>
                 </form>
             )}
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/icons/logo";
-import { Panel } from "@/components/panel";
+import { Card } from "@/components/ui/card";
 
 interface AuthChromeProps {
     /** Headline above the form. e.g. "Sign in" / "Create account". */
@@ -45,7 +45,7 @@ export function SelfHostAuthChrome({
                         <Logo className="text-xl text-foreground" />
                     </Link>
                 </div>
-                <Panel className="space-y-6">
+                <Card className="space-y-6">
                     <div className="space-y-1.5">
                         <h1 className="text-xl font-semibold tracking-tight">
                             {title}
@@ -57,7 +57,7 @@ export function SelfHostAuthChrome({
                         ) : null}
                     </div>
                     {children}
-                </Panel>
+                </Card>
                 <InstanceFooter />
             </div>
         </div>
