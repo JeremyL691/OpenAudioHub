@@ -49,7 +49,12 @@ import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
 const userId = "user-1";
 const recordingId = "rec-1";
 
-function mockLookups(credentialRows: Record<string, unknown>[]) {
+function mockLookups(
+    credentialRows: Record<string, unknown>[],
+    transcriptRows: Record<string, unknown>[] = [
+        { text: "raw transcript", source: "openaudiohub" },
+    ],
+) {
     (db.select as Mock)
         // recording
         .mockReturnValueOnce({
@@ -64,11 +69,7 @@ function mockLookups(credentialRows: Record<string, unknown>[]) {
         // transcription
         .mockReturnValueOnce({
             from: vi.fn().mockReturnValue({
-                where: vi
-                    .fn()
-                    .mockResolvedValue([
-                        { text: "raw transcript", source: "openaudiohub" },
-                    ]),
+                where: vi.fn().mockResolvedValue(transcriptRows),
             }),
         })
         // user settings
@@ -163,5 +164,46 @@ describe("generateSummaryForRecording -- enhancement provider exclusion", () => 
             code: ErrorCode.AI_PROVIDER_NOT_CONFIGURED,
         });
         expect(chatCompletionsCreate).not.toHaveBeenCalled();
+    });
+});
+
+describe("generateSummaryForRecording -- transcript source", () => {
+    const openAiCredentials = [
+        {
+            id: "creds-oai",
+            provider: "OpenAI",
+            apiKey: "enc-1",
+            baseUrl: null,
+            defaultModel: "gpt-4o-mini",
+            isDefaultEnhancement: true,
+            createdAt: new Date("2026-01-01"),
+        },
+    ];
+    const transcripts = [
+        { text: "own text", source: "openaudiohub" },
+        { text: "plaud text", source: "plaud" },
+    ];
+
+    it("summarizes the requested source when it is stored", async () => {
+        mockLookups(openAiCredentials, transcripts);
+        await generateSummaryForRecording(userId, recordingId, {
+            source: "plaud",
+        });
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            messages: { content: string }[];
+        };
+        expect(payload.messages[1]?.content).toContain("plaud text");
+        expect(payload.messages[1]?.content).not.toContain("own text");
+    });
+
+    it("falls back to the own transcript when the requested source is not stored", async () => {
+        mockLookups(openAiCredentials, transcripts);
+        await generateSummaryForRecording(userId, recordingId, {
+            source: "mixed",
+        });
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            messages: { content: string }[];
+        };
+        expect(payload.messages[1]?.content).toContain("own text");
     });
 });

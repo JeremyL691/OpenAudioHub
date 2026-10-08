@@ -10,6 +10,7 @@ import type { Recording } from "@/types/recording";
 interface Transcription {
     text?: string;
     language?: string;
+    source?: string;
 }
 
 interface UseRecordingTranscriptOptions {
@@ -55,7 +56,7 @@ export function useRecordingTranscript({
             : transcription?.text
               ? [
                     {
-                        source: OWN_SOURCE,
+                        source: transcription.source ?? OWN_SOURCE,
                         text: transcription.text,
                         language: transcription.language,
                     },
