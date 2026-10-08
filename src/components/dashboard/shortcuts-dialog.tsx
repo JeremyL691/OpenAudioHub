@@ -7,6 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Kbd } from "@/components/ui/kbd";
 
 interface ShortcutsDialogProps {
     open: boolean;
@@ -51,14 +52,6 @@ const groups: { title: string; rows: ShortcutRow[] }[] = [
     },
 ];
 
-function Kbd({ children }: { children: React.ReactNode }) {
-    return (
-        <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground shadow-sm">
-            {children}
-        </kbd>
-    );
-}
-
 export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -75,11 +68,11 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
                             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 {group.title}
                             </h3>
-                            <ul className="space-y-1.5">
+                            <ul className="divide-y rounded-lg border">
                                 {group.rows.map((row) => (
                                     <li
                                         key={row.description}
-                                        className="flex items-center justify-between text-sm"
+                                        className="flex items-center justify-between px-3 py-2.5 text-sm"
                                     >
                                         <span className="text-foreground">
                                             {row.description}

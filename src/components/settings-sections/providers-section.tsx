@@ -20,9 +20,6 @@ interface Provider {
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
     createdAt: Date;
-    managed?: boolean;
-    includedSeconds?: number;
-    available?: boolean;
 }
 
 const EMPTY_PROVIDERS: Provider[] = [];
@@ -221,11 +218,6 @@ export function ProvidersSection({
     );
 }
 
-function formatIncludedSeconds(seconds: number | undefined): string {
-    if (!seconds) return "Included with your subscription";
-    return `Up to ${Math.round(seconds / 3600)}h of transcription per month`;
-}
-
 /**
  * Configured-providers list with edit/delete row actions. Pure
  * presentation -- the parent owns the data + dialog state.
@@ -263,51 +255,6 @@ function ProvidersList({
     return (
         <div className="space-y-3">
             {providers.map((provider) => {
-                if (provider.managed === true) {
-                    return (
-                        <div
-                            key={provider.id}
-                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
-                        >
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="font-semibold">
-                                        {provider.provider}
-                                    </h3>
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Included with your plan
-                                    </span>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                    {formatIncludedSeconds(
-                                        provider.includedSeconds,
-                                    )}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2 ml-4">
-                                {provider.isDefaultTranscription ? (
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Default
-                                    </span>
-                                ) : (
-                                    <Button
-                                        onClick={() =>
-                                            onSetDefault(provider.id)
-                                        }
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={provider.available === false}
-                                    >
-                                        {provider.available === false
-                                            ? "Resubscribe to use"
-                                            : "Use for transcription"}
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                }
-
                 return (
                     <div
                         key={provider.id}
