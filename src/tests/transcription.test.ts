@@ -47,11 +47,6 @@ vi.mock("@/lib/env", () => ({
     },
 }));
 
-vi.mock("@/lib/hosted/transcription/mynah", () => ({
-    isMynahConfigured: vi.fn().mockReturnValue(false),
-    transcribeViaMynah: vi.fn(),
-}));
-
 vi.mock("@/lib/ai/generate-title", () => ({
     generateTitleFromTranscription: vi
         .fn()
@@ -173,53 +168,6 @@ describe("Transcription", () => {
 
             expect(result.success).toBe(false);
             expect(result.error).toBe("No transcription API configured");
-        });
-
-        it("fails fast (does not fall back to Mynah) when an explicit providerId override doesn't resolve", async () => {
-            const { isMynahConfigured, transcribeViaMynah } = await import(
-                "@/lib/hosted/transcription/mynah"
-            );
-            (isMynahConfigured as Mock).mockReturnValueOnce(true);
-
-            (db.select as Mock)
-                .mockReturnValueOnce({
-                    from: vi.fn().mockReturnValue({
-                        where: vi.fn().mockReturnValue({
-                            limit: vi.fn().mockResolvedValue([
-                                {
-                                    id: mockRecordingId,
-                                    filename: "test.mp3",
-                                    storagePath: "test.mp3",
-                                },
-                            ]),
-                        }),
-                    }),
-                })
-                .mockReturnValueOnce({
-                    from: vi.fn().mockReturnValue({
-                        where: vi.fn().mockReturnValue({
-                            limit: vi.fn().mockResolvedValue([]),
-                        }),
-                    }),
-                })
-                // Explicit providerId lookup finds nothing (stale/invalid/other user's id).
-                .mockReturnValueOnce({
-                    from: vi.fn().mockReturnValue({
-                        where: vi.fn().mockReturnValue({
-                            limit: vi.fn().mockResolvedValue([]),
-                        }),
-                    }),
-                });
-
-            const result = await transcribeRecording(
-                mockUserId,
-                mockRecordingId,
-                { providerId: "stale-provider-id" },
-            );
-
-            expect(result.success).toBe(false);
-            expect(result.errorCode).toBe("NO_TRANSCRIPTION_PROVIDER");
-            expect(transcribeViaMynah).not.toHaveBeenCalled();
         });
 
         it("should return error when API call fails", async () => {

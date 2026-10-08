@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/tooltip";
 
 interface Props {
-    isAdmin: boolean;
     userEmail: string | null;
     initialTheme: "light" | "dark" | "system";
     lastSyncTime: Date | null;
@@ -48,7 +47,6 @@ interface Props {
  * so a separate status block isn't needed.
  */
 export function WorkstationHeader({
-    isAdmin,
     userEmail,
     initialTheme,
     lastSyncTime,
@@ -138,7 +136,6 @@ export function WorkstationHeader({
                     </TooltipContent>
                 </Tooltip>
                 <UserMenu
-                    isAdmin={isAdmin}
                     initialTheme={initialTheme}
                     userEmail={userEmail}
                     onOpenSettings={onOpenSettings}

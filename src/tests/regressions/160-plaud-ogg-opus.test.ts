@@ -38,14 +38,6 @@ vi.mock("@/lib/entitlements", () => ({
     isHostedLockedOut: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock("@/lib/hosted/billing/storage-cap", () => ({
-    enforceStorageCap: vi.fn().mockResolvedValue({
-        allowed: true,
-        currentBytes: 0,
-        limitBytes: null,
-    }),
-}));
-
 vi.mock("@/lib/plaud/client-factory", () => ({
     createPlaudClient: vi.fn(),
 }));
@@ -72,11 +64,6 @@ vi.mock("@/lib/transcription/transcribe-recording", () => ({
 
 vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerEvent: vi.fn(),
-    captureServerException: vi.fn(),
 }));
 
 import { db } from "@/db";

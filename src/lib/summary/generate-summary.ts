@@ -18,7 +18,6 @@ import {
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, ErrorCode } from "@/lib/errors";
-import { captureServerEvent } from "@/lib/posthog-server";
 import { upsertEnhancement } from "@/lib/transcription/persist";
 
 export interface GenerateSummaryOptions {
@@ -46,14 +45,6 @@ export interface GenerateSummaryResult {
      * the default prompt instead.
      */
     promptFallback: boolean;
-}
-
-/** Coarse length bucket -- never send raw transcript length or content. */
-function bucketLength(chars: number): string {
-    if (chars < 2_000) return "short";
-    if (chars < 10_000) return "medium";
-    if (chars < 50_000) return "long";
-    return "very_long";
 }
 
 /**
@@ -301,16 +292,6 @@ export async function generateSummaryForRecording(
     if (!committed) {
         throw new AppError(ErrorCode.NOT_FOUND, "Recording was deleted", 410);
     }
-
-    await captureServerEvent({
-        distinctId: userId,
-        event: "summary_generated",
-        properties: {
-            trigger: opts.trigger ?? "manual",
-            provider: credentials.provider,
-            transcript_length_bucket: bucketLength(transcriptText.length),
-        },
-    });
 
     return {
         summary,

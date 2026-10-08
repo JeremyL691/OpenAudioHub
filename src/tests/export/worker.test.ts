@@ -6,7 +6,6 @@ const {
     buildArchiveMock,
     emailMock,
     storageMock,
-    posthogMock,
     envMock,
 } = vi.hoisted(() => ({
     dbMock: { select: vi.fn() },
@@ -26,7 +25,6 @@ const {
     storageMock: {
         deleteFile: vi.fn(),
     },
-    posthogMock: { captureServerException: vi.fn() },
     envMock: { APP_URL: "https://app.example.com" },
 }));
 
@@ -36,7 +34,6 @@ vi.mock("@/db/queries/export-jobs", () => queriesMock);
 vi.mock("@/lib/export/build-archive", () => buildArchiveMock);
 vi.mock("@/lib/notifications/email", () => emailMock);
 vi.mock("@/lib/env", () => ({ env: envMock }));
-vi.mock("@/lib/posthog-server", () => posthogMock);
 vi.mock("@/lib/storage/factory", () => ({
     createStorageProvider: () => storageMock,
 }));

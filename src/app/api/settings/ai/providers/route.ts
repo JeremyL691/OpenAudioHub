@@ -10,7 +10,6 @@ import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
-import { captureServerEvent } from "@/lib/posthog-server";
 import { validateElevenLabsBaseUrl } from "@/lib/transcription/elevenlabs-transcribe";
 
 // GET - List all AI providers for the user
@@ -135,15 +134,6 @@ export const POST = apiHandler(async (request: Request) => {
 
     // Provider label only -- never baseUrl, which can be a private
     // hostname (homelab Ollama, internal LM Studio, etc.).
-    await captureServerEvent({
-        distinctId: session.user.id,
-        event: "ai_provider_added",
-        properties: {
-            provider,
-            has_custom_base_url: Boolean(baseUrl),
-            is_default_transcription: Boolean(isDefaultTranscription),
-        },
-    });
 
     return NextResponse.json({ provider: newProvider });
 });

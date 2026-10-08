@@ -61,7 +61,6 @@ interface WorkstationProps {
      * never trusted client-side -- the actual /admin gate runs
      * server-side.
      */
-    isAdmin?: boolean;
     /**
      * Logged-in user's email. Passed down to the avatar menu for the
      * identity block. Server-supplied -- never derive from any client
@@ -104,7 +103,6 @@ interface WorkstationProps {
 export function Workstation({
     recordings,
     transcriptions,
-    isAdmin = false,
     userEmail = null,
     initialSettings,
     plaudNeedsReconnect,
@@ -361,7 +359,6 @@ export function Workstation({
             <div className="bg-background">
                 <div className="container mx-auto max-w-7xl px-4 py-6">
                     <WorkstationHeader
-                        isAdmin={isAdmin}
                         userEmail={userEmail}
                         initialTheme={initialSettings.theme}
                         lastSyncTime={lastSyncTime}

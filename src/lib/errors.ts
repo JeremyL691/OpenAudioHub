@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { APIError as OpenAIAPIError } from "openai";
-import { captureServerException } from "@/lib/posthog-server";
 
 export enum ErrorCode {
     UNAUTHORIZED = "UNAUTHORIZED",
@@ -97,11 +96,6 @@ export function errorResponse(error: AppError | Error | unknown): NextResponse {
     if (app.statusCode >= 500) {
         const errorId = attachErrorId(app);
         console.error(`[api] [${errorId}]`, app.code, error);
-        captureServerException(error, {
-            source: "api",
-            errorId,
-            code: app.code,
-        });
     }
     return NextResponse.json(app.toJSON(), { status: app.statusCode });
 }
@@ -128,13 +122,6 @@ export function apiHandler<Ctx = unknown>(
                     app.code,
                     error,
                 );
-                captureServerException(error, {
-                    source: "api",
-                    errorId,
-                    code: app.code,
-                    route: pathname,
-                    method: request.method,
-                });
             }
             return NextResponse.json(app.toJSON(), { status: app.statusCode });
         }
@@ -254,14 +241,6 @@ export function mapErrorToAppError(error: unknown): AppError {
                 ErrorCode.UNIQUE_CONSTRAINT_VIOLATION,
                 "This resource already exists",
                 409,
-            );
-        }
-
-        if (error.name === "MynahBudgetExhaustedError") {
-            return new AppError(
-                ErrorCode.MYNAH_BUDGET_EXHAUSTED,
-                "You've used all of your included Mynah transcription for this cycle. It resets next cycle, or add your own AI provider to keep transcribing.",
-                402,
             );
         }
 

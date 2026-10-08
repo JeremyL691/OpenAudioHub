@@ -18,11 +18,6 @@ vi.mock("@/lib/env", () => ({
     },
 }));
 
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerException: vi.fn(),
-    captureServerEvent: vi.fn(),
-}));
-
 vi.mock("@/db", () => ({
     db: {
         update: vi.fn(),

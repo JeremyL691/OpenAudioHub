@@ -78,11 +78,6 @@ vi.mock("@/lib/env", () => ({
     },
 }));
 
-vi.mock("@/lib/hosted/transcription/mynah", () => ({
-    isMynahConfigured: vi.fn().mockReturnValue(false),
-    transcribeViaMynah: vi.fn(),
-}));
-
 vi.mock("@/lib/ai/generate-title", () => ({
     generateTitleFromTranscription: vi.fn().mockResolvedValue(null),
 }));

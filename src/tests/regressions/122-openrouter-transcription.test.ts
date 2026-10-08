@@ -72,11 +72,6 @@ vi.mock("@/lib/env", () => ({
     },
 }));
 
-vi.mock("@/lib/hosted/transcription/mynah", () => ({
-    isMynahConfigured: vi.fn().mockReturnValue(false),
-    transcribeViaMynah: vi.fn(),
-}));
-
 vi.mock("@/lib/transcription/ffmpeg", () => ({
     transcodeToMp3: vi.fn().mockResolvedValue(Buffer.from("transcoded-mp3")),
     ffmpegToOpus: vi.fn(),

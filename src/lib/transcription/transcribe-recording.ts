@@ -13,14 +13,6 @@ import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
-import {
-    isMynahConfigured,
-    transcribeViaMynah,
-} from "@/lib/hosted/transcription/mynah";
-import {
-    captureServerEvent,
-    captureServerException,
-} from "@/lib/posthog-server";
 import { consumeRateLimitBucket } from "@/lib/rate-limit";
 import {
     DownloadSizeLimitError,
@@ -46,7 +38,6 @@ import {
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
-import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { postProcessTranscription } from "@/lib/transcription/postprocess";
@@ -94,11 +85,6 @@ export async function storeBrowserTranscription(
     // Hosted lockout: a lapsed account is read-only, even for the
     // zero-cost browser path. No-op on self-host.
     if (await isHostedLockedOut(userId)) {
-        await captureServerEvent({
-            distinctId: userId,
-            event: "hosted_locked_out_attempt",
-            properties: { trigger: "browser" },
-        });
         return {
             success: false,
             error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
@@ -207,11 +193,6 @@ export async function storeBrowserTranscription(
     }
 
     await emitEvent("transcription.completed", userId, recordingId);
-    await captureServerEvent({
-        distinctId: userId,
-        event: "recording_transcribed",
-        properties: { trigger: "browser", provider_type: "browser" },
-    });
     return { success: true, text, detectedLanguage };
 }
 
@@ -278,11 +259,6 @@ async function transcribeRecordingInner(
         // Hosted lockout: a lapsed account is read-only. No-op on
         // self-host (isHostedLockedOut always false there).
         if (await isHostedLockedOut(userId)) {
-            await captureServerEvent({
-                distinctId: userId,
-                event: "hosted_locked_out_attempt",
-                properties: { trigger: opts.trigger ?? "manual" },
-            });
             return {
                 success: false,
                 error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
@@ -376,12 +352,11 @@ async function transcribeRecordingInner(
         const autoSummarizePreset = settings?.autoSummarizePreset ?? null;
         const pointer = settings?.defaultTranscriptionProviderId ?? null;
         const requested = opts.providerId || pointer || null;
-        const useManaged = isRiffadoIncludedProviderId(requested);
 
         void quality;
 
         let credentials: typeof apiCredentials.$inferSelect | undefined;
-        if (!useManaged && requested) {
+        if (requested) {
             [credentials] = await db
                 .select()
                 .from(apiCredentials)
@@ -392,26 +367,9 @@ async function transcribeRecordingInner(
                     ),
                 )
                 .limit(1);
-        } else if (!useManaged) {
+        } else {
             credentials = legacyDefaultCredentials;
         }
-
-        const runManagedTranscription = async () => {
-            const input = {
-                userId,
-                storagePath: recording.storagePath,
-                durationMs: recording.duration,
-                language: defaultLanguage,
-                filename: decryptText(recording.filename),
-            };
-            const result = await transcribeViaMynah(input);
-            return {
-                text: result.text,
-                detectedLanguage: result.detectedLanguage,
-                provider: "mynah",
-                model: "parakeet",
-            };
-        };
 
         // Long-audio preprocessing (fork): keep provider secrets and
         // StorageProvider access in Core. The isolated sidecar receives only
@@ -460,20 +418,7 @@ async function transcribeRecordingInner(
         let persistProvider: string;
         let persistModel: string;
 
-        if (useManaged) {
-            if (!isMynahConfigured()) {
-                return {
-                    success: false,
-                    error: "No transcription API configured",
-                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
-                };
-            }
-            const result = await runManagedTranscription();
-            transcriptionText = result.text;
-            detectedLanguage = result.detectedLanguage;
-            persistProvider = result.provider;
-            persistModel = result.model;
-        } else if (credentials) {
+        if (credentials) {
             const apiKey = decrypt(credentials.apiKey);
 
             // Route based on the provider's transcription style:
@@ -626,18 +571,11 @@ async function transcribeRecordingInner(
                 }
             }
         } else {
-            if (requested || !isMynahConfigured()) {
-                return {
-                    success: false,
-                    error: "No transcription API configured",
-                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
-                };
-            }
-            const result = await runManagedTranscription();
-            transcriptionText = result.text;
-            detectedLanguage = result.detectedLanguage;
-            persistProvider = result.provider;
-            persistModel = result.model;
+            return {
+                success: false,
+                error: "No transcription API configured",
+                errorCode: "NO_TRANSCRIPTION_PROVIDER",
+            };
         }
 
         // Persist the user's own ('riffado') transcript via the shared,
@@ -689,16 +627,6 @@ async function transcribeRecordingInner(
         });
 
         await emitEvent("transcription.completed", userId, recordingId);
-        await captureServerEvent({
-            distinctId: userId,
-            event: "recording_transcribed",
-            properties: {
-                trigger: opts.trigger ?? "manual",
-                provider_type:
-                    persistProvider === "mynah" ? "mynah" : "own_key",
-                detected_language: detectedLanguage ?? null,
-            },
-        });
 
         if (autoSummarize) {
             // Per-user hourly cap on auto-summary calls. Cheap defense
@@ -755,21 +683,6 @@ async function transcribeRecordingInner(
         };
     } catch (error) {
         console.error("Error transcribing recording:", error);
-        if (isMynahBudgetExhausted(error)) {
-            await emitEvent("transcription.failed", userId, recordingId, {
-                error: "included_transcription_budget_exhausted",
-            });
-            await captureServerEvent({
-                distinctId: userId,
-                event: "mynah_budget_exhausted",
-                properties: { trigger: opts.trigger ?? "manual" },
-            });
-            return {
-                success: false,
-                error: "You've used all of your included Mynah transcription for this cycle. It resets next cycle, or add your own AI provider to keep transcribing.",
-                errorCode: "MYNAH_BUDGET_EXHAUSTED",
-            };
-        }
         if (error instanceof ElevenLabsFileTooLargeError) {
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: error.message,
@@ -780,11 +693,6 @@ async function transcribeRecordingInner(
                 errorCode: "FILE_TOO_LARGE",
             };
         }
-        captureServerException(error, {
-            source: "transcription",
-            distinctId: userId,
-            trigger: opts.trigger ?? "manual",
-        });
         await emitEvent("transcription.failed", userId, recordingId, {
             error: error instanceof Error ? error.message : String(error),
         });
@@ -795,8 +703,4 @@ async function transcribeRecordingInner(
             errorCode: "TRANSCRIPTION_FAILED",
         };
     }
-}
-
-function isMynahBudgetExhausted(error: unknown): boolean {
-    return error instanceof Error && error.name === "MynahBudgetExhaustedError";
 }
