@@ -40,6 +40,10 @@ vi.mock("sonner", () => ({
     },
 }));
 
+vi.mock("next/navigation", () => ({
+    useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 type Summary = { summary: string };
 
 type PendingRequest = {

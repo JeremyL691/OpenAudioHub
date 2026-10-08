@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -66,6 +67,7 @@ export function useTranscriptionSummary({
     recordingId,
     transcriptionText,
 }: UseTranscriptionSummaryOptions) {
+    const router = useRouter();
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
     const [summarizingIds, setSummarizingIds] = useState(
         () => new Set<string>(),
@@ -241,6 +243,7 @@ export function useTranscriptionSummary({
                 if (postIsCurrent()) {
                     fetchGenerationRef.current += 1;
                     setSummaryData(data);
+                    router.refresh();
                     if (data.promptFallback) {
                         toast.warning(
                             "Selected summary prompt is no longer available -- used your default prompt instead.",
@@ -266,7 +269,7 @@ export function useTranscriptionSummary({
             );
             setSummarizingIds(summarizingIdsRef.current);
         }
-    }, [recordingId, summaryPreset]);
+    }, [recordingId, summaryPreset, router]);
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
@@ -286,6 +289,7 @@ export function useTranscriptionSummary({
             if (response.ok) {
                 if (deleteIsCurrent()) {
                     toast.success("Summary deleted");
+                    router.refresh();
                 }
             } else {
                 if (deleteIsCurrent()) {
@@ -299,7 +303,7 @@ export function useTranscriptionSummary({
                 toast.error("Failed to delete summary");
             }
         }
-    }, [recordingId, summaryData]);
+    }, [recordingId, summaryData, router]);
 
     /**
      * Imperative re-fetch trigger. Use after a re-transcribe call

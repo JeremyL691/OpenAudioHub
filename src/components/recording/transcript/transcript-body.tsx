@@ -12,6 +12,11 @@ export function formatTimestamp(milliseconds: number): string {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+const HEIGHT_CLASS = {
+    preview: "max-h-[60vh]",
+    detail: "max-h-[70vh]",
+} as const;
+
 interface TranscriptBodyProps {
     text: string;
     /** Timed segments from the pipeline. Only shown for the user's own transcript. */
@@ -20,14 +25,17 @@ interface TranscriptBodyProps {
     onSeekTimestamp?: (milliseconds: number) => void;
     /** Keep the segment that is playing centred in the scroll area. */
     followPlayback?: boolean;
-    /** Show only the first N segments. The library preview uses this. */
-    previewLimit?: number;
+    /** Called when the reader scrolls by hand, so follow-playback stops overriding them. */
+    onUserScroll?: () => void;
+    /** Sets the scroll area height. The library preview is the shorter of the two. */
+    variant?: "preview" | "detail";
 }
 
 /**
  * The transcript text. With timed segments it is a clickable timeline that
- * follows playback. Without them it is the plain speaker text. Following scrolls
- * only the transcript's own scroll area, never the page.
+ * follows playback. Without them it is the plain speaker text. Every segment
+ * stays in the scroll area, so nothing is cut off. Following scrolls only the
+ * transcript's own scroll area, never the page.
  */
 export function TranscriptBody({
     text,
@@ -35,18 +43,17 @@ export function TranscriptBody({
     playbackTimeMs,
     onSeekTimestamp,
     followPlayback = false,
-    previewLimit,
+    onUserScroll,
+    variant = "detail",
 }: TranscriptBodyProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const activeRef = useRef<HTMLLIElement>(null);
 
     const segments = timeline ?? [];
-    const visible =
-        previewLimit === undefined ? segments : segments.slice(0, previewLimit);
     const activeIndex =
         playbackTimeMs === undefined
             ? -1
-            : visible.findIndex(
+            : segments.findIndex(
                   (segment) =>
                       playbackTimeMs >= segment.start_ms &&
                       playbackTimeMs < segment.end_ms,
@@ -68,57 +75,46 @@ export function TranscriptBody({
     return (
         <div
             ref={scrollRef}
-            className="relative bg-muted rounded-lg p-4 max-h-96 overflow-y-auto"
+            onWheel={onUserScroll}
+            onTouchMove={onUserScroll}
+            className={`relative bg-muted rounded-lg p-4 overflow-y-auto ${HEIGHT_CLASS[variant]}`}
         >
             {timeline?.length ? (
-                <>
-                    <ol data-testid="transcript-timeline" className="space-y-1">
-                        {visible.map((segment, index) => {
-                            const isActive = index === activeIndex;
-                            return (
-                                <li
-                                    ref={isActive ? activeRef : undefined}
-                                    data-testid="transcript-segment"
-                                    data-start-ms={segment.start_ms}
-                                    data-active={isActive}
-                                    key={`${segment.start_ms}-${index}`}
+                <ol data-testid="transcript-timeline" className="space-y-1">
+                    {segments.map((segment, index) => {
+                        const isActive = index === activeIndex;
+                        return (
+                            <li
+                                ref={isActive ? activeRef : undefined}
+                                data-testid="transcript-segment"
+                                data-start-ms={segment.start_ms}
+                                data-active={isActive}
+                                key={`${segment.start_ms}-${index}`}
+                            >
+                                <button
+                                    type="button"
+                                    disabled={!onSeekTimestamp}
+                                    aria-current={isActive ? "time" : undefined}
+                                    onClick={() => {
+                                        onSeekTimestamp?.(segment.start_ms);
+                                    }}
+                                    className={`relative w-full rounded px-2 py-1 text-left text-sm leading-relaxed hover:bg-background/70 disabled:cursor-default ${isActive ? "bg-background font-medium" : ""}`}
                                 >
-                                    <button
-                                        type="button"
-                                        disabled={!onSeekTimestamp}
-                                        aria-current={
-                                            isActive ? "time" : undefined
-                                        }
-                                        onClick={() => {
-                                            onSeekTimestamp?.(segment.start_ms);
-                                        }}
-                                        className={`relative w-full rounded px-2 py-1 text-left text-sm leading-relaxed hover:bg-background/70 disabled:cursor-default ${isActive ? "bg-background font-medium" : ""}`}
-                                    >
-                                        {isActive && (
-                                            <span
-                                                aria-hidden="true"
-                                                className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand-gradient"
-                                            />
-                                        )}
-                                        <span className="mr-2 font-mono text-xs text-muted-foreground">
-                                            {formatTimestamp(segment.start_ms)}
-                                        </span>
-                                        {segment.text}
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ol>
-                    {visible.length < segments.length && (
-                        <p
-                            data-testid="transcript-preview-note"
-                            className="mt-3 text-xs text-muted-foreground"
-                        >
-                            Showing the first {visible.length} of{" "}
-                            {segments.length} segments.
-                        </p>
-                    )}
-                </>
+                                    {isActive && (
+                                        <span
+                                            aria-hidden="true"
+                                            className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand-gradient"
+                                        />
+                                    )}
+                                    <span className="mr-2 font-mono text-xs text-muted-foreground">
+                                        {formatTimestamp(segment.start_ms)}
+                                    </span>
+                                    {segment.text}
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ol>
             ) : (
                 <SpeakerTranscript text={text} className="text-sm" />
             )}

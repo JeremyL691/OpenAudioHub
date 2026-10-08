@@ -1,20 +1,21 @@
 "use client";
 
 import { FileText, RefreshCw, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 import { TranscribeInBrowserButton } from "@/components/dashboard/transcribe-in-browser-button";
 import { PipelineStatus } from "@/components/recording/pipeline/pipeline-status";
 import { SourceSwitcher } from "@/components/recording/transcript/source-switcher";
 import { TranscriptBody } from "@/components/recording/transcript/transcript-body";
 import { TranscriptMeta } from "@/components/recording/transcript/transcript-meta";
+import { TranscriptToolbar } from "@/components/recording/transcript/transcript-toolbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { RecordingTranscript } from "@/hooks/use-recording-transcript";
 import type { Recording } from "@/types/recording";
-
-/** Segments the library preview shows before the rest is one click away. */
-export const PREVIEW_SEGMENT_LIMIT = 6;
 
 interface TranscriptCardProps {
     /**
@@ -36,7 +37,8 @@ interface TranscriptCardProps {
 
 /**
  * The transcript for one recording: the header actions, the source switcher,
- * the timed or plain text, and the metadata line.
+ * the download and delete toolbar, the timed or plain text, and the metadata
+ * line.
  */
 export function TranscriptCard({
     variant,
@@ -48,6 +50,8 @@ export function TranscriptCard({
     playbackTimeMs,
     onSeekTimestamp,
 }: TranscriptCardProps) {
+    const router = useRouter();
+    const confirm = useConfirm();
     const [followPlayback, setFollowPlayback] = useState(true);
     const {
         activeTranscript,
@@ -59,11 +63,44 @@ export function TranscriptCard({
         isPipelineActive,
         pipelineBusy,
         performPipelineAction,
+        refreshPipelineState,
     } = transcript;
     const isDetail = variant === "detail";
     const hasTimeline = Boolean(timeline?.length);
     const cancel = () => void performPipelineAction("cancel");
     const retry = () => void performPipelineAction("retry");
+
+    const deleteTranscript = () => {
+        if (!activeTranscript) return;
+        const source = activeTranscript.source;
+        void confirm({
+            title: "Delete this transcript?",
+            description:
+                "The transcript and its summary will be removed. You can transcribe and summarize again later.",
+            confirmLabel: "Delete",
+            pendingLabel: "Deleting…",
+            destructive: true,
+            onConfirm: async () => {
+                const response = await fetch(
+                    `/api/recordings/${recording.id}/transcription?source=${encodeURIComponent(source)}`,
+                    { method: "DELETE" },
+                );
+                if (!response.ok) {
+                    const body = (await response.json().catch(() => ({}))) as {
+                        error?: string;
+                    };
+                    throw new Error(
+                        body.error ?? "Failed to delete transcript",
+                    );
+                }
+            },
+        }).then((deleted) => {
+            if (!deleted) return;
+            toast.success("Transcript deleted");
+            void refreshPipelineState();
+            router.refresh();
+        });
+    };
 
     return (
         <Card>
@@ -156,15 +193,24 @@ export function TranscriptCard({
                             activeSource={activeTranscript.source}
                             onSelect={setActiveSource}
                         />
+                        <TranscriptToolbar
+                            title={recording.filename}
+                            text={activeTranscript.text}
+                            language={activeTranscript.language}
+                            timeline={timeline}
+                            deleteDisabled={
+                                isTranscribing || Boolean(isPipelineActive)
+                            }
+                            onDelete={deleteTranscript}
+                        />
                         <TranscriptBody
                             text={activeTranscript.text}
                             timeline={timeline}
                             playbackTimeMs={playbackTimeMs}
                             onSeekTimestamp={onSeekTimestamp}
                             followPlayback={isDetail && followPlayback}
-                            previewLimit={
-                                isDetail ? undefined : PREVIEW_SEGMENT_LIMIT
-                            }
+                            onUserScroll={() => setFollowPlayback(false)}
+                            variant={variant}
                         />
                         <TranscriptMeta transcript={activeTranscript} />
                     </div>
