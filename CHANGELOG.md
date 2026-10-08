@@ -6,6 +6,12 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.0.1]
+
+### Fixed
+
+- The one-line installer works. The audio pipeline is now published as `ghcr.io/jeremyl691/openaudiohub-audio-pipeline`, and `docker-compose.yml` pulls it instead of building it from source, so an installation needs no source checkout. To build both images from a checkout, add `docker-compose.dev.yml`.
+
 ## [1.0.0]
 
 First OpenAudioHub release. It is built from the base commit named above, and it includes the long-audio pipeline. Hosted-only code is removed, and the project is renamed. To move an existing installation, follow [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md).

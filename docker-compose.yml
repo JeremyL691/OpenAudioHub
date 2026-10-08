@@ -36,9 +36,6 @@ services:
     #   - `dev`     → rolling build from `main` (unstable, opt-in)
     # Override via OPENAUDIOHUB_VERSION in .env. For local builds, see docker-compose.dev.yml.
     image: ghcr.io/jeremyl691/openaudiohub:${OPENAUDIOHUB_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: openaudiohub-app
     restart: unless-stopped
     ports:
@@ -96,9 +93,7 @@ services:
       retries: 3
 
   audio-pipeline:
-    build:
-      context: ./audio-pipeline
-      dockerfile: Dockerfile
+    image: ghcr.io/jeremyl691/openaudiohub-audio-pipeline:${OPENAUDIOHUB_VERSION:-latest}
     container_name: openaudiohub-audio-pipeline
     restart: unless-stopped
     environment:

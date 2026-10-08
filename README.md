@@ -85,7 +85,7 @@ docker compose up -d
 
 Open [http://localhost:3000](http://localhost:3000), create an account, connect your Plaud account, and choose a transcription provider in Settings.
 
-To build the image from this checkout instead of pulling the published one:
+To build the images from this checkout instead of pulling the published ones:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
