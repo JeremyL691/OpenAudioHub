@@ -55,6 +55,10 @@ RUN bun build scripts/encrypt-backfill.ts --target=bun --outfile=encrypt-backfil
 
 # Final runtime image
 FROM base AS runner
+LABEL org.opencontainers.image.title="OpenAudioHub" \
+      org.opencontainers.image.description="Self-hosted AI transcription and summaries for Plaud recordings." \
+      org.opencontainers.image.source="https://github.com/JeremyL691/OpenAudioHub" \
+      org.opencontainers.image.licenses="AGPL-3.0"
 WORKDIR /app
 
 ENV NODE_ENV=production

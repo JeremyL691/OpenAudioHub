@@ -1,17 +1,17 @@
 {
-    "name": "riffado",
-    "version": "0.6.4",
-    "description": "Self-hosted AI transcription interface for Plaud Note devices",
-    "author": "Riffado Contributors",
+    "name": "openaudiohub",
+    "version": "1.0.0",
+    "description": "Self-hosted AI transcription and summaries for Plaud recordings.",
+    "author": "OpenAudioHub Contributors",
     "license": "AGPL-3.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/riffado/riffado.git"
+        "url": "https://github.com/JeremyL691/OpenAudioHub.git"
     },
     "bugs": {
-        "url": "https://github.com/riffado/riffado/issues"
+        "url": "https://github.com/JeremyL691/OpenAudioHub/issues"
     },
-    "homepage": "https://github.com/riffado/riffado#readme",
+    "homepage": "https://github.com/JeremyL691/OpenAudioHub#readme",
     "keywords": [
         "plaud",
         "plaud-note",
@@ -22,7 +22,10 @@
         "voice-recorder",
         "openai",
         "nextjs",
-        "typescript"
+        "typescript",
+        "long-audio",
+        "vad",
+        "speech-to-text"
     ],
     "scripts": {
         "dev": "next dev",

@@ -1,7 +1,7 @@
 [project]
 name = "audio-pipeline"
 version = "0.1.0"
-description = "Long-audio preprocessing for Riffado: Silero VAD, smart chunking, pluggable STT, timestamp-preserving merge."
+description = "Long-audio preprocessing for OpenAudioHub: Silero VAD, smart chunking, pluggable STT, timestamp-preserving merge."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
