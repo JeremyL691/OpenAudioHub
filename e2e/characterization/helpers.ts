@@ -14,12 +14,14 @@ export const RECORDINGS = {
 // through the form only when the stored session is missing or expired, because
 // Better Auth rate-limits repeated sign-ins from one client.
 export async function signIn(page: Page): Promise<void> {
-    await page.goto("/dashboard");
+    await page.goto("/recordings");
     if (new URL(page.url()).pathname.startsWith("/login")) {
         await page.getByLabel("Email").fill(process.env.E2E_EMAIL ?? "");
         await page.getByLabel("Password").fill(process.env.E2E_PASSWORD ?? "");
         await page.getByRole("button", { name: /sign in|log ?in/i }).click();
-        await page.waitForURL("**/recordings");
+        // Login lands on the overview; the specs that follow work in the library.
+        await page.waitForURL("**/dashboard");
+        await page.goto("/recordings");
     }
     await expect(page.getByTestId("recording-list")).toBeVisible();
 }

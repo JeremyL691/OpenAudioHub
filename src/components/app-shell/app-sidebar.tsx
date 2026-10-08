@@ -1,6 +1,12 @@
 "use client";
 
-import { AudioLines, BookOpen, type LucideIcon, Settings } from "lucide-react";
+import {
+    AudioLines,
+    BookOpen,
+    LayoutDashboard,
+    type LucideIcon,
+    Settings,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -32,10 +38,17 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
     {
         href: "/dashboard",
+        label: "Overview",
+        icon: LayoutDashboard,
+        testId: "nav-overview",
+        prefixes: ["/dashboard"],
+    },
+    {
+        href: "/recordings",
         label: "Recordings",
         icon: AudioLines,
         testId: "nav-recordings",
-        prefixes: ["/dashboard", "/recordings", "/dev/demo-dashboard"],
+        prefixes: ["/recordings", "/dev/demo-dashboard"],
     },
     {
         href: "/settings",
