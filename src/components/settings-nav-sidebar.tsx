@@ -71,7 +71,11 @@ export function SettingsNavSidebar({
                   li nesting which is invalid HTML and confuses screen
                   readers.
                 */}
-                <nav aria-label="Settings sections" className="space-y-4">
+                <nav
+                    aria-label="Settings sections"
+                    data-testid="settings-nav"
+                    className="space-y-4"
+                >
                     {settingsNavGroups.map((group) => (
                         <SidebarGroup key={group.label} className="space-y-1">
                             <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">

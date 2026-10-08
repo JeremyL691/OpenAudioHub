@@ -340,6 +340,8 @@ export function TranscriptionPanel({
                         <div className="space-y-4">
                             {isTranscribing || isPipelineRunning ? (
                                 <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
                                     className="space-y-2 rounded-md border p-3"
                                     aria-live="polite"
                                 >
@@ -354,6 +356,7 @@ export function TranscriptionPanel({
                                         </p>
                                         {isPipelineRunning && (
                                             <Button
+                                                data-testid="pipeline-cancel"
                                                 size="sm"
                                                 variant="outline"
                                                 disabled={pipelineBusy}
@@ -385,6 +388,8 @@ export function TranscriptionPanel({
                             ) : null}
                             {activeJob?.status === "failed" && (
                                 <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
                                     className="flex flex-col gap-3 rounded-md border border-destructive/40 p-3 sm:flex-row sm:items-center sm:justify-between"
                                     role="alert"
                                 >
@@ -402,6 +407,7 @@ export function TranscriptionPanel({
                                         size="sm"
                                         variant="outline"
                                         disabled={pipelineBusy}
+                                        data-testid="pipeline-retry"
                                         onClick={() =>
                                             void performPipelineAction("retry")
                                         }
@@ -412,6 +418,8 @@ export function TranscriptionPanel({
                             )}
                             {activeJob?.status === "needs_alignment" && (
                                 <p
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
                                     className="rounded-md border p-3 text-sm"
                                     aria-live="polite"
                                 >
@@ -422,6 +430,8 @@ export function TranscriptionPanel({
                             )}
                             {activeJob?.status === "paused" && (
                                 <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
                                     className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
                                     aria-live="polite"
                                 >
@@ -434,6 +444,7 @@ export function TranscriptionPanel({
                                         size="sm"
                                         variant="outline"
                                         disabled={pipelineBusy}
+                                        data-testid="pipeline-cancel"
                                         onClick={() =>
                                             void performPipelineAction("cancel")
                                         }
@@ -443,7 +454,10 @@ export function TranscriptionPanel({
                                 </div>
                             )}
                             {transcriptList.length > 1 && (
-                                <div className="flex items-center gap-2 border-b pb-2">
+                                <div
+                                    data-testid="source-switcher"
+                                    className="flex items-center gap-2 border-b pb-2"
+                                >
                                     {transcriptList.map((t) => (
                                         <button
                                             key={t.source}
@@ -465,7 +479,10 @@ export function TranscriptionPanel({
                             )}
                             <div className="bg-muted rounded-lg p-4 max-h-96 overflow-y-auto">
                                 {timeline?.length ? (
-                                    <ol className="space-y-1">
+                                    <ol
+                                        data-testid="transcript-timeline"
+                                        className="space-y-1"
+                                    >
                                         {timeline.map((segment, index) => {
                                             const isActive =
                                                 playbackTimeMs !== undefined &&
@@ -474,6 +491,11 @@ export function TranscriptionPanel({
                                                 playbackTimeMs < segment.end_ms;
                                             return (
                                                 <li
+                                                    data-testid="transcript-segment"
+                                                    data-start-ms={
+                                                        segment.start_ms
+                                                    }
+                                                    data-active={isActive}
                                                     key={`${segment.start_ms}-${index}`}
                                                 >
                                                     <button
@@ -542,7 +564,11 @@ export function TranscriptionPanel({
                     ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">
                             {isPipelineRunning ? (
-                                <div className="w-full max-w-md space-y-3 rounded-md border p-4 text-left">
+                                <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
+                                    className="w-full max-w-md space-y-3 rounded-md border p-4 text-left"
+                                >
                                     <div className="flex items-center justify-between gap-3">
                                         <p className="text-sm font-medium">
                                             {pipelinePhaseLabel(
@@ -553,6 +579,7 @@ export function TranscriptionPanel({
                                             size="sm"
                                             variant="outline"
                                             disabled={pipelineBusy}
+                                            data-testid="pipeline-cancel"
                                             onClick={() =>
                                                 void performPipelineAction(
                                                     "cancel",
@@ -577,6 +604,8 @@ export function TranscriptionPanel({
                                 </div>
                             ) : activeJob?.status === "paused" ? (
                                 <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
                                     className="flex flex-col gap-3 rounded-md border p-4 text-left sm:flex-row sm:items-center sm:justify-between"
                                     aria-live="polite"
                                 >
@@ -589,6 +618,7 @@ export function TranscriptionPanel({
                                         size="sm"
                                         variant="outline"
                                         disabled={pipelineBusy}
+                                        data-testid="pipeline-cancel"
                                         onClick={() =>
                                             void performPipelineAction("cancel")
                                         }
@@ -597,7 +627,12 @@ export function TranscriptionPanel({
                                     </Button>
                                 </div>
                             ) : activeJob?.status === "failed" ? (
-                                <div className="space-y-3" role="alert">
+                                <div
+                                    data-testid="pipeline-status"
+                                    data-phase={activeJob?.phase ?? ""}
+                                    className="space-y-3"
+                                    role="alert"
+                                >
                                     <FileText className="mx-auto size-10 text-muted-foreground" />
                                     <p className="text-sm font-medium">
                                         Transcription failed
@@ -611,6 +646,7 @@ export function TranscriptionPanel({
                                         size="sm"
                                         variant="outline"
                                         disabled={pipelineBusy}
+                                        data-testid="pipeline-retry"
                                         onClick={() =>
                                             void performPipelineAction("retry")
                                         }
@@ -634,7 +670,7 @@ export function TranscriptionPanel({
 
             {/* Summary Card -- only show when a transcript exists */}
             {activeTranscript?.text && (
-                <Card>
+                <Card data-testid="summary-panel">
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
@@ -665,6 +701,7 @@ export function TranscriptionPanel({
                                     </Select>
                                 )}
                                 <Button
+                                    data-testid="summary-generate"
                                     onClick={handleSummarize}
                                     size="sm"
                                     variant={
@@ -722,7 +759,10 @@ export function TranscriptionPanel({
                                 {summaryExpanded && (
                                     <div className="space-y-4">
                                         {/* Summary text */}
-                                        <div className="bg-muted rounded-lg p-4 text-sm">
+                                        <div
+                                            data-testid="summary-content"
+                                            className="bg-muted rounded-lg p-4 text-sm"
+                                        >
                                             <RichMarkdown
                                                 content={summaryData.summary}
                                             />

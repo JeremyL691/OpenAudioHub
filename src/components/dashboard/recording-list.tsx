@@ -282,7 +282,7 @@ export function RecordingList({
                     </div>
                 )}
 
-                <div>
+                <div data-testid="recording-list">
                     {grouped.map((group, gi) => (
                         <div
                             key={group.label ?? `__ungrouped-${gi.toString()}`}

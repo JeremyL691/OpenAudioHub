@@ -56,6 +56,7 @@ export function RecordingListToolbar({
                     placeholder="Search recordings, transcripts..."
                     className="h-9 pl-8 pr-8"
                     aria-label="Search recordings"
+                    data-testid="recording-search"
                 />
                 {query && (
                     <button
@@ -82,6 +83,7 @@ export function RecordingListToolbar({
                                 size="sm"
                                 className="h-7 px-2 text-xs"
                                 aria-label="Sort"
+                                data-testid="recording-sort"
                             >
                                 <ArrowDownAZ className="size-3.5" />
                                 <span>

@@ -79,7 +79,11 @@ export function WebhooksSection() {
                 description="Outbound HTTP notifications for recording, transcript, and summary events."
                 icon={Webhook}
                 action={
-                    <Button size="sm" onClick={() => openEditor(null)}>
+                    <Button
+                        size="sm"
+                        data-testid="webhook-create"
+                        onClick={() => openEditor(null)}
+                    >
                         <Plus className="size-4" />
                         Add Webhook
                     </Button>
@@ -94,7 +98,11 @@ export function WebhooksSection() {
                 <div className="text-center py-12 border rounded-lg">
                     <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No webhooks</h3>
-                    <Button size="sm" onClick={() => openEditor(null)}>
+                    <Button
+                        size="sm"
+                        data-testid="webhook-create"
+                        onClick={() => openEditor(null)}
+                    >
                         <Plus className="size-4" />
                         Add Webhook
                     </Button>

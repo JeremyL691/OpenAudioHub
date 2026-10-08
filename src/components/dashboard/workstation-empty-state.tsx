@@ -17,7 +17,7 @@ interface Props {
  */
 export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
     return (
-        <Card>
+        <Card data-testid="empty-state">
             <CardContent className="flex flex-col items-center justify-center py-16">
                 <Mic className="mb-4 size-16 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">
