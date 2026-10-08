@@ -58,14 +58,17 @@ export function RecordingPlayerControls({
             <Volume2 className="size-4" />
         );
 
+    // Phones lay the controls out in three rows: the waveform on top, then
+    // play, time and speed, then volume. Every control fits at 320 px, so the
+    // waveform is never squeezed to zero width. From sm up it is one row.
     return (
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4">
             <Button
                 onClick={onTogglePlay}
                 data-testid="player-play"
                 size="lg"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="size-12 shrink-0 rounded-full"
+                className="order-2 size-12 shrink-0 rounded-full sm:order-none"
             >
                 {isPlaying ? (
                     <Pause className="size-5" />
@@ -83,7 +86,7 @@ export function RecordingPlayerControls({
             */}
             <span
                 data-testid="player-time"
-                className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+                className="order-2 min-w-0 flex-1 font-mono text-xs tabular-nums text-muted-foreground sm:order-none sm:flex-none"
                 aria-live="off"
             >
                 <span className="text-foreground">
@@ -97,7 +100,10 @@ export function RecordingPlayerControls({
               Waveform takes whatever's left, with min-w-0 so flex
               doesn't expand the parent when bars are dense.
             */}
-            <div className="min-w-0 flex-1" data-testid="player-scrubber">
+            <div
+                className="order-1 min-w-0 basis-full sm:order-none sm:flex-1"
+                data-testid="player-scrubber"
+            >
                 {scrubberStyle === "waveform" && waveformPeaks ? (
                     <Waveform
                         peaks={waveformPeaks}
@@ -118,7 +124,7 @@ export function RecordingPlayerControls({
                         }
                         max={100}
                         step={0.1}
-                        className="w-full"
+                        className="w-full py-3 sm:py-0"
                         disabled={seekDisabled}
                     />
                 )}
@@ -129,18 +135,18 @@ export function RecordingPlayerControls({
                 data-testid="player-speed"
                 variant="outline"
                 size="sm"
-                className="h-8 w-12 shrink-0 px-0 font-mono text-xs tabular-nums"
+                className="order-2 h-10 w-12 shrink-0 px-0 font-mono text-xs tabular-nums sm:order-none sm:h-8"
                 title="Click to cycle playback speed"
                 aria-label={`Playback speed ${speedLabel}. Click to change.`}
             >
                 {speedLabel}
             </Button>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="order-3 flex basis-full items-center gap-2 sm:order-none sm:shrink-0 sm:basis-auto">
                 <button
                     type="button"
                     onClick={onToggleMute}
-                    className="text-muted-foreground transition-colors hover:text-foreground"
+                    className="-m-3 p-3 text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={volume === 0 ? "Unmute" : "Mute"}
                     title={volume === 0 ? "Unmute" : "Mute"}
                 >
@@ -150,7 +156,7 @@ export function RecordingPlayerControls({
                     value={[volume]}
                     onValueChange={(value) => onVolumeChange(value[0] ?? 75)}
                     max={100}
-                    className="w-20"
+                    className="flex-1 py-3 sm:w-20 sm:flex-none sm:py-0"
                     aria-label="Volume"
                 />
             </div>

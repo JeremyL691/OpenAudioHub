@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProgressBar } from "@/components/app/progress-bar";
 import {
     STATUS_BADGE_STATUSES,
     StatusBadge,
@@ -10,10 +11,6 @@ function badgeFor(phase: string): StatusBadgeStatus {
     return (STATUS_BADGE_STATUSES as readonly string[]).includes(phase)
         ? (phase as StatusBadgeStatus)
         : "running";
-}
-
-function clamp(value: number): number {
-    return Math.max(0, Math.min(1, value));
 }
 
 /** Pipeline jobs that are still running, with their phase and progress. */
@@ -44,11 +41,9 @@ export function ProcessingCard({ items }: { items: ProcessingItem[] }) {
                                 >
                                     {item.title}
                                 </Link>
-                                <progress
-                                    className="h-1.5 w-full accent-primary"
-                                    max={1}
-                                    value={clamp(item.progress)}
-                                    aria-label={`${item.title} progress`}
+                                <ProgressBar
+                                    value={item.progress}
+                                    label={`${item.title} progress`}
                                 />
                             </div>
                             <StatusBadge status={badgeFor(item.phase)} />

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { AppDialogs } from "@/components/app-shell/app-dialogs";
 import { AppSidebar } from "@/components/app-shell/app-sidebar";
+import { MiniPlayerHost } from "@/components/app-shell/mini-player-slot";
 import { TopBar } from "@/components/app-shell/top-bar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
@@ -29,7 +30,9 @@ export function AppShell({
             <AppSidebar footer={sidebarFooter} />
             <SidebarInset>
                 <TopBar userEmail={userEmail} initialTheme={initialTheme} />
-                <div className="flex flex-1 flex-col">{children}</div>
+                <MiniPlayerHost>
+                    <div className="flex flex-1 flex-col">{children}</div>
+                </MiniPlayerHost>
             </SidebarInset>
             <AppDialogs />
         </SidebarProvider>

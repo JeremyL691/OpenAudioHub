@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readWaveformPalette } from "@/components/dashboard/waveform-palette";
 import { formatDuration } from "@/lib/format-duration";
 import { cn } from "@/lib/utils";
 
@@ -110,12 +111,9 @@ export function Waveform({
         ctx.clearRect(0, 0, cssWidth, cssHeight);
 
         const styles = getComputedStyle(wrap);
-        const primary =
-            styles.getPropertyValue("--primary").trim() ||
-            "oklch(0.6171 0.1375 39.0427)";
-        const muted =
-            styles.getPropertyValue("--muted-foreground").trim() ||
-            "rgba(0,0,0,0.5)";
+        const { playedStops, primary, muted } = readWaveformPalette((name) =>
+            styles.getPropertyValue(name),
+        );
 
         if (peaks.length === 0) return;
 
@@ -130,6 +128,20 @@ export function Waveform({
         const radius = Math.min(barWidth / 2, 2);
 
         const playedX = progress * cssWidth;
+        // The played part takes the brand gradient across its own span, so
+        // the colour moves from cyan towards violet as playback advances.
+        const playedFill = ctx.createLinearGradient(
+            0,
+            0,
+            Math.max(1, playedX),
+            0,
+        );
+        playedStops.forEach((color, i) => {
+            playedFill.addColorStop(
+                i / Math.max(1, playedStops.length - 1),
+                color,
+            );
+        });
 
         for (let i = 0; i < visibleBars; i++) {
             const x = i * slotWidth + (slotWidth - barWidth) / 2;
@@ -140,7 +152,7 @@ export function Waveform({
             const played = barCenter <= playedX;
 
             if (played) {
-                ctx.fillStyle = primary;
+                ctx.fillStyle = playedFill;
                 ctx.globalAlpha = 1;
             } else {
                 ctx.fillStyle = muted;
@@ -199,6 +211,18 @@ export function Waveform({
         const ro = new ResizeObserver(() => draw());
         ro.observe(wrap);
         return () => ro.disconnect();
+    }, [draw]);
+
+    // Canvas colours come from theme tokens, so repaint when the theme class
+    // (or data-theme) on <html> changes.
+    useEffect(() => {
+        if (typeof MutationObserver === "undefined") return;
+        const mo = new MutationObserver(() => draw());
+        mo.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ["class", "data-theme"],
+        });
+        return () => mo.disconnect();
     }, [draw]);
 
     const ratioFromClientX = useCallback((clientX: number) => {
