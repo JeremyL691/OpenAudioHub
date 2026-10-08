@@ -29,27 +29,26 @@ export const metadata: Metadata = {
     // self-host deployments override it at runtime via env.
     metadataBase: new URL(env.APP_URL ?? "http://localhost:3000"),
     title: {
-        default:
-            "OpenAudioHub — Open-source AI transcription for voice recorders",
+        default: "OpenAudioHub — Long recordings, intelligently transcribed",
         template: "%s · OpenAudioHub",
     },
     description:
-        "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family: Note, Note Pro, and NotePin.",
+        "Open-source, self-hosted AI audio workspace for long recordings. Sync your Plaud recordings or upload your own, transcribe with the AI provider you choose, and keep everything on storage you control.",
     applicationName: "OpenAudioHub",
     manifest: "/manifest.webmanifest",
     openGraph: {
         type: "website",
         siteName: "OpenAudioHub",
-        title: "OpenAudioHub — Open-source AI transcription for voice recorders",
+        title: "OpenAudioHub — Long recordings, intelligently transcribed",
         description:
-            "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
+            "Open-source, self-hosted AI audio workspace for long recordings. Sync your Plaud recordings or upload your own, transcribe with the AI provider you choose, and keep everything on storage you control.",
         images: [{ url: "/og.png", width: 1200, height: 630 }],
     },
     twitter: {
         card: "summary_large_image",
-        title: "OpenAudioHub — Open-source AI transcription for voice recorders",
+        title: "OpenAudioHub — Long recordings, intelligently transcribed",
         description:
-            "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
+            "Open-source, self-hosted AI audio workspace for long recordings. Sync your Plaud recordings or upload your own, transcribe with the AI provider you choose, and keep everything on storage you control.",
         images: ["/og.png"],
     },
     appleWebApp: {

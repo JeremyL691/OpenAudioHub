@@ -95,3 +95,37 @@ describe("GET /api/export (regression: summary decryption)", () => {
         expect(JSON.stringify(body)).not.toContain("enc:");
     });
 });
+
+describe("GET /api/export (regression B-001: saved default format)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (requireApiSession as unknown as Mock).mockResolvedValue({
+            user: { id: "user-1" },
+        });
+    });
+
+    function queueEmptyExport(defaultExportFormat: string) {
+        queueSelect([{ userId: "user-1", defaultExportFormat }]);
+        queueSelect([]);
+        queueSelect([]);
+        queueSelect([]);
+    }
+
+    it("uses a saved TXT default when no format is requested", async () => {
+        queueEmptyExport("txt");
+        const response = await GET(
+            new Request("https://app.example.com/api/export"),
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-disposition")).toContain(".txt");
+    });
+
+    it("falls back to JSON for a legacy csv default instead of failing", async () => {
+        queueEmptyExport("csv");
+        const response = await GET(
+            new Request("https://app.example.com/api/export"),
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-disposition")).toContain(".json");
+    });
+});

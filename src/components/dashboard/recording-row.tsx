@@ -105,6 +105,7 @@ export function RecordingRow({
                                     status={transcriptStatus({
                                         hasTranscript: recording.hasTranscript,
                                         hasSummary: recording.hasSummary,
+                                        pipelinePhase: recording.pipelinePhase,
                                     })}
                                 />
                             </span>

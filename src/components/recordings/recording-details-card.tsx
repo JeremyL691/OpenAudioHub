@@ -5,14 +5,11 @@ import { useState } from "react";
 import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
 import type { Recording } from "@/types/recording";
 
 const PANEL_ID = "recording-details-panel";
-
-export function formatMegabytes(bytes: number): string {
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
 
 /** The recording's metadata. The card collapses to its header. */
 export function RecordingDetailsCard({ recording }: { recording: Recording }) {
@@ -53,7 +50,7 @@ export function RecordingDetailsCard({ recording }: { recording: Recording }) {
                             File Size
                         </div>
                         <div className="font-medium">
-                            {formatMegabytes(recording.filesize)}
+                            {formatBytes(recording.filesize)}
                         </div>
                     </div>
                     <div>

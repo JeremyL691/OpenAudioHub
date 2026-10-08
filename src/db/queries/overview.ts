@@ -100,6 +100,36 @@ export async function getActivePipelineJobs(userId: string, limit = 5) {
         .limit(limit);
 }
 
+/**
+ * The phase of each recording's active pipeline job, keyed by recording id.
+ * The newest job wins when a recording has more than one.
+ */
+export async function getActivePipelinePhases(
+    userId: string,
+): Promise<Map<string, string>> {
+    const rows = await db
+        .select({
+            recordingId: audioPipelineJobs.recordingId,
+            phase: audioPipelineJobs.phase,
+        })
+        .from(audioPipelineJobs)
+        .where(
+            and(
+                eq(audioPipelineJobs.userId, userId),
+                inArray(audioPipelineJobs.status, [
+                    ...ACTIVE_PIPELINE_STATUSES,
+                ]),
+            ),
+        )
+        .orderBy(desc(audioPipelineJobs.createdAt));
+    const phases = new Map<string, string>();
+    for (const row of rows) {
+        if (!phases.has(row.recordingId))
+            phases.set(row.recordingId, row.phase);
+    }
+    return phases;
+}
+
 export async function getRecentRecordings(userId: string, limit = 8) {
     return db
         .select({

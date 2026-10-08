@@ -61,7 +61,7 @@ describeWithDatabase("PostgreSQL migration chain", () => {
 
 const MIGRATIONS_DIR = "./src/db/migrations";
 const LAST_BEFORE_REBRAND = "0040_worried_lethal_legion";
-const LATEST_TAG = "0041_rebrand_source_values";
+const LATEST_TAG = "0043_source_default_openaudiohub";
 
 /** Copies migrations up to and including `tag` into a temporary folder. */
 function migrationsUpTo(tag: string): string {
@@ -174,6 +174,26 @@ describeWithDatabase("rebrand source values migration", () => {
         expect(enhancement.source).toBe("openaudiohub");
         expect(settings.preferred_transcript_source).toBe("openaudiohub");
         expect(settings.default_transcription_provider_id).toBeNull();
+
+        // 0043: new rows default to the current source value.
+        const defaults = await database.sql<
+            { table_name: string; column_default: string }[]
+        >`
+            select table_name, column_default from information_schema.columns
+            where table_schema = 'public' and column_name = 'source'
+              and table_name in ('transcriptions', 'ai_enhancements')
+            order by table_name
+        `;
+        expect(defaults).toEqual([
+            {
+                table_name: "ai_enhancements",
+                column_default: "'openaudiohub'::character varying",
+            },
+            {
+                table_name: "transcriptions",
+                column_default: "'openaudiohub'::character varying",
+            },
+        ]);
     });
 
     it("records the latest migration in the journal", () => {

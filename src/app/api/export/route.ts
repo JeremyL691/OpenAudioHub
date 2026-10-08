@@ -11,6 +11,13 @@ import { requireApiSession } from "@/lib/auth-server";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
+const EXPORT_FORMATS: ReadonlySet<string> = new Set([
+    "json",
+    "txt",
+    "srt",
+    "vtt",
+]);
+
 // GET - Export recordings in specified format
 export const GET = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
@@ -29,7 +36,12 @@ export const GET = apiHandler(async (request: Request) => {
         .where(eq(userSettings.userId, session.user.id))
         .limit(1);
 
-    const exportFormat = formatParam || settings?.defaultExportFormat || "json";
+    // A saved default from before the allowlist matched the exporter
+    // (`csv`, `zip`) falls back to JSON instead of failing every export.
+    const savedFormat = settings?.defaultExportFormat;
+    const exportFormat =
+        formatParam ||
+        (savedFormat && EXPORT_FORMATS.has(savedFormat) ? savedFormat : "json");
 
     // Get all recordings for user
     const userRecordings = await db

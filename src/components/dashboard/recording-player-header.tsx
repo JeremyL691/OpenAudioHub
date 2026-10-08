@@ -17,6 +17,12 @@ interface Props {
     waveformStatus: "idle" | "ready" | "decoding" | "skipped" | "error";
     onDecodeWaveform: () => void;
     onRenamed?: (filename: string) => void;
+    /**
+     * Leave out the title, the download button, and the date, duration, and
+     * size. The detail page shows them in its own header and actions menu,
+     * so only the waveform status line remains.
+     */
+    hideIdentity?: boolean;
 }
 
 /**
@@ -36,7 +42,15 @@ export function RecordingPlayerHeader({
     waveformStatus,
     onDecodeWaveform,
     onRenamed,
+    hideIdentity = false,
 }: Props) {
+    const waveformNotice =
+        scrubberStyle === "waveform" &&
+        (waveformStatus === "decoding" ||
+            waveformStatus === "skipped" ||
+            waveformStatus === "error");
+    if (hideIdentity && !waveformNotice) return null;
+
     const metaParts: string[] = [
         formatDuration(duration || recording.duration / 1000),
         formatBytes(recording.filesize),
@@ -44,26 +58,32 @@ export function RecordingPlayerHeader({
 
     return (
         <CardHeader className="gap-1">
-            <CardTitle className="min-w-0 text-lg">
-                <RecordingTitle
-                    recordingId={recording.id}
-                    filename={recording.filename}
-                    onRenamed={onRenamed}
-                    className="text-lg"
-                />
-            </CardTitle>
-            <CardAction>
-                <DownloadAudioButton recordingId={recording.id} />
-            </CardAction>
+            {!hideIdentity && (
+                <>
+                    <CardTitle className="min-w-0 text-lg">
+                        <RecordingTitle
+                            recordingId={recording.id}
+                            filename={recording.filename}
+                            onRenamed={onRenamed}
+                            className="text-lg"
+                        />
+                    </CardTitle>
+                    <CardAction>
+                        <DownloadAudioButton recordingId={recording.id} />
+                    </CardAction>
+                </>
+            )}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span>
-                    Recorded{" "}
-                    <LocalTimeRange
-                        start={recording.startTime}
-                        durationMs={recording.duration}
-                    />
-                </span>
-                {metaParts.map((part) => (
+                {!hideIdentity && (
+                    <span>
+                        Recorded{" "}
+                        <LocalTimeRange
+                            start={recording.startTime}
+                            durationMs={recording.duration}
+                        />
+                    </span>
+                )}
+                {(hideIdentity ? [] : metaParts).map((part) => (
                     <span key={part} className="inline-flex items-center gap-2">
                         <span aria-hidden="true" className="opacity-40">
                             ·

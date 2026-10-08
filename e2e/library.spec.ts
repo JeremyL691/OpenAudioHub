@@ -32,6 +32,23 @@ test.describe("library", () => {
         await expect(row).toContainText(/Plaud|Upload/);
     });
 
+    test("server pipeline jobs show their phase and count as processing", async ({
+        page,
+    }) => {
+        // The seeded "Processing now" recording has a running pipeline job in
+        // the transcribing phase, and "Paused for disk" a paused one (D-203).
+        const list = page.getByTestId("recording-list");
+        const processingRow = page
+            .getByTestId("recording-row")
+            .filter({ hasText: RECORDINGS.processing });
+        await expect(processingRow).toContainText("Transcribing speech");
+        await expect(processingRow).not.toContainText("Not transcribed");
+
+        await page.getByTestId("recording-filter-processing").click();
+        await expect(list).toContainText(RECORDINGS.processing);
+        await expect(list).not.toContainText(RECORDINGS.weekly);
+    });
+
     test("the row menu offers Transcribe", async ({ page }) => {
         const row = page
             .getByTestId("recording-row")

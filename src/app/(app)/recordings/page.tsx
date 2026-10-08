@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { Workstation } from "@/components/dashboard/workstation";
 import { db } from "@/db";
+import { getActivePipelinePhases } from "@/db/queries/overview";
 import {
     aiEnhancements,
     plaudConnections,
@@ -31,6 +32,7 @@ export default async function RecordingsPage({
         userSummaryRows,
         [settingsRow],
         [connectionRow],
+        pipelinePhases,
     ] = await Promise.all([
         db
             .select({
@@ -85,6 +87,8 @@ export default async function RecordingsPage({
             .from(plaudConnections)
             .where(eq(plaudConnections.userId, session.user.id))
             .limit(1),
+        // Long-audio jobs run on the server; the list shows their phase.
+        getActivePipelinePhases(session.user.id),
     ]);
     const summaryIds = new Set(userSummaryRows.map((r) => r.recordingId));
     const transcriptIds = new Set(userTranscriptions.map((t) => t.recordingId));
@@ -98,6 +102,7 @@ export default async function RecordingsPage({
             {
                 hasTranscript: transcriptIds.has(r.id),
                 hasSummary: summaryIds.has(r.id),
+                pipelinePhase: pipelinePhases.get(r.id) ?? null,
                 // jsonb comes back already-parsed; coerce to the typed shape.
                 waveformPeaks: Array.isArray(waveformPeaks)
                     ? (waveformPeaks as number[])

@@ -16,6 +16,11 @@ export type Recording = Omit<RecordingQueryResult, "startTime"> & {
     hasTranscript?: boolean;
     hasSummary?: boolean;
     /**
+     * Phase of the recording's active long-audio pipeline job, or null when
+     * no job is running. Computed when the page renders.
+     */
+    pipelinePhase?: string | null;
+    /**
      * Coarse normalized amplitude peaks ([0, 1]) for waveform rendering.
      * Decoded client-side on first listen and cached server-side. Null
      * when never decoded; an empty array would be invalid (treat as null).
@@ -30,6 +35,7 @@ export function serializeRecording(
     flags?: {
         hasTranscript?: boolean;
         hasSummary?: boolean;
+        pipelinePhase?: string | null;
         waveformPeaks?: number[] | null;
     },
 ): Recording {
@@ -38,6 +44,7 @@ export function serializeRecording(
         startTime: recording.startTime.toISOString(),
         hasTranscript: flags?.hasTranscript ?? false,
         hasSummary: flags?.hasSummary ?? false,
+        pipelinePhase: flags?.pipelinePhase ?? null,
         // Empty arrays would be invalid per the field contract ("null
         // when never decoded"); collapse them to null at the
         // serialization boundary so consumers never have to special-case

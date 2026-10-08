@@ -21,7 +21,8 @@ const ENUM_FIELDS = {
     dateTimeFormat: ["relative", "absolute", "iso"],
     recordingListSortOrder: ["newest", "oldest", "name"],
     transcriptionQuality: ["fast", "balanced", "accurate"],
-    defaultExportFormat: ["json", "csv", "zip"],
+    // Matches the formats `/api/export` produces and the settings UI offers.
+    defaultExportFormat: ["json", "txt", "srt", "vtt"],
     transcriptMode: ["plaud_only", "keep_both"],
     preferredTranscriptSource: ["plaud", OWN_SOURCE, LEGACY_SOURCE],
 } as const satisfies Record<string, readonly string[]>;

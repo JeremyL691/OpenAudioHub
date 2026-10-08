@@ -4,7 +4,7 @@
 
 # OpenAudioHub
 
-**Open-source AI transcription for the recorder you already own.**
+**Long recordings, intelligently transcribed.**
 
 OpenAudioHub is a self-hosted web app for Plaud recordings. It syncs your recordings from your Plaud account, keeps the audio on storage you control, and produces transcripts and summaries with AI providers you choose. An optional audio pipeline prepares long recordings and processes them in durable, resumable chunks. When you decide to leave, you can export everything.
 
