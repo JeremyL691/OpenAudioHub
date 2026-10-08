@@ -35,6 +35,14 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - The installer defaults to `$HOME/openaudiohub` and downloads from `github.com/JeremyL691/OpenAudioHub`.
 - Uncaught exceptions are logged, and the process stops. Unhandled promise rejections are logged.
 
+### Fixed
+
+- Clicking a line in the transcript seeks the audio to that line. The highlight follows playback, and Follow playback keeps the active line in view.
+- Choosing a display theme applies it at once, without a reload.
+- Long recordings get an automatic summary after the audio pipeline commits the transcript, as direct transcription already did. A job that is replayed does not summarize twice.
+- The recording page no longer scrolls sideways at 1280 px when a title is long. Titles truncate.
+- Uploaded recordings are labelled Upload, not Plaud.
+
 ### Removed
 
 - Hosted-only features: Stripe billing, managed transcription, PostHog and OpenAnalytics, the hosted admin console, marketing and newsletter email, email validation, the landing, pricing, legal, changelog, and rebrand pages, trial banners, and the Discord link.
@@ -46,3 +54,9 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 
 - The bundled Postgres service publishes its port on `127.0.0.1` only.
 - The installer generates `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, and `AUDIO_PIPELINE_TOKEN`.
+
+### Known issues
+
+- `pnpm audit --prod` reports critical advisories in `next` 16.2.10 (remote code execution, fixed in 16.3.8 or later). Upgrade `next` before publishing a public release.
+- Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
+- The feature list once named translation of summaries. The imported code never had it, so it is not in this release.

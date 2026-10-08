@@ -26,6 +26,14 @@ OpenAudioHub is self-hosted software. This project does not operate a hosted ser
 - **Export.** A full-data ZIP with audio, transcripts, summaries, and a manifest. Transcripts can also be exported as JSON, TXT, SRT, or VTT.
 - **Encryption at rest.** Transcripts, summaries, titles, prompts, provider keys, and Plaud tokens are encrypted with AES-256-GCM under a key you hold.
 
+## Screenshots
+
+The overview, the recording library, and a recording with its transcript and summary, at a 1280 px width in light mode.
+
+| Overview | Library | Recording |
+| --- | --- | --- |
+| ![Overview](docs/screenshots/overview-1280-light.png) | ![Library](docs/screenshots/library-1280-light.png) | ![Recording detail](docs/screenshots/recording-detail-1280-light.png) |
+
 ## Architecture
 
 ```mermaid

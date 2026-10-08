@@ -37,7 +37,31 @@ Upgrade the audio pipeline before Core.
 
 In Compose, start the new `audio-pipeline` service, wait until it is healthy, and only then start `app`.
 
-## Steps
+## Recommended path
+
+`scripts/migrate-from-riffado.sh` runs the migration and checks it. It reads the old stack and never writes to it.
+
+1. Stop the old app so nothing writes during the export. Wait until no pipeline job is active:
+
+   ```bash
+   docker stop riffado-app
+   ```
+
+2. Export (read-only). The script refuses to run while the old app is up:
+
+   ```bash
+   bash scripts/migrate-from-riffado.sh --export-only --out ./migration-artifacts/riffado-export
+   ```
+
+3. Restore into the new deployment. The script refuses to overwrite a database or a volume that already has data, and it prints seven checks to `validation.txt`:
+
+   ```bash
+   bash scripts/migrate-from-riffado.sh --restore-from ./migration-artifacts/riffado-export --target-project openaudiohub --target-env .env --target-dir .
+   ```
+
+Keep the old volumes and the old directory until the new stack has run for a while. The steps below are the same work done by hand, kept for reference.
+
+## Manual steps (reference)
 
 ### 1. Back up the old installation
 
