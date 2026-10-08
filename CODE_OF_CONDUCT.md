@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-conduct@riffado.com.
+reported to the project maintainers. Report privately through GitHub's private
+reporting form at https://github.com/JeremyL691/OpenAudioHub/security/advisories/new
+and mark the report as a conduct issue.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

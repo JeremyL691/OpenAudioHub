@@ -1,279 +1,115 @@
-# Development Guide
+# Development guide
 
-This guide covers setting up a local development environment for Riffado.
+This guide covers setting up a local development environment for OpenAudioHub.
 
-## Quick Start
+## Prerequisites
+
+- Node.js 22, and the pnpm version pinned in `.github/workflows/ci.yml`.
+- [Bun](https://bun.sh). Some scripts, such as `db:migrate` and `e2e`, run with it.
+- Postgres 16.
+- Docker, for container builds and the container test stacks.
+- For the audio pipeline: Python 3.12 and [uv](https://docs.astral.sh/uv/).
+
+## Quick start
 
 ```bash
-# Clone repository
-git clone https://github.com/riffado/riffado.git
-cd riffado
+pnpm install --frozen-lockfile
+cp .env.example .env
+```
 
-# Install dependencies
-pnpm install
+Generate the two secrets and add them to `.env`:
 
-# Set up environment
-cp .env.example .env.local
-# Edit .env.local with your values
+```bash
+echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)"
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+```
 
-# Create database
-createdb riffado
+Set `DATABASE_URL` to your local database, for example `postgresql://postgres:postgres@localhost:5432/openaudiohub`, and set `APP_URL=http://localhost:3000`. Then create the database, apply the migrations, and start the server:
 
-# Run migrations
+```bash
+createdb openaudiohub
 pnpm db:migrate
-
-# Start dev server
 pnpm dev
 ```
 
-Access at http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000).
 
-## Development Tools
+## Scripts
 
-### Required
-- Node.js 20+
-- pnpm (package manager)
-- PostgreSQL 16+
-- Git
+| Script | Purpose |
+| --- | --- |
+| `pnpm dev` | Development server with hot reload |
+| `pnpm build` | Production build |
+| `pnpm start` | Serve the production build |
+| `pnpm format-and-lint` | Check formatting and lint rules with Biome |
+| `pnpm format-and-lint:fix` | Apply Biome fixes |
+| `pnpm type-check` | TypeScript check |
+| `pnpm test` | Unit and integration tests with Vitest |
+| `pnpm test:watch` | Vitest in watch mode |
+| `pnpm e2e` | Playwright end-to-end tests |
+| `pnpm db:generate` | Generate a migration from `src/db/schema.ts` |
+| `pnpm db:migrate` | Apply migrations |
+| `pnpm db:studio` | Drizzle Studio, a database browser |
 
-### Recommended
-- VS Code with extensions:
-  - ESLint
-  - Prettier
-  - Tailwind CSS IntelliSense
-  - Prisma (for viewing database)
-- Docker Desktop (for testing Docker builds)
+## Tests
 
-## Project Scripts
+Integration tests need a Postgres test database. `scripts/dev/test-stack.sh` starts one in a container:
 
 ```bash
-# Development
-pnpm dev                    # Start dev server with hot reload
-pnpm build                  # Build for production
-pnpm start                  # Start production server
+eval "$(scripts/dev/test-stack.sh env)"
+pnpm test
+```
 
-# Code Quality
-pnpm format-and-lint        # Check code style
-pnpm format-and-lint:fix    # Auto-fix style issues
-pnpm type-check             # Run TypeScript checks
+End-to-end tests build the app and serve it on port 3210, with a fake AI server on port 3299:
 
-# Testing
-pnpm test                   # Run tests
-pnpm test:watch             # Run tests in watch mode
+```bash
+pnpm e2e
+```
 
-# Database
-pnpm db:generate            # Generate migration from schema changes
-pnpm db:migrate             # Apply migrations
-pnpm db:studio              # Open Drizzle Studio (database GUI)
+Live Plaud API tests are opt-in. They need `PLAUD_BEARER_TOKEN`, and CI skips them. See [CONTRIBUTING.md](../CONTRIBUTING.md#integration-tests).
+
+Audio pipeline tests run from the `audio-pipeline` directory:
+
+```bash
+cd audio-pipeline
+uv run --frozen --group dev pytest
 ```
 
 ## Architecture
 
-### Frontend
-- **Next.js 16** (App Router)
-- **React 19** with TypeScript
-- **Tailwind CSS** for styling
-- **Shadcn/ui** for components
-- **Framer Motion** for animations
+The app is a Next.js (App Router) application with Postgres, Drizzle ORM, and Better Auth. The interface uses Tailwind CSS and shadcn/ui. The audio pipeline is a separate FastAPI service. The [architecture reference](../content/docs/reference/architecture.mdx) describes how the parts fit together.
 
-### Backend
-- **Next.js API Routes**
-- **PostgreSQL** database
-- **Drizzle ORM**
-- **Better Auth** for authentication
+## Database changes
 
-### Storage
-- Local filesystem or S3-compatible
+1. Edit `src/db/schema.ts`.
+2. Run `pnpm db:generate`. This writes the SQL and the snapshot.
+3. Review the generated SQL in `src/db/migrations/`.
+4. Run `pnpm db:migrate`, and commit the schema change together with the generated files.
 
-### AI Integration
-- OpenAI SDK (universal OpenAI-compatible)
-- Transformers.js for browser transcription
+Do not hand-write migration SQL, and do not edit the snapshots under `src/db/migrations/meta/`. The contributing guide and AGENTS.md explain why.
 
-## Database Development
+## Container development
 
-### Schema Changes
-
-1. Edit `src/db/schema.ts`
-2. Generate migration: `pnpm db:generate`
-3. Review generated SQL in `src/db/migrations/`
-4. Apply migration: `pnpm db:migrate`
-5. Commit both schema.ts and migration files
-
-### Database GUI
+To build the image from your local checkout and run the full stack:
 
 ```bash
-pnpm db:studio
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-Opens Drizzle Studio at http://localhost:4983
+The overlay builds the app image locally instead of pulling it. The `.env` file must include the secrets described in the [installation guide](../content/docs/self-hosting/install.mdx).
 
-## Testing
+## Code style
 
-### Running Tests
+Biome handles formatting and linting. Run `pnpm format-and-lint:fix` before you commit. Use these naming conventions:
 
-```bash
-# All tests
-pnpm test
-
-# Watch mode
-pnpm test:watch
-
-# Integration tests (requires Plaud bearer token)
-export PLAUD_BEARER_TOKEN="Bearer your-token"
-bun test src/tests/plaud.integration.test.ts
-```
-
-### Writing Tests
-
-Use Vitest for testing:
-
-```typescript
-import { describe, it, expect, vi } from 'vitest';
-
-describe('MyFunction', () => {
-  it('should do something', () => {
-    expect(myFunction()).toBe(expected);
-  });
-});
-```
-
-## Debugging
-
-### VS Code
-
-Create `.vscode/launch.json`:
-
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Next.js: debug server-side",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "pnpm dev"
-    }
-  ]
-}
-```
-
-### Browser DevTools
-
-- React DevTools
-- Network tab for API calls
-- Console for errors
-
-## Code Style
-
-### Biome Configuration
-
-We use Biome for linting and formatting. See `biome.json` for configuration.
-
-### Naming Conventions
-
-- Components: PascalCase (`MyComponent.tsx`)
-- Files: kebab-case (`my-utility.ts`)
-- API routes: kebab-case (`my-route/route.ts`)
-- Database tables: snake_case (`user_settings`)
-
-### Component Structure
-
-```typescript
-'use client';  // If client component
-
-import { useState } from 'react';
-
-interface MyComponentProps {
-  title: string;
-}
-
-export function MyComponent({ title }: MyComponentProps) {
-  const [state, setState] = useState();
-
-  return <div>{title}</div>;
-}
-```
-
-## Common Tasks
-
-### Adding a New API Route
-
-1. Create file: `src/app/api/my-route/route.ts`
-2. Export handler: `export async function GET(request: Request) {}`
-3. Add auth check if needed
-4. Return `NextResponse.json()`
-
-### Adding a New Page
-
-1. Create file: `src/app/(app)/my-page/page.tsx`
-2. Export default component
-3. Add to navigation if needed
-
-### Adding a Database Table
-
-1. Edit `src/db/schema.ts`
-2. Add table definition using Drizzle
-3. Generate migration: `pnpm db:generate`
-4. Apply: `pnpm db:migrate`
-
-### Adding a New UI Component
-
-```bash
-# Use shadcn CLI
-npx shadcn@latest add button
-```
-
-Or create manually in `src/components/`
+- Components: `PascalCase.tsx`.
+- Other source files: `kebab-case.ts`.
+- API routes: `src/app/api/<name>/route.ts`.
+- Database tables and columns: `snake_case`.
 
 ## Troubleshooting
 
-### Port Already in Use
-
-```bash
-# Find process
-lsof -i :3000
-
-# Kill process
-kill -9 <PID>
-```
-
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL is running
-pg_isready
-
-# Restart PostgreSQL
-brew services restart postgresql  # macOS
-sudo systemctl restart postgresql  # Linux
-```
-
-### Type Errors
-
-```bash
-# Regenerate types
-rm -rf .next
-pnpm dev
-```
-
-## Environment Variables
-
-See `.env.example` for all variables. Required for development:
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/riffado
-BETTER_AUTH_SECRET=your-secret-here
-ENCRYPTION_KEY=your-64-char-hex-key-here
-APP_URL=http://localhost:3000
-```
-
-## Resources
-
-- [Next.js Docs](https://nextjs.org/docs)
-- [Drizzle ORM Docs](https://orm.drizzle.team)
-- [Tailwind CSS Docs](https://tailwindcss.com/docs)
-- [Better Auth Docs](https://better-auth.com)
-
-## Contributing
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+- **The port is already in use.** Find the process with `lsof -i :3000` and stop it.
+- **Type errors after dependency changes.** Remove the `.next` directory and start again. The build regenerates the route types.
+- **`pnpm db:migrate` cannot connect.** Check that `DATABASE_URL` points at a running Postgres, and that the database exists.
+- **Environment validation fails.** The error names the variable. The required values are listed in [environment variables](../content/docs/self-hosting/environment-variables.mdx#required-at-runtime).

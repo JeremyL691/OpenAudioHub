@@ -1,69 +1,48 @@
 ---
 title: Backup and restore
-description: Export your recordings or restore a self-hosted operations backup.
+description: Export your recordings, transcripts, and summaries, and recover an instance from an operations backup.
 ---
 
-Riffado has separate export and operations-recovery paths:
+OpenAudioHub has three separate ways to export or back up data.
 
-- **`/api/backup`** creates a full-data ZIP for taking your data with
-  you. Its manifest describes whether each recording's audio,
-  transcript, timeline, and summary were included. `timeline.json`
-  keeps timestamp provenance and per-segment correction details.
-- **`/api/export`** flattens transcripts into one human-readable
-  `txt`, `srt`, `vtt`, or `json` file. It is for handing transcript
-  text to other tools.
-- **Operations backup** is the consistent Postgres dump, audio and
-  storage volumes, SQLite-consistent pipeline database backup, and
-  pipeline work directory used to restore a self-hosted service.
+- **Full-data ZIP.** A portable copy of your content, from **Settings → Export/Backup**. Use it to take your data elsewhere or to keep an archive of it.
+- **Transcript export.** A single file with the transcripts of all your recordings, in JSON, TXT, SRT, or VTT format.
+- **Operations backup.** What an operator needs to recover an installation: the database, the audio and storage volumes, and the pipeline data. It is not a file you create from the interface.
 
-## Full-data ZIP export
+## Full-data ZIP
 
-**Settings → Export/Backup → Create Backup** (or `POST /api/backup`)
-produces a ZIP containing `manifest.json` and a folder for each
-recording. A folder can include `audio.<ext>`, `transcript.txt`,
-`timeline.json`, and `summary.json`. The manifest records which files
-were included. If any recording's audio is missing or unreadable, the
-export worker marks the job failed, discards the partial ZIP, and does
-not send a ready notification. Check the manifest when verifying an
-archive produced by the builder or another compatible tool.
+Under **Settings → Export/Backup**, create a backup. The job runs in the background, and you can download the ZIP when it is ready.
 
-The ZIP is **plaintext** because Riffado decrypts your fields before
-serialization. Restrict access, store it encrypted, and do not email it.
-Keep the export separate from the encryption key. The ZIP does not
-contain the key and is not a server restore package.
+The ZIP contains a `manifest.json` and one folder per recording. A folder holds the audio file, `transcript.txt`, `timeline.json`, and `summary.json`, for each item that exists. The manifest lists what each recording includes. If an audio file is missing or unreadable, the export fails, the partial ZIP is discarded, and you are not notified that it is ready. Check the manifest when you verify an archive.
+
+The ZIP is plaintext, because OpenAudioHub decrypts your content before it writes the archive. Store it encrypted, do not send it by email, and keep it apart from your encryption key. The ZIP is not a server restore package, and it cannot be imported back into OpenAudioHub.
+
+The file name is `openaudiohub-export-<id>.zip`.
 
 ## Transcript export
 
-`GET /api/export?format=<fmt>` flattens every one of your recordings
-into one file:
+`GET /api/export?format=<format>` combines all of your recordings into one file. The supported formats are:
 
 | Format | Content |
-| ------ | ------- |
-| `json` | One JSON document with every recording and transcript |
-| `txt`  | Plaintext, one block per recording |
-| `srt`  | SubRip subtitles for all recordings |
-| `vtt`  | WebVTT subtitles for all recordings |
+| --- | --- |
+| `json` | One JSON document with every recording and its transcript |
+| `txt` | Plain text, one block per recording |
+| `srt` | SubRip subtitles for all recordings |
+| `vtt` | WebVTT subtitles for all recordings |
 
-## Operations restore
+## Operations backup and restore
 
-There is no ZIP import endpoint. Restore an operations backup into an
-isolated self-hosted stack using the Postgres dump, audio and storage
-volumes, pipeline SQLite backup and work directory. Restore the matching
-`ENCRYPTION_KEY` from its separate secure storage. Disable automatic sync
-and external provider access during verification. Compare recording and
-transcript counts and hashes, summary hashes, audio hashes, timeline
-provenance, and correction metadata before returning the restored stack
-to service.
+An operations backup is for recovering an installation. It includes:
 
-The ZIP is an export artifact; uploading it does not recreate database
-records. See the [long-audio operations runbook](../../../docs/audio-pipeline-operations.md)
-for the isolated restore and export verification procedure.
+- A logical dump of the Postgres database.
+- The audio and storage volumes, or your S3 bucket.
+- The audio pipeline's SQLite database and work directory.
+- The `ENCRYPTION_KEY`, stored separately from the rest.
 
-## What's encrypted vs. plaintext
+Without the matching `ENCRYPTION_KEY`, the encrypted content in the database cannot be read. The [audio pipeline operations runbook](https://github.com/JeremyL691/OpenAudioHub/blob/main/docs/audio-pipeline-operations.md) describes how to capture a consistent backup, restore it into an isolated stack, and verify the result before you return it to service.
 
-- **In the database**, sensitive fields are encrypted at rest with
-  AES-256-GCM (see [Encryption at rest](../reference/encryption-at-rest)).
-- **In a ZIP from `/api/backup`**, those fields are decrypted before
-  serialization. Protect that file as plaintext personal data.
-- **Audio in storage** is not encrypted by Riffado's app-layer
-  encryption. Use bucket-level server-side encryption when needed.
+## What is encrypted
+
+- **In the database,** sensitive fields are encrypted with AES-256-GCM. See [Encryption at rest](/docs/reference/encryption-at-rest).
+- **In a ZIP from Settings → Export/Backup,** those fields are decrypted before they are written. Protect the file as plaintext personal data.
+- **Audio in storage** is not encrypted by OpenAudioHub. Use server-side encryption on your bucket if you need it.

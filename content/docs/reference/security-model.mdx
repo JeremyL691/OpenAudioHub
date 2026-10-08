@@ -1,159 +1,68 @@
 ---
 title: Security model
-description: Authentication, encryption at rest, API tokens, and trust boundaries.
+description: Authentication, encryption at rest, API key handling, and trust boundaries.
 ---
 
-This page sketches the full picture. The deep dive on database
-encryption lives in
-[Encryption at rest](./encryption-at-rest); cross-link there for the
-column-level details.
+This page gives the overall picture. The column-level details are in [Encryption at rest](./encryption-at-rest).
 
 ## Authentication
 
-Two ways to authenticate to Riffado's HTTP surface:
+There are two ways to authenticate to OpenAudioHub's HTTP surface.
 
-1. **Browser session** (Better Auth). Email + password, with the
-   session cookie signed by `BETTER_AUTH_SECRET`. Used by every page
-   under `(app)`, the dashboard, and the internal `/api/*` routes.
-2. **Personal API key** (`op_<24 chars>`). Used by external
-   integrations against the `/api/v1/*` surface. Sent as a Bearer
-   token. Read-only scope.
+1. **Browser session.** Better Auth signs you in with email and password. The session cookie is signed with `BETTER_AUTH_SECRET`. The interface and its internal API use sessions.
+2. **Personal API key.** Starts with `oah_`. Keys created before version 1.0.0 start with `op_`, and both work. Sent as a Bearer token, and read-only. External tools use keys to call `/api/v1/*`.
 
-Rate limit buckets default to the request's direct client IP. If your
-instance sits behind a reverse proxy that overwrites
-`X-Forwarded-For`, set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` so the
-bucket key uses the original client IP. Don't set it without a proxy
-that actually overwrites the header — clients can forge it and your
-rate limiter is then ornamental.
+Rate limits count requests per client IP. If your instance sits behind a reverse proxy, set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` only when the proxy overwrites `X-Forwarded-For`. Otherwise clients can forge the header, and the limits stop working.
 
 ## Encryption at rest
 
-Sensitive fields are encrypted with AES-256-GCM, keyed off
-`ENCRYPTION_KEY` (a required 64-char hex string).
+Sensitive fields are encrypted with AES-256-GCM under `ENCRYPTION_KEY`, a 64-character hex key. The list of fields is in [Encryption at rest](./encryption-at-rest).
 
-| Field                                   | Why                                    |
-| --------------------------------------- | -------------------------------------- |
-| `recordings.filename`                   | Often carries AI-generated titles      |
-| `transcriptions.text`                   | Full transcript                        |
-| `ai_enhancements.summary`               | LLM summary                            |
-| `ai_enhancements.key_points`            | Stored under `{ "c": "v1:..." }`       |
-| `ai_enhancements.action_items`          | Same envelope                          |
-| `user_settings.summary_prompt`          | May carry user context                 |
-| `user_settings.title_generation_prompt` | Same                                   |
-| `plaud_connections.bearer_token`        | Plaud OAuth-equivalent token           |
-| `api_credentials.api_key`               | Configured AI provider key             |
-| `webhook_endpoints.url`                 | User-configured webhook target         |
-| `webhook_endpoints.secret`              | The `whsec_…` signing secret           |
+## API key hashing
 
-**Out of scope** for the app-layer encryption:
+Personal API keys are stored as HMAC-SHA256 hashes, never as plaintext. The HMAC key is `API_TOKEN_HASH_SECRET` when it is set, and `BETTER_AUTH_SECRET` otherwise. A database breach does not reveal usable keys, because an attacker would also need the HMAC key from the runtime environment.
 
-- Audio files on disk or in S3. Use bucket-level SSE on S3, or full-
-  disk encryption on the host, if you need that.
-- Postgres on disk. Use disk encryption or a managed DB that does it
-  for you.
-- The decryption-at-request-time path — the server holds the key and
-  decrypts content when it needs to run AI on it. This is unavoidable
-  while server-side transcription and summarization are part of the
-  product. If you require true zero-knowledge, see below.
+Two consequences matter:
 
-See [Encryption at rest](./encryption-at-rest) for ciphertext format,
-versioning prefix (`v1:`), and the backfill script.
-
-## API token hashing
-
-Personal API keys are HMAC-SHA256-hashed before being stored. The
-HMAC key is `API_TOKEN_HASH_SECRET` if set, otherwise
-`BETTER_AUTH_SECRET`. A database breach does not leak usable tokens
-(an attacker would still need the HMAC key, which lives only in the
-runtime environment).
-
-Two important consequences:
-
-- We never use plain SHA-256 for tokens. The high-entropy random key
-  doesn't fix that on its own — without an HMAC, a precomputed
-  table over the `op_` keyspace would be feasible at scale.
-- We never reuse `ENCRYPTION_KEY` as the HMAC key. That key is
-  reserved for AES-GCM at-rest encryption. Mixing key uses is a
-  cryptographic smell with no upside.
+- Keys are not hashed with plain SHA-256. A random key is strong, but a plain hash would still allow precomputed lookups over the key space.
+- `ENCRYPTION_KEY` is never used as the HMAC key. It is reserved for encryption.
 
 ## Webhook signatures
 
-Outbound webhook deliveries are signed:
+Each webhook delivery is signed:
 
-- Header: `X-Riffado-Signature: t=<unix>,v1=<hex hmac>`
-- Algorithm: HMAC-SHA256 of `${timestamp}.${rawBody}` with the
-  endpoint's per-secret.
-- Replay window: ±5 minutes.
+- Header: `X-OpenAudioHub-Signature: t=<unix time>,v1=<hex HMAC>`
+- Algorithm: HMAC-SHA256 over `<timestamp>.<raw body>`, using the endpoint's `whsec_` secret.
+- Replay window: five minutes.
 
-Receivers must verify in constant time (timing-safe compare) — see
-[Automation API and webhooks](../guides/automation-and-webhooks) for
-a reference Node implementation.
+Receivers must compare signatures in constant time. The [automation guide](/docs/guides/automation-and-webhooks) has a reference implementation.
 
 ## Webhook target hardening
 
-By default, webhook URLs may use `http://` or `https://` and may point
-at anything the Riffado container can reach (Docker-bridge service
-names, RFC1918 IPs, public hosts). Credentials embedded in the URL are
-rejected.
+By default, a webhook URL can use `http://` or `https://`, and it can point at any address the OpenAudioHub container can reach. That includes Docker service names, private IP addresses, and public hosts. URLs with embedded credentials are rejected.
 
-If your instance is exposed to other people — multi-user self-host
-deployment, anyone you don't fully trust signing up — set
-`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. With that flag, webhook URLs
-must use HTTPS, resolve to a public IP, and not embed credentials.
-Loopback, RFC1918, link-local, ULA, multicast, and IPv6 documentation
-prefixes are all rejected. This stops your instance from being used as
-an SSRF relay against its own private network.
+If other people can reach your instance, set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. Then webhook URLs must use HTTPS, must resolve to public addresses, and must not contain credentials. Loopback, private, link-local, unique-local, multicast, and documentation addresses are rejected. This stops your instance from being used as a relay into your private network.
 
 ## Per-user query isolation
 
-Every database query that touches user-scoped data carries
-`where(eq(table.userId, session.user.id))`. The codebase treats this
-as a hard requirement on **every** query, every time — not "I'll add
-it later," not "it's an internal endpoint." Code review enforces it
-on every PR.
-
-`/api/v1/*` routes get the user id from the personal API key after
-authentication; internal routes get it from the session. Either way,
-the same userId-scoped queries run.
+Every database query that touches user data includes `where(eq(table.userId, session.user.id))`. Routes under `/api/v1/*` take the user from the API key, and the rest take it from the session. Either way, the same user-scoped queries run.
 
 ## Account suspension
 
-Suspended users (`users.suspendedAt` is non-null) are rejected
-**before** any feature code runs:
+A suspended account is rejected before any feature code runs. Suspension is recorded in the `users.suspended_at` column. Session requests and API key requests both check it. There is no interface for suspending accounts yet, so an operator sets the column in the database.
 
-- Session-authenticated requests get `403 ACCOUNT_SUSPENDED` from the
-  session check.
-- API-key-authenticated requests get the same code from the
-  `authenticateRequest` path.
+## Trust boundaries outside OpenAudioHub
 
-The check sits next to the auth lookup, not behind a per-route
-middleware, so it can't be forgotten on a new route.
+Some risks sit outside the application, and this page names them rather than claim to cover them.
 
-## Trust boundaries Riffado does *not* own
+- **Your AI provider.** Plaintext audio and transcripts go to the provider you configured. Its policies and infrastructure determine their privacy. If you do not trust the provider, run a local one on the same machine.
+- **A compromised application server.** The server holds `ENCRYPTION_KEY` and decrypts content when it needs to. Encryption at rest protects against database breaches, not against code execution on the server.
+- **A compromised `ENCRYPTION_KEY`.** Treat it like a database master credential. If it is lost, the encrypted content cannot be recovered.
 
-Some risks live outside the app entirely and we name them rather than
-pretending we cover them:
+## Compliance
 
-- **Your AI provider.** Plaintext audio and plaintext transcripts go
-  to whichever provider you configured. The privacy of that data
-  depends on the provider's policy and infrastructure. If you don't
-  trust them, run a local provider (Ollama / LM Studio) on the same
-  machine as your Riffado instance.
-- **A compromised application server.** The server holds
-  `ENCRYPTION_KEY` and decrypts data on demand. At-rest encryption
-  protects DB breaches, not RCE.
-- **A compromised `ENCRYPTION_KEY`.** Treat the key like a database
-  master credential. Lose it and encrypted content becomes
-  unrecoverable.
-
-## Compliance claims
-
-Riffado does not claim HIPAA, SOC2, or attorney-client privilege.
-Those claims belong to your AI provider (which may itself be
-HIPAA-eligible) and your own self-host setup, which you fully
-control.
+OpenAudioHub does not claim HIPAA, SOC 2, or attorney-client privilege. Those claims depend on your AI provider, which may have its own certifications, and on how you deploy and operate your instance.
 
 ## Reporting a vulnerability
 
-See [SECURITY.md](https://github.com/riffado/riffado/blob/main/SECURITY.md)
-in the repository for disclosure instructions.
+Report security issues privately through [GitHub's vulnerability reporting](https://github.com/JeremyL691/OpenAudioHub/security/advisories/new). The [security policy](https://github.com/JeremyL691/OpenAudioHub/blob/main/SECURITY.md) describes what to include.

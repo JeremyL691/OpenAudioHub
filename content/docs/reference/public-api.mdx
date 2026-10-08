@@ -1,44 +1,38 @@
 ---
 title: Public API
-description: The /api/v1/* read surface — authentication, endpoints, errors, rate limits.
+description: The read-only /api/v1 surface, with authentication, endpoints, errors, and rate limits.
 ---
 
-The `/api/v1/*` surface is Riffado's public, stable, read-only API.
-Personal API keys authenticate it; integrations like Zapier, n8n, and
-your own scripts call into it.
+The `/api/v1/*` surface is OpenAudioHub's public, read-only API. Personal API keys authenticate it. Integrations such as Zapier, n8n, and your own scripts call it.
 
-For creating keys and configuring webhooks, see
-[Automation API and webhooks](../guides/automation-and-webhooks).
+To create keys and configure webhooks, see [Automation API and webhooks](/docs/guides/automation-and-webhooks).
 
 ## Base URL
 
-`https://<your-riffado-host>/api/v1`
+`https://<your-openaudiohub-host>/api/v1`
 
-That's whatever you set `APP_URL` to in your `.env`.
+The host is the one you set as `APP_URL` in `.env`.
 
 ## Authentication
 
 Send your personal API key as a Bearer token:
 
 ```http
-Authorization: Bearer op_K7vR8x...
+Authorization: Bearer oah_...
 ```
 
-Keys are 27 characters: `op_` + 24 URL-safe random characters. Keys
-carry read-only scope today. Revoked or expired keys are rejected with
-`401 UNAUTHORIZED`. Tokens are HMAC-hashed at rest.
+Keys are 38 characters long: the prefix `oah_`, 30 random base62 characters, and a 4-character checksum. Keys created before version 1.0.0 use the `op_` prefix, and they are still accepted. Keys are read-only. A revoked or expired key returns `401 UNAUTHORIZED`.
 
 ## Rate limits
 
-Two buckets enforced on every `/api/v1/*` request:
+Every `/api/v1/*` request counts against two limits:
 
-- **Per IP** — 1,200 requests/minute. Rejects unauth'd flooders.
-- **Per authenticated user** — 600 requests/minute.
+- **Per client IP:** 1,200 requests per minute.
+- **Per authenticated identity:** 600 requests per minute, counted per API key or per signed-in session.
 
-Limit responses are JSON with a `Retry-After` header and these
-RateLimit headers:
+A limited request returns `429` with a JSON body, a `Retry-After` header, and these headers:
 
-```
+```http
 HTTP/1.1 429 Too Many Requests
 Retry-After: 17
 X-RateLimit-Limit: 600
@@ -54,9 +48,11 @@ X-RateLimit-Reset: 1700000017
 }
 ```
 
-## Error envelope
+If the instance is not behind a trusted proxy, the per-IP limit applies to a single shared bucket. Set `RATE_LIMIT_TRUST_PROXY_HEADERS` only behind a proxy that overwrites forwarding headers. See [Environment variables](/docs/self-hosting/environment-variables).
 
-Every error response follows the same shape:
+## Errors
+
+Every error uses the same shape:
 
 ```json
 {
@@ -66,20 +62,17 @@ Every error response follows the same shape:
 }
 ```
 
-Common codes you should handle:
+Branch on `code`, not `error`. The text of `error` can change between releases. The codes you are most likely to handle:
 
-| Code                     | HTTP | Meaning                                              |
-| ------------------------ | ---- | ---------------------------------------------------- |
-| `UNAUTHORIZED`           | 401  | Missing, malformed, revoked, or expired key          |
-| `FORBIDDEN`              | 403  | Authenticated but not allowed                        |
-| `ACCOUNT_SUSPENDED`      | 403  | User account is suspended                            |
-| `INVALID_INPUT`          | 400  | A query param or body field failed validation        |
-| `RECORDING_NOT_FOUND`    | 404  | Recording id doesn't exist (or isn't yours)          |
-| `NOT_FOUND`              | 404  | Generic — e.g. transcript not yet produced           |
-| `RATE_LIMITED`           | 429  | Hit one of the buckets above                         |
-
-The `error` field is safe to display. Never parse `error`; branch on
-`code`.
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `UNAUTHORIZED` | 401 | The key is missing, malformed, revoked, or expired |
+| `FORBIDDEN` | 403 | You are authenticated but not allowed |
+| `ACCOUNT_SUSPENDED` | 403 | The account is suspended |
+| `INVALID_INPUT` | 400 | A query parameter or field failed validation |
+| `RECORDING_NOT_FOUND` | 404 | The recording does not exist, or is not yours |
+| `NOT_FOUND` | 404 | The resource does not exist, for example a transcript that has not been produced yet |
+| `RATE_LIMITED` | 429 | You hit one of the limits above |
 
 ## Endpoints
 
@@ -89,26 +82,25 @@ The `error` field is safe to display. Never parse `error`; branch on
 GET /api/v1/recordings
 ```
 
-Query parameters (all optional):
+All query parameters are optional:
 
-| Param               | Type           | Notes                                              |
-| ------------------- | -------------- | -------------------------------------------------- |
-| `limit`             | int (1–100)    | Page size. Default 50.                             |
-| `cursor`            | opaque string  | From a previous response's `next_cursor`.          |
-| `created_since`     | ISO timestamp  | Filter to recordings created at or after this time.|
-| `updated_since`     | ISO timestamp  | Filter to recordings updated at or after this time.|
-| `has_transcription` | `true`/`false` | Filter on transcription presence.                  |
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `limit` | integer, 1 to 100 | Page size. Default 50. |
+| `cursor` | string | The `next_cursor` value from the previous page |
+| `created_since` | ISO timestamp | Recordings created at or after this time |
+| `updated_since` | ISO timestamp | Recordings updated at or after this time |
+| `has_transcription` | `true` or `false` | Filter by whether a transcript exists |
 
 ```bash
-curl -H "Authorization: Bearer op_K7vR8x..." \
+curl -H "Authorization: Bearer oah_..." \
   "https://your-host/api/v1/recordings?limit=20&has_transcription=true"
 ```
 
 ```js
-const res = await fetch(
-  "https://your-host/api/v1/recordings?limit=20",
-  { headers: { Authorization: `Bearer ${process.env.RIFFADO_KEY}` } },
-);
+const res = await fetch("https://your-host/api/v1/recordings?limit=20", {
+  headers: { Authorization: `Bearer ${process.env.OPENAUDIOHUB_KEY}` },
+});
 const { data, next_cursor, has_more } = await res.json();
 ```
 
@@ -140,9 +132,7 @@ Response:
 }
 ```
 
-Pagination is **cursor-based, descending by `updated_at`**. When
-`has_more` is `true`, pass `next_cursor` back in the next request.
-When it's `false`, you've reached the end.
+Pagination is cursor-based and sorted by `updated_at`, newest first. While `has_more` is `true`, pass `next_cursor` to the next request. When it is `false`, you have reached the end.
 
 ### Get a recording
 
@@ -150,24 +140,12 @@ When it's `false`, you've reached the end.
 GET /api/v1/recordings/{id}
 ```
 
-```bash
-curl -H "Authorization: Bearer op_..." \
-  https://your-host/api/v1/recordings/01J...
-```
-
-Returns the same shape as a list item, plus `transcript` and `summary`
-inline when they exist. Returns `404 RECORDING_NOT_FOUND` if the
-recording doesn't exist or isn't yours.
+Returns the same shape as a list item, plus the `transcript` and `summary` objects when they exist. A recording that does not exist, or that belongs to someone else, returns `404 RECORDING_NOT_FOUND`.
 
 ### Get a transcript
 
 ```http
 GET /api/v1/recordings/{id}/transcript
-```
-
-```bash
-curl -H "Authorization: Bearer op_..." \
-  https://your-host/api/v1/recordings/01J.../transcript
 ```
 
 ```json
@@ -180,9 +158,7 @@ curl -H "Authorization: Bearer op_..." \
 }
 ```
 
-Returns `404 NOT_FOUND` if the recording exists but no transcription
-has been produced for it yet. Listen for `transcription.completed`
-webhooks to know when to retry.
+Returns `404 NOT_FOUND` when the recording exists but has no transcript yet. Listen for `transcription.completed` to know when to fetch it.
 
 ### Stream audio
 
@@ -190,51 +166,30 @@ webhooks to know when to retry.
 GET /api/v1/recordings/{id}/audio
 ```
 
-```bash
-curl -L -H "Authorization: Bearer op_..." \
-  -o recording.mp3 \
-  https://your-host/api/v1/recordings/01J.../audio
-```
-
-Supports HTTP `Range` requests (RFC 7233):
+Follow the redirect with `curl -L`. Range requests (RFC 7233) are supported:
 
 ```bash
-curl -L -H "Authorization: Bearer op_..." \
+curl -L -H "Authorization: Bearer oah_..." \
   -H "Range: bytes=0-65535" \
   -o head.mp3 \
   https://your-host/api/v1/recordings/01J.../audio
 ```
 
-- For recordings on **local storage**, the response is the audio bytes
-  with `Content-Type` derived from the file extension and
-  `Cache-Control: private, max-age=300`. Range requests return `206`
-  with `Content-Range`.
-- For recordings on **S3 storage**, the response is a `302` redirect
-  to a 5-minute pre-signed URL. Follow the redirect (`curl -L`); your
-  HTTP client will fetch the audio directly from S3 with no extra
-  egress through Riffado.
+- For recordings on local storage, the response is the audio itself. `Content-Type` comes from the file extension, and the response is cacheable for five minutes. Range requests return `206` with `Content-Range`.
+- For recordings in S3, the response is a `302` redirect to a pre-signed URL that expires after five minutes. Your client downloads the audio directly from S3, and OpenAudioHub does not proxy it.
 
-`416` with a `Content-Range: bytes */<size>` header is returned only
-for unsatisfiable starts (past EOF or `start > end`). Oversized `end`
-values are clamped to `fileSize - 1` per RFC 7233.
+A `416` response with `Content-Range: bytes */<size>` means the requested range is outside the file. Ends past the end of the file are trimmed to the last byte, as RFC 7233 requires.
 
-## What about writes?
+## Writes
 
-There are no public write endpoints. The `/api/v1/*` surface is
-read-only by design today. If you need to push data *in*, run the
-Riffado UI or sync the source Plaud account via the configured
-sync loop.
+The `/api/v1/*` surface has no write endpoints. To add data, use the interface, or let sync bring recordings in from Plaud.
 
 ## Stability
 
-The `/api/v1/*` surface is a versioned public contract. Once shipped:
+The `/api/v1/*` surface is a versioned contract:
 
-- Existing endpoints don't get breaking changes — fields are added,
-  not repurposed.
-- Error `code` values are stable. New codes get added; old ones don't
-  get renamed.
-- Removals or breaking changes go through a deprecation cycle with a
-  CHANGELOG note.
+- Existing endpoints do not change in breaking ways. New fields are added, and existing fields keep their meaning.
+- Error `code` values are stable. New codes can be added, and existing codes are not renamed.
+- Removals and breaking changes go through a deprecation period, and the changelog records them.
 
-If you need a new field, capability, or endpoint, file an issue. The
-shape gets discussed there before it ships.
+If you need a new field or endpoint, open an issue so the design can be discussed before it ships.

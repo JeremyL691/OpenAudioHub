@@ -1,191 +1,84 @@
 ---
 title: AI providers
-description: Configure OpenAI-compatible transcription and summarization providers.
+description: Configure transcription and summary providers, including OpenAI-compatible endpoints, Google Gemini, ElevenLabs, and local models.
 ---
 
-Riffado uses the OpenAI SDK with a configurable `baseURL`. Any provider
-that exposes an OpenAI-compatible API works: OpenAI itself, Groq,
-OpenRouter, Together, Azure OpenAI, LM Studio, Ollama, and anything else
-that speaks the same wire format.
-
-You can configure multiple providers and pick which one runs
-transcription and which runs summarization on a per-recording basis.
+OpenAudioHub works with several AI providers. Each provider has a base URL, an API key, and default models. You can add more than one, and choose a transcription provider and a summary provider for each recording.
 
 ## Adding a provider
 
-**Settings → AI providers → Add provider** opens a dialog with a preset
-list. Each preset pre-fills `baseURL`, default model, and a hint about
-which API surface the transcription worker should use:
+Open **Settings → Providers** and choose **Add provider**. Pick a preset, which fills in the base URL and suggests models. Paste your API key, choose a model, and save. Repeat for each provider you want to use.
 
-- **Whisper-style** (`/v1/audio/transcriptions`, multipart upload) — the
-  classic OpenAI Whisper surface. Used by OpenAI, Groq Whisper, Together
-  Whisper, LM Studio, Ollama.
-- **Chat-style** (`/v1/chat/completions` with an `input_audio` content
-  part) — for providers that expose audio-input LLMs instead of a
-  dedicated transcription endpoint. Used by OpenRouter routing
-  Gemini / GPT-audio / Voxtral.
-- **ElevenLabs-style** (`/v1/speech-to-text`, multipart upload,
-  `xi-api-key` auth) — not OpenAI-compatible. Used by ElevenLabs Scribe,
-  which returns speaker labels via diarization. OpenAI's
-  `gpt-4o-transcribe-diarize` model also returns speaker labels, through
-  the regular Whisper-style endpoint.
+## Presets
 
-Pick a preset, paste your API key, choose a default model, save. Repeat
-for additional providers.
+| Preset | Base URL | Notes |
+| --- | --- | --- |
+| OpenAI | `api.openai.com` (default) | `whisper-1` and `gpt-4o-transcribe` |
+| Groq | `https://api.groq.com/openai/v1` | Fast Whisper transcription |
+| Together AI | `https://api.together.xyz/v1` | Broad model selection |
+| OpenRouter | `https://openrouter.ai/api/v1` | Audio-capable and chat models behind one key |
+| Google Gemini | Google's Gemini API | Native audio transcription |
+| ElevenLabs | `https://api.elevenlabs.io/v1` | Scribe transcription with speaker labels |
+| LM Studio | `http://localhost:1234/v1` | Runs on your own machine |
+| Ollama | `http://localhost:11434/v1` | Runs on your own machine |
+| Custom | The base URL your provider gives you | Any other OpenAI-compatible endpoint |
 
-## Preset reference
+### Local model servers
 
-| Preset      | Base URL                                     | Notes                                                            |
-| ----------- | -------------------------------------------- | ---------------------------------------------------------------- |
-| OpenAI      | *(blank, defaults to api.openai.com)*        | Production quality; `whisper-1`, `gpt-4o-transcribe`             |
-| Groq        | `https://api.groq.com/openai/v1`             | Free Whisper API, very fast                                      |
-| OpenRouter  | `https://openrouter.ai/api/v1`               | Chat-style transcription; many summarization models in one key   |
-| Together AI | `https://api.together.xyz/v1`                | Cost-effective, broad model selection                            |
-| Azure       | `https://<resource>.openai.azure.com/...`    | Enterprise compliance, deployment-scoped URLs                    |
-| ElevenLabs  | `https://api.elevenlabs.io/v1`               | Scribe transcription; speaker labels; auto language detection    |
-| LM Studio   | `http://localhost:1234/v1`                   | Local, 100% offline                                              |
-| Ollama      | `http://localhost:11434/v1`                  | Local, easy model management                                     |
-| Custom      | *(freeform)*                                 | Anything else OpenAI-compatible                                  |
+LM Studio and Ollama default to `localhost`. Inside a container, `localhost` refers to the container, not the host. To reach a model server running on the Docker host, use `http://host.docker.internal:<port>` on macOS and Windows, or the Docker bridge address on Linux. If the model server runs in a container on the same Compose network, use its service name, for example `http://ollama:11434/v1`.
 
-LM Studio and Ollama presets default to `http://localhost`. From inside
-a Docker container, `localhost` is the container itself, not the host
-machine — use `http://host.docker.internal:<port>` on Mac/Windows, or
-the Docker bridge IP on Linux, to reach an AI server running on the
-host. If you run Ollama in the same Docker network as Riffado, use the
-service hostname (`http://ollama:11434/v1`).
+## Transcription styles
+
+- **OpenAI-style** sends audio to `/v1/audio/transcriptions`. OpenAI, Groq, Together AI, LM Studio, and Ollama use this style.
+- **Chat-style** sends audio as a content part to `/v1/chat/completions`. OpenRouter uses this for models that accept audio input.
+- **Gemini** uses Google's native `generateContent` API, because its OpenAI-compatible layer does not support audio transcription. Inline audio is limited to 20 MB. Larger files return a clear error.
+- **ElevenLabs** uses its speech-to-text API, which can return speaker labels.
 
 ## Choosing models
 
-The preset list ships with a curated set of known transcription model
-ids per provider. When the API exposes structured capability metadata
-(today only OpenRouter), the Add/Edit dialog can fetch the live list of
-audio-capable models for you. For everyone else, the curated list drives
-the dropdown and a **Custom…** option lets you type an id by hand for
-new releases that ship before our next version bump.
-
-Summarization is more forgiving — any chat model that follows the
-OpenAI `chat/completions` shape works. Pick something fast and cheap
-(e.g. `gpt-4o-mini`, `llama-3.1-70b-versatile`) unless you have a
-specific reason to use a larger model.
+Each preset comes with a list of known transcription models. To use a model that is not in the list, choose **Custom…** and type its name. Summaries accept any chat model. Choose a small, fast model unless you need a larger one.
 
 ## Speaker labels
 
-Two providers can return speaker-labelled transcripts, controlled
-differently:
+- **ElevenLabs Scribe:** turn on **Settings → Transcription → Speaker labels**. The optional "expected speakers" hint, from 1 to 32, can improve diarization. It is not a hard limit.
+- **OpenAI `gpt-4o-transcribe-diarize`:** choose this model as the default, or for a single recording. The speaker labels toggle has no effect on it.
 
-- **ElevenLabs Scribe** — diarization is controlled by **Settings →
-  Transcription → Speaker labels**. Turning it on splits the transcript
-  by speaker:
+Other providers return a transcript without speaker labels.
 
-  ```
-  Speaker 1: Hallo zusammen, schön dass ihr da seid.
-  Speaker 2: Guten Morgen, lass uns anfangen.
-  ```
+Language is detected automatically by default. Change **Settings → Transcription → Default transcription language** only when auto-detection gets a recording wrong.
 
-  An optional "Expected speakers" hint (1–32, or Auto) can improve
-  diarization accuracy but is not a hard limit.
-- **OpenAI `gpt-4o-transcribe-diarize`** — diarization is selected by
-  picking that model as the provider's default (or per-recording)
-  model, not by the Speaker labels toggle. The toggle has no effect on
-  OpenAI's output either way.
+## What leaves your server
 
-Providers other than these two ignore diarization entirely and return
-an unlabeled transcript.
+Audio sent for transcription, and transcript text sent for summaries, reach the provider in plaintext. Your provider can see them, and its policies apply. Encryption at rest protects the database. It does not protect these requests. To keep both on hardware you control, run a local provider on the same machine.
 
-Language is auto-detected by default (**Settings → Transcription →
-Default transcription language → Auto-detect**), so German recordings
-need no configuration; ElevenLabs Scribe returns the detected language
-alongside the transcript. Set an explicit language only to override
-auto-detect for noisy recordings or close-language mixups.
+## Switching providers
 
-## What gets sent to the provider
+On any recording, the workstation panel lets you pick a transcription provider and a summary provider. Changes apply right away. If a transcription is poor, run it again with a different provider.
 
-Plaintext audio (for transcription) and plaintext transcript text
-(for summarization). The trust boundary is the provider you picked.
-Riffado's at-rest encryption protects the database, not the network
-hop to your AI provider — see
-[Encryption at rest](../reference/encryption-at-rest) for the explicit
-list of what that layer does and does not cover.
+## Automatic summaries
 
-If you need to minimise that trust boundary, run a local provider (LM
-Studio or Ollama) on the same machine as a self-host instance. Both
-transcription and summarization stay on your hardware.
+**Settings → Summary → Auto-generate summary after transcription** creates a summary after each successful transcription. That includes transcriptions you start by hand, automatic transcriptions after sync, and re-transcriptions. It is off by default, because each summary costs one extra provider call. You can choose a separate preset for automatic summaries, so meeting recordings can use "Meeting Notes" while manual summaries keep "General".
 
-## Switching the active provider
-
-On any recording, the workstation panel exposes a transcription provider
-picker and a summary provider picker. Changes apply immediately; you can
-re-run a transcription with a different provider if the first result was
-poor.
-
-## Auto-summarize after transcription
-
-**Settings → Summary → Auto-generate summary after transcription** turns
-the summary pipeline into a one-shot flow. When the toggle is on, every
-**successful transcription** also generates a summary immediately
-afterward — including manual transcribes, auto-transcribes after sync,
-and re-transcribes. The toggle is independent from Auto-transcribe;
-each governs its own trigger.
-
-The auto path is opt-in (default off) — it costs an extra AI provider
-call per recording. You can pick a separate preset for auto-mode
-("Preset for auto-summary") so meeting recordings can default to
-"Meeting Notes" while you keep "General" for the manual button.
-
-Auto-summary requires your own enhancement or transcription provider
-configured in Settings → AI providers. Hosted accounts using only the
-included Mynah transcription (no self-added provider) won't produce
-auto-summaries — Mynah is transcription-only. Add your own provider to
-use this feature.
+Automatic summaries use a built-in preset, not a custom prompt.
 
 ### Cost guardrails
 
-Auto-summary makes one LLM call per transcript. With chat models at
-`$0.15-$5 / 1M input tokens` and typical 1-2k token transcripts, a
-single summary is fractions of a cent — but a runaway sync of N
-recordings or an upgrade to a premium model can add up. Two safeguards:
+- **Hourly cap.** Automatic summaries are limited per user by `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR`, which defaults to 60. When the limit is reached, the transcript is still saved without a summary, and a `summary.failed` webhook reports a rate-limit error. The manual **Generate summary** button is not limited.
+- **Cheap fallback model.** If your default model is a transcription model, its id contains `whisper`. The summary call would fail against the audio endpoint, so OpenAudioHub uses a chat model that suits the provider instead:
 
-- **Per-user hourly cap.** Auto-summary requests are throttled by
-  `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` (default `60`). When the bucket
-  is exhausted, the transcript still saves, the recording goes through
-  without a summary, and a `summary.failed` event is emitted with a
-  `rate limit` error so your monitoring picks it up. The manual
-  "Generate summary" button is **not** throttled — you stay in the
-  loop there.
-- **Pick the cheap model.** The endpoint reuses the user's enhancement
-  provider (or falls back to the transcription provider). If the
-  configured default model id contains `whisper` (i.e. the user only
-  set up a transcription provider), the summary call substitutes a
-  cheap provider-appropriate chat model so the request doesn't 404
-  against the audio endpoint:
+| Provider base URL contains | Fallback chat model |
+| --- | --- |
+| `groq` | `llama-3.1-8b-instant` |
+| `together` | `meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo` |
+| `openrouter` | `openai/gpt-4o-mini` |
+| Anything else | `gpt-4o-mini` |
 
-  | Provider base URL contains | Fallback chat model                            |
-  | -------------------------- | ---------------------------------------------- |
-  | `groq`                     | `llama-3.1-8b-instant`                         |
-  | `together`                 | `meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo`  |
-  | `openrouter`               | `openai/gpt-4o-mini`                           |
-  | anything else              | `gpt-4o-mini`                                  |
+Change the default model in **Settings → Providers** to use a different model.
 
-  Override the default model in Settings → AI providers if you want a
-  different tradeoff.
+### Re-transcription
 
-### Stale summaries on re-transcribe
+Re-transcribing a recording deletes its old summary, because the summary describes the previous transcript. With automatic summaries on, a new summary is created. Otherwise, choose **Generate summary** to create one.
 
-When a recording is **re-transcribed**, the previous summary is now
-based on the old transcript text. To prevent a fresh transcript from
-appearing alongside a stale summary, Riffado deletes the existing
-summary row in the same transaction that overwrites the user's own
-('riffado'-sourced) transcript. If auto-summary is on, a fresh summary
-is generated immediately. If it's off, the recording shows no summary
-until you click "Generate summary" manually.
+### Failures
 
-### Failure semantics
-
-Failure is isolated: if the summary call dies, the transcript is still
-saved, the `transcription.completed` event still fires, and a
-`summary.failed` event surfaces the error to your webhook receiver. The
-manual "Generate summary" button on the recording still works.
-
-Custom prompts saved under your summary prompt configuration are not
-yet wired into auto-mode; pick a built-in preset (General, Meeting
-Notes, Key Points, Action Items) for the auto path.
+A failed summary does not affect the transcript. The transcript is saved, the `transcription.completed` webhook still fires, and `summary.failed` reports the error. You can retry the summary from the recording.

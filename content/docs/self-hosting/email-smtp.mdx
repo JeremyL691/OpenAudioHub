@@ -1,46 +1,35 @@
 ---
 title: Email (SMTP) setup
-description: Configure an SMTP server so Riffado can deliver email notifications.
+description: Configure an SMTP server so OpenAudioHub can send email notifications.
 ---
 
-Email notifications go out through any SMTP server you configure —
-Postmark, Resend, SES, Mailgun, your own postfix, anything that speaks
-SMTP. This is an operator concern: hosted instances configure SMTP
-once for everyone. The per-user side (enabling email, sending a test
-email) lives in [Notifications](../guides/notifications).
+Email notifications go out through any SMTP server you configure. That includes Postmark, Resend, Amazon SES, Mailgun, a Postfix server you run yourself, or any other SMTP service. This is an operator setting. Each user enables email in their own notification settings, described in [Notifications](/docs/guides/notifications).
 
 ## Configuration
 
-Set these in the environment that runs Riffado:
+Set these values in the environment that runs OpenAudioHub:
 
 ```bash
 SMTP_HOST=smtp.example.com
-SMTP_PORT=587                  # 465 if SMTP_SECURE=true, else 587
-SMTP_SECURE=false              # true => implicit TLS on 465
+SMTP_PORT=587                  # 465 when SMTP_SECURE=true, otherwise 587
+SMTP_SECURE=false              # true for implicit TLS on port 465
 SMTP_USER=apikey-or-username
 SMTP_PASSWORD=secret
-SMTP_FROM="Riffado <noreply@example.com>"
+SMTP_FROM="OpenAudioHub <noreply@example.com>"
 ```
 
-`SMTP_FROM` accepts either a bare email (`noreply@example.com`) or a
-display-name form (`Name <user@example.com>`). The env loader rejects
-anything else.
+`SMTP_FROM` accepts a bare address, such as `noreply@example.com`, or a name with an address, such as `Name <user@example.com>`. Any other value is rejected at startup.
 
-See [Environment variables](./environment-variables) for the full
-list of SMTP knobs and their defaults.
+If `SMTP_FROM` is unset, the sender is `SMTP_USER`. If both are unset, the sender is `OpenAudioHub <noreply@host>`, where `host` is the host name in `APP_URL`.
+
+Set `SMTP_REPLY_TO` to route replies to a monitored inbox while the sender stays a no-reply address.
+
+The full list of SMTP settings and their defaults is in [Environment variables](./environment-variables).
 
 ## When SMTP is unset
 
-When `SMTP_HOST` is unset, the email backend disables itself — calls
-into `sendEmail()` short-circuit and log a "SMTP not configured"
-warning. No silent failures, no swallowed exceptions, no half-working
-state. Users who enable email in Settings will see no errors in the
-UI, but no mail will be sent.
+When `SMTP_HOST` is unset, the email backend turns itself off. Sending a message does nothing and logs a "SMTP not configured" warning on the server. Users who enable email see no error in the interface, and no mail goes out.
 
-## Verifying the configuration
+## Verify the configuration
 
-Once SMTP is set, any user can verify it without waiting for a real
-event: **Settings → Notifications → Email → Send test email**. That
-button calls the `/api/settings/test-email` route, which exercises
-the full nodemailer + template-render path against your configured
-SMTP server.
+Any user can check the setup without waiting for a real event. Under **Settings → Notifications**, choose **Send test email**. That sends a message through your SMTP server, using the same path as real notifications, so a result here means real notifications will work too.

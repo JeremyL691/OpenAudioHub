@@ -122,6 +122,6 @@ errors remain `needs_alignment`.
 
 Controlled ElevenLabs responses and local mocks verify the Core-to-provider
 route without an ElevenLabs key or a billable call. This establishes that the
-enhanced path is connected and simulated; it does not establish real-account
+ElevenLabs chunk route is connected and simulated; it does not establish real-account
 recognition quality. The enforced 24-hour maximum is not a completed 24-hour
 durability test. Cost and accuracy improvements remain unmeasured.
