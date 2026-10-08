@@ -7,7 +7,7 @@ OpenAudioHub works with several AI providers. Each provider has a base URL, an A
 
 ## Adding a provider
 
-Open **Settings → Providers** and choose **Add provider**. Pick a preset, which fills in the base URL and suggests models. Paste your API key, choose a model, and save. Repeat for each provider you want to use.
+Open **Settings → Providers** and choose **Add Provider**. Pick a preset, which fills in the base URL and suggests models. Paste your API key, choose a model, and save. Repeat for each provider you want to use.
 
 ## Presets
 
@@ -63,7 +63,7 @@ Automatic summaries use a built-in preset, not a custom prompt.
 
 ### Cost guardrails
 
-- **Hourly cap.** Automatic summaries are limited per user by `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR`, which defaults to 60. When the limit is reached, the transcript is still saved without a summary, and a `summary.failed` webhook reports a rate-limit error. The manual **Generate summary** button is not limited.
+- **Hourly cap.** Automatic summaries are limited per user by `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR`, which defaults to 60. When the limit is reached, the transcript is still saved without a summary, and a `summary.failed` webhook reports a rate-limit error. The manual **Summarize** and **Re-generate** buttons are not limited.
 - **Cheap fallback model.** If your default model is a transcription model, its id contains `whisper`. The summary call would fail against the audio endpoint, so OpenAudioHub uses a chat model that suits the provider instead:
 
 | Provider base URL contains | Fallback chat model |
@@ -77,7 +77,7 @@ Change the default model in **Settings → Providers** to use a different model.
 
 ### Re-transcription
 
-Re-transcribing a recording deletes its old summary, because the summary describes the previous transcript. With automatic summaries on, a new summary is created. Otherwise, choose **Generate summary** to create one.
+Re-transcribing a recording deletes its old summary, because the summary describes the previous transcript. With automatic summaries on, a new summary is created. Otherwise, choose **Summarize** to create one.
 
 ### Failures
 

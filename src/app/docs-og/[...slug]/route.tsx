@@ -25,9 +25,9 @@ export async function GET(_req: Request, { params }: RouteContext) {
         title: page.data.title,
         description: page.data.description,
         site: "OpenAudioHub",
-        // sRGB of `oklch(0.6171 0.1375 39.0427)` from globals.css. Satori
-        // (next/og renderer) does not support `oklch()`; keep both in sync.
-        primaryColor: "#c96442",
+        // sRGB of `--brand-blue` (`oklch(0.58 0.22 262)`) from globals.css.
+        // Satori (the og renderer) does not support `oklch()`; keep both in sync.
+        primaryColor: "#286ef9",
         primaryTextColor: "#ffffff",
     });
 }

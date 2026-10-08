@@ -1,12 +1,31 @@
 import type { DocsLayoutProps } from "fumadocs-ui/layouts/docs";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import Image from "next/image";
+import { BRAND } from "@/lib/brand";
 
 export const baseOptions: BaseLayoutProps = {
     nav: {
-        title: "OpenAudioHub Docs",
+        // The static mark, not the inline LogoMark: the docs shell renders this
+        // title twice, and the inline mark's gradient id then resolves to the
+        // copy inside the hidden one, which Chromium paints as nothing.
+        // `unoptimized` because the image optimizer does not serve SVG by default.
+        title: (
+            <span className="flex items-center gap-2">
+                <Image
+                    src="/brand/mark.svg"
+                    alt=""
+                    aria-hidden="true"
+                    width={20}
+                    height={20}
+                    unoptimized
+                    className="size-5 shrink-0"
+                />
+                OpenAudioHub Docs
+            </span>
+        ),
         url: "/docs",
     },
-    githubUrl: "https://github.com/JeremyL691/OpenAudioHub",
+    githubUrl: BRAND.repoUrl,
 };
 
 export const docsTabs: NonNullable<DocsLayoutProps["tabs"]> = [
