@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { LogoWordmark } from "@/components/icons/logo";
+import { Logo } from "@/components/icons/logo";
 import { Panel } from "@/components/panel";
 
 interface AuthChromeProps {
@@ -42,7 +42,7 @@ export function SelfHostAuthChrome({
             <div className="relative z-10 w-full max-w-md space-y-6">
                 <div className="flex justify-center">
                     <Link href="/" aria-label="OpenAudioHub">
-                        <LogoWordmark className="h-7 w-auto text-foreground" />
+                        <Logo className="text-xl text-foreground" />
                     </Link>
                 </div>
                 <Panel className="space-y-6">
