@@ -316,6 +316,13 @@
       "when": 1791494664478,
       "tag": "0044_provider_presets_siliconflow_opencode",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791494817877,
+      "tag": "0045_summary_template_and_language",
+      "breakpoints": true
     }
   ]
 }

@@ -12,16 +12,20 @@ interface PromptSelectProps {
     value: string;
     options: { id: string; name: string }[];
     onChange: (id: string) => void;
+    /** Accessible name of the trigger. */
+    label?: string;
 }
 
-/** Picks the summary prompt preset. */
-export function PromptSelect({ value, options, onChange }: PromptSelectProps) {
+/** Picks a summary template or output language. */
+export function PromptSelect({
+    value,
+    options,
+    onChange,
+    label = "Summary prompt",
+}: PromptSelectProps) {
     return (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger
-                className="w-[160px] h-8 text-xs"
-                aria-label="Summary prompt"
-            >
+            <SelectTrigger className="w-[160px] h-8 text-xs" aria-label={label}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>

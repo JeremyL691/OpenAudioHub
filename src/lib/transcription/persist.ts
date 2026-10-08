@@ -43,6 +43,10 @@ export interface UpsertEnhancementArgs {
     source: EnhancementSource;
     provider: string;
     model: string;
+    /** Summary template the text was generated with. Null for imports. */
+    promptId?: string | null;
+    /** Output language code of the summary. Null for imports. */
+    language?: string | null;
 }
 
 /**
@@ -188,6 +192,8 @@ export async function upsertEnhancement(
         source,
         provider,
         model,
+        promptId,
+        language,
     } = args;
 
     try {
@@ -233,6 +239,8 @@ export async function upsertEnhancement(
                         provider,
                         model,
                         source,
+                        promptId: promptId ?? null,
+                        language: language ?? null,
                     })
                     .where(
                         and(
@@ -250,6 +258,8 @@ export async function upsertEnhancement(
                     provider,
                     model,
                     source,
+                    promptId: promptId ?? null,
+                    language: language ?? null,
                 });
             }
 

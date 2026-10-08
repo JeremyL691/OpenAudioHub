@@ -14,11 +14,25 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
 
     const { id } = await (context as IdContext).params;
-    const body = await request.json().catch(() => ({}));
-    const presetId = (body.preset as string) || undefined;
+    const body = (await request.json().catch(() => ({}))) as {
+        preset?: unknown;
+        language?: unknown;
+        source?: unknown;
+    };
+    const presetId =
+        typeof body.preset === "string" && body.preset
+            ? body.preset
+            : undefined;
+    const language = typeof body.language === "string" ? body.language : null;
+    const source =
+        typeof body.source === "string" && body.source
+            ? body.source.slice(0, 20)
+            : null;
 
     const result = await generateSummaryForRecording(session.user.id, id, {
         presetId,
+        language,
+        source,
         trigger: "manual",
     });
 
@@ -93,6 +107,8 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         actionItems: decryptJsonField<string[]>(enhancement.actionItems),
         provider: enhancement.provider,
         model: enhancement.model,
+        promptId: enhancement.promptId,
+        language: enhancement.language,
         createdAt: enhancement.createdAt,
     });
 });

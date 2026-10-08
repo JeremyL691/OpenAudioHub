@@ -298,7 +298,10 @@ export function RecordingWorkstation({
                         className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-1`}
                     >
                         {hasTranscript ? (
-                            <SummaryPanel summary={transcript.summary} />
+                            <SummaryPanel
+                                summary={transcript.summary}
+                                title={recording.filename}
+                            />
                         ) : (
                             <Card>
                                 <CardHeader>

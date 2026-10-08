@@ -66,7 +66,10 @@ export function TranscriptionPanel({
 
             {/* Summary Card -- only show when a transcript exists */}
             {transcript.activeTranscript?.text && (
-                <SummaryPanel summary={transcript.summary} />
+                <SummaryPanel
+                    summary={transcript.summary}
+                    title={recording.filename}
+                />
             )}
         </div>
     );

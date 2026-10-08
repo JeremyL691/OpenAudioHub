@@ -464,6 +464,10 @@ export const aiEnhancements = pgTable(
         source: varchar("source", { length: 20 })
             .notNull()
             .default("openaudiohub"),
+        // Template and output language the summary was generated with. Null
+        // for Plaud imports and for summaries made before these columns.
+        promptId: varchar("prompt_id", { length: 100 }),
+        language: varchar("language", { length: 10 }),
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => ({

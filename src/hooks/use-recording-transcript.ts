@@ -89,6 +89,7 @@ export function useRecordingTranscript({
 
     const summary = useTranscriptionSummary({
         recordingId: recording?.id,
+        transcriptionSource: activeTranscript?.source,
         transcriptionText: activeTranscript?.text,
     });
 
