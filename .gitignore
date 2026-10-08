@@ -85,6 +85,8 @@ htmlcov/
 *.opus
 *.flac
 *.webm
+# Small synthetic audio that the tests read
+!src/tests/fixtures/*.mp3
 /Test audio/
 /test-audio/
 /audio-pipeline/data/
