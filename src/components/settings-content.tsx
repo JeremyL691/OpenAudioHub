@@ -15,7 +15,7 @@ import { SummarySection } from "./settings-sections/summary-section";
 import { SyncSection } from "./settings-sections/sync-section";
 import { TranscriptionSection } from "./settings-sections/transcription-section";
 
-interface Provider {
+export interface Provider {
     id: string;
     provider: string;
     baseUrl: string | null;

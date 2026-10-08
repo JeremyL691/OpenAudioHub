@@ -42,12 +42,15 @@ interface WorkstationProps {
      * live sync result takes over once a sync runs. Server-supplied.
      */
     plaudNeedsReconnect: boolean;
+    /** Recording to select on first paint (`/recordings?id=`). Server-supplied. */
+    initialRecordingId?: string | null;
 }
 
 /**
- * Dashboard composition root: the recording list, the detail pane (player +
+ * Recordings composition root: the recording list, the detail pane (player +
  * transcription), and the command palette. Sync, uploads, transcribes, and the
- * global dialogs (settings, shortcuts, onboarding) come from the app shell.
+ * global dialogs (shortcuts, onboarding) come from the app shell. Settings is
+ * a page at `/settings`.
  *
  * State ownership is split:
  *  - selection / mobile master-detail toggle live here
@@ -63,18 +66,19 @@ export function Workstation({
     transcriptions,
     initialSettings,
     plaudNeedsReconnect,
+    initialRecordingId = null,
 }: WorkstationProps) {
-    const { refresh } = useRouter();
+    const { push, refresh } = useRouter();
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
-        recordings.length > 0 ? recordings[0] : null,
+        () =>
+            recordings.find((r) => r.id === initialRecordingId) ??
+            (recordings.length > 0 ? recordings[0] : null),
     );
     const {
         paletteOpen,
         setPaletteOpen,
         shortcutsOpen,
         setShortcutsOpen,
-        settingsOpen,
-        setSettingsOpen,
         onboardingOpen,
         setPaletteAvailable,
     } = useDialogs();
@@ -84,8 +88,11 @@ export function Workstation({
     >(() => new Map());
     // On <lg viewports the list and detail panes can't coexist -- we
     // toggle between them instead of stacking. Desktop ignores this
-    // state entirely (both panes render via the grid).
-    const [mobileView, setMobileView] = useState<"list" | "detail">("list");
+    // state entirely (both panes render via the grid). A preselected
+    // recording opens on the detail pane.
+    const [mobileView, setMobileView] = useState<"list" | "detail">(() =>
+        recordings.some((r) => r.id === initialRecordingId) ? "detail" : "list",
+    );
 
     const { theme, setTheme } = useTheme(initialSettings.theme);
     const listRef = useRef<RecordingListHandle>(null);
@@ -235,8 +242,7 @@ export function Workstation({
         onPrev: () => listRef.current?.prev(),
         onFocusSearch: () => listRef.current?.focusSearch(),
         onOpenPalette: () => setPaletteOpen(true),
-        enabled:
-            !settingsOpen && !onboardingOpen && !paletteOpen && !shortcutsOpen,
+        enabled: !onboardingOpen && !paletteOpen && !shortcutsOpen,
     });
 
     // The ⌘K button and shortcut appear only where this palette is mounted.
@@ -349,7 +355,7 @@ export function Workstation({
                 }}
                 onSync={handleSync}
                 onUpload={triggerUpload}
-                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenSettings={() => push("/settings")}
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
                 onTranscribeRecording={transcribeById}

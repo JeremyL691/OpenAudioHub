@@ -23,7 +23,7 @@ async function openSettings(page: Page): Promise<void> {
 }
 
 async function openSection(page: Page, name: string): Promise<void> {
-    await page.getByRole("button", { name: `${name} settings` }).click();
+    await page.getByRole("link", { name: `${name} settings` }).click();
 }
 
 test.describe("settings", () => {

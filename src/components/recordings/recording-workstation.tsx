@@ -117,7 +117,7 @@ export function RecordingWorkstation({
             if (response.ok) {
                 toast.success("Recording deleted");
                 setDeleteDialogOpen(false);
-                push("/dashboard");
+                push("/recordings");
                 refresh();
             } else {
                 const error = await response.json().catch(() => ({}));
@@ -136,7 +136,7 @@ export function RecordingWorkstation({
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
                     <Button
-                        onClick={() => push("/dashboard")}
+                        onClick={() => push("/recordings")}
                         variant="outline"
                         size="icon"
                     >

@@ -28,8 +28,8 @@ export default async function SuspendedPage() {
         .limit(1);
 
     // If they're not actually suspended (admin unsuspended them mid-session),
-    // bounce back to the dashboard so they're not stuck.
-    if (!u?.suspendedAt) redirect("/dashboard");
+    // bounce back into the app so they're not stuck.
+    if (!u?.suspendedAt) redirect("/recordings");
 
     return (
         <div className="min-h-screen flex items-center justify-center p-6">

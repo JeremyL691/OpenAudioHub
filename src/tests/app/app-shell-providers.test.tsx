@@ -12,12 +12,12 @@ import {
     type InitialSettings,
 } from "@/lib/settings/initial-settings";
 
-const nav = vi.hoisted(() => ({ pathname: "/dashboard" }));
+const nav = vi.hoisted(() => ({ pathname: "/recordings" }));
 const seen = vi.hoisted(() => ({
     settings: null as InitialSettings | null,
-    settingsOpen: false,
+    shortcutsOpen: false,
     onboardingOpen: false,
-    openSettings: null as (() => void) | null,
+    openShortcuts: null as (() => void) | null,
     latestAutoSyncOptions: null as Record<string, unknown> | null,
 }));
 
@@ -53,9 +53,9 @@ function Probe() {
     const { settings } = useAppSettings();
     const dialogs = useDialogs();
     seen.settings = settings;
-    seen.settingsOpen = dialogs.settingsOpen;
+    seen.shortcutsOpen = dialogs.shortcutsOpen;
     seen.onboardingOpen = dialogs.onboardingOpen;
-    seen.openSettings = () => dialogs.setSettingsOpen(true);
+    seen.openShortcuts = () => dialogs.setShortcutsOpen(true);
     return null;
 }
 
@@ -74,11 +74,11 @@ function shell(initial: InitialSettings, extra: React.ReactNode = null) {
 }
 
 beforeEach(() => {
-    nav.pathname = "/dashboard";
+    nav.pathname = "/recordings";
     seen.settings = null;
-    seen.settingsOpen = false;
+    seen.shortcutsOpen = false;
     seen.onboardingOpen = false;
-    seen.openSettings = null;
+    seen.openShortcuts = null;
     seen.latestAutoSyncOptions = null;
 });
 
@@ -104,14 +104,14 @@ describe("AppShellProviders", () => {
         });
     });
 
-    it("closes the settings dialog on route change, as leaving the dashboard used to", () => {
+    it("closes the shortcuts dialog on route change, as leaving the dashboard used to", () => {
         const { rerender } = render(shell(defaults));
-        act(() => seen.openSettings?.());
-        expect(seen.settingsOpen).toBe(true);
+        act(() => seen.openShortcuts?.());
+        expect(seen.shortcutsOpen).toBe(true);
 
-        nav.pathname = "/recordings/abc";
+        nav.pathname = "/settings/sync";
         rerender(shell(defaults));
-        expect(seen.settingsOpen).toBe(false);
+        expect(seen.shortcutsOpen).toBe(false);
     });
 
     it("follows the onboarding gate in the saved settings", () => {

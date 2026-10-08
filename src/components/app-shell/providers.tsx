@@ -36,8 +36,6 @@ interface DialogState {
     setPaletteOpen: (open: boolean) => void;
     shortcutsOpen: boolean;
     setShortcutsOpen: (open: boolean) => void;
-    settingsOpen: boolean;
-    setSettingsOpen: (open: boolean) => void;
     onboardingOpen: boolean;
     setOnboardingOpen: (open: boolean) => void;
     /** True while a page that owns a command palette is mounted. */
@@ -82,7 +80,7 @@ export function useTranscribeStatus(): TranscribeState {
     return useRequiredContext(TranscribeContext, "useTranscribeStatus");
 }
 
-/** Open state for the palette, shortcuts, settings, and onboarding dialogs. */
+/** Open state for the palette, shortcuts, and onboarding dialogs. */
 export function useDialogs(): DialogState {
     return useRequiredContext(DialogContext, "useDialogs");
 }
@@ -195,7 +193,6 @@ function DialogProvider({ children }: { children: ReactNode }) {
     const onboardingRequired = !settings.onboardingCompleted;
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false);
     // Auto-opens on first paint when onboarding is incomplete. Non-dismissible
     // while `mandatory` is set by the dialog's owner.
     const [onboardingOpen, setOnboardingOpen] = useState(
@@ -203,16 +200,15 @@ function DialogProvider({ children }: { children: ReactNode }) {
     );
     const [paletteAvailable, setPaletteAvailable] = useState(false);
 
-    // These flags used to live in the dashboard, so leaving it reset them.
-    // The shell stays mounted across pages, so reset them on route change.
-    // Adjusting state during render (React's documented pattern) keeps the
-    // reset in the same render as the navigation, with no stale frame.
+    // The palette and shortcuts used to live in the dashboard, so leaving it
+    // reset them. The shell stays mounted across pages, so reset them on route
+    // change. Adjusting state during render (React's documented pattern) keeps
+    // the reset in the same render as the navigation, with no stale frame.
     const [seenPath, setSeenPath] = useState(pathname);
     if (seenPath !== pathname) {
         setSeenPath(pathname);
         setPaletteOpen(false);
         setShortcutsOpen(false);
-        setSettingsOpen(false);
         setOnboardingOpen(onboardingRequired);
     }
     const [seenRequired, setSeenRequired] = useState(onboardingRequired);
@@ -227,20 +223,12 @@ function DialogProvider({ children }: { children: ReactNode }) {
             setPaletteOpen,
             shortcutsOpen,
             setShortcutsOpen,
-            settingsOpen,
-            setSettingsOpen,
             onboardingOpen,
             setOnboardingOpen,
             paletteAvailable,
             setPaletteAvailable,
         }),
-        [
-            paletteOpen,
-            shortcutsOpen,
-            settingsOpen,
-            onboardingOpen,
-            paletteAvailable,
-        ],
+        [paletteOpen, shortcutsOpen, onboardingOpen, paletteAvailable],
     );
 
     return (

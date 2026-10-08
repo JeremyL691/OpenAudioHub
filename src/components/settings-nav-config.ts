@@ -93,3 +93,13 @@ export const SETTINGS_NAV: NavItem[] = SETTINGS_NAV_GROUPS.flatMap(
 );
 
 export const SETTINGS_STORAGE_KEY = "settings-last-section";
+
+/**
+ * True when `value` names a section the settings pages offer. The dev section
+ * is only in the nav outside production, so this also gates `/settings/dev`.
+ */
+export function isSettingsSection(
+    value: string | null | undefined,
+): value is SettingsSection {
+    return SETTINGS_NAV.some((item) => item.id === value);
+}
