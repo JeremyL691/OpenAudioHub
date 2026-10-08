@@ -1,0 +1,2 @@
+ALTER TABLE "user_settings" ADD COLUMN "auto_generate_title" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_settings" ADD COLUMN "sync_title_to_plaud" boolean DEFAULT false NOT NULL;

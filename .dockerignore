@@ -1,0 +1,74 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# audio storage
+/audio
+
+# drizzle
+/drizzle
+
+# git
+# NOTE: `.git/` is intentionally NOT ignored. The `fumadocs-mdx`
+# `lastModified` plugin (see source.config.ts) shells out to `git log`
+# to stamp each MDX page with its last-commit time. Without history
+# present in the builder stage the plugin errors and `next build`
+# fails. `.git` only lands in the `builder` stage; the `runner` stage
+# does not copy it, so the published image is unaffected.
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# README
+README.md
+
+# Local processing state and Python development artifacts
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.codegraph
+.worktrees
+storage
+audio-pipeline/data
+audio-pipeline/jobs
+Test audio
+test-audio
+docker-compose.local.yml
+docker-compose.override.yml
+.env.*

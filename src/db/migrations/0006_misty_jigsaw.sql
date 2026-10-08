@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" ADD COLUMN "title_generation_prompt" jsonb;
