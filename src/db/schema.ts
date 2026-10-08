@@ -18,17 +18,20 @@ import {
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const userPlanEnum = pgEnum("user_plan", [
     "self_host",
     "hosted_free",
     "hosted_pro",
 ]);
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const foundingMemberReservationStatusEnum = pgEnum(
     "founding_member_reservation_status",
     ["reserved", "consumed", "released", "expired"],
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const stripeWebhookEventStatusEnum = pgEnum(
     "stripe_webhook_event_status",
     ["pending", "processing", "completed", "failed"],
@@ -46,9 +49,8 @@ export const users = pgTable("users", {
     // - `/api/v1/*` and the web app return a suspension state on next request
     //   (cooperative; existing in-flight requests are not interrupted).
     // - The sync worker skips suspended users on its next claim.
-    // Set/cleared exclusively via the admin dashboard suspend action; the
-    // self-host code path never writes this column because the admin gate
-    // is locked behind IS_HOSTED.
+    // Nothing in this build writes this column; the admin dashboard that set
+    // it was removed.
     suspendedAt: timestamp("suspended_at"),
     suspendedReason: text("suspended_reason"),
     marketingEmailConsent: boolean("marketing_email_consent")
@@ -56,20 +58,26 @@ export const users = pgTable("users", {
         .default(false),
     // Hosted billing plan. NULL on self-host and for hosted users created
     // before the billing rollout (backfilled by scripts/billing-backfill.ts).
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     plan: userPlanEnum("plan"),
     // Set by the billing rollout backfill to (launch_date + 30 days) for
     // every pre-launch hosted user. While > now(), enforcement skips caps.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     planTransitionUntil: timestamp("plan_transition_until"),
     // Per-cycle Mynah transcription budget in seconds. Reset by cycle-close.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     monthlyMynahSecondsRemaining: integer("monthly_mynah_seconds_remaining")
         .notNull()
         .default(0),
     // Next time cycle-close should refresh the Mynah counter. NULL = never.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     monthlyMynahGrantResetAt: timestamp("monthly_mynah_grant_reset_at"),
     // True while the user currently retains founding monthly pricing. Cleared
     // when they cancel/lapse; the separate claimed timestamp is never cleared
     // so the first-100 capacity does not reopen.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     foundingMember: boolean("founding_member").notNull().default(false),
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     foundingMemberClaimedAt: timestamp("founding_member_claimed_at"),
     // First time the user was successfully charged. NULL = never paid.
     // Used to branch the grace-period policy on lapse:
@@ -78,18 +86,20 @@ export const users = pgTable("users", {
     // Grandfather: pre-launch users are treated as Path B (paid) by checking
     // `createdAt < BILLING_LAUNCH_DATE` at deletion-scheduling time, so this
     // column staying NULL for grandfathered users is intentional.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     everPaidAt: timestamp("ever_paid_at"),
     // When the user enters a lapsed state (trial ended w/o payment, sub
     // canceled/failed-out, etc.) this is set to now() + grace_days. The
     // billing worker deletes the account at that time. Cleared on reactivate.
+    /** @deprecated hosted-only, retained for data compatibility (D-004) */
     accountDeletionScheduledAt: timestamp("account_deletion_scheduled_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Admin read-access audit log (hosted-only).
-// Append-only. One row per admin page view or admin API hit. Self-host never
-// writes here because the admin gate trips at IS_HOSTED.
+// Admin read-access audit log.
+// Append-only. One row per admin page view or admin API hit.
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const adminAuditLog = pgTable(
     "admin_audit_log",
     {
@@ -125,6 +135,7 @@ export const adminAuditLog = pgTable(
 // minimum diff needed to understand the change without storing PII
 // content (e.g., for softDeleteRecording we store filename hashes/sizes,
 // not transcripts).
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const adminActionLog = pgTable(
     "admin_action_log",
     {
@@ -552,9 +563,8 @@ export const userSettings = pgTable("user_settings", {
     })
         .notNull()
         .default("plaud"), // 'plaud' | 'riffado'
-    // Authoritative default transcription provider: an api_credentials id,
-    // the managed "riffado-included" sentinel, or null (no explicit choice
-    // -> hosted managed fallback). Supersedes the per-row
+    // Default transcription provider: an api_credentials id, or null (no
+    // explicit choice). Supersedes the per-row
     // api_credentials.is_default_transcription boolean for selection.
     defaultTranscriptionProviderId: text("default_transcription_provider_id"),
     // Display/UI settings
@@ -745,8 +755,7 @@ export const exportJobs = pgTable(
         status: exportJobStatusEnum("status").notNull().default("pending"),
         storageKey: text("storage_key"),
         // bigint, not integer: a full-library archive (audio for every
-        // recording, uncompressed) can exceed 2^31-1 bytes (~2GB) well
-        // within the hosted_pro 50GB storage cap.
+        // recording, uncompressed) can exceed 2^31-1 bytes (~2GB).
         fileSize: bigint("file_size", { mode: "number" }),
         recordingCount: integer("recording_count"),
         errorMessage: text("error_message"),
@@ -822,17 +831,10 @@ export const apiRateLimitBuckets = pgTable(
 );
 
 /**
- * Aggregate hit counter for the install.sh routes. Counts every fetch of
- * `/install.sh` and `/{version}/install.sh` on the hosted instance.
+ * Aggregate hit counter for the install.sh routes. No writers remain in this
+ * build; the hit recorder was removed with the hosted instance.
  *
- * Privacy: no IP, no User-Agent, no identifier of any kind. Just (day,
- * version) -> count. This is first-party traffic on our own webserver,
- * not user-device storage. Self-host instances do NOT write to this
- * table -- writes are gated on env.IS_HOSTED.
- *
- * Not an instance count. One operator re-running `install.sh` five times
- * is five hits. CI pipelines count every run. Read as a directional
- * trend, not absolute deployments.
+ * @deprecated hosted-only, retained for data compatibility (D-004)
  */
 export const installScriptHits = pgTable(
     "install_script_hits",
@@ -847,6 +849,7 @@ export const installScriptHits = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const emailSuppressions = pgTable(
     "email_suppressions",
     {
@@ -862,6 +865,7 @@ export const emailSuppressions = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const emailCampaigns = pgTable("email_campaigns", {
     id: text("id")
         .primaryKey()
@@ -872,6 +876,7 @@ export const emailCampaigns = pgTable("email_campaigns", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const emailDeliveries = pgTable(
     "email_deliveries",
     {
@@ -908,6 +913,7 @@ export const emailDeliveries = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const emailValidations = pgTable(
     "email_validations",
     {
@@ -931,6 +937,7 @@ export const emailValidations = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const newsletterSubscriptions = pgTable(
     "newsletter_subscriptions",
     {
@@ -952,6 +959,7 @@ export const newsletterSubscriptions = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const billingCustomers = pgTable("billing_customers", {
     userId: text("user_id")
         .primaryKey()
@@ -961,6 +969,7 @@ export const billingCustomers = pgTable("billing_customers", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const foundingMemberReservations = pgTable(
     "founding_member_reservations",
     {
@@ -998,6 +1007,7 @@ export const foundingMemberReservations = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const subscriptions = pgTable(
     "subscriptions",
     {
@@ -1033,6 +1043,7 @@ export const subscriptions = pgTable(
     }),
 );
 
+/** @deprecated hosted-only, retained for data compatibility (D-004) */
 export const stripeWebhookEvents = pgTable(
     "stripe_webhook_events",
     {

@@ -47,7 +47,6 @@ describe("elevenLabsTranscribe -- request shape", () => {
             apiKey: "sk_test",
             model: "scribe_v2",
             file: fakeFile(),
-            isHosted: true,
             diarize: false,
             timeoutMs: 5000,
         });
@@ -83,25 +82,7 @@ describe("elevenLabsTranscribe -- request shape", () => {
         expect(url).toBe("https://proxy.example.com/v1/speech-to-text");
     });
 
-    it("rejects custom base URLs in hosted mode before sending the API key", async () => {
-        const fetchSpy = vi.fn();
-        vi.stubGlobal("fetch", fetchSpy);
-
-        await expect(
-            elevenLabsTranscribe({
-                apiKey: "secret",
-                model: "scribe_v2",
-                file: fakeFile(),
-                baseUrl: "https://proxy.example.com/v1",
-                isHosted: true,
-                diarize: false,
-                timeoutMs: 5000,
-            }),
-        ).rejects.toThrow(/official API endpoint|only supports/i);
-        expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it("treats a whitespace-only hosted base URL as the official default", async () => {
+    it("treats a whitespace-only base URL as the official default", async () => {
         const fetchSpy = vi
             .fn()
             .mockResolvedValue(
@@ -114,7 +95,6 @@ describe("elevenLabsTranscribe -- request shape", () => {
             model: "scribe_v2",
             file: fakeFile(),
             baseUrl: "   ",
-            isHosted: true,
             diarize: false,
             timeoutMs: 5000,
         });
@@ -124,7 +104,7 @@ describe("elevenLabsTranscribe -- request shape", () => {
         );
     });
 
-    it("allows the official EU endpoint in hosted mode", async () => {
+    it("allows the official EU endpoint", async () => {
         const fetchSpy = vi
             .fn()
             .mockResolvedValue(
@@ -137,7 +117,6 @@ describe("elevenLabsTranscribe -- request shape", () => {
             model: "scribe_v2",
             file: fakeFile(),
             baseUrl: "https://api.eu.elevenlabs.io/v1/",
-            isHosted: true,
             diarize: false,
             timeoutMs: 5000,
         });
@@ -178,25 +157,6 @@ describe("elevenLabsTranscribe -- request shape", () => {
                 timeoutMs: 5000,
             }),
         ).rejects.toThrow(/http\(s\) URL without credentials/i);
-        expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it("rejects official ElevenLabs URLs that carry a query string in hosted mode", async () => {
-        const fetchSpy = vi.fn();
-        vi.stubGlobal("fetch", fetchSpy);
-
-        await expect(
-            elevenLabsTranscribe({
-                apiKey: "secret",
-                model: "scribe_v2",
-                file: fakeFile(),
-                baseUrl:
-                    "https://api.elevenlabs.io/v1?redirect=https://evil.example",
-                isHosted: true,
-                diarize: false,
-                timeoutMs: 5000,
-            }),
-        ).rejects.toThrow(/official API/i);
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 

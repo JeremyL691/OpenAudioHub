@@ -7,7 +7,6 @@ import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { encryptText } from "@/lib/encryption/fields";
-import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
@@ -54,14 +53,6 @@ async function getAudioDurationMs(
 
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
-
-    if (await isHostedLockedOut(session.user.id)) {
-        throw new AppError(
-            ErrorCode.ACCOUNT_LOCKED,
-            "Your hosted plan has lapsed. Subscribe to resume uploads, or export your data.",
-            403,
-        );
-    }
 
     const formData = await request.formData();
     const fileEntry = formData.get("file");

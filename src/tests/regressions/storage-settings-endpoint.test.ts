@@ -5,8 +5,6 @@
  *   - usage totals (single aggregate row)
  *   - 12-month gap-filled `monthly` series
  *   - `largest` top-N with decrypted filenames
- *   - `diskFreeBytes` is null on hosted; `storageType` is "hosted"
- *     when IS_HOSTED is true (don't leak underlying backend to tenants)
  *   - `quotaBytes` is null today (reserved seam for future plans)
  *   - all queries are userId-scoped (any future drift here is a
  *     cross-tenant data leak)
@@ -16,7 +14,6 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const envState = {
-    IS_HOSTED: false as boolean,
     DEFAULT_STORAGE_TYPE: "local" as "local" | "s3",
     LOCAL_STORAGE_PATH: "/tmp/riffado-test-nonexistent-storage-path",
 };
@@ -89,7 +86,6 @@ describe("GET /api/settings/storage", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         whereSpy.mockClear();
-        envState.IS_HOSTED = false;
         envState.DEFAULT_STORAGE_TYPE = "local";
     });
 
@@ -169,32 +165,7 @@ describe("GET /api/settings/storage", () => {
         }
     });
 
-    it("hides the storage backend and skips disk-free on hosted", async () => {
-        envState.IS_HOSTED = true;
-        envState.DEFAULT_STORAGE_TYPE = "local";
-
-        mockDb.select
-            .mockReturnValueOnce(
-                makeQueryStub([
-                    {
-                        usedBytes: 0,
-                        recordingCount: 0,
-                        totalDurationMs: 0,
-                    },
-                ]),
-            )
-            .mockReturnValueOnce(makeQueryStub([]));
-
-        const response = await callRoute();
-        const body = await response.json();
-
-        expect(body.storageType).toBe("hosted");
-        expect(body.diskFreeBytes).toBeNull();
-        expect(body.quotaBytes).toBeNull();
-    });
-
     it("returns null diskFreeBytes when S3 is the backend", async () => {
-        envState.IS_HOSTED = false;
         envState.DEFAULT_STORAGE_TYPE = "s3";
 
         mockDb.select

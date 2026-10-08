@@ -2,7 +2,6 @@
 
 import { Keyboard, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
-import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -140,10 +139,6 @@ export function UserMenu({
                     <DropdownMenuItem
                         variant="destructive"
                         onSelect={async () => {
-                            if (posthog.__loaded) {
-                                posthog.capture("user_signed_out");
-                                posthog.reset();
-                            }
                             await signOut();
                             push("/");
                             refresh();

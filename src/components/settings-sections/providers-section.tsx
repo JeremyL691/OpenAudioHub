@@ -29,7 +29,6 @@ const EMPTY_PROVIDERS: Provider[] = [];
 
 interface ProvidersSectionProps {
     initialProviders?: Provider[];
-    isHosted?: boolean;
 }
 
 /**
@@ -49,7 +48,6 @@ interface ProvidersSectionProps {
  */
 export function ProvidersSection({
     initialProviders = EMPTY_PROVIDERS,
-    isHosted = false,
 }: ProvidersSectionProps) {
     const confirm = useConfirm();
     const [providers, setProviders] = useState<Provider[]>(initialProviders);
@@ -198,7 +196,6 @@ export function ProvidersSection({
             <AddProviderDialog
                 open={isAddProviderOpen}
                 onOpenChange={setIsAddProviderOpen}
-                isHosted={isHosted}
                 onSuccess={() => {
                     setIsAddProviderOpen(false);
                     refreshProviders();
@@ -214,7 +211,6 @@ export function ProvidersSection({
                     }
                 }}
                 provider={editingProvider}
-                isHosted={isHosted}
                 onSuccess={() => {
                     setIsEditProviderOpen(false);
                     setEditingProvider(null);

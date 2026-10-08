@@ -46,10 +46,8 @@ export const GET = apiHandler(async (request: Request) => {
 
     // Disk-free is self-host + local only.
     let diskFreeBytes: number | null = null;
-    let storageType: string = env.DEFAULT_STORAGE_TYPE;
-    if (env.IS_HOSTED) {
-        storageType = "hosted";
-    } else if (env.DEFAULT_STORAGE_TYPE === "local") {
+    const storageType: string = env.DEFAULT_STORAGE_TYPE;
+    if (env.DEFAULT_STORAGE_TYPE === "local") {
         try {
             const stat = await fsp.statfs(env.LOCAL_STORAGE_PATH);
             diskFreeBytes = Number(stat.bavail) * Number(stat.bsize);

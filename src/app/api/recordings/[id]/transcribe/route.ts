@@ -72,10 +72,6 @@ function mapErrorCodeToAppError(
             return new AppError(ErrorCode.NOT_FOUND, msg, 410);
         case "NO_TRANSCRIPTION_PROVIDER":
             return new AppError(ErrorCode.NO_TRANSCRIPTION_PROVIDER, msg, 400);
-        case "HOSTED_LOCKED_OUT":
-            return new AppError(ErrorCode.ACCOUNT_LOCKED, msg, 403);
-        case "MYNAH_BUDGET_EXHAUSTED":
-            return new AppError(ErrorCode.MYNAH_BUDGET_EXHAUSTED, msg, 402);
         case "AUDIO_TOO_LONG":
             return new AppError(ErrorCode.TRANSCRIPTION_FAILED, msg, 413);
         case "FILE_TOO_LARGE":

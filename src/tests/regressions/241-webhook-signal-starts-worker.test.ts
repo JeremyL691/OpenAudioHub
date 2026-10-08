@@ -28,7 +28,6 @@ vi.mock("@/db/queries/webhook-deliveries", () => ({
 
 vi.mock("@/lib/env", () => ({
     env: {
-        IS_HOSTED: false,
         APP_URL: "http://localhost:3000",
         WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined,
     },

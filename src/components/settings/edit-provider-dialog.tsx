@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/select";
 import {
     findPreset,
-    getVisiblePresets,
-    isLocalPreset,
+    PROVIDER_PRESETS,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
 
@@ -42,12 +41,6 @@ interface EditProviderDialogProps {
     onOpenChange: (open: boolean) => void;
     provider: Provider | null;
     onSuccess: () => void;
-    /**
-     * When true, hide the LM Studio / Ollama presets and show a hint that
-     * localhost base URLs aren't reachable from the hosted app. The server
-     * also rejects them on save.
-     */
-    isHosted?: boolean;
 }
 
 export function EditProviderDialog({
@@ -55,19 +48,7 @@ export function EditProviderDialog({
     onOpenChange,
     provider,
     onSuccess,
-    isHosted = false,
 }: EditProviderDialogProps) {
-    const visiblePresets = getVisiblePresets({ isHosted });
-    // Legacy case: a hosted user has an existing LM Studio / Ollama provider
-    // (added before hosted enforcement, or imported). Keep their currently
-    // selected preset visible in the dropdown, disabled, so the Select
-    // doesn't render an empty trigger. The save will still fail server-side
-    // because the stored baseUrl is loopback; we surface a notice so the
-    // user knows to delete and re-add with a public endpoint.
-    const legacyLocalProvider =
-        isHosted && provider != null && isLocalPreset(provider.provider)
-            ? provider.provider
-            : null;
     const [providerName, setProviderName] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -196,7 +177,7 @@ export function EditProviderDialog({
                                 <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent>
-                                {visiblePresets.map((preset) => (
+                                {PROVIDER_PRESETS.map((preset) => (
                                     <SelectItem
                                         key={preset.name}
                                         value={preset.name}
@@ -204,34 +185,8 @@ export function EditProviderDialog({
                                         {preset.name}
                                     </SelectItem>
                                 ))}
-                                {legacyLocalProvider && (
-                                    <SelectItem
-                                        key={legacyLocalProvider}
-                                        value={legacyLocalProvider}
-                                        disabled
-                                    >
-                                        {legacyLocalProvider} (not available on
-                                        hosted)
-                                    </SelectItem>
-                                )}
                             </SelectContent>
                         </Select>
-                        {legacyLocalProvider && (
-                            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
-                                <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-                                <span>
-                                    {legacyLocalProvider} isn&apos;t usable on
-                                    the hosted app. We can&apos;t reach your
-                                    machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host Riffado
-                                    (
-                                    <code className="font-mono">
-                                        docker compose up
-                                    </code>
-                                    ).
-                                </span>
-                            </div>
-                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -269,18 +224,6 @@ export function EditProviderDialog({
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
-                        {isHosted && (
-                            <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
-                                <code className="font-mono">
-                                    docker compose up
-                                </code>
-                                ).
-                            </p>
-                        )}
                     </div>
 
                     <TranscriptionModelPicker

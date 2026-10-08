@@ -152,7 +152,6 @@ export async function POST(
                 model: job.model,
                 file: audioFile,
                 baseUrl: credentials.baseUrl,
-                isHosted: env.IS_HOSTED,
                 language,
                 diarize: speakerDiarization,
                 ...(speakerDiarization &&

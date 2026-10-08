@@ -18,7 +18,6 @@ type AudioPipelineWorkerModule = {
 
 type EnvModule = {
     env: {
-        IS_HOSTED: boolean;
         RATE_LIMIT_TRUST_PROXY_HEADERS?: boolean;
         DATABASE_URL?: string;
     };
@@ -42,7 +41,7 @@ export async function register() {
     // sets X-Forwarded-For (or cf-connecting-ip / x-real-ip) and set
     // RATE_LIMIT_TRUST_PROXY_HEADERS=true. (/request-password-reset keeps its
     // IP-independent per-email cap regardless.)
-    if (!env.IS_HOSTED && env.RATE_LIMIT_TRUST_PROXY_HEADERS !== true) {
+    if (env.RATE_LIMIT_TRUST_PROXY_HEADERS !== true) {
         console.warn(
             "[rate-limit] RATE_LIMIT_TRUST_PROXY_HEADERS is not true: per-IP rate limiting on sign-in/sign-up/reset-password is INACTIVE. Set it to true behind a trusted reverse proxy to enable credential-stuffing protection.",
         );

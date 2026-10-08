@@ -22,7 +22,6 @@ describe("issue #241: official compose persist + SMTP passthrough", () => {
             "SMTP_USER",
             "SMTP_PASSWORD",
             "SMTP_FROM",
-            "SMTP_MARKETING_FROM",
             "SMTP_REPLY_TO",
         ]) {
             expect(compose).toContain(`${key}: \${${key}:-}`);

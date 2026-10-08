@@ -11,7 +11,6 @@ import {
 import { findPreset, getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
-import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { consumeRateLimitBucket } from "@/lib/rate-limit";
 import {
@@ -52,8 +51,6 @@ export type TranscribeErrorCode =
     | "RECORDING_NOT_FOUND"
     | "NO_TRANSCRIPTION_PROVIDER"
     | "RECORDING_DELETED"
-    | "HOSTED_LOCKED_OUT"
-    | "MYNAH_BUDGET_EXHAUSTED"
     | "AUDIO_TOO_LONG"
     | "FILE_TOO_LARGE"
     | "TRANSCRIPTION_FAILED";
@@ -81,16 +78,6 @@ export async function storeBrowserTranscription(
     input: StoreBrowserTranscriptionInput,
 ): Promise<TranscribeResult> {
     const { userId, recordingId, text, detectedLanguage, model } = input;
-
-    // Hosted lockout: a lapsed account is read-only, even for the
-    // zero-cost browser path. No-op on self-host.
-    if (await isHostedLockedOut(userId)) {
-        return {
-            success: false,
-            error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
-            errorCode: "HOSTED_LOCKED_OUT",
-        };
-    }
 
     const [recording] = await db
         .select({ id: recordings.id, deletedAt: recordings.deletedAt })
@@ -256,16 +243,6 @@ async function transcribeRecordingInner(
     opts: TranscribeOptions = {},
 ): Promise<TranscribeResult> {
     try {
-        // Hosted lockout: a lapsed account is read-only. No-op on
-        // self-host (isHostedLockedOut always false there).
-        if (await isHostedLockedOut(userId)) {
-            return {
-                success: false,
-                error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
-                errorCode: "HOSTED_LOCKED_OUT",
-            };
-        }
-
         const [recording] = await db
             .select()
             .from(recordings)
@@ -377,7 +354,7 @@ async function transcribeRecordingInner(
         // the source stream and individual chunks. Browser transcription
         // uses storeBrowserTranscription and never enters this server-side
         // branch.
-        if (env.AUDIO_PIPELINE_ENABLED && !env.IS_HOSTED && credentials) {
+        if (env.AUDIO_PIPELINE_ENABLED && credentials) {
             if ((recording.duration ?? 0) > 86_400_000) {
                 return {
                     success: false,
@@ -469,7 +446,6 @@ async function transcribeRecordingInner(
                                 model,
                                 file,
                                 baseUrl: credentials.baseUrl,
-                                isHosted: env.IS_HOSTED,
                                 language: defaultLanguage,
                                 diarize,
                                 numSpeakers,

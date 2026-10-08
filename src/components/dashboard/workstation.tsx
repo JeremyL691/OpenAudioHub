@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/dashboard/command-palette";
@@ -56,12 +55,6 @@ interface WorkstationProps {
     recordings: Recording[];
     transcriptions: Map<string, TranscriptionData>;
     /**
-     * When true, an admin shortcut appears in the avatar menu. Set by
-     * the server-rendered page based on env.ADMIN_EMAILS membership;
-     * never trusted client-side -- the actual /admin gate runs
-     * server-side.
-     */
-    /**
      * Logged-in user's email. Passed down to the avatar menu for the
      * identity block. Server-supplied -- never derive from any client
      * state, which would risk a stale or attacker-influenced value.
@@ -74,14 +67,6 @@ interface WorkstationProps {
      * live sync result takes over once a sync runs. Server-supplied.
      */
     plaudNeedsReconnect: boolean;
-    /**
-     * True when running in Riffado's hosted mode (`IS_HOSTED=true`).
-     * Forwarded into SettingsDialog so hosted-only UI gating reflects
-     * the deployment mode. Server-supplied; never derive client-side.
-     * Required (no default) so a future caller can't silently regress
-     * hosted-mode behavior by forgetting to thread the value through.
-     */
-    isHosted: boolean;
 }
 
 /**
@@ -106,7 +91,6 @@ export function Workstation({
     userEmail = null,
     initialSettings,
     plaudNeedsReconnect,
-    isHosted,
 }: WorkstationProps) {
     const { refresh } = useRouter();
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
@@ -311,9 +295,6 @@ export function Workstation({
                     method: "DELETE",
                 });
                 if (!res.ok) throw new Error("Delete failed");
-                if (posthog.__loaded) {
-                    posthog.capture("recording_deleted");
-                }
                 toast.success("Recording deleted");
                 refresh();
             } catch (err) {
@@ -489,7 +470,6 @@ export function Workstation({
                 open={settingsOpen}
                 onOpenChange={setSettingsOpen}
                 initialProviders={providers}
-                isHosted={isHosted}
                 onReRunOnboarding={() => {
                     setSettingsOpen(false);
                     setOnboardingOpen(true);

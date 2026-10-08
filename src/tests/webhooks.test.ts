@@ -16,7 +16,6 @@ import {
 
 const mockEnv = vi.hoisted(() => ({
     APP_URL: "https://riffado.example",
-    IS_HOSTED: false,
     WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined as boolean | undefined,
 }));
 
@@ -411,7 +410,6 @@ describe("webhooks", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockEnv.APP_URL = "https://riffado.example";
-        mockEnv.IS_HOSTED = false;
         mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = undefined;
         lastMockRequest = null;
     });
@@ -539,8 +537,8 @@ describe("webhooks", () => {
         );
     });
 
-    it("enforces HTTPS and public targets when hosted defaults strict", async () => {
-        mockEnv.IS_HOSTED = true;
+    it("enforces HTTPS and public targets when WEBHOOKS_REQUIRE_PUBLIC_TARGETS is true", async () => {
+        mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = true;
         expect(() =>
             parseWebhookUrl("https://example.com/webhook"),
         ).not.toThrow();
@@ -562,7 +560,7 @@ describe("webhooks", () => {
     });
 
     it("rejects expanded IPv6 loopback targets in strict mode", async () => {
-        mockEnv.IS_HOSTED = true;
+        mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = true;
         const message = "Webhook URL must use a public hostname or IP address";
 
         for (const url of [
@@ -580,18 +578,6 @@ describe("webhooks", () => {
         await expect(
             resolveWebhookUrl("https://example.com/hook"),
         ).rejects.toThrow("Webhook URL must resolve to public IP addresses");
-    });
-
-    it("lets WEBHOOKS_REQUIRE_PUBLIC_TARGETS override IS_HOSTED", () => {
-        mockEnv.IS_HOSTED = true;
-        mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = false;
-        expect(() => parseWebhookUrl("http://127.0.0.1/hook")).not.toThrow();
-
-        mockEnv.IS_HOSTED = false;
-        mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = true;
-        expect(() => parseWebhookUrl("http://127.0.0.1/hook")).toThrow(
-            "Webhook URL must use HTTPS",
-        );
     });
 
     it("encrypts webhook secrets before storage and masks decrypted values", () => {

@@ -1,7 +1,5 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-export const SUPPORT_EMAIL = "support@riffado.com";
-
 const GITHUB_NEW_ISSUE_URL = "https://github.com/riffado/riffado/issues/new";
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
@@ -9,7 +7,6 @@ export interface ReportBugOptions {
     errorId?: string;
     errorContext?: string;
     page?: string;
-    isHosted?: boolean;
 }
 
 export function buildReportBugUrl(opts: ReportBugOptions): string {
@@ -23,12 +20,7 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
         params.set("description", description);
     }
 
-    if (opts.isHosted !== undefined) {
-        params.set(
-            "deployment",
-            opts.isHosted ? "Hosted (riffado.com)" : "Self-hosted",
-        );
-    }
+    params.set("deployment", "Self-hosted");
 
     const additional = buildAdditional(opts);
     if (additional) {
@@ -36,18 +28,6 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
     }
 
     return `${GITHUB_NEW_ISSUE_URL}?${params.toString()}`;
-}
-
-export function buildReportBugMailto(opts: ReportBugOptions): string {
-    const subject = opts.errorId
-        ? `Riffado bug report (${opts.errorId})`
-        : "Riffado bug report";
-    const body = [buildDescription(opts), "", "---", buildAdditional(opts)]
-        .filter(Boolean)
-        .join("\n");
-
-    const qs = `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    return `mailto:${SUPPORT_EMAIL}?${qs}`;
 }
 
 export function buildReportBugBodyPreview(opts: ReportBugOptions): string {
@@ -75,10 +55,6 @@ function buildAdditional(opts: ReportBugOptions): string {
         lines.push(`Page: \`${opts.page}\``);
     }
     lines.push(`Version: ${APP_VERSION_TAG}`);
-    if (opts.isHosted !== undefined) {
-        lines.push(
-            `Mode: ${opts.isHosted ? "Hosted (riffado.com)" : "Self-hosted"}`,
-        );
-    }
+    lines.push("Mode: Self-hosted");
     return lines.join("\n");
 }
