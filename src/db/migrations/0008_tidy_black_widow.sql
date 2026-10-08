@@ -1,0 +1,1 @@
+ALTER TABLE "user_settings" RENAME COLUMN "bark_push_key" TO "bark_push_url";

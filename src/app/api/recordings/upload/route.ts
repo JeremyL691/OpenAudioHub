@@ -1,0 +1,195 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
+import { parseBuffer } from "music-metadata";
+import { nanoid } from "nanoid";
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { recordings } from "@/db/schema";
+import { requireApiSession } from "@/lib/auth-server";
+import { encryptText } from "@/lib/encryption/fields";
+import { isHostedLockedOut } from "@/lib/entitlements";
+import { env } from "@/lib/env";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
+import { captureServerEvent } from "@/lib/posthog-server";
+import { createUserStorageProvider } from "@/lib/storage/factory";
+import { getAudioMimeType } from "@/lib/utils";
+
+const ACCEPTED_EXTENSIONS = new Set([
+    ".mp3",
+    ".mp4",
+    ".m4a",
+    ".wav",
+    ".ogg",
+    ".opus",
+    ".webm",
+    ".aac",
+    ".flac",
+]);
+
+async function getAudioDurationMs(
+    buffer: Uint8Array,
+    mimeType: string,
+): Promise<number> {
+    // Pure-JS metadata parse — no system ffprobe binary required. The
+    // `duration: true` option forces a full scan when the container
+    // doesn't expose duration in its headers (e.g. Chrome-recorded
+    // WebM/Opus, raw ADTS AAC). MIME hint short-circuits format sniffing.
+    try {
+        const { format } = await parseBuffer(
+            buffer,
+            { mimeType, size: buffer.byteLength },
+            { duration: true },
+        );
+        const sec = format.duration ?? 0;
+        if (sec > 0) return Math.round(sec * 1000);
+        return 0;
+    } catch (err) {
+        // Surface the real reason instead of silently returning 0 — the
+        // caller turns 0 into a 422 "invalid audio stream" response, and
+        // a swallowed parse error there is the exact bug class that made
+        // #58 hard to diagnose.
+        console.error("Audio metadata parse failed:", err);
+        return 0;
+    }
+}
+
+export const POST = apiHandler(async (request: Request) => {
+    const session = await requireApiSession(request);
+
+    if (await isHostedLockedOut(session.user.id)) {
+        throw new AppError(
+            ErrorCode.ACCOUNT_LOCKED,
+            "Your hosted plan has lapsed. Subscribe to resume uploads, or export your data.",
+            403,
+        );
+    }
+
+    const formData = await request.formData();
+    const fileEntry = formData.get("file");
+
+    if (!fileEntry || !(fileEntry instanceof File)) {
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "No file provided",
+            400,
+            { field: "file" },
+        );
+    }
+
+    const file = fileEntry;
+
+    // Reject files larger than 500 MB
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+        throw new AppError(
+            ErrorCode.FILE_TOO_LARGE,
+            "File exceeds the 500 MB size limit",
+            413,
+        );
+    }
+
+    // Storage cap: block the upload before reading the body when it would
+    // push the user over their plan's storage limit. No-op on self-host.
+    const cap = await enforceStorageCap({
+        userId: session.user.id,
+        additionalBytes: file.size,
+    });
+    if (!cap.allowed) {
+        throw new AppError(
+            ErrorCode.STORAGE_QUOTA_EXCEEDED,
+            "This upload would exceed your plan's storage limit. Upgrade or free up space to continue.",
+            413,
+        );
+    }
+
+    const ext = path.extname(file.name).toLowerCase();
+
+    if (!ACCEPTED_EXTENSIONS.has(ext)) {
+        throw new AppError(
+            ErrorCode.INVALID_FILE_FORMAT,
+            `Unsupported format. Accepted: ${[...ACCEPTED_EXTENSIONS].join(", ")}`,
+            400,
+        );
+    }
+
+    // Read file into buffer (inline to avoid keeping the intermediate
+    // ArrayBuffer in scope alongside the Buffer, which would briefly
+    // double memory usage for large files)
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Unique ID and storage key for this upload
+    const fileId = `uploaded-${nanoid()}`;
+    const storageKey = `${session.user.id}/${fileId}${ext}`;
+    // Always derive content type from the validated extension — never
+    // trust the user-supplied file.type, which could be set to text/html
+    // and cause a stored XSS if the file is ever served directly.
+    const contentType = getAudioMimeType(storageKey);
+
+    // Compute MD5 synchronously (no need to parallelize a sync operation)
+    const md5 = createHash("md5").update(buffer).digest("hex");
+    const durationMs = await getAudioDurationMs(buffer, contentType);
+
+    // Reject files where the audio metadata parser could not detect a
+    // valid stream. Duration 0 means no readable audio data — the
+    // underlying parse error (if any) is logged inside the helper.
+    if (durationMs === 0) {
+        throw new AppError(
+            ErrorCode.INVALID_FILE_FORMAT,
+            "File does not contain a valid audio stream",
+            422,
+        );
+    }
+
+    const storage = await createUserStorageProvider(session.user.id);
+    await storage.uploadFile(storageKey, buffer, contentType);
+
+    const basename = path.basename(file.name, ext);
+    const now = new Date();
+    const endTime = new Date(now.getTime() + durationMs);
+
+    try {
+        await db.insert(recordings).values({
+            userId: session.user.id,
+            deviceSn: "local",
+            plaudFileId: fileId,
+            // Filename can carry topic info ("Call w/ Acme legal");
+            // encrypt at rest. The response below returns plaintext.
+            filename: encryptText(basename),
+            duration: durationMs,
+            startTime: now,
+            endTime,
+            filesize: buffer.length,
+            fileMd5: md5,
+            storageType: env.DEFAULT_STORAGE_TYPE,
+            storagePath: storageKey,
+            downloadedAt: now,
+            plaudVersion: "1",
+            isTrash: false,
+        });
+    } catch (dbError) {
+        // DB insert failed — clean up the already-uploaded storage file
+        // to avoid orphaned objects with no corresponding DB record.
+        try {
+            await storage.deleteFile(storageKey);
+        } catch (cleanupErr) {
+            console.error(
+                "Failed to clean up orphaned storage file after DB insert error:",
+                cleanupErr,
+            );
+        }
+        throw dbError;
+    }
+
+    await captureServerEvent({
+        distinctId: session.user.id,
+        event: "recording_uploaded",
+        properties: {
+            duration_ms: durationMs,
+            filesize_bytes: buffer.length,
+            extension: ext,
+        },
+    });
+
+    return NextResponse.json({ success: true, filename: basename });
+});

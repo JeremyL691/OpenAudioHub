@@ -1,0 +1,88 @@
+import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/auth-server";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { isPlaudWorkspaceToken, plaudVerifyOtp } from "@/lib/plaud/auth";
+import { persistPlaudConnection } from "@/lib/plaud/persist-connection";
+import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
+
+/**
+ * POST /api/plaud/auth/verify
+ *
+ * Verifies the OTP code against Plaud's API, obtains a long-lived access
+ * token, encrypts it, and stores the connection.
+ *
+ * Errors are unified via `apiHandler` — Plaud helpers throw structured
+ * `AppError`s, so a Plaud 5xx after retries surfaces as 502
+ * `PLAUD_UPSTREAM_ERROR` (not 400 "fix your token"), and a Plaud 4xx
+ * surfaces as 400 `PLAUD_API_ERROR` / `PLAUD_OTP_INVALID` with the
+ * upstream `msg` preserved.
+ *
+ * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/verify/route.ts
+ */
+export const POST = apiHandler(async (request: Request) => {
+    const session = await requireApiSession(request);
+
+    const { code, otpToken, apiBase, email } = await request.json();
+
+    if (
+        typeof code !== "string" ||
+        typeof otpToken !== "string" ||
+        typeof apiBase !== "string" ||
+        !code ||
+        !otpToken ||
+        !apiBase
+    ) {
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "Code, OTP token, and API base are required",
+            400,
+        );
+    }
+
+    // SSRF guard: the client sends apiBase back to us (originally obtained
+    // via the regional -302 redirect in send-code). Restrict to plaud.ai /
+    // plaud.cn hosts so a tampered client cannot point the server at an
+    // arbitrary URL and coerce it into an internal-network request.
+    if (!isValidPlaudApiUrl(apiBase)) {
+        throw new AppError(
+            ErrorCode.PLAUD_INVALID_API_BASE,
+            "Invalid API base",
+            400,
+        );
+    }
+
+    const plaudEmail =
+        typeof email === "string" && email.trim().length > 0
+            ? email.trim().toLowerCase()
+            : null;
+
+    // Verify OTP with Plaud → get the (long-lived) user token (UT)
+    const { accessToken } = await plaudVerifyOtp(code, otpToken, apiBase);
+
+    // Defensive: OTP login returns a long-lived UT today. If Plaud ever
+    // starts handing back a short-lived workspace token here, fail loud
+    // rather than silently storing a token that dies within a day. (issue #203)
+    if (isPlaudWorkspaceToken(accessToken)) {
+        throw new AppError(
+            ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED,
+            "Plaud returned a short-lived workspace token instead of an account token. This is unexpected — please report it.",
+            502,
+        );
+    }
+
+    // Hand off to the shared persistence path: workspace discovery,
+    // end-to-end /device/list validation, encrypted upsert, device sync.
+    // Same gauntlet the paste-token connect flow runs through.
+    const { devices } = await persistPlaudConnection({
+        userId: session.user.id,
+        accessToken,
+        apiBase,
+        plaudEmail,
+        method: "otp",
+    });
+
+    return NextResponse.json({
+        success: true,
+        devices,
+    });
+});
