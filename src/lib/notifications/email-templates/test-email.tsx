@@ -21,7 +21,7 @@ export function TestEmail({ dashboardUrl, settingsUrl }: TestEmailProps) {
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={dashboardUrl}>
-                    Open dashboard
+                    Open overview
                 </Button>
             </Section>
         </EmailLayout>

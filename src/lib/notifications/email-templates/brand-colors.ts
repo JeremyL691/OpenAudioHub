@@ -1,22 +1,31 @@
-// Brand colors extracted from email styles
-// Matches OpenAudioHub's technical aesthetic with WCAG AA contrast compliance
+// Colors for transactional email, taken from the light-mode Chalk tokens in
+// src/app/globals.css (`:root`). Mail clients do not read oklch(), so each
+// value is the sRGB conversion of its token. Emails declare color-scheme
+// light, so the dark tokens are not used here. Re-convert a value when its
+// token changes. src/tests/email/brand-colors.test.ts checks the text pairs
+// against WCAG AA.
 
 export const brandColors = {
-    // Primary brand color - terracotta/orange
-    primary: "#c96442",
+    // Surfaces: Chalk --background (page) and --card (container).
+    background: "#f3f7fc",
+    card: "#f9fcff",
 
-    // Background colors
-    background: "#faf9f5", // Off-white/cream background
-    white: "#ffffff", // Pure white for containers
+    // Text: Chalk --foreground and --muted-foreground.
+    foreground: "#060a12",
+    mutedForeground: "#636974",
 
-    // Text colors
-    foreground: "#3d3929", // Dark brown/charcoal - high contrast text
-    mutedForeground: "#83827d", // Gray - secondary text
+    // Primary buttons and text links: Chalk --primary. DESIGN.md makes
+    // primary buttons Chalk primary, not the brand color.
+    primary: "#101723",
+    primaryForeground: "#fafafa",
 
-    // Border colors
-    borderLight: "#ede9de", // Light border/divider
-    borderDark: "#dad9d4", // Darker border
+    // Brand blue (--brand-blue) is 4.35:1 on the card surface, below the
+    // 4.5:1 that small text needs, so it is only a decorative top rule.
+    accent: "#286ef9",
 
-    // Status colors
-    statusGreen: "#4ade80", // Green for active status indicators
+    // Dividers: Chalk --border.
+    borderLight: "#d8dfe9",
+
+    // Status dot: Chalk --success.
+    statusGreen: "#09672e",
 } as const;

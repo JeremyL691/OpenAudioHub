@@ -18,7 +18,7 @@ export const emailStyles = {
     },
 
     container: {
-        backgroundColor: brandColors.white,
+        backgroundColor: brandColors.card,
         margin: "0 auto",
         padding: "0",
         width: "100%",
@@ -28,7 +28,8 @@ export const emailStyles = {
     header: {
         padding: "24px 20px",
         textAlign: "center" as const,
-        borderBottom: `1px solid ${brandColors.borderDark}`,
+        borderTop: `3px solid ${brandColors.accent}`,
+        borderBottom: `1px solid ${brandColors.borderLight}`,
     },
 
     brand: {
@@ -51,7 +52,7 @@ export const emailStyles = {
 
     content: {
         padding: "32px 20px",
-        backgroundColor: brandColors.white,
+        backgroundColor: brandColors.card,
     },
 
     h1: {
@@ -119,7 +120,7 @@ export const emailStyles = {
     button: {
         display: "inline-block",
         backgroundColor: brandColors.primary,
-        color: brandColors.white,
+        color: brandColors.primaryForeground,
         fontSize: "16px",
         fontWeight: "500",
         textDecoration: "none",
