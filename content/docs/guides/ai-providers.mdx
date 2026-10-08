@@ -17,6 +17,8 @@ Open **Settings → Providers** and choose **Add Provider**. Pick a preset, whic
 | Groq | `https://api.groq.com/openai/v1` | Fast Whisper transcription |
 | Together AI | `https://api.together.xyz/v1` | Broad model selection |
 | OpenRouter | `https://openrouter.ai/api/v1` | Audio-capable and chat models behind one key |
+| SiliconFlow (China) | `https://api.siliconflow.cn/v1` | SenseVoice and other Chinese-market speech models, plus chat models for summaries |
+| OpenCode Go | `https://opencode.ai/zen/go/v1` | Chat models for summaries and titles only. It does not transcribe audio |
 | Google Gemini | Google's Gemini API | Native audio transcription |
 | ElevenLabs | `https://api.elevenlabs.io/v1` | Scribe transcription with speaker labels |
 | LM Studio | `http://localhost:1234/v1` | Runs on your own machine |
@@ -26,6 +28,8 @@ Open **Settings → Providers** and choose **Add Provider**. Pick a preset, whic
 ### Local model servers
 
 LM Studio and Ollama default to `localhost`. Inside a container, `localhost` refers to the container, not the host. To reach a model server running on the Docker host, use `http://host.docker.internal:<port>` on macOS and Windows, or the Docker bridge address on Linux. If the model server runs in a container on the same Compose network, use its service name, for example `http://ollama:11434/v1`.
+
+SiliconFlow (China) and OpenCode Go send their required headers themselves, so no proxy is needed. OpenCode Go is for summaries and titles. Choose a transcription provider separately.
 
 ## Transcription styles
 
@@ -37,6 +41,8 @@ LM Studio and Ollama default to `localhost`. Inside a container, `localhost` ref
 ## Choosing models
 
 Each preset comes with a list of known transcription models. To use a model that is not in the list, choose **Custom…** and type its name. Summaries accept any chat model. Choose a small, fast model unless you need a larger one.
+
+Chat-only providers, such as OpenCode Go, list their chat models from the provider. Those lists leave out MiniMax and Qwen models, which use a different API format. SiliconFlow (China) keeps one default model per provider. If its default model is a transcription model, summaries use the preset's chat model, `Qwen/Qwen2.5-7B-Instruct`. Check that model is available on your account.
 
 ## Speaker labels
 

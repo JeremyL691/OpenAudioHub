@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, audioPipelineJobs, recordings } from "@/db/schema";
+import { createProviderClient } from "@/lib/ai/provider-client";
 import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
@@ -188,10 +188,7 @@ export async function POST(
             });
         }
 
-        const client = new OpenAI({
-            apiKey,
-            baseURL: credentials.baseUrl || undefined,
-        });
+        const client = createProviderClient(credentials, apiKey);
         if (style === "chat") {
             const result = await chatTranscribe({
                 client,

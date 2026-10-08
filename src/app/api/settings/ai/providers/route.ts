@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
 import { listUserProviders } from "@/lib/ai/list-providers";
-import { supportsEnhancement } from "@/lib/ai/provider-presets";
+import {
+    supportsEnhancement,
+    supportsTranscription,
+} from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
@@ -46,6 +49,15 @@ export const POST = apiHandler(async (request: Request) => {
             `${provider} does not support AI enhancements (transcription only)`,
             400,
             { field: "isDefaultEnhancement" },
+        );
+    }
+
+    if (isDefaultTranscription && !supportsTranscription(provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${provider} does not support transcription (chat only)`,
+            400,
+            { field: "isDefaultTranscription" },
         );
     }
 
