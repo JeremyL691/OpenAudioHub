@@ -7,7 +7,7 @@
  * share a single in-flight promise; the second call returns the same
  * result with `inProgress: true` and triggers zero extra Plaud round-trips.
  *
- * Multi-process correctness (across hosted workers) is handled by the
+ * Multi-process correctness (across workers) is handled by the
  * per-user rate limit at the route boundary, tested separately.
  */
 

@@ -2,7 +2,7 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { recordings } from "@/db/schema";
 
-describe("Issue #79 - hosted sync schema", () => {
+describe("Issue #79 - sync schema", () => {
     it("scopes Plaud file id uniqueness per user", () => {
         const config = getTableConfig(recordings);
         const plaudFileColumn = config.columns.find(

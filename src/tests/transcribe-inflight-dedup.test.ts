@@ -14,7 +14,7 @@
  * Equivalent-option calls for the same (userId, recordingId, force)
  * share one in-flight promise. Force is partitioned from non-force so
  * Retry cannot inherit an auto-transcribe idempotent skip.
- * Multi-process hosted correctness is out of scope.
+ * Multi-process correctness is out of scope.
  */
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
