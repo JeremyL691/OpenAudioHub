@@ -1,11 +1,11 @@
-# Development overlay: builds the app image from local source instead of
+# Development overlay: builds the app and audio pipeline images from local source instead of
 # pulling from GHCR. Use this when working on OpenAudioHub itself.
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 #
 # End users should use docker-compose.yml alone, which pulls the published
-# image from ghcr.io/jeremyl691/openaudiohub.
+# images from ghcr.io/jeremyl691/openaudiohub and openaudiohub-audio-pipeline.
 
 services:
   app:
@@ -15,3 +15,9 @@ services:
       dockerfile: Dockerfile
     # Unset the image reference so compose doesn't try to pull it first.
     image: openaudiohub:dev
+
+  audio-pipeline:
+    build:
+      context: ./audio-pipeline
+      dockerfile: Dockerfile
+    image: openaudiohub-audio-pipeline:dev
