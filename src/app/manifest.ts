@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { themeColors } from "@/lib/notifications/email-templates/brand-colors";
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
@@ -8,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
             "Open-source AI transcription for the voice recorder you already own.",
         start_url: "/",
         display: "standalone",
-        background_color: "#f3f7fc",
-        theme_color: "#f3f7fc",
+        background_color: themeColors.light,
+        theme_color: themeColors.light,
         icons: [
             {
                 src: "/icon-192.png",

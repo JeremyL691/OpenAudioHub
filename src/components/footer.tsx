@@ -25,8 +25,8 @@ export function Footer() {
                     <div className="flex items-center gap-2">
                         <LogoMark className="size-4" />
                         <span>
-                            © {currentYear} {BRAND.copyrightHolder} ·{" "}
-                            {BRAND.attribution} · Licensed under{" "}
+                            © {currentYear} {BRAND.copyrightHolder} · Licensed
+                            under{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -34,6 +34,15 @@ export function Footer() {
                                 className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
                             >
                                 AGPL-3.0
+                            </Link>
+                            {" · "}
+                            <Link
+                                href={BRAND.noticeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
+                            >
+                                Notices
                             </Link>
                         </span>
                     </div>

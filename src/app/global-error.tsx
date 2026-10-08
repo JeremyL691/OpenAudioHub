@@ -1,5 +1,7 @@
 "use client";
 
+import { brandColors } from "@/lib/notifications/email-templates/brand-colors";
+
 /**
  * Root-layout-level error boundary. It catches errors in `layout.tsx` itself,
  * where the regular `error.tsx` boundary cannot help because it renders inside
@@ -36,7 +38,7 @@ export default function GlobalError({ reset }: { reset: () => void }) {
                     <p
                         style={{
                             fontSize: "0.875rem",
-                            color: "#4b5563",
+                            color: brandColors.mutedForeground,
                             margin: 0,
                         }}
                     >
@@ -49,9 +51,9 @@ export default function GlobalError({ reset }: { reset: () => void }) {
                             marginTop: "0.25rem",
                             padding: "0.5rem 1rem",
                             borderRadius: "0.375rem",
-                            border: "1px solid #111827",
-                            background: "#111827",
-                            color: "#ffffff",
+                            border: `1px solid ${brandColors.primary}`,
+                            background: brandColors.primary,
+                            color: brandColors.primaryForeground,
                             font: "inherit",
                             cursor: "pointer",
                         }}

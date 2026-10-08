@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { env } from "@/lib/env";
+import { themeColors } from "@/lib/notifications/email-templates/brand-colors";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -60,8 +61,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
     themeColor: [
-        { media: "(prefers-color-scheme: light)", color: "#f3f7fc" },
-        { media: "(prefers-color-scheme: dark)", color: "#141d2b" },
+        { media: "(prefers-color-scheme: light)", color: themeColors.light },
+        { media: "(prefers-color-scheme: dark)", color: themeColors.dark },
     ],
 };
 

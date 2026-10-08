@@ -1,15 +1,12 @@
 import { useId } from "react";
+import { brandGradient } from "@/lib/notifications/email-templates/brand-colors";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
     className?: string;
 }
 
-const BRAND_GRADIENT_STOPS = [
-    { offset: 0, color: "#01ADFB" },
-    { offset: 0.5, color: "#2A5DFA" },
-    { offset: 1, color: "#6B14FB" },
-];
+const BRAND_GRADIENT_STOPS = brandGradient.stops;
 
 const BRAND_GRADIENT_CSS = `linear-gradient(135deg, ${BRAND_GRADIENT_STOPS.map(
     (stop) => `${stop.color} ${stop.offset * 100}%`,
