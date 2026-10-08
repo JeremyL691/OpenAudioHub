@@ -10,7 +10,7 @@ interface TestEmailProps {
 export function TestEmail({ dashboardUrl, settingsUrl }: TestEmailProps) {
     return (
         <EmailLayout
-            previewText="Test email from Riffado - Email notifications are working"
+            previewText="Test email from OpenAudioHub - Email notifications are working"
             footerLink={{ href: settingsUrl, label: "Manage notifications" }}
         >
             <Heading style={emailStyles.h1}>Test email</Heading>

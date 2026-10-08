@@ -10,6 +10,7 @@ import {
     Text,
 } from "@react-email/components";
 import type React from "react";
+import { env } from "@/lib/env";
 import { emailStyles } from "./styles";
 
 interface EmailLayoutProps {
@@ -22,7 +23,7 @@ interface EmailLayoutProps {
 }
 
 /**
- * Shared chrome for all Riffado-sent emails. Wraps the body in the
+ * Shared chrome for all OpenAudioHub emails. Wraps the body in the
  * brand container, includes the inbox preview text, viewport/color-scheme
  * meta tags, and the minimal logo + footer.
  */
@@ -47,8 +48,8 @@ export function EmailLayout({
                     <Section style={emailStyles.header}>
                         <div style={{ textAlign: "center" }}>
                             <Img
-                                src="https://riffado.com/logo.png"
-                                alt="Riffado"
+                                src={`${env.APP_URL ?? "http://localhost:3000"}/brand/email-logo.png`}
+                                alt="OpenAudioHub"
                                 width="32"
                                 height="32"
                                 style={emailStyles.logo}
@@ -70,7 +71,7 @@ export function EmailLayout({
                             </Text>
                         ) : null}
                         <Text style={emailStyles.footerText}>
-                            Riffado. Your recordings, your transcripts.
+                            OpenAudioHub. Your recordings, your transcripts.
                         </Text>
                     </Section>
                 </Container>

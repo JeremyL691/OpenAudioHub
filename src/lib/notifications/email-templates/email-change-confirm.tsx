@@ -16,12 +16,12 @@ export function EmailChangeConfirmEmail({
     expiresInHours,
 }: Props) {
     return (
-        <EmailLayout previewText="Confirm the email change on your Riffado account.">
+        <EmailLayout previewText="Confirm the email change on your OpenAudioHub account.">
             <Heading style={emailStyles.h1}>Confirm email change.</Heading>
             <Text style={emailStyles.text}>
-                A change request was made to update the email on your Riffado
-                account to <strong>{newEmail}</strong>. Click below to confirm.
-                The link expires in {expiresInHours}{" "}
+                A change request was made to update the email on your
+                OpenAudioHub account to <strong>{newEmail}</strong>. Click below
+                to confirm. The link expires in {expiresInHours}{" "}
                 {expiresInHours === 1 ? "hour" : "hours"}.
             </Text>
             <Section style={emailStyles.buttonSection}>

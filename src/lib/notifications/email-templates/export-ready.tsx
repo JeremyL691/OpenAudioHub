@@ -9,7 +9,7 @@ interface Props {
 export function ExportReadyEmail({ downloadUrl }: Props) {
     return (
         <EmailLayout
-            previewText="Your Riffado data export is ready to download."
+            previewText="Your OpenAudioHub data export is ready to download."
             footerLink={{ href: downloadUrl, label: "Download export" }}
         >
             <Heading style={emailStyles.h1}>Your export is ready</Heading>

@@ -46,6 +46,12 @@ function getTransporter(): nodemailer.Transporter | null {
  * Send an email notification using SMTP
  * @returns true if successful, false otherwise
  */
+/** Sender used when SMTP_FROM and SMTP_USER are both unset: noreply on this instance's host. */
+function defaultFromAddress(): string {
+    const host = env.APP_URL ? new URL(env.APP_URL).hostname : "localhost";
+    return `OpenAudioHub <noreply@${host}>`;
+}
+
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
     try {
         const mailer = getTransporter();
@@ -58,7 +64,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         }
 
         const fromEmail =
-            env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
+            env.SMTP_FROM || env.SMTP_USER || defaultFromAddress();
 
         await mailer.sendMail({
             from: fromEmail,
@@ -89,7 +95,7 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
         );
     }
 
-    const fromEmail = env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
+    const fromEmail = env.SMTP_FROM || env.SMTP_USER || defaultFromAddress();
 
     try {
         await mailer.sendMail({
@@ -196,7 +202,7 @@ export async function sendPasswordResetEmail(
     email: string,
     resetUrl: string,
 ): Promise<boolean> {
-    const subject = "Reset your Riffado password";
+    const subject = "Reset your OpenAudioHub password";
 
     const html = await renderEmailHtml(
         React.createElement(PasswordResetEmail, {
@@ -207,7 +213,7 @@ export async function sendPasswordResetEmail(
     const text = `
 ${subject}
 
-We received a request to reset your Riffado password. Click the link below to choose a new password. This link expires in 1 hour.
+We received a request to reset your OpenAudioHub password. Click the link below to choose a new password. This link expires in 1 hour.
 
 ${resetUrl}
 
@@ -244,7 +250,7 @@ export async function sendVerifyEmail(input: {
     );
     return sendEmail({
         to: input.email,
-        subject: "Confirm your Riffado email",
+        subject: "Confirm your OpenAudioHub email",
         html,
     });
 }
@@ -275,7 +281,7 @@ export async function sendEmailChangeConfirm(input: {
     );
     return sendEmail({
         to: input.sendTo,
-        subject: "Confirm your new Riffado email",
+        subject: "Confirm your new OpenAudioHub email",
         html,
     });
 }
@@ -297,7 +303,7 @@ export async function sendExportReadyEmail(input: {
             );
             return {
                 to: input.email,
-                subject: "Your Riffado export is ready",
+                subject: "Your OpenAudioHub export is ready",
                 html,
             };
         },
@@ -305,7 +311,7 @@ export async function sendExportReadyEmail(input: {
 }
 
 export async function sendTestEmail(email: string): Promise<void> {
-    const subject = "Test Email from Riffado";
+    const subject = "Test Email from OpenAudioHub";
 
     const baseUrl = env.APP_URL;
     const dashboardUrl = `${baseUrl}/dashboard`;
@@ -323,7 +329,7 @@ export async function sendTestEmail(email: string): Promise<void> {
     const text = `
 ${subject}
 
-This is a test email from Riffado to verify your email notification settings.
+This is a test email from OpenAudioHub to verify your email notification settings.
 
 If you received this email, your email notifications are configured correctly! You'll receive notifications when new recordings are synced from your Plaud device.
 
