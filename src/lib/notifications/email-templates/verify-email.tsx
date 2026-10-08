@@ -10,11 +10,11 @@ interface Props {
 
 export function VerifyEmailEmail({ verificationUrl, expiresInHours }: Props) {
     return (
-        <EmailLayout previewText="Confirm your email address to finish setting up your Riffado account.">
+        <EmailLayout previewText="Confirm your email address to finish setting up your OpenAudioHub account.">
             <Heading style={emailStyles.h1}>Confirm your email.</Heading>
             <Text style={emailStyles.text}>
                 Click the button below to confirm this is your email address and
-                finish setting up your Riffado account. The link expires in{" "}
+                finish setting up your OpenAudioHub account. The link expires in{" "}
                 {expiresInHours} {expiresInHours === 1 ? "hour" : "hours"}.
             </Text>
             <Section style={emailStyles.buttonSection}>
@@ -23,8 +23,8 @@ export function VerifyEmailEmail({ verificationUrl, expiresInHours }: Props) {
                 </Button>
             </Section>
             <Text style={emailStyles.text}>
-                If you didn't sign up for Riffado, you can safely ignore this
-                message.
+                If you didn't sign up for OpenAudioHub, you can safely ignore
+                this message.
             </Text>
         </EmailLayout>
     );
