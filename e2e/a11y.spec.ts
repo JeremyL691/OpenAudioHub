@@ -1,21 +1,30 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { RECORDINGS } from "./characterization/helpers";
 
 // Axe check for the Phase 5 pages (PLAN §6 P5 gate), in light and dark. Serious
 // and critical violations fail the test; moderate and minor ones are not
 // asserted here.
+
+// A control is disabled while it is busy and dims (disabled:opacity-50). When it
+// is enabled again it fades back over `transition-all`, so wait for the fade to
+// finish too: axe would otherwise sample a mid-fade colour.
+async function settle(control: Locator) {
+    await expect(control).toBeEnabled();
+    await expect
+        .poll(() => control.evaluate((el) => getComputedStyle(el).opacity))
+        .toBe("1");
+}
+
 async function expectNoSeriousViolations(page: Page) {
-    // The sync button dims while it is disabled (disabled:opacity-50), which is
-    // a legitimate inactive state. Audit the settled page, not the busy one.
+    // The sync and summary buttons are busy at times. Audit the settled page.
     const sync = page.getByTestId("sync-button");
     if ((await sync.count()) > 0) {
-        await expect(sync).toBeEnabled();
+        await settle(sync);
     }
-    // The summary button is disabled while a summary runs, for the same reason.
     const summary = page.getByTestId("summary-generate");
     if ((await summary.count()) > 0) {
-        await expect(summary).toBeEnabled();
+        await settle(summary);
     }
 
     const results = await new AxeBuilder({ page })
