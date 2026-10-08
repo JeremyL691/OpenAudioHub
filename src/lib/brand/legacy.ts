@@ -31,3 +31,24 @@ export const LEGACY_ATTRIBUTION = "Based on Riffado (AGPL-3.0)" as const;
 /** Original browser extension repository, linked as third-party attribution. */
 export const LEGACY_CONNECTOR_REPO_URL =
     "https://github.com/riffado/connector" as const;
+
+/**
+ * Moves one persisted value from its pre-rename localStorage key to the
+ * current key: copy when the current key is empty, then remove the legacy key.
+ * A no-op once the legacy key is gone, and when storage is unavailable.
+ */
+export function migrateLegacyStorageKey(current: string, legacy: string): void {
+    if (typeof window === "undefined") return;
+    try {
+        const storage = window.localStorage;
+        const legacyValue = storage.getItem(legacy);
+        if (legacyValue === null) return;
+        if (storage.getItem(current) === null) {
+            storage.setItem(current, legacyValue);
+        }
+        storage.removeItem(legacy);
+    } catch {
+        // Private mode and blocked site data throw; the current key is then
+        // simply unset and the default applies.
+    }
+}

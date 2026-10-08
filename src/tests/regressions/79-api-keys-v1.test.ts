@@ -152,7 +152,7 @@ describe("Issue #79 - API keys and v1 recordings", () => {
             key: string;
             apiKey: { keyPrefix: string; source: string };
         };
-        expect(created.key).toMatch(/^op_/);
+        expect(created.key).toMatch(/^oah_/);
         expect(created.apiKey).toMatchObject({
             keyPrefix: "op_abcdef12",
             source: "manual",

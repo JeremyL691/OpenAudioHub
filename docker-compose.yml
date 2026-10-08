@@ -32,8 +32,8 @@ services:
     #   - `latest`  → newest stable release (recommended)
     #   - `0.1.0`   → pin to a specific version
     #   - `dev`     → rolling build from `main` (unstable, opt-in)
-    # Override via RIFFADO_VERSION in .env. For local builds, see docker-compose.dev.yml.
-    image: ghcr.io/riffado/riffado:${RIFFADO_VERSION:-latest}
+    # Override via OPENAUDIOHUB_VERSION in .env. For local builds, see docker-compose.dev.yml.
+    image: ghcr.io/riffado/riffado:${OPENAUDIOHUB_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile

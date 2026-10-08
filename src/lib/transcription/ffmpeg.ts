@@ -95,7 +95,7 @@ export async function* transcodeToMp3Segments(
     input: Buffer,
     segmentSeconds: number,
 ): AsyncGenerator<{ buffer: Buffer; index: number; count: number }> {
-    const workDir = await mkdtemp(join(tmpdir(), "riffado-diarize-"));
+    const workDir = await mkdtemp(join(tmpdir(), "oah-diarize-"));
     try {
         const outputPattern = join(workDir, "part-%06d.mp3");
         await runFfmpeg(input, [

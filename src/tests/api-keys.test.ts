@@ -26,6 +26,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import {
+    apiKeyChecksum,
     createApiKey,
     getApiKeyPrefix,
     hashApiKey,
@@ -41,12 +42,12 @@ describe("API keys", () => {
         mockEnv.API_TOKEN_HASH_SECRET = undefined;
     });
 
-    it("generates op-prefixed base62 keys with a CRC32 checksum suffix", () => {
+    it("generates oah-prefixed base62 keys with a CRC32 checksum suffix", () => {
         const key = createApiKey();
 
-        // Default payload length is 30, checksum is 4 → 3 + 30 + 4 = 37.
-        expect(key).toMatch(/^op_[0-9A-Za-z]{34}$/);
-        expect(key).toHaveLength(37);
+        // Default payload length is 30, checksum is 4 → 4 + 30 + 4 = 38.
+        expect(key).toMatch(/^oah_[0-9A-Za-z]{34}$/);
+        expect(key).toHaveLength(38);
         expect(getApiKeyPrefix(key)).toBe(key.slice(0, 12));
         expect(validateApiKeyFormat(key)).toBe(true);
     });
@@ -71,6 +72,13 @@ describe("API keys", () => {
         expect(validateApiKeyFormat("op_abc-def_ghijklmnopqrstuv")).toBe(false);
         expect(validateApiKeyFormat("not-an-op-key")).toBe(false);
         expect(validateApiKeyFormat("op_short")).toBe(false);
+    });
+
+    it("still accepts legacy op_ keys whose checksum covers the op_ prefix", () => {
+        const payload = "aB3dE5fG7hJ9kL1mN2pQ4rS6tU8vW0";
+        const legacy = `op_${payload}${apiKeyChecksum(`op_${payload}`)}`;
+        expect(validateApiKeyFormat(legacy)).toBe(true);
+        expect(validateApiKeyFormat(`op_${payload}0000`)).toBe(false);
     });
 
     it("masks a full key while preserving prefix and checksum", () => {

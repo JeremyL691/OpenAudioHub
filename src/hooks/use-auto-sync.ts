@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import {
+    LEGACY_STORAGE_KEYS,
+    migrateLegacyStorageKey,
+} from "@/lib/brand/legacy";
 
 interface UseAutoSyncOptions {
     interval?: number;
@@ -27,10 +31,10 @@ interface SyncStatus {
     } | null;
 }
 
-const STORAGE_KEY = "riffado_last_sync";
+const STORAGE_KEY = "openaudiohub:last-sync";
 // Cross-tab in-flight stamp. Format: `${startedAtMs}:${token}`. Clear
 // side checks token match to avoid a TOCTOU wipe between concurrent tabs.
-const IN_FLIGHT_KEY = "riffado_sync_in_progress";
+const IN_FLIGHT_KEY = "openaudiohub:sync-in-progress";
 const IN_FLIGHT_TTL_MS = 90_000;
 const MANUAL_MIN_INTERVAL_MS = 5_000;
 
@@ -110,6 +114,7 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
     }, [onSuccess, onError]);
 
     useEffect(() => {
+        migrateLegacyStorageKey(STORAGE_KEY, LEGACY_STORAGE_KEYS.lastSync);
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
             const lastSync = new Date(stored);

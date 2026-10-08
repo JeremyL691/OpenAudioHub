@@ -44,7 +44,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     }
 
     const storage = createStorageProvider();
-    const filename = `riffado-export-${job.id}.zip`;
+    const filename = `openaudiohub-export-${job.id}.zip`;
 
     if (env.DEFAULT_STORAGE_TYPE === "s3") {
         const url = await storage.getSignedUrl(

@@ -10,6 +10,7 @@ import {
     reloadClaimedDeliveryForSend,
 } from "@/db/queries/webhook-deliveries";
 import { webhookDeliveries, webhookEndpoints } from "@/db/schema";
+import { buildWebhookHeaders } from "@/lib/webhooks/headers";
 import {
     createOutboundWebhookPayload,
     createStoredWebhookPayload,
@@ -24,7 +25,6 @@ import {
     decryptWebhookSecret,
     decryptWebhookUrl,
 } from "@/lib/webhooks/secrets";
-import { formatWebhookSignatureHeader } from "@/lib/webhooks/signature";
 import {
     isWebhookUrlPolicyError,
     type PublicWebhookAddress,
@@ -211,19 +211,13 @@ async function postDelivery(
         const secret = decryptWebhookSecret(endpoint.secret);
         const result = await postWebhookRequest(
             target,
-            {
-                "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(body).toString(),
-                "User-Agent": "Riffado-Webhooks/1",
-                "X-Riffado-Event": delivery.event,
-                "X-Riffado-Delivery": delivery.id,
-                "X-Riffado-Timestamp": String(timestamp),
-                "X-Riffado-Signature": formatWebhookSignatureHeader(
-                    secret,
-                    timestamp,
-                    body,
-                ),
-            },
+            buildWebhookHeaders({
+                body,
+                event: delivery.event,
+                deliveryId: delivery.id,
+                timestamp,
+                secret,
+            }),
             body,
         );
 
