@@ -33,7 +33,7 @@ export async function withDownloadedBlobWithLimit<T>(
     maxBytes: number,
     consume: (download: DownloadedBlob) => Promise<T>,
 ): Promise<T> {
-    const workDir = await mkdtemp(join(tmpdir(), "riffado-upload-"));
+    const workDir = await mkdtemp(join(tmpdir(), "oah-upload-"));
     const filePath = join(workDir, "audio");
     let size = 0;
     const headerChunks: Buffer[] = [];

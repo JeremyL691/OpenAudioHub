@@ -3,6 +3,7 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { apiKeys, users } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { LEGACY_API_KEY_PREFIX } from "@/lib/brand/legacy";
 import { env } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
 
@@ -14,7 +15,8 @@ export type AuthenticatedRequest = {
 
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 
-const API_KEY_PREFIX = "op_";
+const API_KEY_PREFIX = "oah_";
+const ACCEPTED_API_KEY_PREFIXES = [API_KEY_PREFIX, LEGACY_API_KEY_PREFIX];
 const DISPLAY_PREFIX_LENGTH = 12;
 const DEFAULT_PAYLOAD_LENGTH = 30;
 const MIN_PAYLOAD_LENGTH = 20;
@@ -59,7 +61,12 @@ function toBase62Checksum(num: number): string {
     return out.slice(0, CHECKSUM_LENGTH);
 }
 
-/** Generate `op_{base62}{crc32-base62}`. Stored HMAC; legacy nanoid keys still authenticate. */
+/** Checksum suffix for `value`, the prefix and payload together. Exported for tests. */
+export function apiKeyChecksum(value: string): string {
+    return toBase62Checksum(crc32(value));
+}
+
+/** Generate `oah_{base62}{crc32-base62}`. Stored HMAC; legacy `op_` and nanoid keys still authenticate. */
 export function createApiKey(
     payloadLen: number = DEFAULT_PAYLOAD_LENGTH,
 ): string {
@@ -75,18 +82,17 @@ export function createApiKey(
 
 /** CRC32-format check; rejects legacy nanoid keys. Not used in the auth path. */
 export function validateApiKeyFormat(key: string): boolean {
-    if (!key.startsWith(API_KEY_PREFIX)) return false;
+    const prefix = ACCEPTED_API_KEY_PREFIXES.find((p) => key.startsWith(p));
+    if (!prefix) return false;
 
-    const body = key.slice(API_KEY_PREFIX.length);
+    const body = key.slice(prefix.length);
     if (body.length < MIN_PAYLOAD_LENGTH + CHECKSUM_LENGTH) return false;
     if (body.length > MAX_PAYLOAD_LENGTH + CHECKSUM_LENGTH) return false;
     if (!/^[0-9A-Za-z]+$/.test(body)) return false;
 
     const payload = body.slice(0, -CHECKSUM_LENGTH);
     const providedChecksum = body.slice(-CHECKSUM_LENGTH);
-    const expectedChecksum = toBase62Checksum(
-        crc32(`${API_KEY_PREFIX}${payload}`),
-    );
+    const expectedChecksum = toBase62Checksum(crc32(`${prefix}${payload}`));
     return providedChecksum === expectedChecksum;
 }
 
@@ -159,7 +165,12 @@ export async function authenticateRequest(
 ): Promise<AuthenticatedRequest | null> {
     const bearerToken = getBearerToken(request);
 
-    if (bearerToken?.startsWith(API_KEY_PREFIX)) {
+    if (
+        bearerToken &&
+        ACCEPTED_API_KEY_PREFIXES.some((prefix) =>
+            bearerToken.startsWith(prefix),
+        )
+    ) {
         const keyHash = hashApiKey(bearerToken);
         const now = new Date();
 

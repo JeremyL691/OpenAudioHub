@@ -1,3 +1,7 @@
+import {
+    LEGACY_STORAGE_KEYS,
+    migrateLegacyStorageKey,
+} from "@/lib/brand/legacy";
 export const SYNC_CONFIG = {
     defaultInterval: parseInt(
         process.env.NEXT_PUBLIC_SYNC_INTERVAL || "300000",
@@ -56,8 +60,18 @@ export async function getSyncSettings(): Promise<{
         console.error("Failed to fetch sync settings:", error);
     }
 
-    const storedInterval = localStorage.getItem("riffado_sync_interval");
-    const storedEnabled = localStorage.getItem("riffado_auto_sync_enabled");
+    migrateLegacyStorageKey(
+        "openaudiohub:sync-interval",
+        LEGACY_STORAGE_KEYS.syncInterval,
+    );
+    migrateLegacyStorageKey(
+        "openaudiohub:auto-sync-enabled",
+        LEGACY_STORAGE_KEYS.autoSyncEnabled,
+    );
+    const storedInterval = localStorage.getItem("openaudiohub:sync-interval");
+    const storedEnabled = localStorage.getItem(
+        "openaudiohub:auto-sync-enabled",
+    );
 
     return {
         syncInterval: storedInterval

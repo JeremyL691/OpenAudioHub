@@ -8,7 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toastApiError } from "@/lib/api-errors";
 import { BRAND } from "@/lib/brand";
-import { LEGACY_CONNECTOR_REPO_URL } from "@/lib/brand/legacy";
+import {
+    LEGACY_CONNECTOR_GLOBAL,
+    LEGACY_CONNECTOR_REPO_URL,
+} from "@/lib/brand/legacy";
 import {
     DEFAULT_SERVER_KEY,
     PLAUD_SERVERS,
@@ -30,8 +33,17 @@ interface ConnectorBridge {
 
 declare global {
     interface Window {
-        __riffadoConnector?: ConnectorBridge;
+        __openaudiohubConnector?: ConnectorBridge;
     }
+}
+
+/** The extension publishes its bridge under the current name or the one it used before the rename. */
+function readConnectorBridge(): ConnectorBridge | undefined {
+    const scope = window as unknown as Record<
+        string,
+        ConnectorBridge | undefined
+    >;
+    return scope.__openaudiohubConnector ?? scope[LEGACY_CONNECTOR_GLOBAL];
 }
 
 type Mode = "connector" | "email" | "token";
@@ -86,7 +98,7 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
         let cancelled = false;
         const check = () => {
             if (cancelled) return;
-            const v = window.__riffadoConnector?.version;
+            const v = readConnectorBridge()?.version;
             if (typeof v === "number" && v >= 1) setHasConnector(true);
         };
         check();
@@ -172,7 +184,7 @@ function ConnectorPane({
     const [isLoading, setIsLoading] = useState(false);
 
     const handleConnect = useCallback(async () => {
-        const bridge = window.__riffadoConnector;
+        const bridge = readConnectorBridge();
         if (!bridge) {
             toast.error("Connector extension not detected");
             return;
