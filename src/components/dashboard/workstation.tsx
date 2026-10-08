@@ -11,7 +11,6 @@ import {
     type RecordingListHandle,
 } from "@/components/dashboard/recording-list";
 import { ShortcutsDialog } from "@/components/dashboard/shortcuts-dialog";
-import { TrialBanner } from "@/components/dashboard/trial-banner";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
 import { WorkstationHeader } from "@/components/dashboard/workstation-header";
@@ -361,7 +360,6 @@ export function Workstation({
         <>
             <div className="bg-background">
                 <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <TrialBanner isHosted={isHosted} />
                     <WorkstationHeader
                         isAdmin={isAdmin}
                         userEmail={userEmail}
