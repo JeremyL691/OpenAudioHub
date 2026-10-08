@@ -5,16 +5,17 @@ import { encryptJsonField, encryptText } from "@/lib/encryption/fields";
 
 /**
  * Provenance of a transcript row, orthogonal to `transcriptionType`:
- *   - 'riffado' = produced by the user's own provider (server/browser)
+ *   - 'openaudiohub' = produced by the user's own provider (server/browser);
+ *     legacy 'riffado' rows read as this value
  *   - 'plaud'   = imported from Plaud's native transcription
  *   - 'mixed'   = user-edited combination of the above
  * A recording can hold at most one row per source (enforced by the
  * `(recordingId, userId, source)` unique), so the sources coexist. See #204.
  */
-export type TranscriptSource = "riffado" | "plaud" | "mixed";
+export type TranscriptSource = "openaudiohub" | "plaud" | "mixed";
 
 /** Summaries stay single per recording; `source` records who produced it. */
-export type EnhancementSource = "riffado" | "plaud";
+export type EnhancementSource = "openaudiohub" | "plaud";
 
 export interface UpsertTranscriptionArgs {
     userId: string;
@@ -173,7 +174,7 @@ export async function upsertTranscription(
 
 /**
  * Insert-or-update the single AI summary row for `(recordingId, userId)`.
- * `source` records whether riffado generated it or it was imported from Plaud.
+ * `source` records whether OpenAudioHub generated it or it was imported from Plaud.
  */
 export async function upsertEnhancement(
     args: UpsertEnhancementArgs,

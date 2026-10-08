@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { recordings, transcriptions } from "@/db/schema";
+import { OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 
 /** Max already-synced recordings to retry per sync. */
 export const AUTO_TRANSCRIBE_RETRY_LIMIT = 5;
@@ -40,7 +41,7 @@ export async function listUntranscribedRecordingIds(
         ? and(
               eq(transcriptions.recordingId, recordings.id),
               eq(transcriptions.userId, userId),
-              eq(transcriptions.source, "riffado"),
+              inArray(transcriptions.source, OWN_SOURCE_VALUES),
           )
         : and(
               eq(transcriptions.recordingId, recordings.id),

@@ -19,6 +19,7 @@ import { decrypt } from "@/lib/encryption";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { upsertEnhancement } from "@/lib/transcription/persist";
+import { OWN_SOURCE } from "@/lib/transcription/source";
 
 export interface GenerateSummaryOptions {
     /**
@@ -284,7 +285,7 @@ export async function generateSummaryForRecording(
         summary,
         keyPoints,
         actionItems,
-        source: "riffado",
+        source: OWN_SOURCE,
         provider: credentials.provider,
         model,
     });

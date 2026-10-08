@@ -28,6 +28,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { isOwnSource, OWN_SOURCE } from "@/lib/transcription/source";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -106,7 +107,7 @@ export function TranscriptionPanel({
             : transcription?.text
               ? [
                     {
-                        source: "riffado",
+                        source: OWN_SOURCE,
                         text: transcription.text,
                         language: transcription.language,
                     },
@@ -119,7 +120,7 @@ export function TranscriptionPanel({
         : null;
     const transcriptList: TranscriptOption[] = pipelineTranscriptReady
         ? [
-              ...suppliedTranscriptList.filter((t) => t.source !== "riffado"),
+              ...suppliedTranscriptList.filter((t) => !isOwnSource(t.source)),
               pipelineTranscriptReady,
           ]
         : suppliedTranscriptList;
@@ -134,7 +135,7 @@ export function TranscriptionPanel({
 
     useEffect(() => {
         if (pipelineTranscriptReady?.text.trim()) {
-            setActiveSource((current) => current ?? "riffado");
+            setActiveSource((current) => current ?? OWN_SOURCE);
         }
     }, [pipelineTranscriptReady?.text]);
 
@@ -187,7 +188,7 @@ export function TranscriptionPanel({
                     ["completed", "needs_alignment"].includes(job.status)
                 ) {
                     if (state?.transcription?.text.trim())
-                        setActiveSource("riffado");
+                        setActiveSource(OWN_SOURCE);
                     onTranscribeComplete?.();
                 }
             }
@@ -217,8 +218,9 @@ export function TranscriptionPanel({
         ["queued", "submitted", "running"].includes(activeJob.status);
     const isPipelineActive =
         isPipelineRunning || activeJob?.status === "paused";
-    const timeline =
-        activeTranscript?.source === "riffado" ? pipelineState?.timeline : null;
+    const timeline = isOwnSource(activeTranscript?.source)
+        ? pipelineState?.timeline
+        : null;
 
     const performPipelineAction = async (action: "retry" | "cancel") => {
         if (pipelineBusy) return;

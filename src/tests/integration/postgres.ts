@@ -50,7 +50,8 @@ function makeDatabaseName(label: string): string {
     return `openaudiohub_test_${safeLabel}_${process.pid}_${suffix}`;
 }
 
-export async function createMigratedTestDatabase(
+/** Creates an empty database without running migrations. */
+export async function createTestDatabase(
     adminUrl: string,
     label: string,
 ): Promise<TestPostgresDatabase> {
@@ -81,13 +82,6 @@ export async function createMigratedTestDatabase(
         }
     };
 
-    try {
-        await migrate(db, { migrationsFolder: "./src/db/migrations" });
-    } catch (error) {
-        await dispose();
-        throw error;
-    }
-
     return {
         name,
         url,
@@ -95,4 +89,18 @@ export async function createMigratedTestDatabase(
         sql: client,
         dispose,
     };
+}
+
+export async function createMigratedTestDatabase(
+    adminUrl: string,
+    label: string,
+): Promise<TestPostgresDatabase> {
+    const database = await createTestDatabase(adminUrl, label);
+    try {
+        await migrate(database.db, { migrationsFolder: "./src/db/migrations" });
+    } catch (error) {
+        await database.dispose();
+        throw error;
+    }
+    return database;
 }

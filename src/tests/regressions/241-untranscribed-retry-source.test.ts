@@ -5,6 +5,8 @@
  * not the sync.test.ts mock of listUntranscribedRecordingIds.
  */
 
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/db", () => ({
@@ -16,6 +18,15 @@ vi.mock("@/db", () => ({
 import { db } from "@/db";
 import { transcriptions } from "@/db/schema";
 import { listUntranscribedRecordingIds } from "@/lib/sync/untranscribed";
+
+const dialect = new PgDialect();
+
+/** Source values bound by the predicate, read from the compiled SQL. */
+function boundSourceValues(expr: unknown): string[] {
+    return dialect
+        .sqlToQuery(expr as SQL)
+        .params.filter((p): p is string => typeof p === "string");
+}
 
 function exprReferences(
     expr: unknown,
@@ -79,7 +90,7 @@ describe("issue #241: auto-transcribe retry source predicate", () => {
         vi.clearAllMocks();
     });
 
-    it("plaud_only exists-check does not scope to the riffado source", async () => {
+    it("plaud_only exists-check does not scope to the OpenAudioHub source", async () => {
         const whereExprs = captureWhereExprs();
         await listUntranscribedRecordingIds("user-1", {
             transcriptMode: "plaud_only",
@@ -88,10 +99,11 @@ describe("issue #241: auto-transcribe retry source predicate", () => {
         expect(existsWhere).toBeDefined();
         expect(exprReferences(existsWhere, transcriptions.userId)).toBe(true);
         expect(exprReferences(existsWhere, transcriptions.source)).toBe(false);
-        expect(exprReferences(existsWhere, "riffado")).toBe(false);
+        expect(boundSourceValues(existsWhere)).not.toContain("riffado");
+        expect(boundSourceValues(existsWhere)).not.toContain("openaudiohub");
     });
 
-    it("keep_both exists-check requires a missing riffado-source transcript", async () => {
+    it("keep_both exists-check requires a missing OpenAudioHub-source transcript", async () => {
         const whereExprs = captureWhereExprs();
         await listUntranscribedRecordingIds("user-1", {
             transcriptMode: "keep_both",
@@ -100,6 +112,8 @@ describe("issue #241: auto-transcribe retry source predicate", () => {
         expect(existsWhere).toBeDefined();
         expect(exprReferences(existsWhere, transcriptions.userId)).toBe(true);
         expect(exprReferences(existsWhere, transcriptions.source)).toBe(true);
-        expect(exprReferences(existsWhere, "riffado")).toBe(true);
+        expect(boundSourceValues(existsWhere)).toEqual(
+            expect.arrayContaining(["openaudiohub", "riffado"]),
+        );
     });
 });

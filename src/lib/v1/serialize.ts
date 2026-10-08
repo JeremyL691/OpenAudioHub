@@ -8,6 +8,7 @@ import {
     userSettings,
 } from "@/db/schema";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
+import { isOwnSource, normalizeSource } from "@/lib/transcription/source";
 
 type RecordingRow = typeof recordings.$inferSelect;
 type DeviceRow = typeof plaudDevices.$inferSelect;
@@ -120,7 +121,7 @@ export function serializeTranscript(
     if (!transcription) return null;
 
     return {
-        source: transcription.source,
+        source: normalizeSource(transcription.source),
         language: transcription.detectedLanguage,
         text: decryptText(transcription.text),
         provider: transcription.provider,
@@ -181,7 +182,7 @@ export function serializeRecording(
 /**
  * Choose the primary transcript for singular contexts (the `transcript` field,
  * summary input, the v1 transcript endpoint). Prefers the user's configured
- * source, then their own 'riffado' transcript, then whatever exists.
+ * source, then their own transcript, then whatever exists.
  */
 export function resolvePrimaryTranscript(
     transcripts: TranscriptionRow[],
@@ -189,8 +190,11 @@ export function resolvePrimaryTranscript(
 ): TranscriptionRow | null {
     if (transcripts.length === 0) return null;
     return (
-        transcripts.find((t) => t.source === preferredSource) ??
-        transcripts.find((t) => t.source === "riffado") ??
+        transcripts.find(
+            (t) =>
+                normalizeSource(t.source) === normalizeSource(preferredSource),
+        ) ??
+        transcripts.find((t) => isOwnSource(t.source)) ??
         transcripts[0]
     );
 }
@@ -225,7 +229,7 @@ export async function getPreferredTranscriptSource(
         .from(userSettings)
         .where(eq(userSettings.userId, userId))
         .limit(1);
-    return settings?.preferred ?? "plaud";
+    return normalizeSource(settings?.preferred ?? "plaud");
 }
 
 export async function getV1RecordingDetailForUser(

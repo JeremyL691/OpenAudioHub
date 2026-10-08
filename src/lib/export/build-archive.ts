@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import type { StorageProvider } from "@/lib/storage/types";
+import { isOwnSource } from "@/lib/transcription/source";
 
 export interface ArchiveResult {
     recordingCount: number;
@@ -94,7 +95,7 @@ export async function buildAndUploadExportArchive(input: {
     );
     const timelineMap = new Map(
         userTranscriptions
-            .filter((t) => t.source === "riffado" && t.timeline)
+            .filter((t) => isOwnSource(t.source) && t.timeline)
             .map((t) => [
                 t.recordingId,
                 {

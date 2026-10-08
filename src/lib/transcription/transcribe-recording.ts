@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
@@ -40,6 +40,7 @@ import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { postProcessTranscription } from "@/lib/transcription/postprocess";
+import { OWN_SOURCE, OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -275,12 +276,12 @@ async function transcribeRecordingInner(
                 and(
                     eq(transcriptions.recordingId, recordingId),
                     eq(transcriptions.userId, userId),
-                    // Only the user's own ('riffado') transcript gates the
+                    // Only the user's own ('openaudiohub') transcript gates the
                     // idempotent short-circuit and forced re-run. A
                     // Plaud-imported transcript ('plaud') must NOT suppress the
                     // user's own run, and the user's run must NOT overwrite the
                     // Plaud row — the two coexist. See #204.
-                    eq(transcriptions.source, "riffado"),
+                    inArray(transcriptions.source, OWN_SOURCE_VALUES),
                 ),
             )
             .limit(1);
@@ -554,7 +555,7 @@ async function transcribeRecordingInner(
             };
         }
 
-        // Persist the user's own ('riffado') transcript via the shared,
+        // Persist the user's own ('openaudiohub') transcript via the shared,
         // tombstone-aware, source-scoped upsert. The persisted model is the
         // *actual* model used (may differ from the provider default when the
         // manual route supplied an override).
@@ -563,7 +564,7 @@ async function transcribeRecordingInner(
             recordingId,
             text: transcriptionText,
             detectedLanguage,
-            source: "riffado",
+            source: OWN_SOURCE,
             provider: persistProvider,
             model: persistModel,
         });
