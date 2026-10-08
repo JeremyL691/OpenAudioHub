@@ -182,5 +182,6 @@ export function usePipelineStatus({
         isPipelineActive,
         pipelineBusy,
         performPipelineAction,
+        refreshPipelineState,
     };
 }
