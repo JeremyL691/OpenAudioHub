@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordMode } from "@/lib/auth/reset-password-mode";
@@ -141,14 +141,9 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                     />
                 </div>
 
-                <MetalButton
-                    type="submit"
-                    className="w-full"
-                    variant="cyan"
-                    disabled={isLoading}
-                >
+                <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? "Resetting..." : "Reset password"}
-                </MetalButton>
+                </Button>
             </form>
 
             <div className="text-center text-sm">

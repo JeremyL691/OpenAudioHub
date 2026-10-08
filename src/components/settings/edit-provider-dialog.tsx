@@ -3,9 +3,9 @@
 import { Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
-import { Panel } from "@/components/panel";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -235,7 +235,7 @@ export function EditProviderDialog({
                         disabled={isLoading}
                     />
 
-                    <Panel variant="inset" className="space-y-2 text-sm">
+                    <Card className="space-y-2 text-sm bg-muted/50">
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -266,24 +266,24 @@ export function EditProviderDialog({
                                 {provider.provider} transcribes only.
                             </p>
                         )}
-                    </Panel>
+                    </Card>
 
                     <div className="flex gap-2">
-                        <MetalButton
+                        <Button
                             type="button"
                             onClick={() => onOpenChange(false)}
                             disabled={isLoading}
                             className="flex-1"
                         >
                             Cancel
-                        </MetalButton>
-                        <MetalButton
+                        </Button>
+                        <Button
                             type="submit"
                             disabled={isLoading}
                             className="flex-1"
                         >
                             {isLoading ? "Updating..." : "Update Provider"}
-                        </MetalButton>
+                        </Button>
                     </div>
                 </form>
             </DialogContent>
