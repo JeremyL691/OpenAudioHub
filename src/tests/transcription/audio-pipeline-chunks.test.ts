@@ -78,6 +78,7 @@ vi.mock("openai", () => ({
 }));
 
 import { POST } from "@/app/api/internal/audio-pipeline/jobs/[id]/chunks/route";
+import { isAudioPipelineServiceRequest } from "@/lib/transcription/audio-pipeline-auth";
 
 const bytes = Buffer.from("controlled audio bytes");
 const digest = createHash("sha256").update(bytes).digest("hex");
@@ -217,5 +218,16 @@ describe("audio-pipeline chunk provider bridge", () => {
         if (style === "openai")
             expect(mocks.openAITranscribe).toHaveBeenCalledOnce();
         expect(mocks.elevenLabs).not.toHaveBeenCalled();
+    });
+});
+
+describe("audio-pipeline chunk route auth", () => {
+    it("rejects a chunk upload that does not carry the pipeline token", async () => {
+        vi.mocked(isAudioPipelineServiceRequest).mockReturnValueOnce(false);
+        const response = await postChunk();
+        expect(response.status).toBe(401);
+        await expect(response.json()).resolves.toEqual({
+            error: "Unauthorized",
+        });
     });
 });
