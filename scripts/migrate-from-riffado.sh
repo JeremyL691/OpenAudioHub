@@ -1,28 +1,39 @@
 #!/usr/bin/env bash
 # Migrate an existing Riffado stack into an OpenAudioHub deployment (PLAN §6 P8, T8.2).
 #
-#   1. preflight (read-only): old containers healthy, old health endpoint answers, and no
-#      pipeline job is still active (waits up to WAIT_JOBS_SECONDS, then exits)
+#   1. preflight (read-only): the old database is healthy and no pipeline job is still active
+#      (waits up to WAIT_JOBS_SECONDS, then exits). A combined run also needs the old app healthy.
+#      An export-only run needs the old app stopped, so nothing can write during the export.
 #   2. export: pg_dump -Fc of the old database; each old volume is tarred through a read-only mount
-#   3. manifest: sha256 of every artifact, row counts, file count and bytes (old side)
+#   3. manifest: sha256 of every artifact, row counts, the old-side facts used by validation, and
+#      file count and bytes per volume
 #   4. restore into the target project: build, database first (pg_restore --no-owner), then the
 #      volumes (refused unless empty), then app (runs its migrations) and audio-pipeline
 #   5. validation: counts equal, source values migrated, api key hashes equal, encrypted fields
-#      decrypt, sampled audio sha256 equal, health endpoints answer
+#      decrypt, sampled audio sha256 equal, health endpoints answer. Validation reads the saved
+#      old-side facts, so it still works after the old stack has stopped.
+#
+# Modes:
+#   (default)            preflight, export, restore, validate (rehearsal)
+#   --export-only        preflight (old app stopped), export, manifest; then exit
+#   --restore-from DIR   restore and validate from the artifacts of an earlier --export-only run
+#   --dry-run            read-only preflight, then print the plan
 #
 # The old stack is only read: no writes to its database, its volumes, or its containers. The target
 # is a separate Compose project (default openaudiohub-rehearsal, port from its env file).
 #
 # Usage:
 #   scripts/migrate-from-riffado.sh --dry-run --out DIR
+#   scripts/migrate-from-riffado.sh --export-only --out DIR
+#   scripts/migrate-from-riffado.sh --restore-from DIR [--target-project NAME] [--target-env FILE] [--target-dir DIR]
 #   scripts/migrate-from-riffado.sh --out DIR [--target-project NAME] [--target-env FILE] [--target-dir DIR]
 #
-# Environment overrides: OLD_DB_CONTAINER, OLD_DB_NAME, OLD_APP_HEALTH, HELPER_IMAGE, WAIT_JOBS_SECONDS.
-# Secrets are read from the target env file and never printed.
+# Environment overrides: OLD_DB_CONTAINER, OLD_APP_CONTAINER, OLD_DB_NAME, OLD_APP_HEALTH,
+# HELPER_IMAGE, WAIT_JOBS_SECONDS. Secrets are read from the target env file and never printed.
 set -euo pipefail
 
 OLD_DB_CONTAINER="${OLD_DB_CONTAINER:-riffado-db}"
-OLD_CONTAINERS=("$OLD_DB_CONTAINER" riffado-app)
+OLD_APP_CONTAINER="${OLD_APP_CONTAINER:-riffado-app}"
 OLD_DB_NAME="${OLD_DB_NAME:-riffado}"
 OLD_APP_HEALTH="${OLD_APP_HEALTH:-http://localhost:3000/api/health}"
 OLD_VOLUMES=(riffado_audio riffado_storage riffado_audio-pipeline-data)
@@ -34,18 +45,24 @@ TARGET_PROJECT="${TARGET_PROJECT:-openaudiohub-rehearsal}"
 TARGET_ENV="${TARGET_ENV:-}"
 TARGET_DB_NAME="openaudiohub"
 OUT=""
+RESTORE_FROM=""
 DRY_RUN=0
+EXPORT_ONLY=0
 TERMINAL_JOB_STATES="'completed','failed','cancelled','needs_alignment','superseded'"
 
 usage() {
-    echo "usage: $0 [--dry-run] --out DIR [--target-project NAME] [--target-env FILE] [--target-dir DIR]" >&2
+    echo "usage: $0 [--dry-run | --export-only] --out DIR" >&2
+    echo "       $0 --restore-from DIR [--target-project NAME] [--target-env FILE] [--target-dir DIR]" >&2
+    echo "       $0 --out DIR [--target-project NAME] [--target-env FILE] [--target-dir DIR]" >&2
     exit 2
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
+        --export-only) EXPORT_ONLY=1; shift ;;
         --out) OUT="${2:-}"; shift 2 ;;
+        --restore-from) RESTORE_FROM="${2:-}"; shift 2 ;;
         --target-project) TARGET_PROJECT="${2:-}"; shift 2 ;;
         --target-env) TARGET_ENV="${2:-}"; shift 2 ;;
         --target-dir) TARGET_DIR="${2:-}"; shift 2 ;;
@@ -53,6 +70,9 @@ while [[ $# -gt 0 ]]; do
         *) usage ;;
     esac
 done
+if [[ -n "$RESTORE_FROM" ]]; then
+    OUT="$RESTORE_FROM"
+fi
 [[ -n "$OUT" ]] || usage
 [[ -n "$TARGET_ENV" ]] || TARGET_ENV="$TARGET_DIR/.env.rehearsal"
 
@@ -77,14 +97,20 @@ preflight() {
     log "preflight: docker"
     docker info >/dev/null 2>&1 || die "Docker is not running"
 
-    log "preflight: old containers (read-only inspect)"
-    for name in "${OLD_CONTAINERS[@]}"; do
-        health="$(docker inspect -f '{{.State.Health.Status}}' "$name" 2>/dev/null || echo missing)"
-        [[ "$health" == "healthy" ]] || die "$name is not healthy (state: $health)"
-    done
+    log "preflight: old database (read-only inspect)"
+    health="$(docker inspect -f '{{.State.Health.Status}}' "$OLD_DB_CONTAINER" 2>/dev/null || echo missing)"
+    [[ "$health" == "healthy" ]] || die "$OLD_DB_CONTAINER is not healthy (state: $health)"
 
-    log "preflight: old app health (GET)"
-    curl -fsS -o /dev/null "$OLD_APP_HEALTH" || die "old app health check failed at $OLD_APP_HEALTH"
+    if (( EXPORT_ONLY )); then
+        log "preflight: old app must be stopped for a quiescent export"
+        running="$(docker inspect -f '{{.State.Running}}' "$OLD_APP_CONTAINER" 2>/dev/null || echo missing)"
+        [[ "$running" == "false" ]] || die "$OLD_APP_CONTAINER must be stopped before --export-only (running: $running)"
+    else
+        log "preflight: old app (read-only inspect and GET)"
+        health="$(docker inspect -f '{{.State.Health.Status}}' "$OLD_APP_CONTAINER" 2>/dev/null || echo missing)"
+        [[ "$health" == "healthy" ]] || die "$OLD_APP_CONTAINER is not healthy (state: $health)"
+        curl -fsS -o /dev/null "$OLD_APP_HEALTH" || die "old app health check failed at $OLD_APP_HEALTH"
+    fi
 
     log "preflight: waiting for active pipeline jobs to finish (limit ${WAIT_JOBS_SECONDS}s)"
     waited=0
@@ -120,7 +146,7 @@ if (( DRY_RUN )); then
     cat <<PLAN
   1. docker exec $OLD_DB_CONTAINER pg_dump -Fc -U postgres -d $OLD_DB_NAME > $OUT/riffado.dump
   2. for each of ${OLD_VOLUMES[*]}: docker run --rm -v <volume>:/src:ro $HELPER_IMAGE tar -C /src -cf $OUT/<volume>.tar .
-  3. sha256 manifest and row counts written to $OUT
+  3. sha256 manifest, row counts and old-side facts written to $OUT
   4. target project $TARGET_PROJECT in $TARGET_DIR (env $TARGET_ENV):
        compose build app audio-pipeline; compose up --no-start; compose up -d --wait db
        pg_restore --no-owner into $TARGET_DB_NAME (refused if the database already has tables)
@@ -131,31 +157,37 @@ PLAN
     exit 0
 fi
 
-# ---------------------------------------------------------------- export
-mkdir -p "$OUT"
-OUT="$(cd "$OUT" && pwd -P)"
-preflight
+# ---------------------------------------------------------------- export, or reuse saved artifacts
+if [[ -z "$RESTORE_FROM" ]]; then
+    mkdir -p "$OUT"
+    OUT="$(cd "$OUT" && pwd -P)"
+    preflight
 
-log "export: pg_dump -Fc of $OLD_DB_NAME (read-only)"
-docker exec "$OLD_DB_CONTAINER" pg_dump -Fc -U postgres -d "$OLD_DB_NAME" > "$OUT/riffado.dump"
-[[ -s "$OUT/riffado.dump" ]] || die "pg_dump produced an empty file"
+    log "export: pg_dump -Fc of $OLD_DB_NAME (read-only)"
+    docker exec "$OLD_DB_CONTAINER" pg_dump -Fc -U postgres -d "$OLD_DB_NAME" > "$OUT/riffado.dump"
+    [[ -s "$OUT/riffado.dump" ]] || die "pg_dump produced an empty file"
 
-for volume in "${OLD_VOLUMES[@]}"; do
-    docker volume inspect "$volume" >/dev/null 2>&1 || die "volume $volume not found"
-    log "export: tar of volume $volume through a read-only mount"
-    docker run --rm -v "$volume:/src:ro" -v "$OUT:/out" "$HELPER_IMAGE" \
-        tar -C /src -cf "/out/$volume.tar" .
-done
+    for volume in "${OLD_VOLUMES[@]}"; do
+        docker volume inspect "$volume" >/dev/null 2>&1 || die "volume $volume not found"
+        log "export: tar of volume $volume through a read-only mount"
+        docker run --rm -v "$volume:/src:ro" -v "$OUT:/out" "$HELPER_IMAGE" \
+            tar -C /src -cf "/out/$volume.tar" .
+    done
 
-log "manifest: counts, file count and bytes (old side)"
-old_psql -c "$(count_query)" > "$OUT/counts-old.txt"
-python3 - "$OUT" "${OLD_VOLUMES[@]}" <<'PYEOF'
+    log "export: row counts and old-side facts"
+    old_psql -c "$(count_query)" > "$OUT/counts-old.txt"
+    old_riffado="$(old_psql -c "select count(*) from transcriptions where source='riffado'")"
+    old_keys="$(old_psql -c "select encode(sha256(convert_to(coalesce(string_agg(key_hash, ',' order by key_hash), ''), 'UTF8')), 'hex') from api_keys")"
+    printf 'source_riffado=%s\napi_keys_digest=%s\n' "$old_riffado" "$old_keys" > "$OUT/old-facts.txt"
+
+    log "manifest: sha256 of every artifact, file count and bytes per volume"
+    python3 - "$OUT" "${OLD_VOLUMES[@]}" <<'PYEOF'
 import hashlib, json, pathlib, sys, tarfile
 out = pathlib.Path(sys.argv[1])
 volumes = sys.argv[2:]
 manifest = {}
 for path in sorted(out.glob("*")):
-    if path.is_file() and path.name not in ("manifest.sha256",):
+    if path.is_file() and path.name != "manifest.sha256":
         manifest[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
 stats = {}
 for volume in volumes:
@@ -167,7 +199,22 @@ for volume in volumes:
 (out / "volume-stats-old.json").write_text(json.dumps(stats, indent=2), encoding="utf-8")
 print(json.dumps(stats, indent=2))
 PYEOF
-cat "$OUT/counts-old.txt"
+    cat "$OUT/counts-old.txt"
+
+    if (( EXPORT_ONLY )); then
+        log "export-only: artifacts written to $OUT; restore later with --restore-from"
+        exit 0
+    fi
+else
+    OUT="$(cd "$OUT" && pwd -P)"
+    for artifact in riffado.dump counts-old.txt old-facts.txt manifest.sha256; do
+        [[ -f "$OUT/$artifact" ]] || die "missing $artifact in $OUT"
+    done
+    for volume in "${OLD_VOLUMES[@]}"; do
+        [[ -f "$OUT/$volume.tar" ]] || die "missing $volume.tar in $OUT"
+    done
+    log "restore-from: reusing the artifacts in $OUT"
+fi
 
 # ---------------------------------------------------------------- restore
 [[ -f "$TARGET_DIR/docker-compose.yml" ]] || die "no compose file at $TARGET_DIR"
@@ -209,6 +256,10 @@ check() {
     fi
 }
 
+old_fact() {
+    grep -m1 "^$1=" "$OUT/old-facts.txt" | cut -d= -f2-
+}
+
 target_psql -c "$(count_query)" > "$OUT/counts-new.txt"
 counts_equal=1
 while IFS= read -r line; do
@@ -216,13 +267,13 @@ while IFS= read -r line; do
 done < "$OUT/counts-old.txt"
 check "row counts equal" "$counts_equal" "$(paste -sd' ' "$OUT/counts-old.txt")"
 
-old_riffado="$(old_psql -c "select count(*) from transcriptions where source='riffado'")"
+old_riffado="$(old_fact source_riffado)"
 new_riffado="$(target_psql -c "select count(*) from transcriptions where source='riffado'")"
 new_openaudiohub="$(target_psql -c "select count(*) from transcriptions where source='openaudiohub'")"
 check "source values migrated (0041)" "$([[ "$new_riffado" == "0" && "$new_openaudiohub" == "$old_riffado" ]] && echo 1 || echo 0)" \
     "riffado remaining=$new_riffado, openaudiohub=$new_openaudiohub (old riffado=$old_riffado)"
 
-old_keys="$(old_psql -c "select encode(sha256(convert_to(coalesce(string_agg(key_hash, ',' order by key_hash), ''), 'UTF8')), 'hex') from api_keys")"
+old_keys="$(old_fact api_keys_digest)"
 new_keys="$(target_psql -c "select encode(sha256(convert_to(coalesce(string_agg(key_hash, ',' order by key_hash), ''), 'UTF8')), 'hex') from api_keys")"
 check "api key hashes identical" "$([[ "$old_keys" == "$new_keys" ]] && echo 1 || echo 0)" \
     "set digest ${new_keys:0:16}…"
@@ -252,7 +303,7 @@ dec_bad="${decrypt_result##* }"
 check "encrypted fields decrypt" "$([[ "$dec_ok" -gt 0 && "$dec_bad" == "0" ]] && echo 1 || echo 0)" \
     "decrypted=$dec_ok failed=$dec_bad"
 
-sample_sha="$(python3 - "$OUT" "${OLD_VOLUMES[0]}" <<'PYEOF'
+sample_list="$(python3 - "$OUT" "${OLD_VOLUMES[0]}" <<'PYEOF'
 import random, sys, tarfile
 out, volume = sys.argv[1], sys.argv[2]
 with tarfile.open(f"{out}/{volume}.tar") as archive:
@@ -269,7 +320,7 @@ while IFS= read -r rel; do
     new_sum="$(docker run --rm -v "${TARGET_PROJECT}_${VOLUME_SUFFIXES[0]}:/src:ro" "$HELPER_IMAGE" sha256sum "/src/$rel" | cut -d' ' -f1)" || new_sum=""
     checked=$((checked + 1))
     [[ -n "$old_sum" && "$old_sum" == "$new_sum" ]] || sample_ok=0
-done <<< "$sample_sha"
+done <<< "$sample_list"
 check "sampled audio sha256 equal" "$([[ "$checked" -gt 0 ]] && echo "$sample_ok" || echo 0)" "checked=$checked"
 
 api_status="$(target_compose exec -T app bun -e "fetch('http://localhost:3000/api/health').then((r) => console.log(r.ok ? 'ok' : 'fail'), () => console.log('fail'))" 2>/dev/null || echo fail)"

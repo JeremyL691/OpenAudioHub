@@ -54,6 +54,9 @@ allowed() {
         src/db/migrations/0041_rebrand_source_values.sql | src/db/migrations/meta/0041_snapshot.json) return 0 ;;
         # Rollback for migration 0041. It is not wired into the migrator.
         scripts/rollback/rebrand-source-values.down.sql) return 0 ;;
+        # The migration tool names the old containers, volumes and source values it reads,
+        # and it never writes them (D-162).
+        scripts/migrate-from-riffado.sh) return 0 ;;
     esac
 
     case "$file" in
