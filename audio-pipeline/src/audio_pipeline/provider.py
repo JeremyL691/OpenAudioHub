@@ -1,4 +1,4 @@
-"""Provider-neutral STT boundary; provider credentials remain in Riffado Core."""
+"""Provider-neutral STT boundary; provider credentials remain in the OpenAudioHub core."""
 
 from __future__ import annotations
 

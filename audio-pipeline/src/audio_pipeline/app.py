@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from audio_pipeline.config import AppConfig, load_config
 from audio_pipeline.service import PipelineService
@@ -16,7 +16,12 @@ from audio_pipeline.store import JobStore
 
 class CreateJob(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
-    riffado_job_id: str = Field(min_length=1, max_length=128)
+    # The legacy name is accepted from Core builds made before the rename (D-025).
+    core_job_id: str = Field(
+        min_length=1,
+        max_length=128,
+        validation_alias=AliasChoices("core_job_id", "riffado_job_id"),
+    )
     duration_ms: int = Field(ge=0, le=86_400_000)
 
 
@@ -53,10 +58,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @app.post("/v1/jobs", status_code=202, dependencies=[Depends(authorize)])
     async def submit(body: CreateJob) -> dict[str, Any]:
-        if body.idempotency_key != body.riffado_job_id:
+        if body.idempotency_key != body.core_job_id:
             raise HTTPException(status_code=400, detail="Job identity must be idempotent")
         try:
-            job, created = await service.submit(body.riffado_job_id, body.duration_ms)
+            job, created = await service.submit(body.core_job_id, body.duration_ms)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"job_id": job["id"], "status": job["status"], "created": created}

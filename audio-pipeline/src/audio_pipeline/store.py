@@ -28,7 +28,7 @@ class JobStore:
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
                     idempotency_key TEXT NOT NULL UNIQUE,
-                    riffado_job_id TEXT NOT NULL,
+                    core_job_id TEXT NOT NULL,
                     duration_ms INTEGER NOT NULL,
                     status TEXT NOT NULL,
                     phase TEXT NOT NULL,
@@ -62,6 +62,7 @@ class JobStore:
                     ON chunks(job_id, status, chunk_index);
                 """
             )
+            _rename_legacy_job_column(db)
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=30, isolation_level="IMMEDIATE")
@@ -70,9 +71,7 @@ class JobStore:
         db.execute("PRAGMA busy_timeout=30000")
         return db
 
-    def create(
-        self, key: str, riffado_job_id: str, duration_ms: int
-    ) -> tuple[dict[str, Any], bool]:
+    def create(self, key: str, core_job_id: str, duration_ms: int) -> tuple[dict[str, Any], bool]:
         with self._lock, self._connect() as db:
             row = db.execute("SELECT * FROM jobs WHERE idempotency_key=?", (key,)).fetchone()
             if row:
@@ -80,9 +79,9 @@ class JobStore:
             now = _now()
             db.execute(
                 """INSERT INTO jobs
-                   (id,idempotency_key,riffado_job_id,duration_ms,status,phase,created_at,updated_at)
+                   (id,idempotency_key,core_job_id,duration_ms,status,phase,created_at,updated_at)
                    VALUES (?,?,?,?,'queued','queued',?,?)""",
-                (key, key, riffado_job_id, duration_ms, now, now),
+                (key, key, core_job_id, duration_ms, now, now),
             )
             row = db.execute("SELECT * FROM jobs WHERE id=?", (key,)).fetchone()
             return self._job(row), True
@@ -261,3 +260,10 @@ class JobStore:
         item["acknowledged"] = bool(item["acknowledged"])
         item["result"] = json.loads(item.pop("result_json")) if item["result_json"] else None
         return item
+
+
+def _rename_legacy_job_column(db: sqlite3.Connection) -> None:
+    """Renames jobs.riffado_job_id to core_job_id on databases created before the rename (D-025)."""
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+    if "riffado_job_id" in columns and "core_job_id" not in columns:
+        db.execute("ALTER TABLE jobs RENAME COLUMN riffado_job_id TO core_job_id")
