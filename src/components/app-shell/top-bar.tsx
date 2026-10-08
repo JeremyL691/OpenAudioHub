@@ -79,12 +79,12 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                                 onClick={() => setPaletteOpen(true)}
                                 variant="outline"
                                 size="sm"
-                                className="hidden h-9 md:inline-flex"
+                                className="hidden h-9 px-2.5 md:inline-flex lg:px-3"
                                 aria-label="Open command palette"
                                 data-testid="command-trigger"
                             >
-                                <Command className="mr-2 size-4" />
-                                <span>Search</span>
+                                <Command className="size-4 lg:mr-2" />
+                                <span className="hidden lg:inline">Search</span>
                                 <kbd className="ml-2 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
                                     ⌘K
                                 </kbd>

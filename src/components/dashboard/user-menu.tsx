@@ -7,12 +7,14 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTheme } from "@/hooks/use-theme";
+import { type Theme, useTheme } from "@/hooks/use-theme";
 import { signOut } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
     initialTheme: "light" | "dark" | "system";
@@ -95,43 +97,27 @@ export function UserMenu({
                     </DropdownMenuItem>
                 </div>
 
-                <div className="border-t px-3 py-2">
-                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Theme
-                    </div>
-                    <div
-                        role="radiogroup"
-                        aria-label="Theme"
-                        className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-0.5"
-                    >
-                        {themeOptions.map((opt) => {
-                            const isActive = theme === opt.value;
-                            return (
-                                // biome-ignore lint/a11y/useSemanticElements: segmented control
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={isActive}
-                                    onClick={() => setTheme(opt.value)}
-                                    className={cn(
-                                        "inline-flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors",
-                                        isActive
-                                            ? "bg-background text-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground",
-                                    )}
-                                >
-                                    <opt.icon
-                                        className="size-3.5"
-                                        aria-hidden="true"
-                                    />
-                                    {opt.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
+                <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Theme
+                </DropdownMenuLabel>
+                {/* Radix radio items, so the menu owns only items and groups.
+                    Picking a theme keeps the menu open, as the old segmented
+                    control did. */}
+                <DropdownMenuRadioGroup
+                    value={theme}
+                    onValueChange={(value) => setTheme(value as Theme)}
+                >
+                    {themeOptions.map((opt) => (
+                        <DropdownMenuRadioItem
+                            key={opt.value}
+                            value={opt.value}
+                            onSelect={(event) => event.preventDefault()}
+                        >
+                            <opt.icon className="size-3.5" aria-hidden="true" />
+                            {opt.label}
+                        </DropdownMenuRadioItem>
+                    ))}
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator className="my-0" />
 
                 {/* Sign out */}

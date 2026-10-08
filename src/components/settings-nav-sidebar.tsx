@@ -9,7 +9,7 @@ interface Props {
 
 /**
  * Desktop section list. Each item is a real link to `/settings/<id>`, so the
- * section is in the address bar. Hidden below md, where the section picker in
+ * section is in the address bar. Hidden below lg, where the section picker in
  * the page header takes over.
  */
 export function SettingsNavSidebar({ activeSection }: Props) {
@@ -17,7 +17,7 @@ export function SettingsNavSidebar({ activeSection }: Props) {
         <nav
             aria-label="Settings sections"
             data-testid="settings-nav"
-            className="hidden w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r p-3 md:flex"
+            className="hidden w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r p-3 lg:flex"
         >
             {SETTINGS_NAV_GROUPS.map((group) => (
                 <div key={group.label} className="flex flex-col gap-1">

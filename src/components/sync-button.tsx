@@ -156,19 +156,22 @@ export function SyncButton({
                 >
                     {failed ? (
                         <AlertCircle
-                            className="size-4 sm:mr-2"
+                            className="size-4 lg:mr-2"
                             aria-hidden="true"
                         />
                     ) : (
                         <RefreshCw
                             className={cn(
-                                "size-4 sm:mr-2",
+                                "size-4 lg:mr-2",
                                 isAutoSyncing && "animate-spin",
                             )}
                             aria-hidden="true"
                         />
                     )}
-                    <span className="hidden sm:inline">{label}</span>
+                    {/* Icon only up to lg: at md the library's header also holds
+                        the search and upload buttons, and would overflow the
+                        content column (D-154). The button keeps its aria-label. */}
+                    <span className="hidden lg:inline">{label}</span>
                 </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{title}</TooltipContent>

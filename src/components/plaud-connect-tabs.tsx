@@ -238,7 +238,7 @@ function ConnectorPane({
                         Install the browser extension
                     </a>
                 </Button>
-                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                     Already installed? Reload this page so OpenAudioHub can
                     detect it. Or use the{" "}
                     <button
@@ -278,7 +278,7 @@ function ConnectorPane({
                     ? "Waiting for plaud.ai sign-in…"
                     : "Continue with Plaud"}
             </Button>
-            <p className="text-xs text-muted-foreground/80 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
                 Stuck?{" "}
                 <button
                     type="button"
@@ -428,7 +428,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                         : "Send Verification Code"}
                 </Button>
 
-                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                     Signed up to Plaud with{" "}
                     <span className="font-medium">Google or Apple</span>? The
                     email-code flow may sign you into a different (empty) Plaud

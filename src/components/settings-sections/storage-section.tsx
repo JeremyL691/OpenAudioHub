@@ -262,6 +262,7 @@ export function StorageSection() {
                 action={
                     <Switch
                         id="auto-delete"
+                        aria-label="Auto-delete old recordings"
                         checked={autoDeleteRecordings}
                         onCheckedChange={(checked) => {
                             // The toggle settles retentionDays itself, so any

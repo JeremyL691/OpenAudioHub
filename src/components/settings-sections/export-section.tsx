@@ -303,7 +303,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     </Select>
                 </div>
 
-                <div className="flex items-center justify-between opacity-60">
+                <div className="flex items-center justify-between">
                     <div className="space-y-0.5 flex-1">
                         <div className="flex items-center gap-2">
                             <Label htmlFor="auto-export" className="text-base">
@@ -319,6 +319,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     </div>
                     <Switch
                         id="auto-export"
+                        className="opacity-60"
                         checked={autoExport}
                         onCheckedChange={(checked) => {
                             setAutoExport(checked);
@@ -330,7 +331,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     />
                 </div>
 
-                <div className="space-y-2 opacity-60">
+                <div className="space-y-2">
                     <div className="flex items-center gap-2">
                         <Label htmlFor="backup-frequency">
                             Backup frequency
@@ -350,7 +351,10 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         }}
                         disabled={true}
                     >
-                        <SelectTrigger id="backup-frequency" className="w-full">
+                        <SelectTrigger
+                            id="backup-frequency"
+                            className="w-full opacity-60"
+                        >
                             <SelectValue>
                                 {backupFrequencyOptions.find(
                                     (opt) =>
