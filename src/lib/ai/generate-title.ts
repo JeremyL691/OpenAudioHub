@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
+import {
+    createProviderClient,
+    resolveChatModel,
+} from "@/lib/ai/provider-client";
 import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
@@ -84,21 +87,11 @@ export async function generateTitleFromTranscription(
         // Decrypt API key
         const apiKey = decrypt(credentials.apiKey);
 
-        // Create OpenAI client
-        const openai = new OpenAI({
-            apiKey,
-            baseURL: credentials.baseUrl || undefined,
-        });
+        const openai = createProviderClient(credentials, apiKey);
 
-        // Use a lightweight model for title generation
-        // Prefer chat models (gpt-4o-mini, gpt-3.5-turbo) over Whisper models
-        // Fallback to default model if no specific model is set
-        let model = credentials.defaultModel || "gpt-4o-mini";
-
-        // If the model is a Whisper model (for transcription), use a chat model instead
-        if (model.includes("whisper") || model.includes("whisper-")) {
-            model = "gpt-4o-mini";
-        }
+        // A lightweight chat model for titles. A transcription model stored as
+        // the default is replaced, as in summaries.
+        const model = resolveChatModel(credentials);
 
         // Truncate transcription if too long (to save tokens)
         const maxTranscriptionLength = 2000;

@@ -29,6 +29,7 @@ vi.mock("@/db", () => ({
 
 vi.mock("@/lib/ai/provider-presets", () => ({
     getTranscriptionStyle: mocks.style,
+    findPreset: () => undefined,
 }));
 
 vi.mock("@/lib/encryption", () => ({

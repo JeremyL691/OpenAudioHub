@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
+import { supportsTranscription } from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { requireApiSession } from "@/lib/auth-server";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
@@ -28,7 +29,10 @@ export const PUT = apiHandler(async (request: Request) => {
     const { providerId } = parsed.data;
 
     const [provider] = await db
-        .select({ id: apiCredentials.id })
+        .select({
+            id: apiCredentials.id,
+            provider: apiCredentials.provider,
+        })
         .from(apiCredentials)
         .where(
             and(
@@ -40,6 +44,14 @@ export const PUT = apiHandler(async (request: Request) => {
 
     if (!provider) {
         throw new AppError(ErrorCode.NOT_FOUND, "Provider not found", 404);
+    }
+
+    if (!supportsTranscription(provider.provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${provider.provider} does not support transcription (chat only)`,
+            400,
+        );
     }
 
     await setDefaultTranscriptionProvider(session.user.id, providerId);

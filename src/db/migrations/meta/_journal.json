@@ -309,6 +309,13 @@
       "when": 1791491233755,
       "tag": "0043_source_default_openaudiohub",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791494664478,
+      "tag": "0044_provider_presets_siliconflow_opencode",
+      "breakpoints": true
     }
   ]
 }

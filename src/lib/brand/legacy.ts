@@ -1,9 +1,16 @@
 /**
  * Identifiers inherited from the Riffado fork. Compatibility paths read
- * these, and nothing writes them. This is the only source file that names
+ * these. The one exception is `OPENCODE_GO_SESSION_ID`, which is sent as a
+ * request header unchanged (D-026). This is the only source file that names
  * the legacy brand, apart from the migrations, docs, and the brand-audit
  * allowlist (see T2.10).
  */
+
+/**
+ * Session id the OpenCode Go gateway has routed on since the fork. The
+ * gateway rejects requests without it, so it stays as issued.
+ */
+export const OPENCODE_GO_SESSION_ID = "openaudiohub" as const;
 
 /** `transcriptions.source` and related columns, before the rename. */
 export const LEGACY_SOURCE = "riffado" as const;

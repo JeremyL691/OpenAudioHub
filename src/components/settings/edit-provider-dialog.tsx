@@ -25,6 +25,7 @@ import {
     findPreset,
     PROVIDER_PRESETS,
     supportsEnhancement,
+    supportsTranscription,
 } from "@/lib/ai/provider-presets";
 
 interface Provider {
@@ -84,6 +85,9 @@ export function EditProviderDialog({
         if (preset) {
             setBaseUrl(preset.baseUrl);
             setDefaultModel(preset.defaultModel);
+        }
+        if (!supportsTranscription(value)) {
+            setIsDefaultTranscription(false);
         }
     };
 
@@ -236,17 +240,21 @@ export function EditProviderDialog({
                     />
 
                     <Card className="space-y-2 text-sm bg-muted/50">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultTranscription}
-                                onChange={(e) =>
-                                    setIsDefaultTranscription(e.target.checked)
-                                }
-                                disabled={isLoading}
-                            />
-                            <span>Use for transcription</span>
-                        </label>
+                        {supportsTranscription(providerName) && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isDefaultTranscription}
+                                    onChange={(e) =>
+                                        setIsDefaultTranscription(
+                                            e.target.checked,
+                                        )
+                                    }
+                                    disabled={isLoading}
+                                />
+                                <span>Use for transcription</span>
+                            </label>
+                        )}
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -264,6 +272,12 @@ export function EditProviderDialog({
                         {!supportsEnhancement(provider.provider) && (
                             <p className="text-xs text-muted-foreground pl-6">
                                 {provider.provider} transcribes only.
+                            </p>
+                        )}
+                        {!supportsTranscription(providerName) && (
+                            <p className="text-xs text-muted-foreground pl-6">
+                                {providerName} is chat only. It cannot
+                                transcribe audio.
                             </p>
                         )}
                     </Card>

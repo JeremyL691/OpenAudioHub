@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
     apiCredentials,
@@ -8,6 +7,10 @@ import {
     userSettings,
 } from "@/db/schema";
 import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
+import {
+    createProviderClient,
+    resolveChatModel,
+} from "@/lib/ai/provider-client";
 import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import {
     getAiOutputLanguageDirective,
@@ -180,29 +183,11 @@ export async function generateSummaryForRecording(
     }
 
     const apiKey = decrypt(credentials.apiKey);
+    const openai = createProviderClient(credentials, apiKey);
 
-    const openai = new OpenAI({
-        apiKey,
-        baseURL: credentials.baseUrl || undefined,
-    });
-
-    // The configured "default model" on apiCredentials can be a Whisper
-    // (transcription-only) id when the user only set up a transcription
-    // provider. Pick a sane lightweight chat model per provider in that
-    // case so summarization still works.
-    let model = credentials.defaultModel || "gpt-4o-mini";
-    if (model.includes("whisper")) {
-        const baseUrl = credentials.baseUrl || "";
-        if (baseUrl.includes("groq")) {
-            model = "llama-3.1-8b-instant";
-        } else if (baseUrl.includes("together")) {
-            model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo";
-        } else if (baseUrl.includes("openrouter")) {
-            model = "openai/gpt-4o-mini";
-        } else {
-            model = "gpt-4o-mini";
-        }
-    }
+    // The stored default can be a transcription-only id on a provider that
+    // both transcribes and chats. resolveChatModel picks the chat model then.
+    const model = resolveChatModel(credentials);
 
     // Decrypt the transcript before sending it to the LLM. Plaintext is
     // the LLM's input contract; ciphertext lives only in the DB.

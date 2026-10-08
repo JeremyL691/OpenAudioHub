@@ -1,4 +1,10 @@
+import { OPENCODE_GO_SESSION_ID } from "@/lib/brand/legacy";
+
 export type TranscriptionStyle = "whisper" | "chat" | "gemini" | "elevenlabs";
+
+/** Model ids that transcribe audio. Matched when no preset list names the model. */
+const TRANSCRIPTION_MODEL_PATTERN =
+    /whisper|asr|sensevoice|telespeech|transcribe|scribe|parakeet|speech/i;
 
 export interface ProviderPreset {
     name: string;
@@ -15,6 +21,22 @@ export interface ProviderPreset {
      * to `false`.
      */
     supportsEnhancement?: boolean;
+    /**
+     * Whether this provider can transcribe audio. Defaults to `true`. Chat-only
+     * providers such as OpenCode Go set this to `false`.
+     */
+    supportsTranscription?: boolean;
+    /**
+     * Chat model for summaries and titles. Used when the stored model is a
+     * transcription model, as on a provider that both transcribes and chats.
+     */
+    defaultChatModel?: string;
+    /** List chat models from `GET {baseUrl}/models` in the model picker. */
+    fetchChatModels?: boolean;
+    /** Model ids matching this pattern are left out of the chat model list. */
+    chatModelExclude?: RegExp;
+    /** Headers sent with every request to this provider. */
+    defaultHeaders?: Readonly<Record<string, string>>;
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -60,6 +82,35 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         defaultModel: "google/gemini-2.5-flash-lite",
         transcriptionStyle: "chat",
         fetchAudioModels: true,
+    },
+    {
+        name: "SiliconFlow (China)",
+        baseUrl: "https://api.siliconflow.cn/v1",
+        placeholder: "sk-...",
+        defaultModel: "FunAudioLLM/SenseVoiceSmall",
+        transcriptionStyle: "whisper",
+        knownTranscriptionModels: [
+            "FunAudioLLM/SenseVoiceSmall",
+            "TeleAI/TeleSpeechASR",
+            "XingChenAGI/XingChenASR-V3.2-Ultra",
+        ],
+        defaultChatModel: "Qwen/Qwen2.5-7B-Instruct",
+        fetchChatModels: true,
+        chatModelExclude:
+            /asr|sensevoice|telespeech|speech|audio|tts|embed|rerank|bge|image|flux/i,
+    },
+    {
+        name: "OpenCode Go",
+        baseUrl: "https://opencode.ai/zen/go/v1",
+        placeholder: "sk-...",
+        defaultModel: "deepseek-v4.1-flash",
+        transcriptionStyle: "chat",
+        supportsTranscription: false,
+        fetchChatModels: true,
+        // MiniMax and Qwen models use the Anthropic Messages format, which the
+        // OpenAI-compatible path here cannot call.
+        chatModelExclude: /minimax|qwen/i,
+        defaultHeaders: { "x-opencode-session": OPENCODE_GO_SESSION_ID },
     },
     {
         name: "LM Studio",
@@ -123,4 +174,23 @@ export function getTranscriptionStyle(
  */
 export function supportsEnhancement(providerName: string): boolean {
     return findPreset(providerName)?.supportsEnhancement ?? true;
+}
+
+/**
+ * Whether a provider can transcribe audio. Unknown/custom provider names
+ * default to `true`.
+ */
+export function supportsTranscription(providerName: string): boolean {
+    return findPreset(providerName)?.supportsTranscription ?? true;
+}
+
+/** True when the model id names a transcription model rather than a chat model. */
+export function isTranscriptionModel(
+    model: string,
+    providerName: string,
+): boolean {
+    const known =
+        findPreset(providerName)?.knownTranscriptionModels?.includes(model) ??
+        false;
+    return known || TRANSCRIPTION_MODEL_PATTERN.test(model);
 }
