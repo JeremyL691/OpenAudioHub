@@ -1,0 +1,84 @@
+# Docker smoke stack for the long-audio run (PLAN §6 P7, T7.4). Started by scripts/dev/docker-smoke.sh.
+# Project name oah-e2e, app on 127.0.0.1:3100. The database is not published to the host.
+# Secrets come from .dev-artifacts/oah-e2e.env (generated, gitignored); values are never printed.
+# `down -v` removes only this project's volumes (oah-e2e_*), never the volumes of the existing stack.
+# The fake AI server runs on the host (scripts/dev/fake-ai-server.ts, port 3299). The app
+# reaches it as host.docker.internal:3299 and uses it as the transcription and chat provider.
+name: oah-e2e
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/dev/docker-smoke.sh env first}
+      POSTGRES_DB: openaudiohub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d openaudiohub"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: oah-e2e-app:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/openaudiohub
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Run scripts/dev/docker-smoke.sh env first}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run scripts/dev/docker-smoke.sh env first}
+      APP_URL: http://localhost:3100
+      DEFAULT_STORAGE_TYPE: local
+      LOCAL_STORAGE_PATH: /app/audio
+      AUDIO_PIPELINE_ENABLED: "true"
+      AUDIO_PIPELINE_BASE_URL: http://audio-pipeline:8100
+      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:?Run scripts/dev/docker-smoke.sh env first}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - audio:/app/audio
+      - storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    # The runner image is oven/bun, so the probe uses bun, the runtime the server runs on.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+
+  audio-pipeline:
+    build:
+      context: ../../audio-pipeline
+      dockerfile: Dockerfile
+    image: oah-e2e-audio-pipeline:local
+    restart: unless-stopped
+    environment:
+      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:?Run scripts/dev/docker-smoke.sh env first}
+      AUDIO_PIPELINE_CORE_URL: http://app:3000
+      AUDIO_PIPELINE_DATA_DIR: /data
+    volumes:
+      - audio-pipeline-data:/data
+    mem_limit: 2g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
+      retries: 30
+
+volumes:
+  pgdata:
+  audio:
+  storage:
+  audio-pipeline-data:
