@@ -24,3 +24,10 @@ export const LEGACY_CONNECTOR_GLOBAL = "__riffadoConnector" as const;
 
 /** Pipeline job column and request field before the rename. */
 export const LEGACY_PIPELINE_JOB_FIELD = "riffado_job_id" as const;
+
+/** Attribution line shown in the footer and copyright. */
+export const LEGACY_ATTRIBUTION = "Based on Riffado (AGPL-3.0)" as const;
+
+/** Original browser extension repository, linked as third-party attribution. */
+export const LEGACY_CONNECTOR_REPO_URL =
+    "https://github.com/riffado/connector" as const;

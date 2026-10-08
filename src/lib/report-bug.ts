@@ -1,6 +1,7 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-const GITHUB_NEW_ISSUE_URL = "https://github.com/riffado/riffado/issues/new";
+const GITHUB_NEW_ISSUE_URL =
+    "https://github.com/JeremyL691/OpenAudioHub/issues/new";
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
 export interface ReportBugOptions {

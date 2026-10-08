@@ -7,16 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toastApiError } from "@/lib/api-errors";
+import { BRAND } from "@/lib/brand";
+import { LEGACY_CONNECTOR_REPO_URL } from "@/lib/brand/legacy";
 import {
     DEFAULT_SERVER_KEY,
     PLAUD_SERVERS,
     type PlaudServerKey,
 } from "@/lib/plaud/servers";
 
-const CONNECTOR_CHROME_URL =
-    "https://github.com/riffado/connector#installation";
+const CONNECTOR_CHROME_URL = `${LEGACY_CONNECTOR_REPO_URL}#installation`;
 
-// API contract for the Riffado Connector extension; bump `version` on both sides.
+// API contract for the browser extension; bump `version` on both sides.
 interface ConnectorBridge {
     version: number;
     connect(): Promise<{
@@ -37,7 +38,7 @@ type Mode = "connector" | "email" | "token";
 type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
-const ISSUE_URL = "https://github.com/riffado/riffado/issues/65";
+const ISSUE_URL = BRAND.issuesUrl;
 
 // One-liner the user pastes into the web.plaud.ai console. Reads
 // `pld_tokenstr` (the long-lived ~300-day user token, stored as a
@@ -211,7 +212,7 @@ function ConnectorPane({
             <div className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
                     Easiest path: install the{" "}
-                    <span className="font-medium">Riffado Connector</span>{" "}
+                    <span className="font-medium">Browser extension</span>{" "}
                     browser extension. Sign in to Plaud the way you normally do
                     (Google, Apple, or email) and the connector hands the
                     session back here, no copy-pasting.
@@ -222,12 +223,12 @@ function ConnectorPane({
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        Install Riffado Connector
+                        Install the browser extension
                     </a>
                 </Button>
                 <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    Already installed? Reload this page so Riffado can detect
-                    it. Or use the{" "}
+                    Already installed? Reload this page so OpenAudioHub can
+                    detect it. Or use the{" "}
                     <button
                         type="button"
                         onClick={onUseEmail}
@@ -631,7 +632,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                         Recommended: use the connector instead
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        The Riffado Connector signs you in and captures the
+                        The browser extension signs you in and captures the
                         right long-lived token automatically — no copying, and
                         it won't stop working after a day.{" "}
                         <button
@@ -746,7 +747,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                                     onClick={onUseConnector}
                                     className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
                                 >
-                                    Use the Riffado Connector
+                                    Use the browser extension
                                 </button>{" "}
                                 and it captures the right token for you.
                             </p>

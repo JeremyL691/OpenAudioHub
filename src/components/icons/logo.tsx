@@ -10,7 +10,7 @@ export const Logo = ({ className, ...props }: IconProps) => {
             {...props}
             fill="none"
             className={className}
-            aria-label="Riffado Logo"
+            aria-label="OpenAudioHub Logo"
             aria-hidden="true"
         >
             <path
@@ -31,7 +31,7 @@ export const LogoWordmark = ({ className, ...props }: IconProps) => {
             {...props}
             fill="none"
             className={className}
-            aria-label="Riffado Wordmark"
+            aria-label="OpenAudioHub Wordmark"
             aria-hidden="true"
         >
             {/* Logo mark */}

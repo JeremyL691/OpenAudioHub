@@ -267,7 +267,7 @@ describe("Sync", () => {
             });
         });
 
-        it("asks the retry lookup for missing Riffado transcripts in keep_both mode", async () => {
+        it("asks the retry lookup for missing OpenAudioHub transcripts in keep_both mode", async () => {
             const mockPlaudClient = {
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: [],

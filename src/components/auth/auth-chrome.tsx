@@ -6,7 +6,7 @@ import { Panel } from "@/components/panel";
 interface AuthChromeProps {
     /** Headline above the form. e.g. "Sign in" / "Create account". */
     title: string;
-    /** Optional sub-headline. e.g. "Welcome back to Riffado." */
+    /** Optional sub-headline. e.g. "Welcome back to OpenAudioHub." */
     subtitle?: string;
     /** The form body (fields + submit + internal nav links). */
     children: ReactNode;
@@ -16,11 +16,11 @@ interface AuthChromeProps {
 // SelfHostAuthChrome
 // ---------------------------------------------------------------------------
 // The audience here is the operator (and maybe 1-2 invitees) of an instance they deployed
-// themselves. They already know what Riffado is -- marketing copy is
+// themselves. They already know what OpenAudioHub is -- marketing copy is
 // wasted space.
 //
 // Surfaces ONLY non-sensitive context below the card:
-//   - Docs / GitHub / Discord links
+//   - Docs / GitHub links
 //
 // Explicitly NOT surfaced on this PRE-AUTH page (would leak to anyone
 // scanning the internet for vulnerable instances):
@@ -41,7 +41,7 @@ export function SelfHostAuthChrome({
         <div className="relative flex min-h-screen items-center justify-center px-4 py-12">
             <div className="relative z-10 w-full max-w-md space-y-6">
                 <div className="flex justify-center">
-                    <Link href="/" aria-label="Riffado">
+                    <Link href="/" aria-label="OpenAudioHub">
                         <LogoWordmark className="h-7 w-auto text-foreground" />
                     </Link>
                 </div>
@@ -69,7 +69,7 @@ function InstanceFooter() {
         <div className="flex justify-center text-xs text-muted-foreground font-mono">
             <div className="flex items-center gap-4">
                 <Link
-                    href="https://riffado.com/docs"
+                    href="/docs"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-foreground"
@@ -80,23 +80,12 @@ function InstanceFooter() {
                     ·
                 </span>
                 <Link
-                    href="https://github.com/riffado/riffado"
+                    href="https://github.com/JeremyL691/OpenAudioHub"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-foreground"
                 >
                     GitHub
-                </Link>
-                <span aria-hidden className="text-muted-foreground/40">
-                    ·
-                </span>
-                <Link
-                    href="https://riffado.com/discord"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-foreground"
-                >
-                    Discord
                 </Link>
             </div>
         </div>

@@ -202,7 +202,7 @@ export function StorageSection() {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Storage"
-                description="Where Riffado keeps the audio files behind your recordings."
+                description="Where OpenAudioHub keeps the audio files behind your recordings."
                 icon={HardDrive}
             />
 

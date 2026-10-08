@@ -113,7 +113,7 @@ async function postChunk() {
     form.set("end_sample", "32000");
     form.set("content_sha256", digest);
     return POST(
-        new Request("http://riffado.test", { method: "POST", body: form }),
+        new Request("http://openaudiohub.test", { method: "POST", body: form }),
         {
             params: Promise.resolve({ id: "job-1" }),
         },

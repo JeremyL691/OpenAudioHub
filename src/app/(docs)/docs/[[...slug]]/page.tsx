@@ -14,8 +14,8 @@ interface PageProps {
     params: Promise<{ slug?: string[] }>;
 }
 
-const GITHUB_OWNER = "riffado";
-const GITHUB_REPO = "riffado";
+const GITHUB_OWNER = "JeremyL691";
+const GITHUB_REPO = "OpenAudioHub";
 
 export default async function Page({ params }: PageProps) {
     const { slug } = await params;

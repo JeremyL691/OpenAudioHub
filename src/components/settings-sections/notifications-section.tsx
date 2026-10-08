@@ -176,7 +176,7 @@ export function NotificationsSection() {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Notifications"
-                description="Choose how and when Riffado lets you know about new recordings and sync events."
+                description="Choose how and when OpenAudioHub lets you know about new recordings and sync events."
                 icon={Bell}
             />
 

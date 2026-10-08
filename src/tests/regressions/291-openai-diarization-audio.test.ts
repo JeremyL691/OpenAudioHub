@@ -3,7 +3,7 @@
  *
  * Plaud Ogg/Opus recordings can be rejected by OpenAI's diarization model even
  * when the container is valid, and the provider rejects any generated chunk
- * longer than 1,400 seconds. Riffado now normalizes diarization input to MP3
+ * longer than 1,400 seconds. OpenAudioHub now normalizes diarization input to MP3
  * and splits long recordings into balanced chunks of at most 20 minutes.
  */
 import type { OpenAI } from "openai";

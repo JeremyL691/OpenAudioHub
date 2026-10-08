@@ -7,7 +7,7 @@ function isSafeImageSrc(src: string): boolean {
     if (isValidPlaudApiUrl(src)) return true;
     if (!src.startsWith("/api/plaud-assets/")) return false;
 
-    const base = "https://riffado.invalid";
+    const base = "https://openaudiohub.invalid";
     const normalized = new URL(src, base);
     return (
         normalized.origin === base &&

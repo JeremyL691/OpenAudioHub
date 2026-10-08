@@ -4,6 +4,7 @@ import { Github } from "@/components/icons/icons";
 import { Logo } from "@/components/icons/logo";
 import { ReportBugButton } from "@/components/report-bug-dialog";
 import { UpdateBadge } from "@/components/update-badge";
+import { BRAND } from "@/lib/brand";
 import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
 
 /**
@@ -24,7 +25,8 @@ export function Footer() {
                     <div className="flex items-center gap-2">
                         <Logo className="size-4" />
                         <span>
-                            © {currentYear} Riffado · Licensed under{" "}
+                            © {currentYear} {BRAND.copyrightHolder} ·{" "}
+                            {BRAND.attribution} · Licensed under{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -48,7 +50,7 @@ export function Footer() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"
-                            aria-label={`Release notes for Riffado ${APP_VERSION_TAG}`}
+                            aria-label={`Release notes for OpenAudioHub ${APP_VERSION_TAG}`}
                         >
                             {APP_VERSION_TAG}
                         </Link>
@@ -60,7 +62,7 @@ export function Footer() {
                         </Link>
                         <ReportBugButton className="hover:text-foreground transition-colors" />
                         <Link
-                            href="https://github.com/riffado/riffado"
+                            href="https://github.com/JeremyL691/OpenAudioHub"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"

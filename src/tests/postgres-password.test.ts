@@ -10,12 +10,12 @@ describe("usesDefaultPostgresPassword", () => {
     it("detects the known compose default", () => {
         expect(
             usesDefaultPostgresPassword(
-                "postgresql://postgres:postgres@db:5432/riffado",
+                "postgresql://postgres:postgres@db:5432/openaudiohub",
             ),
         ).toBe(true);
         expect(
             usesDefaultPostgresPassword(
-                "postgres://postgres:postgres@localhost:5432/riffado?sslmode=disable",
+                "postgres://postgres:postgres@localhost:5432/openaudiohub?sslmode=disable",
             ),
         ).toBe(true);
     });
@@ -23,7 +23,7 @@ describe("usesDefaultPostgresPassword", () => {
     it("accepts a non-default password", () => {
         expect(
             usesDefaultPostgresPassword(
-                "postgresql://postgres:s3cret@db:5432/riffado",
+                "postgresql://postgres:s3cret@db:5432/openaudiohub",
             ),
         ).toBe(false);
     });

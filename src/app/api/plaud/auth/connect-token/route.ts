@@ -25,7 +25,7 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
  * request, minus the "Bearer " prefix). We decode `exp` for a UX hint, run
  * the same workspace + /device/list validation as the OTP path, and store.
  *
- * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/connect-token/route.ts
+ * Source: https://github.com/JeremyL691/OpenAudioHub/blob/main/src/app/api/plaud/auth/connect-token/route.ts
  */
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
@@ -75,7 +75,7 @@ export const POST = apiHandler(async (request: Request) => {
     if (isPlaudWorkspaceToken(accessToken)) {
         throw new AppError(
             ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED,
-            "That's a workspace token, which expires in about 24 hours. Riffado needs your long-lived account token. Easiest fix: use the Riffado Connector. To paste manually, grab the value of localStorage 'pld_tokenstr' on web.plaud.ai (Application → Local Storage), not the Authorization header from a /device/list request.",
+            "That's a workspace token, which expires in about 24 hours. OpenAudioHub needs your long-lived account token. Easiest fix: use the OpenAudioHub Connector. To paste manually, grab the value of localStorage 'pld_tokenstr' on web.plaud.ai (Application → Local Storage), not the Authorization header from a /device/list request.",
             400,
             { field: "accessToken" },
         );

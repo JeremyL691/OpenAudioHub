@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: "Riffado",
-        short_name: "Riffado",
+        name: "OpenAudioHub",
+        short_name: "OpenAudioHub",
         description:
             "Open-source AI transcription for the voice recorder you already own.",
         start_url: "/",

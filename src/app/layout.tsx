@@ -26,35 +26,34 @@ export const metadata: Metadata = {
     // previews. `APP_URL` is allowed to be unset during `next build`
     // (see `src/lib/env.ts`); the fallback keeps the build green and
     // self-host deployments override it at runtime via env.
-    metadataBase: new URL(env.APP_URL ?? "https://riffado.com"),
+    metadataBase: new URL(env.APP_URL ?? "http://localhost:3000"),
     title: {
-        default: "Riffado — Open-source AI transcription for voice recorders",
-        template: "%s · Riffado",
+        default:
+            "OpenAudioHub — Open-source AI transcription for voice recorders",
+        template: "%s · OpenAudioHub",
     },
     description:
         "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family: Note, Note Pro, and NotePin.",
-    applicationName: "Riffado",
+    applicationName: "OpenAudioHub",
     manifest: "/manifest.webmanifest",
     openGraph: {
         type: "website",
-        siteName: "Riffado",
-        title: "Riffado — Open-source AI transcription for voice recorders",
+        siteName: "OpenAudioHub",
+        title: "OpenAudioHub — Open-source AI transcription for voice recorders",
         description:
             "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
         images: [{ url: "/og-home.png", width: 1200, height: 630 }],
     },
     twitter: {
         card: "summary_large_image",
-        site: "@riffadohq",
-        creator: "@riffadohq",
-        title: "Riffado — Open-source AI transcription for voice recorders",
+        title: "OpenAudioHub — Open-source AI transcription for voice recorders",
         description:
             "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
         images: ["/og-home.png"],
     },
     appleWebApp: {
         capable: true,
-        title: "Riffado",
+        title: "OpenAudioHub",
         statusBarStyle: "black-translucent",
     },
 };

@@ -3,10 +3,10 @@ import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 export const baseOptions: BaseLayoutProps = {
     nav: {
-        title: "Riffado Docs",
+        title: "OpenAudioHub Docs",
         url: "/docs",
     },
-    githubUrl: "https://github.com/riffado/riffado",
+    githubUrl: "https://github.com/JeremyL691/OpenAudioHub",
 };
 
 export const docsTabs: NonNullable<DocsLayoutProps["tabs"]> = [
