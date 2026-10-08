@@ -42,7 +42,7 @@ export function SettingsPage({ section, initialProviders }: SettingsPageProps) {
             <h1 className="sr-only">Settings</h1>
             <SettingsNavSidebar activeSection={section} />
             <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex h-14 shrink-0 items-center justify-end border-b px-4 md:hidden">
+                <div className="flex h-14 shrink-0 items-center justify-end border-b px-4 lg:hidden">
                     <SettingsNavMobile
                         activeSection={section}
                         onSectionChange={handleSectionChange}

@@ -73,7 +73,7 @@ export function LandingPage({ registrationEnabled }: LandingPageProps) {
                     </Link>
                     <nav
                         aria-label="Primary"
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-0.5 sm:gap-1"
                     >
                         <Button asChild variant="ghost" size="sm">
                             <Link href={BRAND.docsPath}>Docs</Link>

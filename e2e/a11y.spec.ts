@@ -16,7 +16,13 @@ async function settle(control: Locator) {
         .toBe("1");
 }
 
-async function expectNoSeriousViolations(page: Page) {
+// `modal` is set for menus and dialogs. Radix hides the app shell with
+// aria-hidden while one is open and traps focus inside it, so the shell's links
+// are not reachable and aria-hidden-focus is a false positive there (D-155).
+async function expectNoSeriousViolations(
+    page: Page,
+    { modal = false }: { modal?: boolean } = {},
+) {
     // The sync and summary buttons are busy at times. Audit the settled page.
     const sync = page.getByTestId("sync-button");
     if ((await sync.count()) > 0) {
@@ -27,9 +33,16 @@ async function expectNoSeriousViolations(page: Page) {
         await settle(summary);
     }
 
-    const results = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-        .analyze();
+    const builder = new AxeBuilder({ page }).withTags([
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+    ]);
+    if (modal) {
+        builder.disableRules(["aria-hidden-focus"]);
+    }
+    const results = await builder.analyze();
     // One entry per blocking rule: its impact, then up to five nodes with their
     // selector and failure reason, so a failure names the element to fix.
     const blocking = results.violations
@@ -89,6 +102,81 @@ for (const scheme of ["light", "dark"] as const) {
             await expectNoSeriousViolations(page);
         });
 
+        for (const section of [
+            "transcription",
+            "summary",
+            "plaud-account",
+            "sync",
+            "playback",
+            "display",
+            "storage",
+            "export",
+            "api-keys",
+            "webhooks",
+        ]) {
+            test(`settings: ${section}`, async ({ page }) => {
+                await page.goto(`/settings/${section}`);
+                await expectNoSeriousViolations(page);
+            });
+        }
+
+        test("user menu", async ({ page }) => {
+            await page.goto("/recordings");
+            await expect(page.getByTestId("recording-list")).toBeVisible();
+            await page.getByTestId("user-menu").click();
+            await expect(page.getByRole("menu")).toBeVisible();
+            await expectNoSeriousViolations(page, { modal: true });
+        });
+
+        test("report a bug dialog", async ({ page }) => {
+            await page.goto("/recordings");
+            await expect(page.getByTestId("recording-list")).toBeVisible();
+            // The entry is a button in the sidebar footer, not a menu item.
+            await page
+                .getByRole("button", { name: "Report a bug" })
+                .first()
+                .click();
+            await expect(
+                page.getByRole("dialog", { name: "Report a bug" }),
+            ).toBeVisible();
+            await expectNoSeriousViolations(page, { modal: true });
+        });
+
+        test("keyboard shortcuts dialog", async ({ page }) => {
+            await page.goto("/recordings");
+            await expect(page.getByTestId("recording-list")).toBeVisible();
+            await page.keyboard.type("?");
+            await expect(
+                page.getByRole("dialog", { name: "Keyboard shortcuts" }),
+            ).toBeVisible();
+            await expectNoSeriousViolations(page);
+        });
+
+        test("delete confirmation", async ({ page }) => {
+            await page.goto("/recordings");
+            await expect(page.getByTestId("recording-list")).toBeVisible();
+            const id = await page
+                .getByTestId("recording-row")
+                .filter({ hasText: RECORDINGS.weekly })
+                .getAttribute("data-id");
+            await page.goto(`/recordings/${id}`);
+            await expect(page.getByTestId("player")).toBeVisible();
+            await page
+                .getByRole("button", { name: "Recording actions" })
+                .click();
+            await page
+                .getByRole("menuitem", { name: "Delete recording" })
+                .click();
+            await expect(page.getByRole("dialog")).toBeVisible();
+            // The actions menu fades out as the dialog opens; audit after it is gone.
+            await expect(
+                page.locator('[data-slot="dropdown-menu-content"]'),
+            ).toHaveCount(0);
+            await expectNoSeriousViolations(page, { modal: true });
+            // Cancel: the audit must not delete anything.
+            await page.getByRole("button", { name: "Cancel" }).click();
+        });
+
         test("command palette", async ({ page }) => {
             await page.goto("/recordings");
             await expect(page.getByTestId("recording-list")).toBeVisible();
@@ -117,6 +205,11 @@ for (const scheme of ["light", "dark"] as const) {
 
         test("docs", async ({ page }) => {
             await page.goto("/docs");
+            await expectNoSeriousViolations(page);
+        });
+
+        test("not found", async ({ page }) => {
+            await page.goto("/no-such-page-for-axe");
             await expectNoSeriousViolations(page);
         });
     });
