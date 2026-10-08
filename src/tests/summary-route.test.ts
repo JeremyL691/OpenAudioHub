@@ -13,11 +13,6 @@ import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
  * change how presets propagate or how the response is shaped.
  */
 
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerEvent: vi.fn().mockResolvedValue(undefined),
-    captureServerException: vi.fn(),
-}));
-
 vi.mock("@/lib/auth-server", () => ({
     requireApiSession: vi.fn().mockResolvedValue({
         user: { id: "user-1", email: "u@example.com" },

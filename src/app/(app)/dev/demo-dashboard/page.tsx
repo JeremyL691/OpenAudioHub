@@ -45,7 +45,6 @@ export default async function DemoDashboardPage() {
         <Workstation
             recordings={recordings}
             transcriptions={transcriptions}
-            isAdmin={false}
             userEmail={session.user.email ?? null}
             initialSettings={DEMO_INITIAL_SETTINGS}
             plaudNeedsReconnect={false}

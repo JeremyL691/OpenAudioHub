@@ -24,10 +24,6 @@ vi.mock("@/lib/encryption/fields", () => ({
     decryptText: vi.fn((value: string) => value),
 }));
 
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerEvent: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock("@/lib/transcription/persist", () => ({
     upsertEnhancement: vi.fn().mockResolvedValue({ committed: true }),
 }));

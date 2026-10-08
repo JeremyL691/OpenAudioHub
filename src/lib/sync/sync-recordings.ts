@@ -13,7 +13,6 @@ import { encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
-import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -24,10 +23,6 @@ import {
     parseTranscript,
     selectContentItems,
 } from "@/lib/plaud/content";
-import {
-    captureServerEvent,
-    captureServerException,
-} from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
     claimAutoTranscribeIds,
@@ -350,14 +345,6 @@ async function processRecording(
             if (capState.blocked) {
                 return { status: "skipped", capExceeded: true };
             }
-            const cap = await enforceStorageCap({
-                userId: context.userId,
-                additionalBytes: plaudRecording.filesize,
-            });
-            if (!cap.allowed) {
-                capState.blocked = true;
-                return { status: "skipped", capExceeded: true };
-            }
         }
 
         const audioBuffer = await plaudClient.downloadRecording(
@@ -558,7 +545,7 @@ async function processBatch(
 /** Paginated, batched sync. Coalesces concurrent same-user calls in-process. */
 export async function syncRecordingsForUser(
     userId: string,
-    trigger: "manual" | "background" = "manual",
+    _trigger: "manual" | "background" = "manual",
 ): Promise<SyncResult> {
     const inFlight = inFlightSyncs.get(userId);
     if (inFlight) {
@@ -574,15 +561,6 @@ export async function syncRecordingsForUser(
         // a background cron tick with zero new/updated recordings is pure
         // noise, not a usage signal.
         if (result.newRecordings > 0 || result.updatedRecordings > 0) {
-            await captureServerEvent({
-                distinctId: userId,
-                event: "plaud_synced",
-                properties: {
-                    trigger,
-                    new_recordings: result.newRecordings,
-                    updated_recordings: result.updatedRecordings,
-                },
-            });
         }
         // `skipped` covers the expected-state early returns (no
         // connection yet, suspended, hosted lockout) -- not bugs, so
@@ -598,17 +576,6 @@ export async function syncRecordingsForUser(
         // process into third-party telemetry. Only a count crosses that
         // boundary.
         if (result.errors.length > 0 && !result.skipped) {
-            captureServerException(
-                new Error(
-                    `Sync completed with ${result.errors.length} error(s)`,
-                ),
-                {
-                    source: "sync",
-                    distinctId: userId,
-                    trigger,
-                    errorCount: result.errors.length,
-                },
-            );
         }
         return result;
     } finally {

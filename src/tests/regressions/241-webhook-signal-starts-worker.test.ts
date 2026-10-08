@@ -26,10 +26,6 @@ vi.mock("@/db/queries/webhook-deliveries", () => ({
     reloadClaimedDeliveryForSend: vi.fn(),
 }));
 
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerException: vi.fn(),
-}));
-
 vi.mock("@/lib/env", () => ({
     env: {
         IS_HOSTED: false,

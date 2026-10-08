@@ -1,14 +1,6 @@
 "use client";
 
-import {
-    Keyboard,
-    LogOut,
-    Monitor,
-    Moon,
-    Settings,
-    Shield,
-    Sun,
-} from "lucide-react";
+import { Keyboard, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
@@ -24,7 +16,6 @@ import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
-    isAdmin: boolean;
     initialTheme: "light" | "dark" | "system";
     userEmail: string | null;
     onOpenSettings: () => void;
@@ -47,7 +38,6 @@ function emailInitial(email: string | null): string {
 }
 
 export function UserMenu({
-    isAdmin,
     initialTheme,
     userEmail,
     onOpenSettings,
@@ -88,7 +78,7 @@ export function UserMenu({
                             {userEmail || "Signed in"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            {isAdmin ? "Admin" : "Signed in"}
+                            Signed in
                         </p>
                     </div>
                 </div>
@@ -104,12 +94,6 @@ export function UserMenu({
                         <span className="flex-1">Keyboard shortcuts</span>
                         <Kbd>?</Kbd>
                     </DropdownMenuItem>
-                    {isAdmin && (
-                        <DropdownMenuItem onSelect={() => push("/admin")}>
-                            <Shield />
-                            <span className="flex-1">Admin dashboard</span>
-                        </DropdownMenuItem>
-                    )}
                 </div>
 
                 <div className="border-t px-3 py-2">

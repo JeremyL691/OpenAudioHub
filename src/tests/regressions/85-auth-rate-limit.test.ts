@@ -28,11 +28,6 @@ vi.mock("@/lib/rate-limit", () => ({
     getClientIp: () => clientIp.value,
 }));
 
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerException: vi.fn(),
-    captureServerEvent: vi.fn(),
-}));
-
 import { enforceAuthRateLimit } from "@/lib/auth-rate-limit";
 
 function allowed(): RateLimitResult {

@@ -13,14 +13,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// `@/lib/errors` captures 5xx via `@/lib/posthog-server`, which imports
-// `@/lib/env` -- eagerly validated at module load and unrelated to what
-// this test covers (the error envelope itself, not capture behavior).
-vi.mock("@/lib/posthog-server", () => ({
-    captureServerException: vi.fn(),
-    captureServerEvent: vi.fn(),
-}));
-
 import {
     AppError,
     apiHandler,

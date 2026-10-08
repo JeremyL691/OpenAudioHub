@@ -1,5 +1,4 @@
 import { env } from "@/lib/env";
-import { captureServerException } from "@/lib/posthog-server";
 
 interface WebshareProxy {
     id: string;
@@ -22,25 +21,6 @@ const WEBSHARE_LIST_URL =
 let cachedList: ProxyCache | null = null;
 let badProxyIds = new Set<string>();
 
-// A single paginated sync can call `getPlaudProxyUrl`/`fetchProxyList` many
-// times in a few seconds; during a sustained Webshare outage that would
-// otherwise fire one exception capture per call. Throttle per-reason so the
-// first failure captures immediately (fast signal) and repeats within the
-// window are logged (console.warn still fires every time) but not re-sent.
-const CAPTURE_THROTTLE_MS = 60_000;
-const lastCaptureAtByReason = new Map<string, number>();
-function captureWebshareExceptionThrottled(
-    error: unknown,
-    reason: string,
-    extra?: Record<string, unknown>,
-): void {
-    const now = Date.now();
-    const last = lastCaptureAtByReason.get(reason);
-    if (last !== undefined && now - last < CAPTURE_THROTTLE_MS) return;
-    lastCaptureAtByReason.set(reason, now);
-    captureServerException(error, { source: "webshare", reason, ...extra });
-}
-
 async function fetchProxyList(): Promise<WebshareProxy[]> {
     const apiKey = env.WEBSHARE_API_KEY;
     if (!apiKey) return [];
@@ -52,11 +32,6 @@ async function fetchProxyList(): Promise<WebshareProxy[]> {
         if (!res.ok) {
             console.warn(
                 `[plaud/proxy] Webshare list error: ${res.status} ${res.statusText}`,
-            );
-            captureWebshareExceptionThrottled(
-                new Error(`Webshare proxy list failed (${res.status})`),
-                "list_failed",
-                { status: res.status },
             );
             return [];
         }
@@ -70,7 +45,6 @@ async function fetchProxyList(): Promise<WebshareProxy[]> {
             "[plaud/proxy] Webshare list fetch failed:",
             err instanceof Error ? err.message : err,
         );
-        captureWebshareExceptionThrottled(err, "list_fetch_failed");
         return [];
     }
 }
@@ -131,10 +105,6 @@ export async function getPlaudProxyUrl(): Promise<SelectedProxy | null> {
     }
     if (available.length === 0) {
         console.warn("[plaud/proxy] no valid Webshare proxies available");
-        captureWebshareExceptionThrottled(
-            new Error("Webshare proxy pool exhausted"),
-            "pool_exhausted",
-        );
         return null;
     }
 
@@ -157,5 +127,4 @@ export function isPlaudProxyConfigured(): boolean {
 export function _resetPlaudProxyCacheForTest(): void {
     cachedList = null;
     badProxyIds = new Set();
-    lastCaptureAtByReason.clear();
 }
