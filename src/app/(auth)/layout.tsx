@@ -3,8 +3,7 @@ export default function AuthLayout({
 }: {
     children: React.ReactNode;
 }) {
-    // Background ownership moved to each auth route so design variants
-    // (see login/page.tsx) can paint full-bleed without competing with
-    // a shared gradient.
+    // Every auth page renders SelfHostAuthChrome (components/auth/auth-chrome.tsx),
+    // which owns the layout, the brand panel, and the background.
     return <div className="min-h-screen bg-background">{children}</div>;
 }

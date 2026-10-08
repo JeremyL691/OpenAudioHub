@@ -37,9 +37,10 @@ export async function requireAuth() {
 /**
  * Redirects to `/dashboard` unless the session's account has finished
  * onboarding (`userSettings.onboardingCompleted`). Call after
- * `requireAuth()` from any authenticated content page other than
- * `/dashboard` itself, which owns the mandatory onboarding dialog and
- * must not redirect into itself.
+ * `requireAuth()` from any authenticated content page. The app shell mounts
+ * the mandatory onboarding dialog on every page, so the redirect target
+ * (`/dashboard`, which forwards to `/recordings`) never calls this helper
+ * and cannot loop back into itself.
  *
  * Deliberately separate from `requireAuth()` (rather than folded into
  * it) so it doesn't blanket-apply to every `requireAuth()` caller --

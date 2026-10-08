@@ -18,7 +18,7 @@ export default async function RegisterPage() {
     return (
         <SelfHostAuthChrome
             title="Create your account"
-            subtitle="The first account on a new OpenAudioHub instance becomes the admin."
+            subtitle="Create the account you will use to sign in to this instance."
         >
             <RegisterForm />
         </SelfHostAuthChrome>
