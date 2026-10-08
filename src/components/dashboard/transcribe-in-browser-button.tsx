@@ -4,7 +4,7 @@ import { Cpu, Loader2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { transcribeInBrowser } from "@/lib/transcription/browser-transcriber";
+import { runBrowserTranscription } from "@/lib/transcription/browser-run";
 import type { TranscriptionModel } from "@/types/transcription";
 
 interface Props {
@@ -52,42 +52,7 @@ export function TranscribeInBrowserButton({
 
     const run = useCallback(async () => {
         try {
-            setPhase("downloading-audio");
-            const audioRes = await fetch(
-                `/api/recordings/${recordingId}/audio`,
-            );
-            if (!audioRes.ok) {
-                throw new Error(`Failed to fetch audio (${audioRes.status})`);
-            }
-            const blob = await audioRes.blob();
-            const file = new File([blob], `recording-${recordingId}`, {
-                type: blob.type || "audio/mpeg",
-            });
-
-            setPhase("decoding-audio");
-            const result = await transcribeInBrowser(file, model, (status) => {
-                if (status === "decoding-audio") setPhase("decoding-audio");
-                if (status === "loading-model") setPhase("loading-model");
-                if (status === "transcribing") setPhase("transcribing");
-            });
-
-            const postRes = await fetch(
-                `/api/recordings/${recordingId}/transcription/from-browser`,
-                {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({
-                        text: result.text,
-                        detectedLanguage: result.detectedLanguage,
-                        model,
-                    }),
-                },
-            );
-            if (!postRes.ok) {
-                const err = await postRes.json().catch(() => ({}));
-                throw new Error(err.error ?? "Failed to save transcription");
-            }
-
+            await runBrowserTranscription(recordingId, model, setPhase);
             toast.success("Transcribed in browser");
             onComplete();
         } catch (err) {

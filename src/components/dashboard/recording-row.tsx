@@ -1,9 +1,11 @@
 "use client";
 
 import {
+    Cpu,
     Download,
     Loader2,
     MoreHorizontal,
+    Pencil,
     Play,
     Sparkles,
     Trash2,
@@ -41,6 +43,8 @@ export function RecordingRow({
     onSelect,
     onDelete,
     onTranscribe,
+    onTranscribeInBrowser,
+    onRename,
     registerRef,
 }: {
     recording: Recording;
@@ -53,6 +57,8 @@ export function RecordingRow({
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
     onTranscribe?: (recording: Recording) => void;
+    onTranscribeInBrowser?: (recording: Recording) => void;
+    onRename?: (recording: Recording) => void;
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
 }) {
     const confirm = useConfirm();
@@ -148,6 +154,14 @@ export function RecordingRow({
                             <Play />
                             Open
                         </DropdownMenuItem>
+                        {onRename ? (
+                            <DropdownMenuItem
+                                onSelect={() => onRename(recording)}
+                            >
+                                <Pencil />
+                                Rename
+                            </DropdownMenuItem>
+                        ) : null}
                         {onTranscribe ? (
                             <DropdownMenuItem
                                 onSelect={() => onTranscribe(recording)}
@@ -155,6 +169,17 @@ export function RecordingRow({
                             >
                                 <Sparkles />
                                 Transcribe
+                            </DropdownMenuItem>
+                        ) : null}
+                        {onTranscribeInBrowser ? (
+                            <DropdownMenuItem
+                                onSelect={() =>
+                                    onTranscribeInBrowser(recording)
+                                }
+                                disabled={inFlight === "transcribing"}
+                            >
+                                <Cpu />
+                                Transcribe in browser
                             </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuItem
