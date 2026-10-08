@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import {
     decodeRecordingCursor,
     encodeRecordingCursor,
@@ -58,7 +59,7 @@ const device = row<DeviceRow>({
     model: "Note",
 });
 
-const riffadoTranscript = row<TranscriptionRow>({
+const legacyTranscript = row<TranscriptionRow>({
     id: "tr-1",
     recordingId: "rec-1",
     userId: "user-1",
@@ -69,7 +70,7 @@ const riffadoTranscript = row<TranscriptionRow>({
     model: "whisper-1",
     timeline: null,
     timelineSource: null,
-    source: "riffado",
+    source: LEGACY_SOURCE,
     createdAt: new Date("2026-01-01T00:04:00Z"),
 });
 
@@ -97,7 +98,7 @@ const enhancement = row<EnhancementRow>({
     keyPoints: ["Roadmap update"],
     provider: "Custom",
     model: "fake-chat-1",
-    source: "riffado",
+    source: LEGACY_SOURCE,
     createdAt: new Date("2026-01-01T00:06:00Z"),
 });
 
@@ -125,7 +126,7 @@ describe("/api/v1 contract", () => {
             serializeRecordingDetail(
                 recording,
                 device,
-                [riffadoTranscript, plaudTranscript],
+                [legacyTranscript, plaudTranscript],
                 enhancement,
                 "plaud",
             ),
@@ -147,16 +148,16 @@ describe("/api/v1 contract", () => {
     it("picks the preferred source, then the user's own transcript", () => {
         expect(
             resolvePrimaryTranscript(
-                [riffadoTranscript, plaudTranscript],
+                [legacyTranscript, plaudTranscript],
                 "plaud",
             )?.source,
         ).toBe("plaud");
         expect(
             resolvePrimaryTranscript(
-                [riffadoTranscript, plaudTranscript],
+                [legacyTranscript, plaudTranscript],
                 "missing",
             )?.source,
-        ).toBe("riffado");
+        ).toBe(LEGACY_SOURCE);
         expect(resolvePrimaryTranscript([], "plaud")).toBeNull();
     });
 

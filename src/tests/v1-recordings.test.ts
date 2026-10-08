@@ -13,6 +13,7 @@ vi.mock("@/lib/encryption/fields", () => ({
     decryptJsonField: vi.fn((value: unknown) => value ?? null),
 }));
 
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import {
     decodeRecordingCursor,
     encodeRecordingCursor,
@@ -67,7 +68,7 @@ const transcription = {
     transcriptionType: "server",
     provider: "openai",
     model: "whisper-1",
-    source: "riffado",
+    source: LEGACY_SOURCE,
     timeline: null,
     timelineSource: null,
     createdAt: now,
@@ -82,7 +83,7 @@ const enhancement = {
     keyPoints: ["Planning"],
     provider: "openai",
     model: "gpt-4o-mini",
-    source: "riffado",
+    source: LEGACY_SOURCE,
     createdAt: now,
 };
 

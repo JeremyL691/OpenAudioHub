@@ -1,6 +1,6 @@
 /**
  * Regression for issue #241 auto-transcribe retry eligibility.
- * keep_both must require a missing Riffado-source transcript; plaud_only
+ * keep_both must require a missing own-source transcript; plaud_only
  * treats any transcript row as done. Exercises the real query builder,
  * not the sync.test.ts mock of listUntranscribedRecordingIds.
  */
@@ -8,6 +8,7 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 
 vi.mock("@/db", () => ({
     db: {
@@ -99,7 +100,7 @@ describe("issue #241: auto-transcribe retry source predicate", () => {
         expect(existsWhere).toBeDefined();
         expect(exprReferences(existsWhere, transcriptions.userId)).toBe(true);
         expect(exprReferences(existsWhere, transcriptions.source)).toBe(false);
-        expect(boundSourceValues(existsWhere)).not.toContain("riffado");
+        expect(boundSourceValues(existsWhere)).not.toContain(LEGACY_SOURCE);
         expect(boundSourceValues(existsWhere)).not.toContain("openaudiohub");
     });
 
@@ -113,7 +114,7 @@ describe("issue #241: auto-transcribe retry source predicate", () => {
         expect(exprReferences(existsWhere, transcriptions.userId)).toBe(true);
         expect(exprReferences(existsWhere, transcriptions.source)).toBe(true);
         expect(boundSourceValues(existsWhere)).toEqual(
-            expect.arrayContaining(["openaudiohub", "riffado"]),
+            expect.arrayContaining(["openaudiohub", LEGACY_SOURCE]),
         );
     });
 });

@@ -25,7 +25,7 @@ export type AutoTranscribeRetryOptions = {
 
 /**
  * Recording ids still eligible for auto-transcribe retry, newest first.
- * `keep_both` requires a missing Riffado-source transcript. `plaud_only`
+ * `keep_both` requires a missing own-source transcript. `plaud_only`
  * (default) treats any transcript row as done.
  */
 export async function listUntranscribedRecordingIds(

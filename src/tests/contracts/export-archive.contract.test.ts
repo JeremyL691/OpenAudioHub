@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import unzipper from "unzipper";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import { buildAndUploadExportArchive } from "@/lib/export/build-archive";
 import type { StorageProvider } from "@/lib/storage/types";
 
@@ -115,7 +116,7 @@ describe("export archive contract", () => {
                 {
                     recordingId: "rec-normalized",
                     text: "enc-transcript",
-                    source: "riffado",
+                    source: LEGACY_SOURCE,
                     timeline: [
                         {
                             start_ms: 900,

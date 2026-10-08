@@ -6,7 +6,7 @@ import { encryptJsonField, encryptText } from "@/lib/encryption/fields";
 /**
  * Provenance of a transcript row, orthogonal to `transcriptionType`:
  *   - 'openaudiohub' = produced by the user's own provider (server/browser);
- *     legacy 'riffado' rows read as this value
+ *     legacy source values read as this value
  *   - 'plaud'   = imported from Plaud's native transcription
  *   - 'mixed'   = user-edited combination of the above
  * A recording can hold at most one row per source (enforced by the

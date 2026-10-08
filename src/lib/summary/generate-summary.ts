@@ -277,7 +277,7 @@ export async function generateSummaryForRecording(
         summary = rawContent;
     }
 
-    // Persist the riffado-generated summary via the shared, tombstone-aware
+    // Persist the generated summary via the shared, tombstone-aware
     // upsert. Summaries stay single per recording; `source` records the origin.
     const { committed } = await upsertEnhancement({
         userId,

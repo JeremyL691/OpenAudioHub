@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Release script for Riffado.
+ * Release script for OpenAudioHub.
  *
  * Two phases, because `main` is protected and direct pushes are
  * rejected by required status checks.
@@ -120,7 +120,7 @@ function updateChangelogForRelease(version: string): void {
 	}
 
 	const compareLinkPattern =
-		/^\[unreleased\]: (https:\/\/github\.com\/riffado\/riffado\/compare\/)(v\d+\.\d+\.\d+)\.\.\.HEAD$/m;
+		/^\[unreleased\]: (https:\/\/github\.com\/JeremyL691\/OpenAudioHub\/compare\/)(v\d+\.\d+\.\d+)\.\.\.HEAD$/m;
 	const compareLink = content.match(compareLinkPattern);
 	if (!compareLink) {
 		console.error(
@@ -183,7 +183,7 @@ function assertCleanOnMainInSync(): void {
 }
 
 function phase1(target: string): void {
-	console.log("\n=== Riffado Release — Phase 1 (open PR) ===\n");
+	console.log("\n=== OpenAudioHub Release — Phase 1 (open PR) ===\n");
 	assertGhAvailable();
 	assertCleanOnMainInSync();
 
@@ -259,7 +259,7 @@ function phase1(target: string): void {
 	// Use mkdtempSync for a fresh, unpredictable directory so a pre-planted
 	// symlink in the system temp dir can't redirect the write
 	// (js/insecure-temporary-file).
-	const tmpDir = mkdtempSync(join(tmpdir(), "riffado-release-"));
+	const tmpDir = mkdtempSync(join(tmpdir(), "oah-release-"));
 	const bodyPath = join(tmpDir, `pr-body-v${version}.md`);
 	writeFileSync(bodyPath, prBody);
 	run(
@@ -281,7 +281,7 @@ function phase1(target: string): void {
 }
 
 function phase2Finalize(): void {
-	console.log("\n=== Riffado Release — Phase 2 (finalize) ===\n");
+	console.log("\n=== OpenAudioHub Release — Phase 2 (finalize) ===\n");
 
 	console.log("Fetching origin...");
 	run("git fetch origin main --tags", { silent: true });

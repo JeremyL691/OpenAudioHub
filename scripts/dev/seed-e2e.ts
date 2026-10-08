@@ -61,7 +61,7 @@ type JobSpec = {
 };
 
 type TranscriptSpec = {
-    source: "riffado" | "plaud";
+    source: "openaudiohub" | "plaud";
     segments: FixtureSegment[];
     withTimeline: boolean;
 };
@@ -89,7 +89,7 @@ const RECORDING_SPECS: RecordingSpec[] = [
         audio: "sample",
         daysAgo: 1,
         transcript: {
-            source: "riffado",
+            source: "openaudiohub",
             segments: SHORT_SEGMENTS,
             withTimeline: true,
         },
@@ -107,7 +107,7 @@ const RECORDING_SPECS: RecordingSpec[] = [
         audio: "long",
         daysAgo: 2,
         transcript: {
-            source: "riffado",
+            source: "openaudiohub",
             segments: LONG_SEGMENTS,
             withTimeline: true,
         },
@@ -137,7 +137,7 @@ const RECORDING_SPECS: RecordingSpec[] = [
         audio: "sample",
         daysAgo: 4,
         transcript: {
-            source: "riffado",
+            source: "openaudiohub",
             segments: SHORT_SEGMENTS,
             withTimeline: false,
         },
@@ -378,7 +378,7 @@ async function insertRecording(
             actionItems: encryptJsonField(SUMMARY.actionItems),
             provider: "Custom",
             model: "fake-chat-1",
-            source: "riffado",
+            source: "openaudiohub",
         });
     }
 

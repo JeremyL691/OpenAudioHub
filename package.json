@@ -40,6 +40,8 @@
         "type-check": "tsc --noEmit",
         "format-and-lint": "biome check .",
         "format-and-lint:fix": "biome check . --write",
+        "brand:audit": "bash scripts/dev/brand-audit.sh",
+        "docs:check": "node scripts/dev/check-doc-links.mjs",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "bun src/db/migrate.ts",
         "db:studio": "drizzle-kit studio",
