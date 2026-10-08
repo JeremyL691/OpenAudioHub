@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { AppShellProviders } from "@/components/app-shell/providers";
 import { Workstation } from "@/components/dashboard/workstation";
 import { db } from "@/db";
 import {
@@ -117,13 +118,18 @@ export default async function DashboardPage() {
     // there is the only place callers need to touch.
     const initialSettings = initialSettingsFromRow(settingsRow);
 
+    // The providers own sync, upload, and dialog state for the Workstation.
+    // They mount here rather than in the (app) layout so their lifetime
+    // matches the old in-Workstation hooks (D-134).
     return (
-        <Workstation
-            recordings={recordingsData}
-            transcriptions={transcriptionMap}
-            userEmail={session.user.email ?? null}
-            initialSettings={initialSettings}
-            plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
-        />
+        <AppShellProviders initialSettings={initialSettings}>
+            <Workstation
+                recordings={recordingsData}
+                transcriptions={transcriptionMap}
+                userEmail={session.user.email ?? null}
+                initialSettings={initialSettings}
+                plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
+            />
+        </AppShellProviders>
     );
 }
