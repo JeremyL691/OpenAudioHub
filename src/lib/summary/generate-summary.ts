@@ -63,8 +63,9 @@ export interface GenerateSummaryResult {
 }
 
 /**
- * The requested source when one is given, otherwise this instance's own
- * transcript, otherwise the first one stored.
+ * The requested source when it is stored, otherwise this instance's own
+ * transcript, otherwise the first one stored. A missing source falls back
+ * rather than failing, so a summary is still made from the only transcript.
  */
 function pickTranscription<T extends { source: string }>(
     rows: T[],
@@ -72,7 +73,10 @@ function pickTranscription<T extends { source: string }>(
 ): T | undefined {
     if (source) {
         const wanted = normalizeSource(source);
-        return rows.find((row) => normalizeSource(row.source) === wanted);
+        const match = rows.find(
+            (row) => normalizeSource(row.source) === wanted,
+        );
+        if (match) return match;
     }
     return rows.find((row) => isOwnSource(row.source)) ?? rows[0];
 }

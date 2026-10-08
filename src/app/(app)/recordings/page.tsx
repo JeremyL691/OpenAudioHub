@@ -12,7 +12,7 @@ import {
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
-import { isOwnSource } from "@/lib/transcription/source";
+import { isOwnSource, normalizeSource } from "@/lib/transcription/source";
 import { serializeRecording } from "@/types/recording";
 
 interface RecordingsPageProps {
@@ -113,7 +113,7 @@ export default async function RecordingsPage({
 
     const transcriptionMap = new Map<
         string,
-        { text: string; language?: string }
+        { text: string; language?: string; source: string }
     >();
     for (const transcription of userTranscriptions) {
         const existing = transcriptionMap.get(transcription.recordingId);
@@ -121,6 +121,9 @@ export default async function RecordingsPage({
             transcriptionMap.set(transcription.recordingId, {
                 text: decryptText(transcription.text),
                 language: transcription.language || undefined,
+                // The source travels with the text, so the card labels a Plaud
+                // transcript as Plaud and sends the right source to summary and delete.
+                source: normalizeSource(transcription.source),
             });
         }
     }
