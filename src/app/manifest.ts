@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
             "Open-source AI transcription for the voice recorder you already own.",
         start_url: "/",
         display: "standalone",
-        background_color: "#0a0a0a",
-        theme_color: "#0a0a0a",
+        background_color: "#f3f7fc",
+        theme_color: "#f3f7fc",
         icons: [
             {
                 src: "/icon-192.png",
