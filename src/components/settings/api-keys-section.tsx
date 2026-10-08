@@ -153,6 +153,7 @@ export function ApiKeysSection() {
                 action={
                     <Button
                         size="sm"
+                        data-testid="api-key-create"
                         onClick={() => {
                             setCreatedKey(null);
                             setIsCreateOpen(true);
@@ -172,7 +173,11 @@ export function ApiKeysSection() {
                 <div className="text-center py-12 border rounded-lg">
                     <KeyRound className="size-12 mx-auto mb-3 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No API keys</h3>
-                    <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                    <Button
+                        size="sm"
+                        data-testid="api-key-create"
+                        onClick={() => setIsCreateOpen(true)}
+                    >
                         <Plus className="size-4" />
                         Create Key
                     </Button>

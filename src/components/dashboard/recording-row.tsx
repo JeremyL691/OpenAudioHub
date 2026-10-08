@@ -43,6 +43,8 @@ export function RecordingRow({
     const confirm = useConfirm();
     return (
         <div
+            data-testid="recording-row"
+            data-id={recording.id}
             className={cn(
                 "group/row relative",
                 isSelected

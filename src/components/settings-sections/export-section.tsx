@@ -274,7 +274,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         }}
                         disabled={isSavingSettings}
                     >
-                        <SelectTrigger id="export-format" className="w-full">
+                        <SelectTrigger
+                            id="export-format"
+                            data-testid="export-format"
+                            className="w-full"
+                        >
                             <SelectValue>
                                 {exportFormatOptions.find(
                                     (opt) => opt.value === defaultExportFormat,
@@ -421,6 +425,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             )}
                         </Button>
                         <Button
+                            data-testid="backup-start"
                             onClick={handleStartBackup}
                             disabled={
                                 isStartingBackup ||

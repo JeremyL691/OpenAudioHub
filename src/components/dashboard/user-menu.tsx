@@ -69,6 +69,7 @@ export function UserMenu({
                     variant="outline"
                     size="icon"
                     aria-label="Account menu"
+                    data-testid="user-menu"
                     className="font-semibold"
                 >
                     {emailInitial(userEmail)}

@@ -113,7 +113,7 @@ export function RecordingPlayer({
     });
 
     return (
-        <Card>
+        <Card data-testid="player">
             <RecordingPlayerHeader
                 recording={recording}
                 duration={duration}

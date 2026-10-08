@@ -150,6 +150,7 @@ export function SyncButton({
                         className,
                     )}
                     aria-label={ariaLabel}
+                    data-testid="sync-button"
                 >
                     {failed ? (
                         <AlertCircle

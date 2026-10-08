@@ -87,6 +87,7 @@ export function WorkstationHeader({
                             size="sm"
                             className="hidden h-9 md:inline-flex"
                             aria-label="Open command palette"
+                            data-testid="command-trigger"
                         >
                             <Command className="mr-2 size-4" />
                             <span>Search</span>
@@ -117,6 +118,7 @@ export function WorkstationHeader({
                     <TooltipTrigger asChild>
                         <Button
                             onClick={onTriggerUpload}
+                            data-testid="upload-button"
                             disabled={isProcessing}
                             variant="outline"
                             size="sm"

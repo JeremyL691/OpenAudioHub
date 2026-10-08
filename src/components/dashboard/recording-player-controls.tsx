@@ -62,6 +62,7 @@ export function RecordingPlayerControls({
         <div className="flex items-center gap-4">
             <Button
                 onClick={onTogglePlay}
+                data-testid="player-play"
                 size="lg"
                 aria-label={isPlaying ? "Pause" : "Play"}
                 className="size-12 shrink-0 rounded-full"
@@ -81,6 +82,7 @@ export function RecordingPlayerControls({
               next to play so the eye can pair them without scanning.
             */}
             <span
+                data-testid="player-time"
                 className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
                 aria-live="off"
             >
@@ -95,7 +97,7 @@ export function RecordingPlayerControls({
               Waveform takes whatever's left, with min-w-0 so flex
               doesn't expand the parent when bars are dense.
             */}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1" data-testid="player-scrubber">
                 {scrubberStyle === "waveform" && waveformPeaks ? (
                     <Waveform
                         peaks={waveformPeaks}
@@ -124,6 +126,7 @@ export function RecordingPlayerControls({
 
             <Button
                 onClick={onCycleSpeed}
+                data-testid="player-speed"
                 variant="outline"
                 size="sm"
                 className="h-8 w-12 shrink-0 px-0 font-mono text-xs tabular-nums"
