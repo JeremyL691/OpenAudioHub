@@ -6,6 +6,34 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Migration `0044_provider_presets_siliconflow_opencode` moves `Custom` provider rows onto the new SiliconFlow (China) and OpenCode Go presets when their base URL matches. Keys, models, and default flags are unchanged. OpenCode Go rows switch from the local proxy URL to `https://opencode.ai/zen/go/v1`, and the app sends the session header itself. No action is needed. The `opencode-proxy` service stays in Compose but is no longer required.
+- Migration `0045_summary_template_and_language` adds two nullable columns to `ai_enhancements`: `prompt_id` and `language`. Existing summaries have null values. The change is additive.
+- The summary templates write Markdown, not JSON. Existing summaries are unchanged. Regenerate a summary to get the new layout.
+- The summary output languages are Auto, Chinese (Simplified), English, Japanese, and Korean. A saved language outside that list reads as Auto.
+
+### Added
+
+- Transcript toolbar with TXT and JSON downloads, and a Delete action. Deleting a transcript also deletes the summary made from it.
+- Summary templates for interviews and research, phone and client calls, lectures, brainstorms, and voice memos. The meeting template is now Meeting Minutes, with an owner, task, due date, and status for each action item.
+- Summary language choice for each run.
+- Copy, Markdown, and TXT export for summaries.
+- SiliconFlow (China) and OpenCode Go presets. OpenCode Go is for summaries and titles only.
+- A Back to app link in the docs.
+
+### Changed
+
+- Transcripts show every segment, in a scroll area on both the detail page and the library preview. Scrolling by hand turns off Follow playback.
+- Summaries follow the template's structure and state when a section has nothing to report.
+- Summary and title generation share one client helper. Titles now use the same chat-model fallback as summaries.
+
+### Fixed
+
+- The library preview no longer cuts a transcript off after six segments.
+- Status badges update after a transcript or summary is deleted or regenerated.
+- Title generation no longer forces `gpt-4o-mini` when the stored default is a Whisper model on Groq or Together AI.
+
 ## [1.0.0]
 
 First OpenAudioHub release. It is built from the base commit named above, and it includes the long-audio pipeline. Hosted-only code is removed, and the project is renamed. To move an existing installation, follow [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md).
