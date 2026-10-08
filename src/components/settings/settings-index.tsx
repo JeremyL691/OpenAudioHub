@@ -19,7 +19,7 @@ function readLastSection(): string | null {
 
 /**
  * `/settings` has no page of its own. It forwards to one section: the section
- * named in the URL hash (email links use `/settings#notifications`), else the
+ * named in the URL hash (emails sent before T5.8 use `/settings#notifications`), else the
  * one the viewer opened last, else Providers.
  */
 export function SettingsIndex() {

@@ -10,6 +10,7 @@ import {
     Text,
 } from "@react-email/components";
 import type React from "react";
+import { BRAND } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { emailStyles } from "./styles";
 
@@ -71,7 +72,14 @@ export function EmailLayout({
                             </Text>
                         ) : null}
                         <Text style={emailStyles.footerText}>
-                            OpenAudioHub. Your recordings, your transcripts.
+                            {BRAND.name} · {BRAND.description}
+                        </Text>
+                        <Text style={emailStyles.footerText}>
+                            <Link href={BRAND.repoUrl} style={emailStyles.link}>
+                                Source code
+                            </Link>
+                            {" · "}
+                            {BRAND.copyrightHolder} · {BRAND.attribution}
                         </Text>
                     </Section>
                 </Container>

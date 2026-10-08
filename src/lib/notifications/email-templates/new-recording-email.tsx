@@ -5,7 +5,7 @@ import { emailStyles } from "./styles";
 interface NewRecordingEmailProps {
     count: number;
     recordingNames?: string[];
-    dashboardUrl: string;
+    recordingsUrl: string;
     settingsUrl: string;
 }
 
@@ -14,7 +14,7 @@ const EMPTY_NAMES: string[] = [];
 export function NewRecordingEmail({
     count,
     recordingNames = EMPTY_NAMES,
-    dashboardUrl,
+    recordingsUrl,
     settingsUrl,
 }: NewRecordingEmailProps) {
     const previewText =
@@ -42,7 +42,7 @@ export function NewRecordingEmail({
                         {recordingNames.slice(0, 10).map((name, index) => (
                             <Link
                                 key={name}
-                                href={dashboardUrl}
+                                href={recordingsUrl}
                                 style={{
                                     ...emailStyles.recordingItem,
                                     ...(index ===
@@ -74,12 +74,12 @@ export function NewRecordingEmail({
                     {count === 1
                         ? "a new recording"
                         : `${count} new recordings`}{" "}
-                    to your dashboard.
+                    to OpenAudioHub.
                 </Text>
             )}
 
             <Section style={emailStyles.buttonSection}>
-                <Button style={emailStyles.button} href={dashboardUrl}>
+                <Button style={emailStyles.button} href={recordingsUrl}>
                     View recordings
                 </Button>
             </Section>

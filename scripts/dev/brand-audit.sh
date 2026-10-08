@@ -38,6 +38,9 @@ allowed() {
         docs/dev/*) return 0 ;;
         # Attribution and the migration guide.
         LICENSE | NOTICE | docs/MIGRATION_FROM_RIFFADO.md) return 0 ;;
+        # Email render snapshots record the footer's attribution line, which is
+        # BRAND.attribution from src/lib/brand/legacy.ts (the AGPL notice).
+        src/tests/email/__snapshots__/templates.render.test.tsx.snap) return 0 ;;
         # Compatibility code: legacy names are read here, and written nowhere else.
         src/lib/brand/legacy.ts) return 0 ;;
         # Compatibility tests. Each one exercises a legacy value or header on purpose.

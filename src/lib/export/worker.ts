@@ -217,7 +217,7 @@ async function notifyExportReady(userId: string, jobId: string): Promise<void> {
         userId,
         email: row.email,
         jobId,
-        downloadUrl: `${base}/settings?export=${jobId}#export`,
+        downloadUrl: `${base}/settings/export`,
     });
 }
 

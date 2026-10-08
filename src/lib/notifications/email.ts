@@ -161,15 +161,15 @@ export async function sendNewRecordingEmail(
         count === 1 ? "New recording synced" : `${count} new recordings synced`;
 
     const baseUrl = env.APP_URL;
-    const dashboardUrl = `${baseUrl}/dashboard`;
-    const settingsUrl = `${baseUrl}/settings#notifications`;
+    const recordingsUrl = `${baseUrl}/recordings`;
+    const settingsUrl = `${baseUrl}/settings/notifications`;
 
     // Render React email component to HTML
     const html = await renderEmailHtml(
         React.createElement(NewRecordingEmail, {
             count,
             recordingNames: recordingNames || [],
-            dashboardUrl,
+            recordingsUrl,
             settingsUrl,
         }),
     );
@@ -185,7 +185,7 @@ ${
         : ""
 }
 
-View recordings: ${dashboardUrl}
+View recordings: ${recordingsUrl}
 
 Manage notifications: ${settingsUrl}
     `.trim();
@@ -315,7 +315,7 @@ export async function sendTestEmail(email: string): Promise<void> {
 
     const baseUrl = env.APP_URL;
     const dashboardUrl = `${baseUrl}/dashboard`;
-    const settingsUrl = `${baseUrl}/settings#notifications`;
+    const settingsUrl = `${baseUrl}/settings/notifications`;
 
     // Render React email component to HTML
     const html = await renderEmailHtml(
@@ -333,7 +333,7 @@ This is a test email from OpenAudioHub to verify your email notification setting
 
 If you received this email, your email notifications are configured correctly! You'll receive notifications when new recordings are synced from your Plaud device.
 
-View dashboard: ${dashboardUrl}
+Open overview: ${dashboardUrl}
 
 Manage notifications: ${settingsUrl}
     `.trim();
