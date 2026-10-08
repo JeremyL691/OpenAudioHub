@@ -78,7 +78,20 @@ function selectChain() {
             table = t;
             return c;
         },
-        where: () => c,
+        // Awaiting `.where()` directly resolves the rows, as drizzle does. The
+        // spread keeps `.orderBy()` and `.limit()` chainable after it.
+        where: () => ({
+            ...c,
+            // biome-ignore lint/suspicious/noThenProperty: the mock must be awaitable like drizzle's builder
+            then: (
+                resolve: (value: unknown[]) => void,
+                reject: (reason: unknown) => void,
+            ) =>
+                Promise.resolve(selectResults.get(table)?.shift() ?? []).then(
+                    resolve,
+                    reject,
+                ),
+        }),
         for: () => c,
         // `orderBy` terminates the credentials lookup in
         // generate-summary.ts / generate-title.ts (no trailing `.limit()`

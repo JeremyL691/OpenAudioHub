@@ -27,6 +27,7 @@ import { useSettings } from "@/hooks/use-settings";
 import {
     AI_OUTPUT_LANGUAGES,
     type CustomSummaryPrompt,
+    normalizeAiOutputLanguage,
     SUMMARY_PRESETS,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
@@ -80,11 +81,10 @@ export function SummarySection() {
                         setSelectedPrompt(config.selectedPrompt);
                     }
                     setCustomPrompts(config?.customPrompts || []);
-                    if (typeof data.aiOutputLanguage === "string") {
-                        setOutputLanguage(data.aiOutputLanguage);
-                    } else {
-                        setOutputLanguage("auto");
-                    }
+                    setOutputLanguage(
+                        normalizeAiOutputLanguage(data.aiOutputLanguage) ??
+                            "auto",
+                    );
                     setAutoSummarize(data.autoSummarize === true);
                     setAutoSummarizePreset(
                         typeof data.autoSummarizePreset === "string"

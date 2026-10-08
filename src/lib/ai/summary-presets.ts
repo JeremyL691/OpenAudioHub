@@ -1,6 +1,11 @@
 export type SummaryPreset =
     | "general"
     | "meeting-notes"
+    | "interview"
+    | "call"
+    | "lecture"
+    | "brainstorm"
+    | "voice-memo"
     | "key-points"
     | "action-items";
 
@@ -24,40 +29,211 @@ export interface SummaryPromptConfiguration {
     customPrompts: CustomSummaryPrompt[];
 }
 
+/**
+ * Templates write Markdown. Each one names the sections it expects, so the
+ * output is easy to scan and to export. The shared rules live in the system
+ * message (see `generate-summary.ts`).
+ */
 export const SUMMARY_PRESETS: Record<SummaryPreset, SummaryPromptConfig> = {
     general: {
         id: "general",
         name: "General Summary",
-        description: "Concise summary of any audio transcription",
-        prompt: `Provide a concise summary of this audio transcription. Then extract key points and action items if any exist.
+        description:
+            "Overview, key points, details, and follow-ups for any recording",
+        prompt: `Summarize this recording as Markdown with these sections, in this order:
 
-Respond in the following JSON format (no markdown, no code fences):
-{
-  "summary": "A concise paragraph summarizing the transcription",
-  "keyPoints": ["key point 1", "key point 2"],
-  "actionItems": ["action item 1", "action item 2"]
-}
+## Overview
+Two to four sentences on what the recording is about and why it matters.
 
-If there are no key points or action items, return empty arrays.
+## Key Points
+Five to ten bullet points, most important first. Each one is a complete sentence.
+
+## Details
+Facts, figures, names, dates, and quotes that someone would need to act on or remember. Use bullets.
+
+## Follow-ups
+Open questions and next steps, one bullet each.
+
+If a section has nothing to report, write "None mentioned." under its heading.
 
 Transcription:
 {transcription}`,
     },
     "meeting-notes": {
         id: "meeting-notes",
-        name: "Meeting Notes",
+        name: "Meeting Minutes",
         description:
-            "Structured meeting summary with attendees, decisions, and action items",
-        prompt: `Summarize this meeting recording. Include attendees mentioned, decisions made, and action items.
+            "Attendees, discussion, decisions, and an owner, task, and due date for each action item",
+        prompt: `Write meeting minutes as Markdown with these sections, in this order:
 
-Respond in the following JSON format (no markdown, no code fences):
-{
-  "summary": "A structured summary of the meeting including attendees and decisions",
-  "keyPoints": ["decision 1", "decision 2", "key discussion point"],
-  "actionItems": ["action item with owner if mentioned", "follow-up task"]
-}
+## Meeting Overview
+- **Topic:** the subject of the meeting
+- **Participants:** names as spoken or labelled in the transcript
+- **Purpose:** one sentence on why the meeting was held
 
-If there are no key points or action items, return empty arrays.
+## Summary
+A short paragraph on what was discussed and where the discussion ended.
+
+## Discussion Points
+Bullets grouped by topic, with the main arguments and any disagreement.
+
+## Decisions
+Bullets. Each one states the decision and who made or agreed to it.
+
+## Action Items
+A Markdown table with the columns Owner | Task | Due date | Status. Write "Unassigned" when no owner is named, "Not set" when no date is given, and "Open" as the status unless the meeting says otherwise.
+
+## Risks and Open Questions
+Bullets.
+
+## Next Meeting
+Agenda items or plans for the follow-up meeting.
+
+If a section has nothing to report, write "None mentioned." under its heading. Do not invent names, dates, or decisions.
+
+Transcription:
+{transcription}`,
+    },
+    interview: {
+        id: "interview",
+        name: "Interview and Research",
+        description:
+            "Background, questions and answers, pain points, quotes with timestamps, and insights",
+        prompt: `Turn this interview or user research conversation into Markdown notes with these sections, in this order:
+
+## Participant Background
+Role, context, and relevant experience, as stated in the conversation.
+
+## Key Questions and Answers
+For each important question, a bullet with the question and a one- to three-sentence answer in the speaker's own words where possible.
+
+## Pain Points and Needs
+Bullets. Each one names the problem, how often or how badly it happens, and any workaround the person uses.
+
+## Notable Quotes
+Direct quotes that carry a strong opinion or a specific detail. Add the timestamp in the form [mm:ss] when the transcript has one.
+
+## Insights
+Patterns and implications, one sentence each. Mark anything that is a guess as a guess.
+
+## Follow-ups
+Things to verify, people to contact, and questions left open.
+
+If a section has nothing to report, write "None mentioned." under its heading.
+
+Transcription:
+{transcription}`,
+    },
+    call: {
+        id: "call",
+        name: "Phone and Client Call",
+        description:
+            "Purpose, requests, commitments, agreed next steps, and open issues",
+        prompt: `Summarize this phone or client call as Markdown with these sections, in this order:
+
+## Purpose
+One sentence on why the call happened.
+
+## Requests From the Other Party
+Bullets. What they asked for and any deadlines they gave.
+
+## Our Commitments
+Bullets. What was promised, by whom, and by when.
+
+## Agreed Next Steps
+A numbered list in the order the steps should happen. Give an owner and a date for each one when the call states them.
+
+## Open Issues
+Unresolved points, disagreements on price or scope, and information still missing.
+
+## Contacts
+Names, roles, and companies mentioned.
+
+If a section has nothing to report, write "None mentioned." under its heading. Do not invent names, dates, or commitments.
+
+Transcription:
+{transcription}`,
+    },
+    lecture: {
+        id: "lecture",
+        name: "Lecture and Study Notes",
+        description:
+            "Outline, core concepts, examples, pitfalls, and review questions",
+        prompt: `Turn this lecture into study notes in Markdown with these sections, in this order:
+
+## Topic Outline
+A nested bullet outline of the lecture, in the order it was taught.
+
+## Core Concepts
+For each concept, the term in bold followed by a one- or two-sentence definition as given in the lecture.
+
+## Examples and Worked Problems
+One bullet per example or problem, with the key steps or the result.
+
+## Common Pitfalls
+Mistakes or misconceptions the lecturer warned about.
+
+## Review Questions
+Five questions that test the main ideas. Do not include the answers.
+
+## Assignments and Dates
+Homework, readings, and deadlines mentioned.
+
+If a section has nothing to report, write "None mentioned." under its heading.
+
+Transcription:
+{transcription}`,
+    },
+    brainstorm: {
+        id: "brainstorm",
+        name: "Brainstorm",
+        description:
+            "Ideas grouped by theme, trade-offs, ideas set aside, and next experiments",
+        prompt: `Capture this brainstorm as Markdown with these sections, in this order:
+
+## Problem Statement
+One or two sentences on the problem or question the group explored.
+
+## Ideas by Theme
+Group the ideas into themes. Under each theme, one bullet per idea: a short phrase, then a few words of context.
+
+## Trade-offs
+For the strongest one to three ideas, one bullet each for the advantages and the drawbacks that were stated.
+
+## Ideas Set Aside
+Ideas that were rejected or parked, with the reason given.
+
+## Next Experiments
+Concrete things to try next, phrased as actions.
+
+If a section has nothing to report, write "None mentioned." under its heading.
+
+Transcription:
+{transcription}`,
+    },
+    "voice-memo": {
+        id: "voice-memo",
+        name: "Voice Memo and Podcast",
+        description:
+            "Main points, ideas, quotes, resources mentioned, and to-dos",
+        prompt: `Turn this voice memo or podcast into Markdown notes with these sections, in this order:
+
+## Main Points
+The main ideas in order, one bullet each.
+
+## Ideas and Insights
+Original thoughts, reflections, or observations worth keeping.
+
+## Quotes
+Memorable lines, with the timestamp in the form [mm:ss] when the transcript has one.
+
+## Resources Mentioned
+Books, articles, tools, people, or places referred to.
+
+## To-dos
+Tasks the speaker committed to or wanted to do.
+
+If a section has nothing to report, write "None mentioned." under its heading.
 
 Transcription:
 {transcription}`,
@@ -65,15 +241,12 @@ Transcription:
     "key-points": {
         id: "key-points",
         name: "Key Points",
-        description: "Extract the key points as a bullet list",
-        prompt: `Extract the key points from this transcription. Focus on the most important information, facts, and insights.
+        description: "A one-sentence overview and five to fifteen key points",
+        prompt: `List the key points of this transcription as Markdown.
 
-Respond in the following JSON format (no markdown, no code fences):
-{
-  "summary": "A brief one-sentence overview of the transcription",
-  "keyPoints": ["key point 1", "key point 2", "key point 3"],
-  "actionItems": []
-}
+Start with one sentence that summarizes the recording.
+
+Then give five to fifteen bullet points, most important first. Each bullet is one complete sentence that carries its concrete facts.
 
 Transcription:
 {transcription}`,
@@ -81,18 +254,12 @@ Transcription:
     "action-items": {
         id: "action-items",
         name: "Action Items",
-        description:
-            "Extract all action items, tasks, and follow-ups mentioned",
-        prompt: `Extract all action items, tasks, and follow-ups mentioned in this transcription. Include who is responsible if mentioned.
+        description: "Owner, task, due date, and status for every action item",
+        prompt: `Extract every action item from this transcription as a Markdown table with the columns Owner | Task | Due date | Status.
 
-Respond in the following JSON format (no markdown, no code fences):
-{
-  "summary": "A brief overview of what was discussed",
-  "keyPoints": [],
-  "actionItems": ["action item 1 (owner if known)", "task 2", "follow-up 3"]
-}
+Write "Unassigned" when no owner is named, "Not set" when no date is given, and "Open" as the status unless the speaker says otherwise. Keep the tasks in the order they came up.
 
-If there are no action items, return an empty array but still provide a summary.
+After the table, add one sentence on what the recording was about. If there are no action items, write "No action items mentioned." in place of the table.
 
 Transcription:
 {transcription}`,
@@ -143,36 +310,13 @@ export interface AiOutputLanguageOption {
     label: string;
 }
 
+/** Output languages offered in this release. Stored values outside this list read as `auto`. */
 export const AI_OUTPUT_LANGUAGES: readonly AiOutputLanguageOption[] = [
     { code: "auto", label: "Auto (match transcript)" },
-    { code: "en", label: "English" },
-    { code: "es", label: "Spanish" },
-    { code: "fr", label: "French" },
-    { code: "de", label: "German" },
-    { code: "it", label: "Italian" },
-    { code: "pt", label: "Portuguese" },
-    { code: "nl", label: "Dutch" },
-    { code: "pl", label: "Polish" },
-    { code: "ru", label: "Russian" },
-    { code: "tr", label: "Turkish" },
-    { code: "uk", label: "Ukrainian" },
-    { code: "cs", label: "Czech" },
-    { code: "sv", label: "Swedish" },
-    { code: "da", label: "Danish" },
-    { code: "no", label: "Norwegian" },
-    { code: "fi", label: "Finnish" },
-    { code: "el", label: "Greek" },
-    { code: "ro", label: "Romanian" },
-    { code: "hu", label: "Hungarian" },
-    { code: "ja", label: "Japanese" },
     { code: "zh", label: "Chinese (Simplified)" },
+    { code: "en", label: "English" },
+    { code: "ja", label: "Japanese" },
     { code: "ko", label: "Korean" },
-    { code: "ar", label: "Arabic" },
-    { code: "he", label: "Hebrew" },
-    { code: "hi", label: "Hindi" },
-    { code: "id", label: "Indonesian" },
-    { code: "vi", label: "Vietnamese" },
-    { code: "th", label: "Thai" },
 ] as const;
 
 const LANGUAGE_CODES = new Set(AI_OUTPUT_LANGUAGES.map((l) => l.code));
@@ -183,14 +327,23 @@ export function normalizeAiOutputLanguage(value: unknown): string | null {
     return LANGUAGE_CODES.has(value) ? value : null;
 }
 
-/** Directive sentence for the model; null for `auto`/missing/unknown. */
+const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
+    auto: "Write all natural-language output, including headings, in the same language as the transcription.",
+    zh: "Write all natural-language output, including headings, in Simplified Chinese.",
+    en: "Write all natural-language output, including headings, in English.",
+    ja: "Write all natural-language output, including headings, in Japanese.",
+    ko: "Write all natural-language output, including headings, in Korean.",
+};
+
+/**
+ * Directive sentence for the model. Missing and unknown codes follow the
+ * transcription, the same as `auto`.
+ */
 export function getAiOutputLanguageDirective(
     code: string | null | undefined,
-): string | null {
-    if (!code || code === "auto") return null;
-    const match = AI_OUTPUT_LANGUAGES.find((l) => l.code === code);
-    if (!match) return null;
-    return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
+): string {
+    const normalized = normalizeAiOutputLanguage(code) ?? "auto";
+    return `IMPORTANT: ${LANGUAGE_INSTRUCTIONS[normalized]} Keep any JSON keys in English exactly as specified.`;
 }
 
 export function getSummaryPromptById(

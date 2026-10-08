@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
     getAllSummaryPrompts,
     getDefaultSummaryPromptConfig,
+    normalizeAiOutputLanguage,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
 import {
@@ -31,8 +32,10 @@ export interface SummaryData {
     actionItems: string[] | null;
     provider?: string;
     model?: string;
-    /** Prompt id actually used server-side. Only present on POST responses. */
-    promptId?: string;
+    /** Template id the summary was made with. Null for imported summaries. */
+    promptId?: string | null;
+    /** Output language code the summary was written in. */
+    language?: string | null;
     /**
      * True when the requested prompt id couldn't be resolved (e.g. a
      * custom prompt deleted from another tab) and the server fell back
@@ -44,6 +47,8 @@ export interface SummaryData {
 interface UseTranscriptionSummaryOptions {
     /** Recording id used for `/api/recordings/:id/summary` requests. */
     recordingId: string | null | undefined;
+    /** Source of the transcript on screen. The summary is made from it. */
+    transcriptionSource?: string | null;
     /**
      * Latest transcription text. When this changes we drop the cached
      * summary (stale relative to the new text) and re-fetch -- the
@@ -65,6 +70,7 @@ interface UseTranscriptionSummaryOptions {
  */
 export function useTranscriptionSummary({
     recordingId,
+    transcriptionSource,
     transcriptionText,
 }: UseTranscriptionSummaryOptions) {
     const router = useRouter();
@@ -76,6 +82,14 @@ export function useTranscriptionSummary({
     const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPresetState] = useState("general");
+    const [summaryLanguage, setSummaryLanguageState] = useState("auto");
+    // Same guard as the preset: a choice made before the settings fetch
+    // resolves is not overwritten by the saved default.
+    const userSelectedLanguageRef = useRef(false);
+    const setSummaryLanguage = useCallback((language: string) => {
+        userSelectedLanguageRef.current = true;
+        setSummaryLanguageState(language);
+    }, []);
     // Set the moment the caller (the per-recording dropdown) makes an
     // explicit choice. Guards the settings-fetch effect below from
     // clobbering that choice if the fetch resolves afterwards -- without
@@ -109,6 +123,12 @@ export function useTranscriptionSummary({
         fetch("/api/settings/user", { signal: controller.signal })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
+                if (!userSelectedLanguageRef.current) {
+                    setSummaryLanguageState(
+                        normalizeAiOutputLanguage(data?.aiOutputLanguage) ??
+                            "auto",
+                    );
+                }
                 const config = data?.summaryPrompt as
                     | SummaryPromptConfiguration
                     | null
@@ -235,7 +255,11 @@ export function useTranscriptionSummary({
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ preset: summaryPreset }),
+                    body: JSON.stringify({
+                        preset: summaryPreset,
+                        language: summaryLanguage,
+                        source: transcriptionSource ?? null,
+                    }),
                 },
             );
             if (response.ok) {
@@ -269,7 +293,13 @@ export function useTranscriptionSummary({
             );
             setSummarizingIds(summarizingIdsRef.current);
         }
-    }, [recordingId, summaryPreset, router]);
+    }, [
+        recordingId,
+        summaryPreset,
+        summaryLanguage,
+        transcriptionSource,
+        router,
+    ]);
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
@@ -326,6 +356,8 @@ export function useTranscriptionSummary({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
+        summaryLanguage,
+        setSummaryLanguage,
         summaryPromptOptions,
         handleSummarize,
         handleDeleteSummary,

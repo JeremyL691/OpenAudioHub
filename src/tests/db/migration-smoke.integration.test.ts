@@ -10,13 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-    aiEnhancements,
-    recordings,
-    transcriptions,
-    userSettings,
-    users,
-} from "@/db/schema";
+import { recordings, transcriptions, userSettings, users } from "@/db/schema";
 import {
     createMigratedTestDatabase,
     createTestDatabase,
@@ -61,7 +55,7 @@ describeWithDatabase("PostgreSQL migration chain", () => {
 
 const MIGRATIONS_DIR = "./src/db/migrations";
 const LAST_BEFORE_REBRAND = "0040_worried_lethal_legion";
-const LATEST_TAG = "0043_source_default_openaudiohub";
+const LATEST_TAG = "0045_summary_template_and_language";
 
 /** Copies migrations up to and including `tag` into a temporary folder. */
 function migrationsUpTo(tag: string): string {
@@ -138,14 +132,11 @@ describeWithDatabase("rebrand source values migration", () => {
             model: "whisper-1",
             source: "riffado",
         });
-        await db.insert(aiEnhancements).values({
-            recordingId: "rec-rebrand",
-            userId,
-            summary: "legacy summary",
-            provider: "Custom",
-            model: "gpt",
-            source: "riffado",
-        });
+        // Raw SQL: the schema now has columns this migration point does not.
+        await database.sql`
+            insert into ai_enhancements (id, recording_id, user_id, summary, provider, model, source)
+            values ('enh-rebrand', 'rec-rebrand', ${userId}, 'legacy summary', 'Custom', 'gpt', 'riffado')
+        `;
         await db.insert(userSettings).values({
             userId,
             preferredTranscriptSource: "riffado",

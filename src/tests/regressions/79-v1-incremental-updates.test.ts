@@ -133,8 +133,15 @@ function selectRows(rows: unknown[], captureWhere?: (expr: unknown) => void) {
         from: vi.fn().mockReturnValue({
             where: vi.fn((expr: unknown) => {
                 captureWhere?.(expr);
+                // Awaiting `.where()` directly resolves the rows, as drizzle does
+                // for the transcript lookup. `.limit()` still works after it.
                 return {
                     limit: vi.fn().mockResolvedValue(rows),
+                    // biome-ignore lint/suspicious/noThenProperty: the mock must be awaitable like drizzle's builder
+                    then: (
+                        resolve: (value: unknown[]) => void,
+                        reject: (reason: unknown) => void,
+                    ) => Promise.resolve(rows).then(resolve, reject),
                 };
             }),
         }),

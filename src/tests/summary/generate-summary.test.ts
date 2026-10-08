@@ -64,11 +64,11 @@ function mockLookups(credentialRows: Record<string, unknown>[]) {
         // transcription
         .mockReturnValueOnce({
             from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                    limit: vi
-                        .fn()
-                        .mockResolvedValue([{ text: "raw transcript" }]),
-                }),
+                where: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { text: "raw transcript", source: "openaudiohub" },
+                    ]),
             }),
         })
         // user settings

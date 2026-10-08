@@ -92,7 +92,12 @@ describe("POST /api/recordings/[id]/summary (manual)", () => {
         expect(generateSummaryForRecording).toHaveBeenCalledWith(
             "user-1",
             "rec-1",
-            { presetId: "meeting-notes", trigger: "manual" },
+            {
+                presetId: "meeting-notes",
+                language: null,
+                source: null,
+                trigger: "manual",
+            },
         );
     });
 
@@ -110,7 +115,12 @@ describe("POST /api/recordings/[id]/summary (manual)", () => {
         expect(generateSummaryForRecording).toHaveBeenCalledWith(
             "user-1",
             "rec-1",
-            { presetId: undefined, trigger: "manual" },
+            {
+                presetId: undefined,
+                language: null,
+                source: null,
+                trigger: "manual",
+            },
         );
     });
 
@@ -137,7 +147,12 @@ describe("POST /api/recordings/[id]/summary (manual)", () => {
         expect(generateSummaryForRecording).toHaveBeenCalledWith(
             "user-1",
             "rec-1",
-            { presetId: undefined, trigger: "manual" },
+            {
+                presetId: undefined,
+                language: null,
+                source: null,
+                trigger: "manual",
+            },
         );
     });
 });

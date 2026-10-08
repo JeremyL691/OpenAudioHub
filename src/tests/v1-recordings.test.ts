@@ -84,6 +84,8 @@ const enhancement = {
     provider: "openai",
     model: "gpt-4o-mini",
     source: LEGACY_SOURCE,
+    promptId: null,
+    language: null,
     createdAt: now,
 };
 

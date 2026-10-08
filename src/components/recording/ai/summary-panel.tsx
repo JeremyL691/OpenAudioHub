@@ -3,22 +3,46 @@
 import {
     ChevronDown,
     ChevronUp,
+    Copy,
+    Download,
     ListChecks,
     Loader2,
     RefreshCw,
     Sparkles,
     Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PromptSelect } from "@/components/recording/ai/prompt-select";
 import { RichMarkdown } from "@/components/recordings/rich-content";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { AI_OUTPUT_LANGUAGES } from "@/lib/ai/summary-presets";
+import { downloadText } from "@/lib/download-text";
+import {
+    buildSummaryExport,
+    type SummaryExportFormat,
+} from "@/lib/summary/export";
 
 type SummaryState = ReturnType<typeof useTranscriptionSummary>;
 
-/** The summary card: generate or regenerate, expand, key points, action items, delete. */
-export function SummaryPanel({ summary }: { summary: SummaryState }) {
+const LANGUAGE_OPTIONS = AI_OUTPUT_LANGUAGES.map((l) => ({
+    id: l.code,
+    name: l.label,
+}));
+
+/**
+ * The summary card: generate or regenerate with a template and language,
+ * expand, key points, action items, copy or download, and delete.
+ */
+export function SummaryPanel({
+    summary,
+    title,
+}: {
+    summary: SummaryState;
+    /** The recording name, used in exports. */
+    title: string;
+}) {
     const {
         summaryData,
         isSummarizing,
@@ -27,9 +51,44 @@ export function SummaryPanel({ summary }: { summary: SummaryState }) {
         summaryPreset,
         setSummaryPreset,
         summaryPromptOptions,
+        summaryLanguage,
+        setSummaryLanguage,
         handleSummarize,
         handleDeleteSummary,
     } = summary;
+
+    const templateName = summaryData?.promptId
+        ? (summaryPromptOptions.find((p) => p.id === summaryData.promptId)
+              ?.name ?? null)
+        : null;
+    const languageName = summaryData?.language
+        ? (AI_OUTPUT_LANGUAGES.find((l) => l.code === summaryData.language)
+              ?.label ?? null)
+        : null;
+
+    const exportSummary = (format: SummaryExportFormat) => {
+        if (!summaryData?.summary) return;
+        const file = buildSummaryExport(format, {
+            title,
+            summary: summaryData.summary,
+            keyPoints: summaryData.keyPoints,
+            actionItems: summaryData.actionItems,
+            templateName,
+            languageName,
+            model: summaryData.model,
+        });
+        downloadText(file.filename, file.content, file.mimeType);
+    };
+
+    const copySummary = async () => {
+        if (!summaryData?.summary) return;
+        try {
+            await navigator.clipboard.writeText(summaryData.summary);
+            toast.success("Summary copied");
+        } catch {
+            toast.error("Couldn't copy the summary");
+        }
+    };
 
     return (
         <Card data-testid="summary-panel">
@@ -41,11 +100,19 @@ export function SummaryPanel({ summary }: { summary: SummaryState }) {
                     </CardTitle>
                     <div className="flex flex-wrap items-center gap-2">
                         {!isSummarizing && (
-                            <PromptSelect
-                                value={summaryPreset}
-                                options={summaryPromptOptions}
-                                onChange={setSummaryPreset}
-                            />
+                            <>
+                                <PromptSelect
+                                    label="Summary language"
+                                    value={summaryLanguage}
+                                    options={LANGUAGE_OPTIONS}
+                                    onChange={setSummaryLanguage}
+                                />
+                                <PromptSelect
+                                    value={summaryPreset}
+                                    options={summaryPromptOptions}
+                                    onChange={setSummaryPreset}
+                                />
+                            </>
                         )}
                         <Button
                             data-testid="summary-generate"
@@ -161,9 +228,19 @@ export function SummaryPanel({ summary }: { summary: SummaryState }) {
                                         </div>
                                     )}
 
-                                {/* Meta + Delete */}
-                                <div className="flex items-center justify-between pt-2 border-t">
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                {/* Meta, export, and delete */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        {templateName && (
+                                            <span className="px-2 py-0.5 rounded bg-muted">
+                                                {templateName}
+                                            </span>
+                                        )}
+                                        {languageName && (
+                                            <span className="px-2 py-0.5 rounded bg-muted">
+                                                {languageName}
+                                            </span>
+                                        )}
                                         {summaryData.provider && (
                                             <span className="px-2 py-0.5 rounded bg-muted">
                                                 {summaryData.provider}
@@ -175,15 +252,43 @@ export function SummaryPanel({ summary }: { summary: SummaryState }) {
                                             </span>
                                         )}
                                     </div>
-                                    <Button
-                                        onClick={handleDeleteSummary}
-                                        size="sm"
-                                        variant="ghost"
-                                        className="text-destructive hover:text-destructive"
-                                    >
-                                        <Trash2 className="size-4 mr-1" />
-                                        Delete
-                                    </Button>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        <Button
+                                            onClick={copySummary}
+                                            size="sm"
+                                            variant="ghost"
+                                        >
+                                            <Copy className="size-4 mr-1" />
+                                            Copy
+                                        </Button>
+                                        <Button
+                                            onClick={() => exportSummary("md")}
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Download summary as Markdown"
+                                        >
+                                            <Download className="size-4 mr-1" />
+                                            Markdown
+                                        </Button>
+                                        <Button
+                                            onClick={() => exportSummary("txt")}
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Download summary as TXT"
+                                        >
+                                            <Download className="size-4 mr-1" />
+                                            TXT
+                                        </Button>
+                                        <Button
+                                            onClick={handleDeleteSummary}
+                                            size="sm"
+                                            variant="ghost"
+                                            className="text-destructive hover:text-destructive"
+                                        >
+                                            <Trash2 className="size-4 mr-1" />
+                                            Delete
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         )}
