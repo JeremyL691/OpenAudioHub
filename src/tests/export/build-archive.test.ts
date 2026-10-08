@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import unzipper from "unzipper";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import type { StorageProvider } from "@/lib/storage/types";
 
 const { dbMock } = vi.hoisted(() => ({ dbMock: { select: vi.fn() } }));
@@ -149,7 +150,7 @@ describe("buildAndUploadExportArchive", () => {
                 {
                     recordingId: "rec-1",
                     text: "enc-transcript",
-                    source: "riffado",
+                    source: LEGACY_SOURCE,
                     timeline: [
                         { start_ms: 1250, end_ms: 2300, text: "hello there" },
                     ],
@@ -322,7 +323,7 @@ describe("buildAndUploadExportArchive", () => {
                 {
                     recordingId: "rec-normalized",
                     text: "enc-transcript",
-                    source: "riffado",
+                    source: LEGACY_SOURCE,
                     timeline: [
                         {
                             start_ms: 900,

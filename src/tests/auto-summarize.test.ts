@@ -90,7 +90,7 @@ type UserSettingsRow = {
  * Mount the standard select-chain mocks that `transcribeRecording` walks
  * through before reaching the auto-summarize branch:
  *   1. recording lookup
- *   2. existing 'riffado' transcription (present iff `existingText` is set)
+ *   2. existing own-source transcription (present iff `existingText` is set)
  *   3. legacy default credentials (transcription provider)
  *   4. userSettings row
  */

@@ -23,7 +23,7 @@ const ENUM_FIELDS = {
     transcriptionQuality: ["fast", "balanced", "accurate"],
     defaultExportFormat: ["json", "csv", "zip"],
     transcriptMode: ["plaud_only", "keep_both"],
-    preferredTranscriptSource: ["plaud", "openaudiohub", "riffado"],
+    preferredTranscriptSource: ["plaud", OWN_SOURCE, LEGACY_SOURCE],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(

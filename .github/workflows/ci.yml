@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - enhanced
   pull_request:
   workflow_dispatch:
 
@@ -57,6 +56,12 @@ jobs:
 
       - name: Run Biome lint & format check
         run: pnpm format-and-lint
+
+      - name: Check legacy brand names
+        run: pnpm brand:audit
+
+      - name: Check documentation links
+        run: pnpm docs:check
 
   typecheck:
     name: Type Check

@@ -360,7 +360,7 @@ export const transcriptions = pgTable(
         timelineSource: varchar("timeline_source", { length: 10 }), // native | aligned
         // Provenance of this transcript, orthogonal to transcriptionType:
         //   'openaudiohub' = produced by the user's own provider (server/browser);
-        //     legacy 'riffado' rows are still read as this value
+        //     legacy source values are still read as this value
         //   'plaud'   = imported from Plaud's native transcription
         //   'mixed'   = user-edited combination of the above (see #204)
         source: varchar("source", { length: 20 }).notNull().default("riffado"),
@@ -563,7 +563,7 @@ export const userSettings = pgTable("user_settings", {
         length: 20,
     })
         .notNull()
-        .default("plaud"), // 'plaud' | 'openaudiohub' (legacy 'riffado' read as this)
+        .default("plaud"), // 'plaud' | 'openaudiohub' (legacy values read as this)
     // Default transcription provider: an api_credentials id, or null (no
     // explicit choice). Supersedes the per-row
     // api_credentials.is_default_transcription boolean for selection.
