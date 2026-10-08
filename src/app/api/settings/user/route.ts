@@ -7,8 +7,10 @@ import {
     normalizeAiOutputLanguage,
 } from "@/lib/ai/summary-presets";
 import { requireApiSession } from "@/lib/auth-server";
+import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import { decryptJsonField, encryptJsonField } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { normalizeSource, OWN_SOURCE } from "@/lib/transcription/source";
 
 // Enum allowlists. DB columns are `varchar`, not pg enums, so validation
 // must happen here.
@@ -21,7 +23,7 @@ const ENUM_FIELDS = {
     transcriptionQuality: ["fast", "balanced", "accurate"],
     defaultExportFormat: ["json", "csv", "zip"],
     transcriptMode: ["plaud_only", "keep_both"],
-    preferredTranscriptSource: ["plaud", "riffado"],
+    preferredTranscriptSource: ["plaud", "openaudiohub", "riffado"],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(
@@ -115,7 +117,10 @@ const SETTINGS_FIELDS = [
 function extractSettings(settings: typeof userSettings.$inferSelect) {
     const result: Record<string, unknown> = {};
     for (const field of SETTINGS_FIELDS) {
-        result[field] = settings[field];
+        result[field] =
+            field === "preferredTranscriptSource"
+                ? normalizeSource(settings[field])
+                : settings[field];
     }
     result.barkPushUrl = settings.barkPushUrl || null;
     result.barkPushUrlSet = !!settings.barkPushUrl;
@@ -187,6 +192,9 @@ export const PUT = apiHandler(async (request: Request) => {
 
     for (const field of SETTINGS_FIELDS) {
         let value = body[field];
+        if (field === "preferredTranscriptSource" && value === LEGACY_SOURCE) {
+            value = OWN_SOURCE;
+        }
         if (
             field in ENUM_FIELDS &&
             value !== undefined &&

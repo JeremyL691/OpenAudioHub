@@ -21,6 +21,7 @@ import {
 import { encryptJsonField, encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { postProcessPipelineTranscription } from "@/lib/transcription/postprocess";
+import { OWN_SOURCE, OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 export interface QueueAudioPipelineInput {
@@ -553,7 +554,7 @@ async function persistPipelineResult(
                 and(
                     eq(transcriptions.recordingId, job.recordingId),
                     eq(transcriptions.userId, job.userId),
-                    eq(transcriptions.source, "riffado"),
+                    inArray(transcriptions.source, OWN_SOURCE_VALUES),
                 ),
             )
             .limit(1);
@@ -563,7 +564,7 @@ async function persistPipelineResult(
             transcriptionType: "server",
             provider: job.provider,
             model: job.model,
-            source: "riffado",
+            source: OWN_SOURCE,
             timeline: encryptedTimeline,
             timelineSource: timeline.length
                 ? (result.timestamp_source ?? "native")
@@ -593,7 +594,7 @@ async function persistPipelineResult(
                 and(
                     eq(aiEnhancements.recordingId, job.recordingId),
                     eq(aiEnhancements.userId, job.userId),
-                    eq(aiEnhancements.source, "riffado"),
+                    inArray(aiEnhancements.source, OWN_SOURCE_VALUES),
                 ),
             );
         await tx

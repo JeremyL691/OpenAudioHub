@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { audioPipelineJobs, transcriptions } from "@/db/schema";
@@ -9,6 +9,7 @@ import {
     cancelAudioPipelineJob,
     retryAudioPipelineJob,
 } from "@/lib/transcription/audio-pipeline";
+import { OWN_SOURCE, OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -39,7 +40,7 @@ export const GET = apiHandler<Context>(async (request, context) => {
             and(
                 eq(transcriptions.recordingId, recordingId),
                 eq(transcriptions.userId, session.user.id),
-                eq(transcriptions.source, "riffado"),
+                inArray(transcriptions.source, OWN_SOURCE_VALUES),
             ),
         )
         .limit(1);
@@ -63,7 +64,7 @@ export const GET = apiHandler<Context>(async (request, context) => {
                     ? {
                           text: decryptText(transcription.text),
                           language: transcription.language ?? undefined,
-                          source: "riffado",
+                          source: OWN_SOURCE,
                       }
                     : null
                 : null,

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { normalizeSource } from "@/lib/transcription/source";
 
 // ISO-639-1 codes from Whisper's supported-languages list. Sticking to
 // languages with non-trivial user populations to keep the dropdown
@@ -113,7 +114,9 @@ export function TranscriptionSection() {
                     setImportPlaudContent(data.importPlaudContent ?? false);
                     setTranscriptMode(data.transcriptMode ?? "plaud_only");
                     setPreferredTranscriptSource(
-                        data.preferredTranscriptSource ?? "plaud",
+                        normalizeSource(
+                            data.preferredTranscriptSource ?? "plaud",
+                        ),
                     );
                 }
             } catch (error) {
@@ -451,7 +454,7 @@ export function TranscriptionSection() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="plaud">Plaud</SelectItem>
-                                    <SelectItem value="riffado">
+                                    <SelectItem value="openaudiohub">
                                         My provider
                                     </SelectItem>
                                 </SelectContent>

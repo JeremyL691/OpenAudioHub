@@ -134,7 +134,7 @@ describe("v1 recordings", () => {
         );
 
         expect(detail.transcript?.text).toBe("Hello world");
-        expect(detail.transcript?.source).toBe("riffado");
+        expect(detail.transcript?.source).toBe("openaudiohub");
         expect(detail.transcripts).toHaveLength(1);
         expect(detail.summary?.text).toBe("A short summary");
         expect(detail.summary?.action_items).toEqual(["Follow up"]);

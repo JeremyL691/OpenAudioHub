@@ -11,6 +11,7 @@ import {
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
+import { isOwnSource } from "@/lib/transcription/source";
 import { serializeRecording } from "@/types/recording";
 
 export default async function DashboardPage() {
@@ -103,7 +104,7 @@ export default async function DashboardPage() {
     >();
     for (const transcription of userTranscriptions) {
         const existing = transcriptionMap.get(transcription.recordingId);
-        if (!existing || transcription.source === "riffado") {
+        if (!existing || isOwnSource(transcription.source)) {
             transcriptionMap.set(transcription.recordingId, {
                 text: decryptText(transcription.text),
                 language: transcription.language || undefined,

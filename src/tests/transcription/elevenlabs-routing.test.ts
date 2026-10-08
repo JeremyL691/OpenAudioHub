@@ -355,7 +355,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
 
         expect(result.success).toBe(true);
         // upsertTranscription (real, unmocked) inserts the new row inside
-        // the transaction since no existing 'riffado' row was found.
+        // the transaction since no existing OpenAudioHub row was found.
         const insertValues = tx.insertValues.mock.calls[0][0];
         // encryptText mock above is `(v) => enc:${v}`.
         expect(insertValues).toMatchObject({
@@ -365,7 +365,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
             detectedLanguage: "de",
             provider: "ElevenLabs",
             model: "scribe_v2",
-            source: "riffado",
+            source: "openaudiohub",
         });
     });
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/encryption/fields";
 import { isAudioPipelineServiceRequest } from "@/lib/transcription/audio-pipeline-auth";
 import { isRepairResult } from "@/lib/transcription/audio-pipeline-repair";
+import { OWN_SOURCE_VALUES } from "@/lib/transcription/source";
 
 function textHash(value: string): string {
     return createHash("sha256").update(value, "utf8").digest("hex");
@@ -148,7 +149,7 @@ export async function POST(request: Request): Promise<Response> {
                     and(
                         eq(transcriptions.recordingId, recording.id),
                         eq(transcriptions.userId, reference.userId),
-                        eq(transcriptions.source, "riffado"),
+                        inArray(transcriptions.source, OWN_SOURCE_VALUES),
                     ),
                 )
                 .for("update")
