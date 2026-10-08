@@ -34,7 +34,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             await service.stop()
 
-    app = FastAPI(title="Riffado Audio Preprocessing Pipeline", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="OpenAudioHub Audio Pipeline", version="0.1.0", lifespan=lifespan)
     app.state.store = store
     app.state.service = service
 
