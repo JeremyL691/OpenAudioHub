@@ -31,4 +31,15 @@ test.describe("docs site", () => {
         expect(response.ok()).toBeTruthy();
         expect(response.headers()["content-type"]).toContain("image/png");
     });
+
+    test("the docs search API returns the pages that match a query", async ({
+        request,
+    }) => {
+        // The index is built from the MDX pages, so this checks the running app, not a unit.
+        const response = await request.get("/api/search?query=plaud");
+        expect(response.status()).toBe(200);
+        const results = await response.json();
+        expect(Array.isArray(results)).toBeTruthy();
+        expect(results.length).toBeGreaterThan(0);
+    });
 });
