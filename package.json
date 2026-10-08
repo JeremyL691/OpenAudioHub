@@ -37,6 +37,7 @@
         "e2e": "bun scripts/dev/e2e-prepare.ts && playwright test",
         "e2e:prepare": "bun scripts/dev/e2e-prepare.ts",
         "e2e:smoke": "bun scripts/dev/e2e-prepare.ts && playwright test --grep @smoke",
+        "e2e:dev": "bun scripts/dev/e2e-prepare.ts && playwright test -c playwright.dev.config.ts",
         "type-check": "tsc --noEmit",
         "format-and-lint": "biome check .",
         "format-and-lint:fix": "biome check . --write",

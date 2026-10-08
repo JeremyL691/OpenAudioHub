@@ -22,6 +22,9 @@ const appEnv = Object.fromEntries(
 export default defineConfig({
     testDir: "./e2e",
     testMatch: "**/*.spec.ts",
+    // Dev-only specs run under `next dev` from playwright.dev.config.ts, never against
+    // the production server.
+    testIgnore: "dev/**",
     globalSetup: "./e2e/global-setup.ts",
     workers: 1,
     fullyParallel: false,

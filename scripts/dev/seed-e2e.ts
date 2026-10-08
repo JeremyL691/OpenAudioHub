@@ -169,6 +169,19 @@ const RECORDING_SPECS: RecordingSpec[] = [
         daysAgo: 5,
         summary: false,
     },
+    {
+        key: "e2e-paused-disk",
+        filename: "Paused for disk",
+        audio: "sample",
+        daysAgo: 6,
+        summary: false,
+        job: {
+            status: "paused",
+            phase: "paused_disk",
+            progress: 0.5,
+            timestampSource: null,
+        },
+    },
 ];
 
 async function send(
