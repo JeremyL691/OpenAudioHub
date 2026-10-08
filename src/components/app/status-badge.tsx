@@ -150,7 +150,7 @@ const STATUS_DEFINITIONS: Record<StatusBadgeStatus, StatusDefinition> = {
 };
 
 // Each tone is a background token paired with its foreground token, so the
-// contrast of every chip can be checked from globals.css (docs/dev/DESIGN.md).
+// contrast of every chip can be checked from globals.css.
 const TONE_CLASSES: Record<StatusTone, string> = {
     neutral: "bg-muted text-muted-foreground",
     info: "bg-info text-info-foreground",

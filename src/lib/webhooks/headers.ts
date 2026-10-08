@@ -2,7 +2,7 @@ import { formatWebhookSignatureHeader } from "@/lib/webhooks/signature";
 
 /**
  * Headers sent with every webhook delivery. The names are part of the public
- * contract (D-007): they changed with the rename and are not aliased.
+ * contract: they changed with the rename and are not aliased.
  */
 export function buildWebhookHeaders(input: {
     body: string;

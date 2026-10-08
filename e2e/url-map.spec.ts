@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "./characterization/helpers";
 
-// Covers the old-to-new URL map in docs/dev/url-map.md (T4.3).
+// Covers the redirects from the old URLs to the current ones.
 test.describe("url map", () => {
     test.beforeEach(async ({ page }) => {
         await signIn(page);

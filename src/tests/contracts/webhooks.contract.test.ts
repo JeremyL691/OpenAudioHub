@@ -10,9 +10,9 @@ import {
     verifyWebhookSignature,
 } from "@/lib/webhooks/signature";
 
-// Contract snapshots for outbound webhooks (PLAN T0.8). Header names are checked
+// Contract snapshots for outbound webhooks. Header names are checked
 // by the delivery worker tests; this file pins the event list, payload body, and
-// signature format. T2.6 renames the headers and updates these snapshots on purpose.
+// signature format. Update these snapshots only when the contract changes on purpose.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/env", () => ({ env: {} }));
 

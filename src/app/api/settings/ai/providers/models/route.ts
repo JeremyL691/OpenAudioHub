@@ -17,6 +17,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { providerHeaders } from "@/lib/ai/provider-client";
 import { findPreset, type ProviderPreset } from "@/lib/ai/provider-presets";
 import { requireApiSession } from "@/lib/auth-server";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
@@ -85,7 +86,7 @@ export const POST = apiHandler(async (request: Request) => {
             `${effectiveBaseUrl.replace(/\/$/, "")}/models`,
             {
                 Authorization: `Bearer ${apiKey}`,
-                ...preset.defaultHeaders,
+                ...providerHeaders(provider),
             },
         );
         return NextResponse.json({ models: chatModelsFrom(payload, preset) });

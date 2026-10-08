@@ -2,8 +2,9 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { openRecording, RECORDINGS, signIn } from "./characterization/helpers";
 
-// Read-only checks for the 2026-10-08 feedback. Deleting a transcript is
-// covered by unit tests, because the seeded recordings are shared by other specs.
+// Read-only checks for the docs link and the transcript and summary actions.
+// Deleting a transcript is covered by unit tests, because the seeded recordings
+// are shared by other specs.
 
 test("the docs page links back to the app", async ({ page }) => {
     await signIn(page);

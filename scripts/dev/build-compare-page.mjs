@@ -17,7 +17,7 @@ const shots = path.join(root, ".dev-artifacts", "screenshots");
 const beforeDir = path.join(shots, "before");
 const afterDir = path.join(shots, "after");
 
-// The baseline matrix named the overview "dashboard" before T5.1 renamed the route.
+// The baseline matrix named the overview "dashboard" before the route was renamed.
 const SLUG_MAP = { overview: "dashboard" };
 const PAGES = [
     "landing",

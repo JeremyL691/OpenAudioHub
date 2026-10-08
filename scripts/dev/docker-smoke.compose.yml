@@ -1,4 +1,4 @@
-# Docker smoke stack for the long-audio run (PLAN §6 P7, T7.4). Started by scripts/dev/docker-smoke.sh.
+# Docker smoke stack for the long-audio run. Started by scripts/dev/docker-smoke.sh.
 # Project name oah-e2e, app on 127.0.0.1:3100. The database is not published to the host.
 # Secrets come from .dev-artifacts/oah-e2e.env (generated, gitignored); values are never printed.
 # `down -v` removes only this project's volumes (oah-e2e_*), never the volumes of the existing stack.

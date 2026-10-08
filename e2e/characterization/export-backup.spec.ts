@@ -2,8 +2,8 @@ import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
 // Formats served by GET /api/export. The settings UI offers the same four, and
-// /api/settings/user accepts the same four as the saved default (B-001, D-201;
-// before that the validator accepted json, csv, and zip, so TXT was reverted).
+// /api/settings/user accepts the same four as the saved default. An older
+// validator accepted json, csv, and zip, so a saved TXT default was reverted.
 const EXPORT_FORMATS = ["json", "txt", "srt", "vtt"] as const;
 
 async function openExportSection(page: Page): Promise<void> {

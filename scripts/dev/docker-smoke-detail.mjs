@@ -1,4 +1,4 @@
-// Detail-page check for the Docker smoke stack (PLAN §6 P7, T7.4). Called by docker-smoke-flow.py.
+// Detail-page check for the Docker smoke stack. Called by docker-smoke-flow.py.
 // Opens the long recording as the smoke user, waits for audio metadata, checks the duration,
 // clicks the transcript segment nearest 400 s, and checks that the audio seeks there and that
 // exactly one segment is active. Reads its inputs from the environment and never prints the

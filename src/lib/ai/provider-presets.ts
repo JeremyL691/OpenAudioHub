@@ -1,4 +1,8 @@
-import { OPENCODE_GO_SESSION_ID } from "@/lib/brand/legacy";
+/**
+ * Default `x-opencode-session` header. The OpenCode Go gateway rejects
+ * requests without one. `OPENCODE_GO_SESSION_ID` overrides it on the server.
+ */
+export const OPENCODE_GO_DEFAULT_SESSION_ID = "openaudiohub";
 
 export type TranscriptionStyle = "whisper" | "chat" | "gemini" | "elevenlabs";
 
@@ -110,7 +114,9 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         // MiniMax and Qwen models use the Anthropic Messages format, which the
         // OpenAI-compatible path here cannot call.
         chatModelExclude: /minimax|qwen/i,
-        defaultHeaders: { "x-opencode-session": OPENCODE_GO_SESSION_ID },
+        defaultHeaders: {
+            "x-opencode-session": OPENCODE_GO_DEFAULT_SESSION_ID,
+        },
     },
     {
         name: "LM Studio",

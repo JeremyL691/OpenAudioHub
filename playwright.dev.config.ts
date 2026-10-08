@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import base from "./playwright.config";
 
-// Dev-mode E2E for the dev-only routes (PLAN §7, F24). Those routes return 404 under a
+// Dev-mode E2E for the dev-only routes. Those routes return 404 under a
 // production build, so this config runs `next dev` on the port the production suite
 // uses (playwright.config.ts). Run the two suites one after the other, never together:
 // both bind port 3210, and both write to .next.

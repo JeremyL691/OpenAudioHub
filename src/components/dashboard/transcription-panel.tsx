@@ -31,7 +31,7 @@ interface TranscriptionPanelProps {
 /**
  * The library preview's transcript card and summary card for one recording.
  * The state comes from useRecordingTranscript and the cards from
- * TranscriptCard (preview variant) and SummaryPanel (see D-142 and D-144).
+ * TranscriptCard (preview variant) and SummaryPanel.
  */
 export function TranscriptionPanel({
     recording,

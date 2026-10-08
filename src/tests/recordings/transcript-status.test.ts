@@ -17,7 +17,7 @@ describe("transcriptStatus", () => {
 
     it("shows an active pipeline phase before the content state", () => {
         // A long recording in the server pipeline used to read "Not transcribed"
-        // in the library while the overview showed it transcribing (D-203).
+        // in the library while the overview showed it transcribing.
         expect(transcriptStatus({ pipelinePhase: "transcribing" })).toBe(
             "transcribing",
         );

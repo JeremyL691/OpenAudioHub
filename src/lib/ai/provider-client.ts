@@ -18,13 +18,28 @@ export function createProviderClient(
     apiKey: string,
     timeout?: number,
 ): OpenAI {
-    const headers = findPreset(connection.provider)?.defaultHeaders;
+    const headers = providerHeaders(connection.provider);
     return new OpenAI({
         apiKey,
         baseURL: connection.baseUrl || undefined,
         ...(timeout === undefined ? {} : { timeout }),
         ...(headers ? { defaultHeaders: headers } : {}),
     });
+}
+
+/**
+ * Headers a preset sends with every request. `OPENCODE_GO_SESSION_ID`, when
+ * set, replaces the default OpenCode Go session header. Server-side only.
+ */
+export function providerHeaders(
+    providerName: string,
+): Record<string, string> | undefined {
+    const headers = findPreset(providerName)?.defaultHeaders;
+    if (!headers) return undefined;
+    const session = process.env.OPENCODE_GO_SESSION_ID?.trim();
+    return session && "x-opencode-session" in headers
+        ? { ...headers, "x-opencode-session": session }
+        : { ...headers };
 }
 
 /**

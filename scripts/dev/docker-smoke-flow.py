@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Long-audio flow for the Docker smoke stack (PLAN §6 P7, T7.4).
+"""Long-audio flow for the Docker smoke stack.
 
 Stages, run in order by `all` or one at a time:
   audio   synthesize a 12-minute recording: six 100 s speech blocks (macOS `say`)

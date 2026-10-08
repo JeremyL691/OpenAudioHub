@@ -16,7 +16,7 @@ from audio_pipeline.store import JobStore
 
 class CreateJob(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
-    # The legacy name is accepted from Core builds made before the rename (D-025).
+    # The legacy name is accepted from Core builds made before the rename.
     core_job_id: str = Field(
         min_length=1,
         max_length=128,

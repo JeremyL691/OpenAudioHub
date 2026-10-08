@@ -1,4 +1,4 @@
-// Prepares the E2E environment (PLAN §10.3): writes e2e/.env.e2e with fresh local
+// Prepares the E2E environment: writes e2e/.env.e2e with fresh local
 // test secrets, recreates the oah_e2e database on the test stack, and applies the
 // migrations. Secret values go only into the env file and are never printed.
 // Requires scripts/dev/test-stack.sh up.

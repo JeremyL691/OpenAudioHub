@@ -193,7 +193,7 @@ export function RecordingWorkstation({
                         <ArrowLeft className="size-4" />
                     </Button>
                     {/* contain: a long title truncates here instead of setting the
-                        row's minimum width, which overflowed the page at 1280 px (D-158). */}
+                        row's minimum width, which overflowed the page at 1280 px. */}
                     <div className="min-w-0 flex-1 [contain:inline-size]">
                         <h1 className="min-w-0">
                             <RecordingTitle

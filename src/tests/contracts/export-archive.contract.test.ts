@@ -5,7 +5,7 @@ import { LEGACY_SOURCE } from "@/lib/brand/legacy";
 import { buildAndUploadExportArchive } from "@/lib/export/build-archive";
 import type { StorageProvider } from "@/lib/storage/types";
 
-// Contract snapshots for the export archive (PLAN T0.8): manifest.json and
+// Contract snapshots for the export archive: manifest.json and
 // timeline.json. The fixtures match the timeline case in
 // src/tests/export/build-archive.test.ts. Only createdAt, the one wall-clock
 // value, is normalized.

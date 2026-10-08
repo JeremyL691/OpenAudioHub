@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Regression for defect fix ③ (PLAN D-018, T6.3): a transcript produced by the
+// Regression for defect fix ③: a transcript produced by the
 // audio pipeline gets the automatic summary, as a direct transcription does.
-// Before T6.3 the pipeline path never summarized.
+// Before the fix the pipeline path never summarized.
 
 const mocks = vi.hoisted(() => ({
     transaction: vi.fn(),

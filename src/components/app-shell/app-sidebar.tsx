@@ -73,8 +73,7 @@ function matchesPrefix(pathname: string, prefixes: string[]): boolean {
 }
 
 /**
- * Primary navigation for the signed-in app. Overview is not listed yet: its
- * page arrives with T5.1, and a link that repeats Recordings would mislead.
+ * Primary navigation for the signed-in app.
  * Desktop collapses it off-canvas; below md it opens as a sheet.
  */
 export function AppSidebar({ footer }: { footer: ReactNode }) {

@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { RECORDINGS } from "./characterization/helpers";
 
-// Axe check for the Phase 5 pages (PLAN §6 P5 gate), in light and dark. Serious
+// Axe check for the main pages, in light and dark. Serious
 // and critical violations fail the test; moderate and minor ones are not
 // asserted here.
 
@@ -18,7 +18,7 @@ async function settle(control: Locator) {
 
 // `modal` is set for menus and dialogs. Radix hides the app shell with
 // aria-hidden while one is open and traps focus inside it, so the shell's links
-// are not reachable and aria-hidden-focus is a false positive there (D-155).
+// are not reachable and aria-hidden-focus is a false positive there.
 async function expectNoSeriousViolations(
     page: Page,
     { modal = false }: { modal?: boolean } = {},

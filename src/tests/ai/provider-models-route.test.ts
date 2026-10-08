@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OPENCODE_GO_SESSION_ID } from "@/lib/brand/legacy";
+import { OPENCODE_GO_DEFAULT_SESSION_ID } from "@/lib/ai/provider-presets";
 
 vi.mock("@/lib/auth-server", () => ({
     requireApiSession: vi.fn(async () => ({ user: { id: "user-1" } })),
@@ -58,7 +58,7 @@ describe("POST /api/settings/ai/providers/models", () => {
         expect(url).toBe("https://opencode.ai/zen/go/v1/models");
         expect(
             (init.headers as Record<string, string>)["x-opencode-session"],
-        ).toBe(OPENCODE_GO_SESSION_ID);
+        ).toBe(OPENCODE_GO_DEFAULT_SESSION_ID);
     });
 
     it("returns an empty list for a provider without a chat list", async () => {

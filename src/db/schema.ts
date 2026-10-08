@@ -18,20 +18,20 @@ import {
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const userPlanEnum = pgEnum("user_plan", [
     "self_host",
     "hosted_free",
     "hosted_pro",
 ]);
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const foundingMemberReservationStatusEnum = pgEnum(
     "founding_member_reservation_status",
     ["reserved", "consumed", "released", "expired"],
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const stripeWebhookEventStatusEnum = pgEnum(
     "stripe_webhook_event_status",
     ["pending", "processing", "completed", "failed"],
@@ -58,26 +58,26 @@ export const users = pgTable("users", {
         .default(false),
     // Hosted billing plan. NULL on self-host and for hosted users created
     // before the billing rollout (backfilled by scripts/billing-backfill.ts).
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     plan: userPlanEnum("plan"),
     // Set by the billing rollout backfill to (launch_date + 30 days) for
     // every pre-launch hosted user. While > now(), enforcement skips caps.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     planTransitionUntil: timestamp("plan_transition_until"),
     // Per-cycle Mynah transcription budget in seconds. Reset by cycle-close.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     monthlyMynahSecondsRemaining: integer("monthly_mynah_seconds_remaining")
         .notNull()
         .default(0),
     // Next time cycle-close should refresh the Mynah counter. NULL = never.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     monthlyMynahGrantResetAt: timestamp("monthly_mynah_grant_reset_at"),
     // True while the user currently retains founding monthly pricing. Cleared
     // when they cancel/lapse; the separate claimed timestamp is never cleared
     // so the first-100 capacity does not reopen.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     foundingMember: boolean("founding_member").notNull().default(false),
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     foundingMemberClaimedAt: timestamp("founding_member_claimed_at"),
     // First time the user was successfully charged. NULL = never paid.
     // Used to branch the grace-period policy on lapse:
@@ -86,12 +86,12 @@ export const users = pgTable("users", {
     // Grandfather: pre-launch users are treated as Path B (paid) by checking
     // `createdAt < BILLING_LAUNCH_DATE` at deletion-scheduling time, so this
     // column staying NULL for grandfathered users is intentional.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     everPaidAt: timestamp("ever_paid_at"),
     // When the user enters a lapsed state (trial ended w/o payment, sub
     // canceled/failed-out, etc.) this is set to now() + grace_days. The
     // billing worker deletes the account at that time. Cleared on reactivate.
-    /** @deprecated hosted-only, retained for data compatibility (D-004) */
+    /** @deprecated hosted-only, retained for data compatibility */
     accountDeletionScheduledAt: timestamp("account_deletion_scheduled_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -99,7 +99,7 @@ export const users = pgTable("users", {
 
 // Admin read-access audit log.
 // Append-only. One row per admin page view or admin API hit.
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const adminAuditLog = pgTable(
     "admin_audit_log",
     {
@@ -135,7 +135,7 @@ export const adminAuditLog = pgTable(
 // minimum diff needed to understand the change without storing PII
 // content (e.g., for softDeleteRecording we store filename hashes/sizes,
 // not transcripts).
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const adminActionLog = pgTable(
     "admin_action_log",
     {
@@ -843,7 +843,7 @@ export const apiRateLimitBuckets = pgTable(
  * Aggregate hit counter for the install.sh routes. No writers remain in this
  * build; the hit recorder was removed with the hosted instance.
  *
- * @deprecated hosted-only, retained for data compatibility (D-004)
+ * @deprecated hosted-only, retained for data compatibility
  */
 export const installScriptHits = pgTable(
     "install_script_hits",
@@ -858,7 +858,7 @@ export const installScriptHits = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const emailSuppressions = pgTable(
     "email_suppressions",
     {
@@ -874,7 +874,7 @@ export const emailSuppressions = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const emailCampaigns = pgTable("email_campaigns", {
     id: text("id")
         .primaryKey()
@@ -885,7 +885,7 @@ export const emailCampaigns = pgTable("email_campaigns", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const emailDeliveries = pgTable(
     "email_deliveries",
     {
@@ -922,7 +922,7 @@ export const emailDeliveries = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const emailValidations = pgTable(
     "email_validations",
     {
@@ -946,7 +946,7 @@ export const emailValidations = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const newsletterSubscriptions = pgTable(
     "newsletter_subscriptions",
     {
@@ -968,7 +968,7 @@ export const newsletterSubscriptions = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const billingCustomers = pgTable("billing_customers", {
     userId: text("user_id")
         .primaryKey()
@@ -978,7 +978,7 @@ export const billingCustomers = pgTable("billing_customers", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const foundingMemberReservations = pgTable(
     "founding_member_reservations",
     {
@@ -1016,7 +1016,7 @@ export const foundingMemberReservations = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const subscriptions = pgTable(
     "subscriptions",
     {
@@ -1052,7 +1052,7 @@ export const subscriptions = pgTable(
     }),
 );
 
-/** @deprecated hosted-only, retained for data compatibility (D-004) */
+/** @deprecated hosted-only, retained for data compatibility */
 export const stripeWebhookEvents = pgTable(
     "stripe_webhook_events",
     {

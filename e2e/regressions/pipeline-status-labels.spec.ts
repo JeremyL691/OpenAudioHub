@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "../characterization/helpers";
 
-// F25 (PLAN §7): the two pipeline outcomes that tell the user what to do next. The jobs are
+// F25: the two pipeline outcomes that tell the user what to do next. The jobs are
 // seeded by scripts/dev/seed-e2e.ts.
 // - The recording page shows the outcome in its pipeline status block, which carries the
 //   job phase in data-phase (src/components/recording/pipeline/pipeline-status.tsx).

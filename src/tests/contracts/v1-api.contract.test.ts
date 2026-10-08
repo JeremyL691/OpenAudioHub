@@ -10,7 +10,7 @@ import {
     type serializeTranscript,
 } from "@/lib/v1/serialize";
 
-// Contract snapshots for the /api/v1 response shapes (PLAN T0.8). Encryption is
+// Contract snapshots for the /api/v1 response shapes. Encryption is
 // replaced with a visible prefix so snapshots show which fields were decrypted.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/encryption/fields", () => ({

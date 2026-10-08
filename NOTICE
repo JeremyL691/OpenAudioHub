@@ -1,5 +1,6 @@
 OpenAudioHub
-Copyright (C) OpenAudioHub contributors
+Copyright (C) 2026 Jeremy Liu
+Portions Copyright (C) Riffado contributors (https://github.com/riffado/riffado)
 
 OpenAudioHub is licensed under the GNU Affero General Public License,
 version 3. The full license text is in the LICENSE file.
@@ -11,8 +12,9 @@ Origin
 OpenAudioHub is based on Riffado v0.6.4 (commit 712e74f), an AGPL-3.0
 project created by Perier and maintained by the Riffado community. The
 long-audio pipeline in this repository was developed in a fork of Riffado
-based on upstream commit b518379. The copyright notices and license terms
-of the upstream code are preserved in the repository history.
+based on upstream commit b518379. The upstream copyright notices and
+license terms continue to apply to the code that came from Riffado. Its full
+history is available in the upstream repository.
 
 Some identifiers, such as the `op_` API key prefix, come from an earlier
 project name, OpenPlaud. OpenAudioHub still accepts them, so existing keys

@@ -91,7 +91,7 @@ function contrast(
 
 // [foreground, background, required ratio, what the pair is used for].
 // The warning color is a chip background only (with warning-foreground), never page
-// text or an icon on the page, so it has no page-level pair here (docs/dev/DESIGN.md).
+// text or an icon on the page, so it has no page-level pair here.
 const PAIRS: [string, string, number, string][] = [
     ["foreground", "background", 4.5, "page text"],
     ["card-foreground", "card", 4.5, "card text"],
