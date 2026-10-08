@@ -1,5 +1,17 @@
 # Riffado — Agent Guidelines
 
+## OpenAudioHub Program Rules
+
+This repository is the OpenAudioHub rebuild of the Riffado fork. The authoritative plan, task list, decisions, and handoff state live in `docs/dev/` (see `docs/dev/PLAN.md`). These rules apply to every agent working here. Where they conflict with the general rules below, these take precedence.
+
+1. **Resume first.** Before any work, follow the RESUME protocol in `docs/dev/PLAN.md` §9.5: read `docs/dev/HANDOFF.md`, `docs/dev/TASKS.md`, the last 40 lines of `docs/dev/PROGRESS_LOG.md`, the titles in `docs/dev/DECISIONS.md`, and `docs/dev/BLOCKERS.md`. Then check `.dev-artifacts/lock.json` and reconcile git state with the handoff.
+2. **Authorized by the program (D-005, D-027).** Local `git commit`, `pnpm dev`, `pnpm build`, `pnpm db:generate` (including `--custom`), tests, and `docker compose up/down` for the project names `oah-test`, `oah-e2e`, and `openaudiohub-rehearsal` are permitted without asking. The general rules "NEVER run without user instruction" and "NEVER commit unless the user asks" do not apply to this program.
+3. **Forbidden.** `git push`; creating remote repositories; `git reset --hard`, `git clean -fd`, `git stash`, `git checkout .`; `git commit --no-verify`; force pushes and history rewrites. Stage explicit paths only (`git add <paths>`), never `git add -A` or `git add .`. Do not modify anything under `~/Desktop/Projects/riffado/`. Do not modify or delete the `riffado_*` Docker volumes or containers (read-only `pg_dump` and `tar` are allowed). Do not stop the old stack, occupy port 3000, or replace the desktop app before the gated cutover (`docs/dev/PLAN.md` T8.4).
+4. **Approved removals and renames.** Removal of hosted-only code (D-003, PLAN §1.2 reachability rule), renames of public protocols without legacy aliases (D-007), and the `db:generate --custom` migration exception (D-024) are approved. They do not need a separate confirmation. Never remove self-host reachable features. For anything the plan does not cover, choose the most conservative option, record it in `docs/dev/DECISIONS.md` as `D-1xx`, then continue.
+5. **Gates.** Creating a GitHub repository, pushing, the production cutover, and deleting data volumes are gated. Record them as `[GATE]` in `docs/dev/BLOCKERS.md` and continue with other tasks.
+6. **Commit trailers.** Commit messages follow `docs/dev/PLAN.md` §9.4 (`Task:`, `Step:`, `Agent:`, `Verification:`).
+7. **Secrets.** Never print values from `.env` in logs, commits, or output. Refer to variable names only.
+
 ## First task
 
 If the user did not give you a concrete task, read this file + `README.md` + `BRANCHING.md`, then ask which area to work on (sync, transcription, AI, storage, UI, settings, onboarding, notifications, landing).

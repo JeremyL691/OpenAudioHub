@@ -93,3 +93,9 @@ docker-compose.local.yml
 docker-compose.override.yml
 .codegraph/
 .worktrees/
+
+# OpenAudioHub development artifacts (PLAN §9.2)
+.dev-artifacts/
+e2e/.env.e2e
+playwright-report/
+test-results/
