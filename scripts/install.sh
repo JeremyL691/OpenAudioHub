@@ -1,26 +1,26 @@
 #!/bin/sh
-# Riffado one-line installer.
+# OpenAudioHub one-line installer.
 #
 # Usage:
-#   curl -fsSL https://riffado.com/install.sh | sh
-#   curl -fsSL https://riffado.com/v0.2.0/install.sh | sh   # version-pinned
+#   curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/download/v0.2.0/install.sh | sh   # version-pinned
 #
 # What this does:
 #   1. Verifies Docker + docker compose v2 are installed and running.
-#   2. Creates an install directory (default $HOME/riffado).
+#   2. Creates an install directory (default $HOME/openaudiohub).
 #   3. Downloads docker-compose.yml + env.example from the GitHub release.
-#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD).
+#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD, AUDIO_PIPELINE_TOKEN).
 #   5. Pulls images and starts the stack.
 #   6. Waits for /api/health to return 200.
 #
-# This script is part of the Riffado deploy surface (see AGENTS.md).
-# Source: https://github.com/riffado/riffado/blob/main/scripts/install.sh
+# This script is part of the OpenAudioHub deploy surface (see AGENTS.md).
+# Source: https://github.com/JeremyL691/OpenAudioHub/blob/main/scripts/install.sh
 
 set -eu
 
 VERSION="{{VERSION}}"
-REPO="riffado/riffado"
-DEFAULT_DIR="$HOME/riffado"
+REPO="JeremyL691/OpenAudioHub"
+DEFAULT_DIR="$HOME/openaudiohub"
 DEFAULT_APP_URL="http://localhost:3000"
 HEALTH_TIMEOUT=60
 
@@ -102,7 +102,7 @@ ok "Docker Compose v2 available"
 # ---- prompt for install dir + APP_URL --------------------------------------
 
 prompt INSTALL_DIR "Install directory" "$DEFAULT_DIR"
-prompt APP_URL "Public URL where Riffado will be reachable" "$DEFAULT_APP_URL"
+prompt APP_URL "Public URL where OpenAudioHub will be reachable" "$DEFAULT_APP_URL"
 
 if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null || true)" ]; then
     die "$INSTALL_DIR already exists and is not empty. Pick another directory or remove it first."
@@ -135,6 +135,7 @@ ok "Downloaded docker-compose.yml and .env"
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 ENCRYPTION_KEY="$(openssl rand -hex 32)"
 POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+AUDIO_PIPELINE_TOKEN="$(openssl rand -hex 32)"
 
 # Patch the .env in place. macOS ships BSD sed which requires a backup-suffix
 # arg to -i; GNU sed does not. Use a temp file + mv to stay portable.
@@ -162,10 +163,11 @@ patch_env() {
 patch_env BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
 patch_env ENCRYPTION_KEY "$ENCRYPTION_KEY"
 patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
+patch_env AUDIO_PIPELINE_TOKEN "$AUDIO_PIPELINE_TOKEN"
 patch_env APP_URL "$APP_URL"
 if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
-    # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
-    patch_env RIFFADO_VERSION "${VERSION#v}"
+    # VERSION starts with "v"; OPENAUDIOHUB_VERSION expects a bare semver.
+    patch_env OPENAUDIOHUB_VERSION "${VERSION#v}"
 fi
 chmod 600 .env
 ok "Generated secrets and wrote .env"
@@ -175,7 +177,7 @@ ok "Generated secrets and wrote .env"
 info "Pulling images (this can take a minute on first run)..."
 docker compose pull
 
-info "Starting Riffado..."
+info "Starting OpenAudioHub..."
 docker compose up -d
 
 # ---- health check ----------------------------------------------------------
@@ -185,7 +187,7 @@ i=0
 while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
     if curl -fsS -o /dev/null "$APP_URL/api/health" 2>/dev/null; then
         ok "Health check passed"
-        printf '\n%s🎙  Riffado is up.%s\n' "$BOLD" "$RESET"
+        printf '\n%s🎙  OpenAudioHub is up.%s\n' "$BOLD" "$RESET"
         printf '   Open %s%s/register%s to create your account.\n\n' "$BOLD" "$APP_URL" "$RESET"
         printf '   Install dir: %s\n' "$INSTALL_DIR"
         printf '   Logs:        cd %s && docker compose logs -f\n' "$INSTALL_DIR"
