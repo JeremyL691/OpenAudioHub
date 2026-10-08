@@ -86,12 +86,12 @@ class PipelineService:
             return
         self._tasks[job_id] = asyncio.create_task(self._run_with_slot(job_id))
 
-    async def submit(self, riffado_job_id: str, duration_ms: int) -> tuple[dict[str, Any], bool]:
-        if not _ID_RE.fullmatch(riffado_job_id):
-            raise ValueError("Invalid Riffado job id")
+    async def submit(self, core_job_id: str, duration_ms: int) -> tuple[dict[str, Any], bool]:
+        if not _ID_RE.fullmatch(core_job_id):
+            raise ValueError("Invalid core job id")
         if duration_ms < 0 or duration_ms > 24 * 60 * 60 * 1000:
             raise ValueError("Audio duration must be between zero and 24 hours")
-        job, created = self.store.create(riffado_job_id, riffado_job_id, duration_ms)
+        job, created = self.store.create(core_job_id, core_job_id, duration_ms)
         self.schedule(job["id"])
         return job, created
 
@@ -458,7 +458,7 @@ class PipelineService:
                 )
                 return
             request = ChunkAudio(
-                job_id=job["riffado_job_id"],
+                job_id=job["core_job_id"],
                 chunk_id=chunk["id"],
                 index=chunk["chunk_index"],
                 start_sample=plan.start_sample,

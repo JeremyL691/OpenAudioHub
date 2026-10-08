@@ -17,7 +17,7 @@ async def test_api_auth_idempotent_submit_status_and_cancel(tmp_path: Path, monk
     app.state.service.schedule = lambda _job_id: None
     payload = {
         "idempotency_key": "core-job-api",
-        "riffado_job_id": "core-job-api",
+        "core_job_id": "core-job-api",
         "duration_ms": 90_000,
     }
 
@@ -97,7 +97,7 @@ async def test_submit_accepts_exact_24_hour_limit_and_rejects_one_ms_over(
                 headers=headers,
                 json={
                     "idempotency_key": "limit-24h",
-                    "riffado_job_id": "limit-24h",
+                    "core_job_id": "limit-24h",
                     "duration_ms": 86_400_000,
                 },
             )
@@ -108,10 +108,38 @@ async def test_submit_accepts_exact_24_hour_limit_and_rejects_one_ms_over(
                 headers=headers,
                 json={
                     "idempotency_key": "over-limit",
-                    "riffado_job_id": "over-limit",
+                    "core_job_id": "over-limit",
                     "duration_ms": 86_400_001,
                 },
             )
             assert rejected.status_code == 422
+    finally:
+        await app.state.service.stop()
+
+
+async def test_legacy_riffado_job_id_field_is_still_accepted(tmp_path: Path, monkeypatch) -> None:
+    # Core builds from before the rename send `riffado_job_id` (D-025).
+    monkeypatch.setenv("AUDIO_PIPELINE_DATA_DIR", str(tmp_path / "default-app"))
+    from audio_pipeline.app import create_app
+
+    token = "local-test-token-that-is-long-enough-123"
+    app = create_app(AppConfig(server=ServerConfig(data_dir=tmp_path / "api", api_token=token)))
+    app.state.service.schedule = lambda _job_id: None
+    headers = {"Authorization": f"Bearer {token}"}
+    legacy_payload = {
+        "idempotency_key": "legacy-core-job",
+        "riffado_job_id": "legacy-core-job",
+        "duration_ms": 60_000,
+    }
+
+    await app.state.service.start()
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://pipeline.test"
+        ) as client:
+            response = await client.post("/v1/jobs", json=legacy_payload, headers=headers)
+            assert response.status_code == 202
+            assert response.json()["created"] is True
     finally:
         await app.state.service.stop()

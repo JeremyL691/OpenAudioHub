@@ -300,7 +300,7 @@ export async function processJob(job: ClaimedJob): Promise<void> {
             method: "POST",
             body: JSON.stringify({
                 idempotency_key: job.id,
-                riffado_job_id: job.id,
+                core_job_id: job.id,
                 duration_ms: job.durationMs,
             }),
         });

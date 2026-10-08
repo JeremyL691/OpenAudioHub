@@ -172,7 +172,7 @@ def _preview(database: Path, output: Path) -> None:
                         token,
                         {
                             "action": "preview",
-                            "job_id": row["riffado_job_id"],
+                            "job_id": row["core_job_id"],
                             "expected_text_sha256": _digest(result["text"]),
                             "result": result,
                         },
@@ -190,7 +190,7 @@ def _preview(database: Path, output: Path) -> None:
                     raise RuntimeError("Core returned an invalid repair generation")
                 plans.append(
                     {
-                        "job_id": row["riffado_job_id"],
+                        "job_id": row["core_job_id"],
                         "recording_minutes": round(row["duration_ms"] / 60_000, 2),
                         "generation": generation,
                         "expected_text_sha256": _digest(result["text"]),
