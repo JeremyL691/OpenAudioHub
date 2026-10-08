@@ -42,14 +42,14 @@ export const metadata: Metadata = {
         title: "OpenAudioHub — Open-source AI transcription for voice recorders",
         description:
             "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
-        images: [{ url: "/og-home.png", width: 1200, height: 630 }],
+        images: [{ url: "/og.png", width: 1200, height: 630 }],
     },
     twitter: {
         card: "summary_large_image",
         title: "OpenAudioHub — Open-source AI transcription for voice recorders",
         description:
             "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
-        images: ["/og-home.png"],
+        images: ["/og.png"],
     },
     appleWebApp: {
         capable: true,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyableCommand } from "@/components/copyable-command";
 import { Footer } from "@/components/footer";
-import { LogoWordmark } from "@/components/icons/logo";
+import { Logo } from "@/components/icons/logo";
 import { INSTALL_ONELINER, pinnedInstallCommand } from "@/lib/install-commands";
 import { APP_VERSION_TAG } from "@/lib/version";
 
@@ -35,7 +35,7 @@ export default function InstallPage() {
                         className="flex items-center hover:opacity-80 transition-opacity"
                         aria-label="OpenAudioHub"
                     >
-                        <LogoWordmark className="h-7 w-auto" />
+                        <Logo className="text-xl" />
                     </Link>
                 </div>
             </header>

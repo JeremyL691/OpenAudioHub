@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/readme-hero.png" alt="OpenAudioHub" width="720">
+</p>
+
 # OpenAudioHub
 
 **Open-source AI transcription for the recorder you already own.**

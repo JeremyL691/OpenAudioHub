@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { Github } from "@/components/icons/icons";
-import { Logo } from "@/components/icons/logo";
+import { LogoMark } from "@/components/icons/logo";
 import { ReportBugButton } from "@/components/report-bug-dialog";
 import { UpdateBadge } from "@/components/update-badge";
 import { BRAND } from "@/lib/brand";
@@ -23,7 +23,7 @@ export function Footer() {
             <div className="container mx-auto px-4 py-3 max-w-7xl">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground font-mono">
                     <div className="flex items-center gap-2">
-                        <Logo className="size-4" />
+                        <LogoMark className="size-4" />
                         <span>
                             © {currentYear} {BRAND.copyrightHolder} ·{" "}
                             {BRAND.attribution} · Licensed under{" "}
