@@ -1,3 +1,5 @@
+import { waveformFallback } from "@/lib/notifications/email-templates/brand-colors";
+
 /** Colours the waveform draws with, read from the theme tokens at draw time. */
 export interface WaveformPalette {
     /** Gradient stops for the played part of the waveform, left to right. */
@@ -8,13 +10,7 @@ export interface WaveformPalette {
     muted: string;
 }
 
-const FALLBACK = {
-    cyan: "oklch(0.72 0.15 230)",
-    blue: "oklch(0.58 0.22 262)",
-    violet: "oklch(0.55 0.25 290)",
-    primary: "oklch(0.2038 0.0264 260.9332)",
-    muted: "rgba(0,0,0,0.5)",
-};
+const FALLBACK = waveformFallback;
 
 /**
  * Builds the waveform palette from a token reader (usually

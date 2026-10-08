@@ -28,7 +28,7 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 
 ### Changed
 
-- Product names, UI copy, email text, and the footer read OpenAudioHub. The footer attribution credits the upstream project.
+- Product names, UI copy, email text, and the footer read OpenAudioHub. The footer reads “Licensed under AGPL-3.0” and links to NOTICE, which credits the upstream project.
 - Browser storage keys are now `openaudiohub:*`. Values under the previous key names are copied on first read, and the old keys are then removed.
 - The browser connector global is `window.__openaudiohubConnector`. The previous global is still read.
 - Download filenames are `openaudiohub-export-*.zip`. The Bark group is `openaudiohub-recordings`. Temporary directories use the `oah-` prefix.

@@ -19,8 +19,9 @@ describe("brand constants", () => {
         expect(BRAND.docsPath).toBe("/docs");
     });
 
-    it("keeps Riffado attribution in the copyright line", () => {
-        expect(BRAND.copyright).toContain("Based on Riffado (AGPL-3.0)");
+    it("states the license in the copyright line without naming the upstream project", () => {
+        expect(BRAND.copyright).toContain("Licensed under AGPL-3.0");
+        expect(BRAND.copyright).not.toContain("Riffado");
     });
 });
 
