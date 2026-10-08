@@ -1,9 +1,11 @@
 version: '3.8'
 
+name: openaudiohub
+
 services:
   db:
     image: postgres:16-alpine
-    container_name: riffado-db
+    container_name: openaudiohub-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -16,7 +18,7 @@ services:
       #   set POSTGRES_PASSWORD=<value> in .env
       #   docker compose up -d --force-recreate app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: riffado
+      POSTGRES_DB: openaudiohub
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -33,17 +35,17 @@ services:
     #   - `0.1.0`   → pin to a specific version
     #   - `dev`     → rolling build from `main` (unstable, opt-in)
     # Override via OPENAUDIOHUB_VERSION in .env. For local builds, see docker-compose.dev.yml.
-    image: ghcr.io/riffado/riffado:${OPENAUDIOHUB_VERSION:-latest}
+    image: ghcr.io/jeremyl691/openaudiohub:${OPENAUDIOHUB_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: riffado-app
+    container_name: openaudiohub-app
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       # Database
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/riffado
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/openaudiohub
 
       # Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -61,9 +63,9 @@ services:
       S3_REGION: ${S3_REGION:-}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
-      AUDIO_PIPELINE_ENABLED: ${AUDIO_PIPELINE_ENABLED:-false}
+      AUDIO_PIPELINE_ENABLED: ${AUDIO_PIPELINE_ENABLED:-true}
       AUDIO_PIPELINE_BASE_URL: ${AUDIO_PIPELINE_BASE_URL:-http://audio-pipeline:8100}
-      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:-}
+      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:?Set AUDIO_PIPELINE_TOKEN in .env}
 
       # SMTP (optional: password reset + email notifications)
       SMTP_HOST: ${SMTP_HOST:-}
@@ -94,10 +96,10 @@ services:
     build:
       context: ./audio-pipeline
       dockerfile: Dockerfile
-    container_name: riffado-audio-pipeline
+    container_name: openaudiohub-audio-pipeline
     restart: unless-stopped
     environment:
-      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:-}
+      AUDIO_PIPELINE_TOKEN: ${AUDIO_PIPELINE_TOKEN:?Set AUDIO_PIPELINE_TOKEN in .env}
       AUDIO_PIPELINE_CORE_URL: http://app:3000
       AUDIO_PIPELINE_DATA_DIR: /data
     volumes:
