@@ -1,397 +1,232 @@
-# Riffado — Agent Guidelines
+# OpenAudioHub Agent Guidelines
 
-## OpenAudioHub Program Rules
+## Program rules
 
-This repository is the OpenAudioHub rebuild of the Riffado fork. The authoritative plan, task list, decisions, and handoff state live in `docs/dev/` (see `docs/dev/PLAN.md`). These rules apply to every agent working here. Where they conflict with the general rules below, these take precedence.
+This repository is the OpenAudioHub rebuild. The plan, task list, decisions, and handoff state live in `docs/dev/`, starting with `docs/dev/PLAN.md`. These rules apply to every agent working here and take precedence over the general rules below.
 
-1. **Resume first.** Before any work, follow the RESUME protocol in `docs/dev/PLAN.md` §9.5: read `docs/dev/HANDOFF.md`, `docs/dev/TASKS.md`, the last 40 lines of `docs/dev/PROGRESS_LOG.md`, the titles in `docs/dev/DECISIONS.md`, and `docs/dev/BLOCKERS.md`. Then check `.dev-artifacts/lock.json` and reconcile git state with the handoff.
-2. **Authorized by the program (D-005, D-027).** Local `git commit`, `pnpm dev`, `pnpm build`, `pnpm db:generate` (including `--custom`), tests, and `docker compose up/down` for the project names `oah-test`, `oah-e2e`, and `openaudiohub-rehearsal` are permitted without asking. The general rules "NEVER run without user instruction" and "NEVER commit unless the user asks" do not apply to this program.
-3. **Forbidden.** `git push`; creating remote repositories; `git reset --hard`, `git clean -fd`, `git stash`, `git checkout .`; `git commit --no-verify`; force pushes and history rewrites. Stage explicit paths only (`git add <paths>`), never `git add -A` or `git add .`. Do not modify anything under `~/Desktop/Projects/riffado/`. Do not modify or delete the `riffado_*` Docker volumes or containers (read-only `pg_dump` and `tar` are allowed). Do not stop the old stack, occupy port 3000, or replace the desktop app before the gated cutover (`docs/dev/PLAN.md` T8.4).
-4. **Approved removals and renames.** Removal of hosted-only code (D-003, PLAN §1.2 reachability rule), renames of public protocols without legacy aliases (D-007), and the `db:generate --custom` migration exception (D-024) are approved. They do not need a separate confirmation. Never remove self-host reachable features. For anything the plan does not cover, choose the most conservative option, record it in `docs/dev/DECISIONS.md` as `D-1xx`, then continue.
-5. **Gates.** Creating a GitHub repository, pushing, the production cutover, and deleting data volumes are gated. Record them as `[GATE]` in `docs/dev/BLOCKERS.md` and continue with other tasks.
-6. **Commit trailers.** Commit messages follow `docs/dev/PLAN.md` §9.4 (`Task:`, `Step:`, `Agent:`, `Verification:`).
+1. **Resume first.** Before any work, follow the RESUME protocol in `docs/dev/PLAN.md` §9.5. Read `docs/dev/HANDOFF.md`, `docs/dev/TASKS.md`, the end of `docs/dev/PROGRESS_LOG.md`, the titles in `docs/dev/DECISIONS.md`, and `docs/dev/BLOCKERS.md`. Then reconcile git state with the handoff.
+2. **Authorized actions.** Local commits, `pnpm dev`, `pnpm build`, `pnpm db:generate` (including `--custom`), tests, and `docker compose up` and `down` for the project names `oah-test`, `oah-e2e`, and `openaudiohub-rehearsal` do not need separate confirmation.
+3. **Forbidden.** `git push`; creating remote repositories; `git reset --hard`, `git clean -fd`, `git stash`, and `git checkout .`; `git commit --no-verify`; force pushes; history rewrites. Stage explicit paths only, never `git add -A` or `git add .`. Do not modify the legacy checkout or its Docker volumes and containers. Read-only dumps and archives are allowed. Do not stop the legacy stack or take its port before the gated cutover in `docs/dev/PLAN.md` (T8.4).
+4. **Approved removals and renames.** Removal of hosted-only code, renames of public protocols without aliases, and the custom-migration exception (D-024) are approved. Never remove a feature that self-hosters can reach. For anything the plan does not cover, choose the most conservative option, record it in `docs/dev/DECISIONS.md` as `D-1xx`, then continue.
+5. **Gates.** Creating a GitHub repository, pushing, the production cutover, and deleting data volumes are gated. Record them as `[GATE]` in `docs/dev/BLOCKERS.md`, and do not perform them.
+6. **Commit trailers.** Commit messages follow `docs/dev/PLAN.md` §9.4.
 7. **Secrets.** Never print values from `.env` in logs, commits, or output. Refer to variable names only.
 
 ## First task
 
-If the user did not give you a concrete task, read this file + `README.md` + `BRANCHING.md`, then ask which area to work on (sync, transcription, AI, storage, UI, settings, onboarding, notifications, landing).
+If the user did not give a concrete task, read this file, `README.md`, and `BRANCHING.md`. Then ask which area to work on: sync, transcription, AI, storage, UI, settings, onboarding, notifications, the audio pipeline, or docs.
 
-## The One Rule
+## The one rule
 
-Understand what you're changing. Riffado is live and in use — people depend on it to access their recordings, transcripts, and storage. If you can't explain what your change does and how it interacts with the rest of the system, don't ship it.
+Understand what you are changing. People depend on OpenAudioHub to reach their recordings, transcripts, and storage. If you cannot explain what your change does and how it interacts with the rest of the system, do not ship it.
 
-Using AI to write code is fine. Submitting AI-generated code you don't understand is not.
+Using AI to write code is fine. Submitting AI-generated code you do not understand is not.
 
 ## Style
 
-- Keep answers short and concise
-- No emojis in commits, issues, PR comments, or code
-- No fluff or cheerful filler text
-- Technical prose only, be kind but direct (e.g., "Thanks @user" not "Thanks so much @user!")
-- Avoid overusing spaced em dashes (` — `), especially in user-facing copy. Prefer a period, comma, colon, parenthetical, or a shorter sentence unless the dash is clearly the best punctuation.
+- Keep answers short and direct.
+- No emojis in commits, issues, pull request comments, or code.
+- No filler or cheerful padding.
+- Avoid overusing spaced em dashes (` — `), especially in user-facing copy. Prefer a period, a comma, a colon, parentheses, or a shorter sentence.
 
-Marketing surfaces (landing page copy, README feature sections) are exempt — they follow product design, not agent rules.
+## Code quality
 
-## Code Quality
-
-- No `any` types unless absolutely necessary
-- Check `node_modules` for external API type definitions instead of guessing
-- **NEVER use inline imports** — no `await import("./foo")`, no `import("pkg").Type` in type positions. Always top-level imports.
-- NEVER remove or downgrade code to fix type errors from outdated dependencies; upgrade the dependency instead
-- Always ask before removing functionality or code that appears to be intentional
-- Refactor freely and do not preserve backward compatibility on internal code unless the user explicitly asks. Internal code APIs are not a contract; only the **deploy surface** is (see below) — that one is sacred.
+- Avoid `any` unless it is truly necessary.
+- Check `node_modules` for external API type definitions instead of guessing.
+- Never use inline imports (`await import("./foo")`, `import("pkg").Type`). Use top-level imports.
+- Never remove or downgrade code to fix type errors from outdated dependencies. Upgrade the dependency instead.
+- Ask before you remove functionality or code that looks intentional.
+- Internal code APIs are not a contract, so refactor freely. The deploy surface described below is.
 
 ### Comments
 
-JSDoc on exported APIs only. No narrative or strategy comments in source.
-Design rationale goes in the commit message.
+JSDoc on exported APIs only. No narrative or strategy comments in source. Put design rationale in the commit message.
 
 ## Commands
 
-- After code changes (not docs): `pnpm format-and-lint:fix && pnpm type-check`. Fix all errors and warnings before committing.
-- When running check/typecheck/test commands, capture the full output — do not pipe through `| tail`, `| head`, or otherwise truncate. Hidden errors are the whole problem these commands are supposed to surface.
-- Tests: `pnpm test` (from repo root). Integration tests are opt-in via `PLAUD_BEARER_TOKEN=... bun test src/tests/plaud.integration.test.ts`.
-- If you create or modify a test file, run it and iterate until it passes.
-- Regression tests for a specific bug go at `src/tests/regressions/<issue-number>-<short-slug>.test.ts` (create the directory the first time).
-- **NEVER run without user instruction:** `pnpm dev`, `pnpm build`, `pnpm db:migrate`, `pnpm db:generate`, `docker compose up`, any release command.
-- Dev diagnostics endpoint: `/api/dev/plaud/info` (dev-only, hidden in production) — probes the stored Plaud connection and reports device + recording counts. Useful for "is the connection actually working" without digging into the DB.
-- Dev screenshot route: `/dev/demo-dashboard` (dev-only, hidden in production) — renders the real dashboard `<Workstation>` against hand-curated fixtures in `src/lib/demo/fixtures.ts`. Used to capture marketing screenshots without polluting a real account. Summaries for `demo-` ids are served by a dev-only branch in `/api/recordings/[id]/summary` GET; audio playback is intentionally broken (404) since screenshots don't need it.
+- After code changes (not docs), run `pnpm format-and-lint:fix && pnpm type-check`. Fix every error and warning before you commit.
+- When you run check, type-check, or test commands, capture the full output. Do not pipe it through `head` or `tail`. Hidden errors are the problem these commands exist to surface.
+- Tests: `pnpm test`. Integration tests need a test database. `scripts/dev/test-stack.sh` starts one.
+- End-to-end tests: `pnpm e2e` runs Playwright against a production build on port 3210, with a fake AI server on port 3299.
+- Regression tests for a specific bug go in `src/tests/regressions/<issue-number>-<short-slug>.test.ts`.
+- Dev-only diagnostics: `/api/dev/plaud/info` probes the stored Plaud connection and reports the device and recording counts. It is hidden in production.
 
-## **CRITICAL** Tool Usage Rules **CRITICAL**
+## Tool usage (CRITICAL)
 
-- NEVER use `sed`/`cat` to read a file or a range of a file. Always use the Read tool (use offset + limit for ranged reads).
-- You MUST read every file you modify in full before editing.
+- Read files with the Read tool, not `sed` or `cat`. Use `offset` and `limit` for ranged reads.
+- Read every file in full before you edit it.
 
-## **CRITICAL** Git Rules **CRITICAL**
+## Git rules (CRITICAL)
 
-Multiple agents may work on the same worktree simultaneously (subagents, parallel sessions). These rules prevent destroying other agents' work and prevent destructive mistakes even in single-agent use.
+Several agents may work in the same checkout. These rules stop one agent from destroying another's work.
 
-### Committing
+- Commit only the files you changed in this session.
+- Include `fixes #<number>` or `closes #<number>` in the commit message when a related issue exists.
+- Never use `git add -A` or `git add .`. Stage paths explicitly with `git add -- <paths>`.
+- Before you commit, run `git status` and confirm that you staged only your files.
+- Matching `src/db/migrations/*.sql` and `src/db/migrations/meta/*` files belong with the `src/db/schema.ts` change that produced them.
+- Delete files with `git rm -- <paths>`.
 
-- **ONLY commit files YOU changed in THIS session.**
-- ALWAYS include `fixes #<number>` or `closes #<number>` in the commit message when there is a related issue or PR.
-- NEVER use `git add -A` or `git add .` — these sweep up changes from other agents.
-- ALWAYS use `git add <specific-file-paths>` listing only files you modified.
-- Before committing, run `git status` and verify you are only staging YOUR files.
-- Track which files you created/modified/deleted during the session.
-- It is always fine to include matching `src/db/migrations/*.sql` and `src/db/migrations/meta/*` files alongside the `src/db/schema.ts` change that produced them — they are generated artifacts of your edit, not other agents' work.
-- NEVER commit unless the user asks.
-
-### Forbidden Git Operations
-
-These can destroy work:
-
-- `git reset --hard` — destroys uncommitted changes
-- `git checkout .` — destroys uncommitted changes
-- `git clean -fd` — deletes untracked files
-- `git stash` — stashes ALL changes including other agents' work
-- `git add -A` / `git add .` — stages other agents' uncommitted work
-- `git commit --no-verify` — bypasses required checks, never allowed
-- `git push --force` / `--force-with-lease` — never allowed
-
-### Safe Workflow
-
-```bash
-# 1. Check status first
-git status
-
-# 2. Add ONLY your specific files
-git add src/lib/storage/s3-storage.ts
-git add CHANGELOG.md
-
-# 3. Commit
-git commit -m "fix(storage): correct S3 content-type fallback"
-
-# 4. Push (pull --rebase if needed, but NEVER reset/checkout)
-git pull --rebase && git push
-```
+Forbidden operations: `git reset --hard`, `git checkout .`, `git clean -fd`, `git stash`, `git add -A`, `git add .`, `git commit --no-verify`, and force pushes.
 
 ### Commit prefixes
 
-`feat:`, `fix:`, `refactor:`, `chore:`, `perf:`, `docs:` (Conventional-Commits-ish). Squash-merge scoped features into `main`. Regular-merge long-lived branches where per-commit history matters.
-
-### Branch model
-
-`main` is a **rolling integration branch** — may be broken at any commit. Stable deploys come from tagged releases. See [BRANCHING.md](BRANCHING.md).
-
-### PR workflow
-
-- Analyze PRs without pulling locally first.
-- If the user approves: create a feature branch, pull the PR, rebase on `main`, apply adjustments, commit, merge into `main`, push, close the PR, and leave a comment in the user's tone.
-- You never open PRs yourself. Work in feature branches until everything matches the user's requirements, then merge into `main` and push.
+`feat:`, `fix:`, `refactor:`, `chore:`, `perf:`, and `docs:`. Squash-merge scoped features into `main`.
 
 ### Rebase conflicts
 
-- Resolve conflicts in YOUR files only.
-- If conflict is in a file you didn't modify, abort and ask the user.
-- NEVER force-push.
+Resolve conflicts only in files you changed. If a conflict is in a file you did not change, stop and ask.
 
 ### User override
 
-If user instructions conflict with these rules, ask for explicit confirmation before executing. Only then override.
+If user instructions conflict with these rules, ask for explicit confirmation before you act.
 
-## GitHub Issues and PRs
+## Issues and pull requests
 
-### Reading
-
-- Always read all comments, not just the body.
-- Recipe: `gh issue view <number> --json title,body,comments,labels,state`
-
-### Creating issues
-
-Three templates — pick the right one:
-
-- `bug_report.yml` — user-facing bug
-- `feature_request.yml` — user-facing feature suggestion
-- `task.yml` — internal agent-handoff work item
-
-Task template has three blocks: **Context** (why + current state), **Acceptance Criteria** (concrete verifiable outcomes), **Relevant files** (optional pointers).
-
-Title prefixes match commit prefixes. Labels: `bug`, `enhancement`, `task`, `triage`, `good first issue`, `documentation`, `help wanted`. Don't invent ad-hoc labels.
-
-### Commenting
-
-- Write multi-line comments to a temp file, use `gh issue comment --body-file` / `gh pr comment --body-file`. Never `--body` in shell for multi-line markdown.
-- Preview the exact comment text before posting.
-- Post exactly one final comment unless the user asks for more.
-- If a comment is malformed, delete it and repost one corrected version.
-- Tone: concise, technical, in the user's voice.
-
-### Closing via commit
-
-Include `closes #<n>` or `fixes #<n>` in the commit message — GitHub auto-closes when merged to `main`.
-
-### TODOs
-
-Plans and TODOs that need to survive a session belong in GitHub Issues, not in code comments or `plans/*.md`.
+- Read every comment on an issue or pull request, not only the body. `gh issue view <number> --json title,body,comments,labels,state` retrieves all of it.
+- Write multi-line comments to a file and post them with `gh issue comment --body-file` or `gh pr comment --body-file`. Preview the text before you post it, and post one final comment.
+- Plans and TODOs that must survive a session belong in GitHub issues, not in code comments.
 
 ## Changelog
 
-`CHANGELOG.md` is **maintainer-curated at release time.** Contributors do not edit it in PRs.
+`CHANGELOG.md` is curated by maintainers at release time. Contributors do not edit it in pull requests.
 
-### Format
+- New entries go under `## [Unreleased]`, in these subsections: `### Breaking Changes` (needs a migration note), `### Added`, `### Changed`, `### Fixed`, `### Removed`, and `### Security`.
+- Append to existing subsections. Do not create duplicates.
+- Never modify a released version section such as `## [1.0.0]`.
+- Breaking changes, and schema or environment changes that ship to every self-host image, get an entry. Describe the footprint: the table, migration number, or variable name, and the behavior that changes.
 
-Entries go under `## [Unreleased]`. Subsections:
+Attribution format:
 
-- `### Breaking Changes` — needs a migration note
-- `### Added` — new features
-- `### Changed` — changes to existing functionality
-- `### Fixed` — bug fixes
-- `### Removed` — removed features
-- `### Security` — security-relevant changes
-
-### Rules
-
-- Before adding entries, read the full `[Unreleased]` section to see which subsections exist.
-- New entries ALWAYS go under `## [Unreleased]`.
-- Append to existing subsections; do not create duplicates.
-- NEVER modify already-released version sections (`## [0.1.0]`, etc.) — each is immutable once released.
-- **Hosted-only behavioral changes are not changelog material.** The CHANGELOG audience is self-hosters and contributors; hosted users don't read it. Internal hosted-ops work (admin dashboard tweaks, hosted-only UI fixes, hosted analytics plumbing, hosted marketing surfaces) belongs in commit history, not here. Exception: schema or env changes that ship to every self-host image, even if the feature only activates under `IS_HOSTED=true` — self-hosters still run the migration and still see the env var in `.env.example`, so it gets a one-line entry.
-  - **That one-line entry discloses footprint, not the hosted business model.** State what showed up (table name, migration numbers, env var names) and that it's inert without the relevant flag. Do not explain pricing tiers, trial mechanics, entitlements, or how a hosted feature works — a self-hoster has no operational need for that, and the audience for that explanation is hosted users on `/changelog` or the landing page, not here. Real mistake to avoid repeating: a founding-member-pricing migration entry originally read "Founding-member monthly pricing (first-paid, first-served; the price stays locked for as long as the subscription remains active)..." — that's product copy. The corrected version just said "Adds the `founding_member_reservations` table (migrations `0033`/`0034`) and optional `.env.example` vars `STRIPE_STANDARD_PRICE_ID_USD`/`_EUR`, ... Inert on self-host unless `BILLING_ENABLED` is set."
-
-### Attribution format
-
-- Internal changes: `Fixed sync stall on 429 ([#123](https://github.com/riffado/riffado/issues/123))`
-- External contributions: `Added Groq provider ([#456](https://github.com/riffado/riffado/pull/456) by [@username](https://github.com/username))`
+- Internal change: `Fixed sync stall on 429 ([#123](https://github.com/JeremyL691/OpenAudioHub/issues/123))`
+- External contribution: `Added Groq provider ([#456](https://github.com/JeremyL691/OpenAudioHub/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 
-Agents do not cut releases — that's a maintainer action. The procedure (tag, push, workflows, draft review) lives in [BRANCHING.md](BRANCHING.md).
+Agents do not cut releases. Maintainers do. The procedure is in [BRANCHING.md](BRANCHING.md).
 
-## Private operations repository
+## Deploy surface (CRITICAL)
 
-Hosted production runbooks live in the private `riffado/ops` repository, not in this public repository. This pointer documents only its existence; do not copy private operational content, production identifiers, customer data, preflight evidence, or incident details into public files, issues, commits, or logs. Secrets belong in the deployment secret manager even when working in the private repository. If a hosted operations task requires that repository and access is unavailable, stop and ask the maintainer.
+The deploy surface is a contract with self-hosters. It covers the database schema, environment variables, `docker-compose.yml`, the image tags, and the installer.
 
-## Don't break existing deployments
+- **Schema changes are additive by default.** Dropping a column or table needs a user-impact assessment and a migration plan. See the database migrations rules below.
+- **Environment variable renames.** Either keep the old name working for one release, with a deprecation warning, or record the decision in `docs/dev/DECISIONS.md` and document the break in `docs/MIGRATION_FROM_RIFFADO.md` and `CHANGELOG.md`.
+- **`docker-compose.yml` is a user contract.** Breaking structural changes need a changelog migration note.
+- **The installer is part of the deploy surface.** `scripts/install.sh` ships as a release asset, and `src/lib/install-commands.ts` points users at it. Breaking changes need a changelog note.
+- **Sync changes need a real-account test.** Test against a real Plaud account before you ship anything that touches `src/lib/sync/` or `src/lib/plaud/`.
+- **Breaking changes are announced.** They ship with loud logging and a changelog entry. Never silently.
 
-Riffado ships in **two production modes from the same codebase**:
-
-1. **Self-host** (`IS_HOSTED` unset/false) — AGPL, `docker compose up`, single-tenant in practice, owned by the user.
-2. **Hosted** (`IS_HOSTED=true`) — multi-tenant SaaS we operate. Live, paying users, profit-bearing.
-
-Both surfaces are user contracts. The **deploy surface** — DB schema, env vars, `docker-compose.yml` structure, install flow — is a contract for self-host. The **hosted surface** — the external API at `/api/v1/*` (introduced by issue #79 / PR #80; not yet on `main`), webhook payloads, token format, and API behavior under load — will be a contract for hosted customers once those surfaces land. Internal code is not a contract for either.
-
-- **Schema changes are additive by default.** Dropping columns or tables requires a user-impact assessment and a migration plan. See the **Database Migrations** block below.
-- **Env var renames need deprecation.** Keep the old name working for at least one release cycle, log a deprecation warning, document both in `CHANGELOG.md`.
-- **`docker-compose.yml` is a user contract.** Breaking structural changes need a CHANGELOG migration note.
-- **The one-line installer is part of the deploy surface.** `scripts/install.sh`, the `riffado.com/install.sh` route, and the version-pinned `riffado.com/vX.Y.Z/install.sh` route are a single contract — the script is served from the repo file via `src/app/install.sh/route.ts` and `src/app/[version]/install.sh/route.ts`. Breaking changes (renaming, removing prompts, changing the URL shape) need a deprecation cycle and a CHANGELOG note. Self-hosters paste these URLs into their own runbooks; don't break them silently.
-- **Test sync against a real Plaud account** before shipping anything touching `src/lib/sync/` or `src/lib/plaud/`. Sync regressions destroy user trust fastest.
-- **Breaking changes ship with loud logging + Sentry context + CHANGELOG notes.** Never silently.
-- **Never gate features behind `IS_HOSTED` in a way that breaks self-host.** Hosted-only branches must degrade cleanly to the self-host path, not crash or silently disable functionality self-hosters expect.
-
-Ask: *"If this goes wrong, how many users notice, and how fast can they recover?"* — and answer it for **both** modes.
+Ask: if this goes wrong, how many users notice, and how quickly can they recover?
 
 ## Product context
 
-Riffado is AGPL-3.0, an open-source companion app for AI voice recorders. Currently supports the Plaud Note family (Note, Note Pro, NotePin); more device support is planned.
+OpenAudioHub is AGPL-3.0 software for self-hosted transcription of Plaud recordings. It currently supports the Plaud Note family (Note, Note Pro, NotePin). There is no hosted mode. Every code path is the self-host path.
 
-### Positioning rules (marketing-facing)
+Invariants, in priority order:
 
-Riffado is **not** positioned as a Plaud competitor or a "subscription killer." Even though Plaud is the only device family supported today, marketing copy stays vendor-agnostic and forward-looking:
+1. **Self-host is first-class.** If it does not run with `docker compose up`, it does not ship.
+2. **The local AI path keeps working.** Browser transcription with Transformers.js, and local servers such as Ollama and LM Studio, must not regress.
+3. **No vendor lock-in.** Storage is pluggable (local or S3-compatible). AI providers are pluggable (any OpenAI-compatible endpoint). Never add a default cloud fallback that silently sends data elsewhere.
+4. **Export parity.** The full-data ZIP is the proof that users can leave. Every recording, transcript, and summary must round-trip. Do not ship a feature that cannot be backed up.
+5. **No compliance claims.** HIPAA, SOC 2, and privilege claims belong to the operator and their provider. Do not write copy that claims them.
 
-- Frame Riffado as a **multi-device transcription layer**, not a Plaud alternative.
-- Use the category noun **"voice recorders"** (not "Plaud devices") wherever possible.
-- Plaud references are factual / interoperability only ("currently supports the Plaud Note family"). No "replace", "subscription", "cheaper than", "$X/mo", or "skip the subscription" framing.
-- When pricing context is needed, present it survey-style across 3+ vendors (Plaud Pro, Otter Business, Rev AI Pro — not just Plaud) with each vendor's published number. No qualitative claims.
-- Do not republish disparaging third-party quotes about Plaud (the previous `reddit-quotes.tsx` was removed for commercial-disparagement risk — do not reinstate without legal review).
-- A future Riffado-branded device is on the roadmap but **must not be announced** in any user-facing copy until product confirms.
-- **Write marketing copy for the non-technical user.** The hosted product exists for people who don't want to think about infrastructure — that's the audience for landing, FAQ, pricing, emails, and any in-app marketing surface. Name real vendors and outcomes ("OpenAI, Anthropic, Groq", "your recordings, your transcripts"), not categories or implementation details ("OpenAI-compatible providers", "S3-compatible object storage", "JWT bearer tokens"). Technical / self-host readers parse plain-user language fine; the reverse isn't true. Implementation-detail language belongs in `README.md`, `CHANGELOG.md`, docs, and code comments — not marketing surfaces. Per-vendor escape hatches ("+ any OpenAI-compatible endpoint") stay as tail clauses for the technical reader, never as the lead.
+Product principles, in priority order:
 
-### Audience slices
+1. **Performance.** Optimistic updates on writes. No data waterfalls. Minimal blocking states during onboarding.
+2. **Good defaults.** Less configuration is better. Sensible sync intervals, retention, and storage paths. Auto-detect the Plaud region through its `-302` redirect.
+3. **Convenience.** Shareable URLs. Re-authentication is a modal, not a full onboarding reset.
+4. **Security.** AES-256-GCM for stored secrets. A `userId` check on every user-scoped query. Path-traversal protection in local storage. Range-header validation for audio streaming.
 
-- **Slice 1 — Voice recorder owners who want choice** (default path; hero, features, pricing, the-math target these). Driver: own your transcripts, choose your AI, choose your storage, leave anytime. Don't care where the code runs.
-- **Slice 2 — Privacy / compliance professionals** (`for-professionals.tsx`): lawyers, journalists, consultants, researchers. Driver: sovereignty. Default to self-host + local AI (Whisper / Ollama). Care about auditability (AGPL) and infrastructure control.
+## Code conventions
 
-### Delivery tiers
+- Prefer server components. Use `"use client"` only where you need interactivity.
+- Route handlers live under `src/app/api/`, one `route.ts` per endpoint.
+- Database access uses Drizzle. Fluent Drizzle queries may live inline in route handlers and feature `lib/` files. Raw SQL (`db.execute(sql\`...\`)` or a full `SELECT`, `INSERT`, `UPDATE`, or `DELETE` in a `sql\`\`` template) must live in `src/db/queries/`. Inline `sql` fragments inside the fluent builder (in `set`, `where`, or `orderBy`) can stay where they are used.
+- In any `sql\`\`` template, every value must be a `${...}` placeholder, never concatenated. Every `Date` must be converted with `.toISOString()` and cast. User-supplied `ILIKE` patterns must escape `%` and `_`. Sort columns and identifiers come from a fixed allowlist, never from user input.
+- Environment variables are validated with Zod in `src/lib/env.ts`. Add new variables there and read them through the validated `env` object. Never read `process.env.X` directly in feature code.
+- Toasts use `sonner`. Do not use `alert()` or a custom toast system.
+- Client components that fetch data use the existing `/api/...` routes.
 
-- **Self-host (Free, forever)** — AGPL source, `docker compose up`. Shipped. Default for Slice 2. `IS_HOSTED` unset or false.
-- **Hosted (we operate it)** — same codebase, `IS_HOSTED=true`. **Live, multi-tenant, profit-bearing.** Multiple Next.js processes behind a load balancer, shared Postgres, real users paying real money. This is not aspirational. Treat it as production.
+## CRITICAL: User-scoped queries
 
-`IS_HOSTED` is the deployment-mode switch. Today it gates the marketing landing page (`src/app/page.tsx` redirects to `/login` when unset) and is the default for hosted-strict safety knobs (see Hosted mode invariants below). It is **not** the signup switch — sign-up is gated by `DISABLE_REGISTRATION` (wired into `src/lib/auth.ts` via `disableSignUp`). Billing and plan-aware hosted UI are gated by dedicated billing/provider env knobs such as `BILLING_ENABLED`, Stripe configuration, and Mynah configuration; do not overload `IS_HOSTED` as a feature switch. Code that needs to branch on mode reads `env.IS_HOSTED`; never sniff `process.env` directly. Default behavior must always be the self-host path — `IS_HOSTED=true` is opt-in to the stricter/marketing-enabled mode.
+Every query that touches user-scoped data must include `where(eq(table.userId, session.user.id))`. Trusting a route parameter or a body field without this check is a security bug. An attacker could read or change other users' recordings, transcriptions, tokens, and AI keys.
 
-### Core invariants
+This applies to every query, every time. It is not optional, and it does not depend on whether the route is internal.
 
-- **Self-host is first-class.** If it won't run in `docker compose up`, it doesn't ship. Slice 2 literally cannot use it otherwise.
-- **Local-AI path must keep working.** Transformers.js (browser) and Ollama/LM Studio (local server) are the privacy-critical path. Don't regress them for "better" cloud-provider features.
-- **No vendor lock-in inside Riffado either.** Storage pluggable (local / S3-compatible). AI providers pluggable (any OpenAI-compatible). Don't hardcode to one; don't add a "default cloud" fallback that silently leaks data.
-- **Export parity is non-negotiable.** Full backup (one-archive export → restore elsewhere) is the proof users can leave. Every recording, transcript, summary must round-trip. Do not ship features that can't be backed up.
-- **Never claim compliance we don't own.** HIPAA, SOC2, attorney-client privilege — the claim belongs to the user's AI provider + their self-host setup, not to Riffado. Marketing and product copy both stay honest here.
+## CRITICAL: Encryption at rest
 
-### Hosted mode invariants (`IS_HOSTED=true`)
+These values are encrypted with AES-256-GCM before they reach the database, through the helpers in `src/lib/encryption/`:
 
-When designing or reviewing any feature, assume hosted is real and check both modes:
-
-- **Multi-process safe.** No in-memory locks as the only correctness mechanism. Background workers must claim work at the DB level (`SELECT … FOR UPDATE SKIP LOCKED`) or be moved to a dedicated process. In-memory `running` flags are advisory only.
-- **Multi-tenant safe.** Every query touches `userId` (see the User-Scoped Queries CRITICAL block). One user's data, quota, retries, or failures must not affect another user's experience.
-- **Egress is hostile territory.** Outbound HTTP from hosted infra (webhooks, AI proxying, etc.) must default to public destinations only and DNS-pin to resolved IPs. Self-host needs the opposite default (homelab `http://n8n:5678/...` over the docker bridge must work). Branch the default on `IS_HOSTED`, not on hardcoded policy.
-- **Secrets at rest.** Hosted DB exfil is a multi-user incident. Hash high-entropy secrets (API tokens) with HMAC keyed off `BETTER_AUTH_SECRET` (or a dedicated `API_TOKEN_HASH_SECRET` if introduced for rotation independence) — not plain SHA-256. Never reuse `ENCRYPTION_KEY` for HMAC; that key is reserved for AES-GCM at-rest encryption via `src/lib/encryption.ts`. Encrypt non-hashable secrets (Plaud bearer tokens, AI keys, SMTP creds, S3 creds) via `src/lib/encryption.ts`.
-- **Per-user fairness.** Background queues (webhook delivery, transcription, sync) must not let one slow/abusive user starve others. Per-user concurrency caps or fair-share claim queries.
-- **Rate limiting on `/api/v1/*`.** Per-token + per-IP. Required before hosted exposes a new write endpoint or a new external surface.
-- **No claims of compliance we don't own.** Hosted does not make us HIPAA/SOC2 compliant. Don't ship copy that says it does.
-
-### Mynah — hosted included transcription
-
-**Mynah** is a real Riffado product (`mynah.riffado.com`), not an internal codename — the hosted transcription backend included with a paid plan. Surface it as **"Mynah"** in user-facing copy; only the underlying model name (`parakeet`) stays internal.
-
-- **First-class managed provider, not a hidden fallback.** Instance-configured via env (`MYNAH_BASE_URL`, `MYNAH_SERVICE_TOKEN`); `isMynahConfigured()` requires `IS_HOSTED`, so self-host never sees it. It is **never** a row in `api_credentials` — it's surfaced as a synthetic managed provider with id `RIFFADO_INCLUDED_PROVIDER_ID` (`"riffado-included"`) and label from `RIFFADO_INCLUDED_PROVIDER_LABEL`, both in `src/lib/transcription/included-provider.ts`. `listUserProviders()` (`src/lib/ai/list-providers.ts`) prepends it for the Providers UI + SSR seed.
-- **Authoritative transcription default is `userSettings.defaultTranscriptionProviderId`** (a credential id, the `"riffado-included"` sentinel, or null). The per-row `apiCredentials.isDefaultTranscription` boolean is now a **derived mirror** — do not read it as the source of truth for transcription selection. All writes go through `setDefaultTranscriptionProvider()` (`src/lib/ai/set-default-transcription.ts`), which keeps pointer + mirror consistent. (`isDefaultEnhancement` is unchanged and still authoritative for enhancement.)
-- **Selection precedence** (`transcribe-recording.ts`): explicit `opts.providerId` → stored pointer → managed-if-configured fallback → `NO_TRANSCRIPTION_PROVIDER`. An explicit credential id that doesn't resolve **must fail loudly**, never silently fall to managed.
-- **Entitlement-gated.** Only `hosted_pro` (incl. the transition window) has `monthlyMynahSeconds > 0`. Metered per-user via `reserveMynah`/`commit`/`release`; budget exhaustion surfaces product copy, not the raw error. Self-host has no Mynah; lapsed accounts show it locked.
-- **Complimentary, not a replacement.** Users can always add their own provider (Settings → Providers) and switch the transcription default between Mynah and their key; both coexist. Onboarding frames Mynah as included + optional-own, and must not treat "has Mynah" as "user brought their own provider."
-
-### Marketing-vs-product gap
-
-Riffado has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
-
-- Plaud refresh-token handling was removed in `bed9cd3` — Plaud issues only long-lived access tokens (~300 day JWT). Do not re-add refresh-token plumbing.
-
-### Target UX comparisons
-
-- **Yes:** Plaud's own web app (the thing we're replacing), Linear, Vercel dashboards.
-- **No:** generic self-host transcription stacks (Whisper + a script). Riffado must feel like a product, not a pile of utilities.
-
-## Product principles
-
-In priority order when in doubt:
-
-1. **Performance above all else.** Optimistic updates on writes. Data-loader patterns + link prewarm on hover. No JS or data waterfalls. Minimize blocking onboarding states.
-2. **Good defaults.** Less config is best. Sensible sync intervals, retention, storage paths. Auto-detect Plaud region via `-302` redirect. Default to browser transcription when no AI provider configured.
-3. **Convenience.** Shareable URLs share-ready by default. Homepage → latest recording ≤ 4 clicks. Re-auth flows are modals, not full onboarding resets.
-4. **Security.** AES-256-GCM for all stored tokens. `userId` check on every user-scoped query (see CRITICAL block below). Be thoughtful about "public" endpoints. Path-traversal protection in local storage, range-header validation on audio streaming.
-
-## Code Conventions
-
-- Prefer **server components**; use `"use client"` only for interactivity.
-- Route handlers live under `src/app/api/` — one `route.ts` per endpoint.
-- Database access via Drizzle. Fluent Drizzle queries (`db.select().from(...).where(...)`) may live inline in route handlers and feature `lib/` files. **Raw-SQL queries — anything calling `db.execute(sql\`...\`)` or holding a full `SELECT`/`INSERT`/`UPDATE`/`DELETE` inside a `sql\`\`` template — MUST live in `src/db/queries/`** and be imported by feature code. Inline `sql\`\`` *expression fragments* embedded inside Drizzle's fluent builder (`set: { col: sql\`col + 1\` }`, `where(sql\`json @> ...\`)`, `orderBy(sql\`...\`)`) stay where they're used — they're operator helpers, not queries.
-- When you write or touch any `sql\`\`` template: every interpolated value must be a `${...}` placeholder (param-bound, never string-concatenated); every `Date` value must be `.toISOString()` and cast (`${iso}::timestamp` for `timestamp` columns, `::timestamptz` only when the column is `timestamptz`); user-supplied `ILIKE` patterns must escape `%` and `_` with `escape '\\'`; sort columns and identifiers come from a fixed allowlist, never from user input.
-- Environment variables are validated via Zod in `src/lib/env.ts`. Add new vars there and access via the validated `env` object. **Never `process.env.X` directly in feature code.**
-- Toasts via `sonner`; no `alert()` or custom toast systems.
-- Client components that fetch from our own API use existing `/api/...` routes — no duplicate client-side Plaud API calls.
-
-## **CRITICAL** User-Scoped Queries **CRITICAL**
-
-Every query that touches user-scoped data **MUST** include `where(eq(table.userId, session.user.id))`. Trusting route params or body fields without this check is a security bug — an attacker can read/modify other users' recordings, transcriptions, tokens, and AI keys.
-
-This is not optional, not "I'll add it later," not "it's an internal endpoint." Every query. Every time.
-
-## **CRITICAL** Encryption At Rest **CRITICAL**
-
-These values go through `src/lib/encryption.ts` (AES-256-GCM) before hitting the DB:
-
-- Plaud bearer tokens (`plaudConnections.bearerToken`)
-- AI API keys (`apiCredentials.apiKey`)
+- Plaud access tokens (`plaudConnections.bearerToken`)
+- AI provider API keys (`apiCredentials.apiKey`)
 - SMTP credentials
 - S3 credentials
+- Recording titles, transcripts, summaries, and prompt text
 
-Decrypt only at the moment of HTTP request construction. Never log decrypted values. Never return them in API responses.
+Decrypt only at the moment you build an outbound request or render a response. Never log decrypted values. Never return them in an API response unless the caller is the owner and the endpoint's contract calls for it.
 
-## **CRITICAL** Database Migrations **CRITICAL**
+## CRITICAL: Database migrations
 
-Always edit `src/db/schema.ts` first, then run `pnpm db:generate` to produce the migration. **NEVER hand-write migration SQL files.** Drizzle tracks migrations via snapshot files in `src/db/migrations/meta/` — hand-written files don't generate snapshots, which causes future `db:generate` runs to re-emit already-applied columns. That's silent history corruption.
+Edit `src/db/schema.ts` first, then run `pnpm db:generate` to produce the migration. Do not hand-write migration SQL. Drizzle tracks migrations through snapshots in `src/db/migrations/meta/`. A hand-written migration has no snapshot, so later `db:generate` runs re-emit changes that already applied. That silently corrupts the history.
 
-Same applies to rebases, conflict resolution, and renumbering: rerun `pnpm db:generate` against the rebased schema. Never hand-edit `meta/_journal.json` or `meta/*_snapshot.json`, and never delete or consolidate migrations drizzle-kit has already produced — even unreleased ones. Stacked migrations within one release (e.g. add-then-drop) ship as two files.
+The same rule covers rebases, conflict resolution, and renumbering. Rerun `pnpm db:generate` against the rebased schema. Never edit `meta/_journal.json` or the snapshots by hand. Never delete or merge migrations that Drizzle has already produced, even unreleased ones. Stacked changes in one release ship as separate files.
 
-If drizzle-kit generates SQL that re-adds columns that already exist, meta snapshots are out of sync with reality. **Fix the drift, don't hand-edit around it.** Migrations `0010-0012` are historical examples of this drift; `0013+` are clean.
+If `drizzle-kit` generates SQL that re-adds columns that already exist, the snapshots have drifted from reality. Fix the drift. Do not patch around it by hand. Open items are listed in `docs/dev/BLOCKERS.md`.
 
-## Architecture Notes
+## Architecture notes
 
-- **Sync is pull-based.** Plaud has no push. The sync worker (`src/lib/sync/sync-recordings.ts`) is idempotent and paginated.
-- **Transcription runs in two places:** (1) in-browser via Transformers.js for zero-cost, or (2) server-side via any OpenAI-compatible provider. Per-recording choice, changeable from the workstation.
-- **Storage is pluggable** behind `StorageProvider` (`src/lib/storage/types.ts`). Factory pattern in `factory.ts`. Don't branch on storage type in feature code.
-- **AI is pluggable** via OpenAI-compatible HTTP (`src/lib/ai/`). Users configure `baseURL` + API key per provider; any OpenAI-compatible endpoint works. Don't hardcode OpenAI-specific behavior.
+- **Sync is pull-based.** Plaud has no push interface. The sync worker in `src/lib/sync/sync-recordings.ts` is idempotent and paginated. A background worker in `src/lib/sync/worker.ts` runs it for every connected user.
+- **Transcription runs in two places.** Either in the browser with Transformers.js, or on the server through any OpenAI-compatible provider. The choice is per recording.
+- **The audio pipeline is optional.** It is a private FastAPI service with SQLite state, reachable only on the Compose network. Core keeps the provider credentials and makes every provider request.
+- **Storage is pluggable** behind `StorageProvider` in `src/lib/storage/types.ts`, selected by the factory in `src/lib/storage/factory.ts`. Do not branch on the storage type anywhere else.
+- **AI is pluggable** through OpenAI-compatible HTTP in `src/lib/ai/`. Users configure a base URL and an API key per provider. Do not hard-code provider-specific behavior.
 
-## Plaud API Gotchas
+## Plaud API gotchas
 
-Non-obvious facts about Plaud's server:
+These are non-obvious facts about Plaud's server.
 
-- **No refresh tokens.** The OTP login flow returns only `access_token` — a long-lived JWT (~300 day expiry observed). Do not re-add refresh-token plumbing. When access tokens expire, users re-auth via the reconnect UI.
-- **Two token types: UT vs WT.** Plaud issues a long-lived **user token (UT, ~300 days)** AND short-lived **workspace tokens (WT, ~24h)**. The UT is what Riffado stores in `plaudConnections.bearerToken`; `PlaudClient` mints a fresh WT from it per request (`/user-app/auth/workspace/token/<id>`). Tell them apart by JWT claims: a WT carries `ut_ref`/`wid`/`wtype` (and ~24h lifetime); a UT does not. This holds for SSO (Google/Apple) accounts too — verified via HAR (issue #203). **Gotcha:** web.plaud.ai puts the WT on the data requests users inspect (`/device/list`, `/file/simple/web`) and the UT in `localStorage.pld_tokenstr` plus identity endpoints (`/user/me`, `/team-app/workspaces/list`), so paste-flow users grab the WT by mistake. A pasted WT validates against `/device/list` (connect *looks* fine) but cannot mint a fresh WT, so the connection dies within a day. `isPlaudWorkspaceToken()` (`src/lib/plaud/auth.ts`) guards the connect-token + verify routes against this. Paste instructions should recommend the connector first, then `pld_tokenstr` if the user insists on manual paste; never point users at `/device/list` or `/file/simple/web`.
-- **Regional servers.** `api.plaud.ai` is global; accounts may live on `api-euc1.plaud.ai` (EU) or `api-apse1.plaud.ai` (APAC). `/auth/otp-send-code` returns `status: -302` with `data.domains.api` when the account is on a different region. `plaudSendCode` handles the redirect.
-- **Rate limiting.** `PlaudClient` has built-in retry-with-backoff on 429 + 5xx (`src/lib/plaud/client.ts`). Respect `Retry-After`.
-- **Bearer tokens are encrypted at rest** in `plaudConnections.bearerToken` — see Encryption block above. Decrypt only when constructing the HTTP request.
+- **No refresh tokens.** The OTP login returns only an access token, a long-lived JWT of about 300 days. Do not add refresh-token handling. When the token expires, the user reconnects.
+- **Two token types, UT and WT.** Plaud issues a long-lived user token (UT, about 300 days) and short-lived workspace tokens (WT, about 24 hours). OpenAudioHub stores the UT in `plaudConnections.bearerToken`, and `PlaudClient` mints a fresh WT from it for each request. A WT carries `ut_ref`, `wid`, and `wtype` claims, and a UT does not. Both kinds appear in the browser, so paste flows often grab the wrong one. `isPlaudWorkspaceToken()` in `src/lib/plaud/auth.ts` guards the connect and verify routes. Recommend the connector extension first. If the user pastes a token manually, point them at `pld_tokenstr` in localStorage, not at `/device/list` or `/file/simple/web`.
+- **Regional servers.** `api.plaud.ai` is global. Accounts can live on `api-euc1.plaud.ai` or `api-apse1.plaud.ai`. A `/auth/otp-send-code` response with `status: -302` and `data.domains.api` means the account is on another region. `plaudSendCode` follows the redirect.
+- **Rate limiting.** `PlaudClient` retries 429 and 5xx responses with backoff (`src/lib/plaud/client.ts`). Honor `Retry-After`.
+- **Bearer tokens are encrypted at rest.** Decrypt them only when you construct the HTTP request.
 
-## Extension Points
+## Extension points
 
 ### Adding a storage adapter
 
-Storage is configured at the **instance level** (env vars), not per-user.
+Storage is configured per instance through environment variables, not per user.
 
-1. Implement `StorageProvider` (`src/lib/storage/types.ts`): `uploadFile`, `downloadFile`, `getSignedUrl`, `deleteFile`, `testConnection`.
-2. Add your adapter class in `src/lib/storage/<name>.ts`.
+1. Implement `StorageProvider` in `src/lib/storage/types.ts`: `uploadFile`, `downloadFile`, `getSignedUrl`, `deleteFile`, and `testConnection`.
+2. Add the adapter class in `src/lib/storage/<name>.ts`.
 3. Add the new type to the `StorageType` union in `types.ts`.
-4. Add a branch in `createStorageProvider()` in `src/lib/storage/factory.ts`.
-5. Add any new env vars to `src/lib/env.ts` (Zod schema) and `.env.example`.
-6. Validate required env vars in the factory and throw a helpful error if missing (see S3 branch for pattern).
-7. Add a settings UI section if the adapter has per-user-visible config (S3 does; Local doesn't).
-
-Don't branch on storage type anywhere outside `factory.ts`.
+4. Add a branch to `createStorageProvider()` in `src/lib/storage/factory.ts`.
+5. Add environment variables to `src/lib/env.ts` and `.env.example`.
+6. Validate required variables in the factory, and throw a clear error when one is missing. Follow the S3 branch.
+7. Add a settings section only if the adapter has settings that users see. S3 does. Local storage does not.
 
 ### Adding an AI provider
 
-Riffado doesn't have a per-provider abstraction — it uses the OpenAI SDK with a custom `baseURL`. "Adding a provider" is usually configuration, not code:
+Most providers need no code. OpenAI-compatible providers are configured in the UI with a base URL, an API key, and model names. Document the preset in `docs/` or the in-app guide.
 
-1. If the provider is OpenAI-compatible (OpenAI, Groq, Together, OpenRouter, LM Studio, Ollama, Azure, …): no code change. Users add it via the settings UI — `baseURL` + API key + model names. Document it in `README.md` under the AI Provider Setup section.
-2. If the provider has non-standard auth (e.g., AWS Bedrock with SigV4): write an adapter that fronts the provider behind an OpenAI-compatible surface. Do not branch on provider name in feature code. Keep the abstraction clean.
-
-Adding a new **AI feature** (summary style, title strategy, etc.) is different — that's new code under `src/lib/ai/` following the `generate-title.ts` / prompt-presets pattern.
+If a provider has non-standard authentication, write an adapter that exposes it behind an OpenAI-compatible surface. Do not branch on the provider name in feature code.
 
 ### Adding a notification backend
 
-Notifications currently have no shared interface — `src/lib/notifications/{bark,browser,email}.ts` are separate files, each invoked directly by callers. If you add a new backend:
+Each backend is a file in `src/lib/notifications/`, such as `bark.ts` or `email.ts`, and callers invoke it directly.
 
-1. Write `src/lib/notifications/<name>.ts` exporting a `send<Name>Notification()` function.
-2. Wire it into callers (check how `bark.ts` and `email.ts` are called for the pattern).
-3. Add env vars to `src/lib/env.ts` and `.env.example`.
-4. Add a settings UI toggle if the backend is user-configurable.
-5. Include a timeout (see `bark.ts` for the 3-second pattern) — notifications must never block the sync loop.
-
-Consider introducing a shared `NotificationProvider` interface if you're adding the third or fourth backend. For now, the flat file-per-backend structure is fine.
+1. Add `src/lib/notifications/<name>.ts` exporting `send<Name>Notification()`.
+2. Wire it into the callers, following the existing pattern.
+3. Add environment variables to `src/lib/env.ts` and `.env.example`.
+4. Add a settings toggle if users configure the backend.
+5. Set a timeout. `bark.ts` uses 3 seconds. A notification must never block the sync loop.
 
 ## Pointers
 
-- [README.md](README.md) — product overview + self-host install
-- [CONTRIBUTING.md](CONTRIBUTING.md) — contributor workflow
-- [BRANCHING.md](BRANCHING.md) — branching and release model
-- [CHANGELOG.md](CHANGELOG.md) — version history
-- [SECURITY.md](SECURITY.md) — vulnerability disclosure
+- [README.md](README.md): product overview and self-host installation.
+- [CONTRIBUTING.md](CONTRIBUTING.md): contributor workflow.
+- [BRANCHING.md](BRANCHING.md): branches and releases.
+- [CHANGELOG.md](CHANGELOG.md): version history.
+- [SECURITY.md](SECURITY.md): vulnerability reporting.
+- [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md): upgrading an earlier installation.
+- [docs/dev/PLAN.md](docs/dev/PLAN.md): the rebuild plan, and the source of the program rules above.

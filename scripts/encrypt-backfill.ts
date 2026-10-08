@@ -17,7 +17,7 @@
  *   bun scripts/encrypt-backfill.ts            # apply
  *   bun scripts/encrypt-backfill.ts --dry-run  # report only
  *
- * Hosted rollout: deploy code first (writes new = encrypted, reads tolerate
+ * Rollout: deploy code first (writes new = encrypted, reads tolerate
  * both), run --dry-run, eyeball counts, then run for real.
  */
 
@@ -40,8 +40,8 @@ const DRY_RUN = process.argv.includes("--dry-run");
 /**
  * Page size for the cursor-based fetch. We page through the table by `id`
  * (`> lastId ORDER BY id ASC LIMIT BATCH_SIZE`) so the script never holds
- * more than one batch of rows in memory at a time — important on hosted
- * Postgres where transcripts can be large and the table can be wide.
+ * more than one batch of rows in memory at a time — important on large
+ * Postgres databases where transcripts can be large and the table can be wide.
  */
 const BATCH_SIZE = 500;
 

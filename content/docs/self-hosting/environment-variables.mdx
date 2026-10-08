@@ -1,81 +1,100 @@
 ---
 title: Environment variables
-description: Every env var that Riffado reads, what it does, and what it defaults to.
+description: Every environment variable OpenAudioHub reads, what it does, and its default.
 ---
 
-Riffado validates every environment variable through a Zod schema in
-`src/lib/env.ts` at process start. A misconfigured env crashes the
-server with a precise error message rather than booting into a broken
-state — that's intentional. Read this page as the source of truth for
-the self-host install.
+OpenAudioHub validates every environment variable with a schema when the server starts. An invalid value stops the server, and the error names the field. Unknown variables are ignored.
 
 ## Required at runtime
 
-These must be set whenever the server actually runs (dev or prod).
-They're optional at the **build** layer so `next build` doesn't depend
-on production secrets.
+These must be set whenever the server runs.
 
-| Variable                    | Type     | Notes                                                                  |
-| --------------------------- | -------- | ---------------------------------------------------------------------- |
-| `DATABASE_URL`              | string   | Postgres connection string                                             |
-| `BETTER_AUTH_SECRET`        | string   | At least 32 chars; signs session cookies                               |
-| `APP_URL`                   | URL      | Public origin (e.g. `https://riffado.example.com`)                   |
-| `ENCRYPTION_KEY`            | hex(64)  | Exactly 64 hex chars (32 bytes); see [Encryption](../reference/encryption-at-rest)|
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string. Compose builds it for the bundled database. |
+| `BETTER_AUTH_SECRET` | Signs session cookies. At least 32 characters. |
+| `APP_URL` | Public origin of the instance, for example `https://openaudiohub.example.com`. Used in links and webhook payloads. |
+| `ENCRYPTION_KEY` | Exactly 64 hex characters (32 bytes). See [Encryption at rest](/docs/reference/encryption-at-rest). |
+| `AUDIO_PIPELINE_TOKEN` | Required when `AUDIO_PIPELINE_ENABLED=true`. At least 32 characters. The app and the pipeline share it. |
 
-## Optional knobs
+Startup also checks the values that depend on each other. The production build skips these runtime checks, so the image builds without secrets.
 
-| Variable                            | Default                            | Effect                                                                                                              |
-| ----------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `DISABLE_REGISTRATION`              | `false`                            | When `true`, sign-up is rejected server-side and the `/register` page is disabled. Existing users keep working.     |
-| `DISABLE_UPDATE_CHECK`              | `false`                            | When `true`, the footer never calls `api.github.com` to check for new release tags.                                 |
-| `RIFFADO_VERSION`                 | `latest`                           | Read by Docker Compose, not the app. Sets which image tag Compose pulls.                                            |
-| `POSTGRES_PASSWORD`               | `postgres`                         | Read by Docker Compose, not the app. Password for the bundled `db` service. The one-line installer writes a random value. Changing this env var alone does not change an already-initialized database; rotate in place with `ALTER USER postgres WITH PASSWORD '…'`, write the same value to `.env`, and recreate the app. Recreating the `db` volume is not required. |
-| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`   | `false`                            | When `true`, webhook URLs must be HTTPS and resolve to public IPs. Useful when your instance is exposed to others.  |
-| `RATE_LIMIT_TRUST_PROXY_HEADERS`    | `false`                            | When `true`, trust `X-Forwarded-For` for rate-limit buckets. Only safe behind a reverse proxy that overwrites the header. |
-| `API_TOKEN_HASH_SECRET`             | falls back to `BETTER_AUTH_SECRET` | At least 32 chars. HMAC key for personal API token hashing. Set independently if you want token-hash rotation without rotating session secrets. |
+## Compose settings
 
-Setting `RATE_LIMIT_TRUST_PROXY_HEADERS=true` without a proxy that
-overwrites forwarding headers lets clients forge their own IPs and
-defeats rate limiting. If you're not sure your proxy strips/overwrites
-these headers, leave the value unset.
+Read by `docker-compose.yml`, not by the app.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `OPENAUDIOHUB_VERSION` | `latest` | Image tag to run. Pin an exact release for repeatable installs. |
+| `POSTGRES_PASSWORD` | `postgres` | Password for the bundled database. Postgres uses it only when it creates the volume. Changing it later does not change an existing database. |
+
+## Accounts and access
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `DISABLE_REGISTRATION` | `false` | `true` closes sign-up. Existing accounts keep working. |
+| `API_TOKEN_HASH_SECRET` | Falls back to `BETTER_AUTH_SECRET` | At least 32 characters. The HMAC key for personal API key hashes. Set it so you can rotate `BETTER_AUTH_SECRET` without invalidating API keys. Changing it later invalidates existing keys. |
+| `DISABLE_UPDATE_CHECK` | `false` | `true` stops the footer from checking GitHub for newer releases. |
+
+## Network and rate limits
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | Unset | Trust `X-Forwarded-For` when counting requests per client. Enable this only behind a proxy that overwrites the header. Otherwise clients can forge their address. |
+| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | `false` | Require HTTPS webhook URLs that resolve to public addresses. Turn it on if other people can reach your instance. |
+| `PLAUD_SYNC_RATE_LIMIT_PER_MINUTE` | `10` | Per-user limit on manual sync requests. Range 1 to 600. |
+| `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` | `60` | Per-user hourly cap on automatic summaries. Manual summaries are not capped. Range 1 to 600. |
+
+## Sync
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `BACKGROUND_SYNC_ENABLED` | `true` | Runs the server-side sync worker. Set `false` to sync only while a browser tab is open, or to trigger sync from your own scheduler. |
+| `BACKGROUND_SYNC_INTERVAL_MS` | `300000` | How often the worker checks for new recordings. Range 60000 to 3600000. The worker skips a user who synced in the last 4 minutes, whatever this value is. |
+| `WEBSHARE_API_KEY` | Unset | When set, Plaud requests go through a Webshare proxy. Unset means direct connections. |
+| `PLAUD_PROXY_SCOPE` | `all` | Which Plaud requests use the proxy when `WEBSHARE_API_KEY` is set. `all` includes audio downloads. `api-only` excludes them. |
+
+## Transcription
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `WHISPER_MAX_BYTES` | `25165824` (24 MiB) | Audio larger than this is re-encoded before it is sent to an OpenAI-style provider. Maximum 26214400 (25 MiB). |
+| `WHISPER_COMPRESS_BITRATE_KBPS` | `12` | Starting bitrate, in kbit/s, for the mono Opus re-encode. |
+| `WHISPER_REQUEST_TIMEOUT_MS` | `3600000` | Timeout for transcription requests to OpenAI-style providers. |
+
+## Audio pipeline
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `AUDIO_PIPELINE_ENABLED` | `false` | Turns on long-audio preprocessing for new server transcriptions. The bundled Compose file sets it to `true`. |
+| `AUDIO_PIPELINE_BASE_URL` | `http://audio-pipeline:8100` | Internal address of the pipeline service. |
+| `AUDIO_PIPELINE_TOKEN` | Unset | Shared secret with the pipeline. See [Required at runtime](#required-at-runtime). |
+
+The pipeline is described in [docs/audio-pipeline.md](https://github.com/JeremyL691/OpenAudioHub/blob/main/docs/audio-pipeline.md).
 
 ## Storage
 
-| Variable                | Default     | Effect                                                              |
-| ----------------------- | ----------- | ------------------------------------------------------------------- |
-| `DEFAULT_STORAGE_TYPE`  | `local`     | `local` or `s3`. The default new users get; per-user override in UI.|
-| `LOCAL_STORAGE_PATH`    | `./storage` | Filesystem path when `DEFAULT_STORAGE_TYPE=local`.                  |
-| `S3_ENDPOINT`           | —           | Endpoint URL. Blank for AWS S3.                                     |
-| `S3_BUCKET`             | —           | Bucket name.                                                        |
-| `S3_REGION`             | —           | Region (`auto` on R2).                                              |
-| `S3_ACCESS_KEY_ID`      | —           |                                                                     |
-| `S3_SECRET_ACCESS_KEY`  | —           |                                                                     |
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `DEFAULT_STORAGE_TYPE` | `local` | `local` or `s3`. Applies to the whole instance. Changing it does not move existing audio. See [S3-compatible storage](./storage-s3). |
+| `LOCAL_STORAGE_PATH` | `./storage` | Directory for local audio files. The bundled Compose file uses `/app/audio`. |
+| `S3_ENDPOINT` | AWS S3 | Endpoint URL. Leave it blank for AWS S3. |
+| `S3_BUCKET` | Unset | Bucket name. |
+| `S3_REGION` | Unset | Region. Use `auto` for Cloudflare R2. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Unset | Credentials for the instance-wide S3 default. |
 
-See [S3-compatible storage](./storage-s3) for per-provider
-config templates.
+See [S3-compatible storage](./storage-s3) for provider examples.
 
-## SMTP (email notifications)
+## Email
 
-| Variable        | Default                | Effect                                                                                |
-| --------------- | ---------------------- | ------------------------------------------------------------------------------------- |
-| `SMTP_HOST`     | —                      | When unset, email backend is disabled cleanly.                                        |
-| `SMTP_PORT`     | 465 if secure, else 587| Integer.                                                                              |
-| `SMTP_SECURE`   | `false`                | `true` => implicit TLS (port 465). `false` => STARTTLS (port 587).                    |
-| `SMTP_USER`     | —                      |                                                                                       |
-| `SMTP_PASSWORD` | —                      |                                                                                       |
-| `SMTP_FROM`     | —                      | Either `user@example.com` or `Name <user@example.com>`. Validated.                    |
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `SMTP_HOST` | Unset | SMTP server. When unset, email is disabled and the server logs a warning. |
+| `SMTP_PORT` | `465` when `SMTP_SECURE=true`, otherwise `587` | SMTP port. |
+| `SMTP_SECURE` | `false` | `true` for implicit TLS on port 465. `false` for STARTTLS. |
+| `SMTP_USER`, `SMTP_PASSWORD` | Unset | SMTP credentials. |
+| `SMTP_FROM` | `SMTP_USER`, then `OpenAudioHub <noreply@host>` | Sender address, either bare or in the form `Name <address>`. The host comes from `APP_URL`. |
+| `SMTP_REPLY_TO` | Unset | Reply-To address for outgoing mail. |
+| `EMAIL_SEND_RATE_PER_SECOND` | `5` | Sending rate limit. Range 1 to 100. |
 
-## When values are missing
-
-At server boot, the env loader does two passes:
-
-1. **Schema validation** — types, formats, ranges. Failures produce a
-   multi-line `Environment validation failed:` error listing the
-   problem fields.
-2. **Runtime presence checks** — required-at-runtime vars
-   (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `APP_URL`, `ENCRYPTION_KEY`)
-   are confirmed non-empty and strong enough. These checks are skipped
-   during `next build` (phase `phase-production-build`) so the
-   front-end build doesn't depend on server-only secrets.
-
-If a value is wrong, the server refuses to start. That's the contract.
+See [Email (SMTP) setup](./email-smtp) for provider settings.

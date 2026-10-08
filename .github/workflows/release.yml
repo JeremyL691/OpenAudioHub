@@ -99,7 +99,7 @@ jobs:
             printf '%s\n' "$BODY"
             printf '\n---\n\n'
             printf 'Full changelog: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' "$REPO" "$TAG"
-            printf 'Install: see `docker-compose.yml` and `env.example` attached below, or follow [README \xe2\x86\x92 Quick Start](https://github.com/%s#quick-start).\n' "$REPO"
+            printf 'Install: run the attached `install.sh`, or follow the [Quick start](https://github.com/%s#quick-start) in the README with the attached `docker-compose.yml` and `env.example`.\n' "$REPO"
           } > /tmp/release-body.md
           # Output name uses an underscore so `${{ steps.notes.outputs.body_path }}`
           # is parsed as a property access rather than `body - path`.
@@ -119,12 +119,12 @@ jobs:
           name: ${{ steps.tag.outputs.current }}
           body_path: ${{ steps.notes.outputs.body_path }}
           draft: true
-          # Attach self-host install artifacts so users can
-          #   curl -fLO .../releases/latest/download/docker-compose.yml
-          #   curl -fL  .../releases/latest/download/env.example -o .env
-          # without cloning the repo.
+          # Attach self-host install artifacts so users can run the installer
+          # (install.sh downloads docker-compose.yml and env.example from this
+          # same release) or fetch the files without cloning the repo.
           files: |
             docker-compose.yml
             env.example
+            scripts/install.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

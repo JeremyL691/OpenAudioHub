@@ -1,6 +1,6 @@
 # Encryption at rest
 
-Riffado encrypts user content fields in the database with AES-256-GCM, keyed off the `ENCRYPTION_KEY` environment variable that the runtime already requires.
+OpenAudioHub encrypts user content fields in the database with AES-256-GCM, keyed off the `ENCRYPTION_KEY` environment variable that the runtime already requires.
 
 This is **server-held-key envelope encryption.** It is not zero-knowledge.
 
@@ -24,14 +24,14 @@ Pre-existing encryption (unchanged):
 Out of scope for this layer:
 
 - **Audio files in storage** (local FS / S3). Object-level encryption is a separate, heavier change. For S3, prefer server-side encryption at the bucket level today; revisit per-object app-layer encryption later.
-- **Search.** No full-text search on transcripts is implemented today, so encrypting `text` causes no regression. If search lands later, it will need a tokenized HMAC index — not this PR.
+- **Search.** No full-text search on transcripts is implemented today, so encrypting `text` causes no regression. If search lands later, it will need a tokenized HMAC index, which is a separate change.
 
 ## What this protects against
 
 - Stolen DB backups or snapshots
 - Read-replica access without app-server access
 - A SQL-injection that reads but does not execute application code
-- Operators with DB-only access (e.g. via an admin console) cannot read content without also having the app-server key
+- Anyone with direct database access but no access to the application server cannot read content, because they do not have the key
 
 ## What this does not protect against
 
@@ -39,7 +39,7 @@ Out of scope for this layer:
 - A compromised `ENCRYPTION_KEY`. Treat the key like a database master credential.
 - A compromised AI provider. Plaintext is sent to whichever transcription / enhancement provider the user configured. That trust boundary is the user's choice and is independent of this layer.
 
-If you require true zero-knowledge — where even Riffado's hosted operators cannot read your data — **self-host with browser-based transcription** (Transformers.js) and a local LLM (Ollama / LM Studio). Hosted cannot give you that and we will not claim it does.
+OpenAudioHub does not provide zero-knowledge storage. If you need the server operator to be unable to read your content, keep transcription and summaries on hardware you control: browser-based transcription (Transformers.js) and a local model server (Ollama or LM Studio).
 
 ## Key management
 

@@ -1,38 +1,57 @@
 ---
 title: Install
-description: Install Riffado on your own infrastructure with Docker Compose.
+description: Install OpenAudioHub on your own infrastructure with Docker Compose.
 ---
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- A Plaud account with at least one device
-- An OpenAI-compatible API key (OpenAI, Groq, OpenRouter, Ollama, LM Studio,
-  or any other compatible endpoint). Optional — browser-based transcription
-  via Transformers.js works without an API key.
+- Docker with Compose v2.
+- A Plaud account with at least one recorder.
+- A transcription provider. Use an API key from an OpenAI-compatible provider, Google Gemini, or ElevenLabs, or run a local model server such as Ollama or LM Studio. Browser transcription needs no provider.
 
-## Install
+## One-line installer
 
-The one-line installer pulls the published `docker-compose.yml`, prompts for
-the values it needs, and starts the stack:
+The installer checks for Docker and Compose, downloads the release files, generates the secrets, and starts the stack in `$HOME/openaudiohub`.
 
 ```bash
-curl -fsSL https://riffado.com/install.sh | bash
+curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
 ```
 
-Pin to a specific release:
+To pin a release, use the installer from that release:
 
 ```bash
-curl -fsSL https://riffado.com/v0.4.2/install.sh | bash
+curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/download/v1.0.0/install.sh | sh
 ```
 
-Once the containers are healthy, open `http://localhost:3000` and create an
-account. You'll be walked through connecting your Plaud account and picking
-a transcription provider.
+When the containers are healthy, open `http://localhost:3000` and create an account. The setup steps connect your Plaud account and choose a transcription provider.
 
-## Next
+## Manual setup
 
-- See **[Encryption at rest](/docs/reference/encryption-at-rest)** for how
-  sensitive fields are stored.
-- The README in the repository has a fuller feature tour and configuration
-  reference while these docs are being built out.
+To manage the files yourself, download the compose file and the environment template from the release:
+
+```bash
+mkdir openaudiohub && cd openaudiohub
+curl -fLO https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/docker-compose.yml
+curl -fL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/env.example -o .env
+```
+
+Edit `.env`. Set `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `AUDIO_PIPELINE_TOKEN`, and `APP_URL`. Generate each secret separately with `openssl rand -hex 32`. Then start the stack:
+
+```bash
+docker compose up -d
+```
+
+## Check the stack
+
+```bash
+docker compose ps
+curl http://localhost:3000/api/health
+```
+
+The health endpoint returns `"status":"ok"` when the app is ready.
+
+## Next steps
+
+- [Environment variables](./environment-variables) lists every setting.
+- [Encryption at rest](/docs/reference/encryption-at-rest) explains which fields are encrypted, and why you must back up `ENCRYPTION_KEY`.
+- If you are moving an existing installation, follow the [migration guide](https://github.com/JeremyL691/OpenAudioHub/blob/main/docs/MIGRATION_FROM_RIFFADO.md) instead of installing over it.

@@ -1,86 +1,49 @@
 ---
 title: Connect your Plaud account
-description: Sign in to Plaud from Riffado, including the Google/Apple workaround.
+description: Sign in to Plaud from OpenAudioHub, including the Google and Apple workaround.
 ---
 
-Riffado signs into Plaud directly — the same way the official Plaud app
-does. No screen-scraping, no headless browser, no reverse-engineered
-mobile-app traffic. The flow you'll use depends on how you originally
-created your Plaud account.
+OpenAudioHub signs into Plaud directly, the same way the official Plaud app does. It does not scrape pages or use a headless browser. The flow you use depends on how you created your Plaud account.
 
-## Email-and-code (default path)
+## Email and code (default)
 
-If you signed up to Plaud with an email address and password, you can sign
-in from Riffado directly:
+If you signed up to Plaud with an email address and password:
 
 1. Enter the email address you use on [plaud.ai](https://plaud.ai).
-2. Plaud emails you a 6-digit verification code.
-3. Paste it into Riffado.
+2. Plaud emails you a six-digit code.
+3. Enter the code in OpenAudioHub.
 
-The code is forwarded to Plaud's servers and **never stored locally**.
-After login, the returned access token is encrypted with AES-256-GCM
-before it hits the database — see
-[Encryption at rest](../reference/encryption-at-rest) for what that
-covers.
+The code goes to Plaud's servers and is not stored. The access token that comes back is encrypted with AES-256-GCM before it is saved. See [Encryption at rest](/docs/reference/encryption-at-rest).
 
-Plaud's account region (Global, EU, Asia Pacific) is detected
-automatically: if the global endpoint responds with `status: -302` and a
-regional API host in `data.domains.api`, Riffado follows the redirect
-and stores the per-account region alongside the token.
+OpenAudioHub detects your Plaud region automatically. If Plaud reports that your account lives on another regional server, it follows that redirect and stores the region with the token.
 
-## Signed up with Google or Apple?
+## Signed up with Google or Apple
 
-If you originally tapped **Continue with Google** or **Continue with
-Apple** on Plaud, the email-and-code flow will *appear* to succeed but
-sync will return zero recordings. That's because the email/password
-identity and the Google/Apple identity are two different accounts on
-Plaud's side, even when they share an email address
-([#65](https://github.com/riffado/riffado/issues/65)).
+If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-and-code flow can appear to succeed and then sync zero recordings. Plaud treats the Google or Apple identity as a separate account, even when the email address matches.
 
-Real "Sign in with Google / Apple" inside Riffado is structurally
-blocked by Google's authorized-origins policy on Plaud's OAuth client.
-There are two workarounds.
+Plaud's Google sign-in cannot be used directly from OpenAudioHub, so there are two workarounds.
 
-### Easy path: the connector extension
+### Browser connector (recommended)
 
-Install the [Riffado Connector](https://github.com/riffado/connector/releases/latest)
-browser extension (AGPL-3.0) — grab the latest release from GitHub and
-load it as an unpacked extension. With the extension installed, the
-connect screen surfaces a **Sign in with Plaud** button. You sign in to
-`web.plaud.ai` the way you normally do; the extension forwards the
-resulting access token to your Riffado instance. No copy-pasting, no
-devtools.
+Install the browser connector extension, then choose **Sign in with Plaud** on the connect screen. Sign in to web.plaud.ai the way you normally do. The extension sends the resulting token to your OpenAudioHub instance, so you do not copy anything. The connector is a separate AGPL-3.0 project. Its source and release links are in the [NOTICE](https://github.com/JeremyL691/OpenAudioHub/blob/main/NOTICE) file.
 
-### Manual fallback: paste the token
+### Paste a token
 
-If you can't or won't install the extension:
+If you cannot install the extension:
 
-1. Open [web.plaud.ai](https://web.plaud.ai) in a tab and sign in with
-   Google or Apple as usual.
-2. Open browser devtools (F12 / Cmd+Option+I) → **Network** tab. Refresh
-   the page.
-3. Click any request whose host starts with `api.plaud.ai`,
-   `api-euc1.plaud.ai`, or `api-apse1.plaud.ai`.
-4. Under **Headers → Request Headers**, find `Authorization`. Copy
-   everything after `Bearer ` — the long `eyJ…` JWT.
-5. In Riffado, switch to the **Paste token** tab, pick the region that
-   matches the host you copied the token from (EU if it was
-   `api-euc1.plaud.ai`, APAC for `api-apse1.plaud.ai`, otherwise
-   Global), and paste.
+1. Open [web.plaud.ai](https://web.plaud.ai) and sign in.
+2. Open your browser's developer tools, switch to the Console, and run `localStorage.getItem('pld_tokenstr')`.
+3. Copy the long `eyJ...` value it prints.
+4. In OpenAudioHub, open the **Paste token** tab, choose the region your account is on, and paste the value.
 
-The pasted token is encrypted at rest the same way as a code-flow token.
+Do not copy a token from a network request header. Those are short-lived workspace tokens. They expire within about a day, and OpenAudioHub rejects them during connection.
 
-## What about refresh tokens?
+The pasted token is encrypted at rest in the same way as a token from the email flow.
 
-Plaud's API does not issue refresh tokens. The OTP login response
-contains only an access token, which is a long-lived JWT (roughly 300
-days observed). When it expires, the dashboard surfaces a reconnect
-banner and you repeat whichever flow above you used originally. There is
-no background refresh to fail silently.
+## Refresh tokens
+
+Plaud does not issue refresh tokens. The token lasts roughly 300 days. When it expires, the dashboard shows a reconnect banner, and you reconnect with the same method you used before. Reconnecting keeps your existing recordings.
 
 ## Switching accounts
 
-You can disconnect or switch the connected Plaud account at any time
-from **Settings → Plaud account**. The encrypted bearer token is
-deleted; previously synced recordings stay where they are (you own that
-data on your own storage).
+Disconnect or switch the Plaud account under **Settings → Plaud Account**. The stored token is deleted. Recordings you already synced stay in your storage.

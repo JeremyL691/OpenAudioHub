@@ -1,11 +1,9 @@
 ---
 title: Upgrading
-description: Pull a new image, restart the stack, and pick the right tag for your risk tolerance.
+description: Pull a new image, restart the stack, and choose the right tag for your risk tolerance.
 ---
 
-Riffado ships as a single Docker image on GitHub Container Registry.
-Upgrades are an image pull and a restart; migrations run automatically
-on container start.
+OpenAudioHub publishes Docker images to GitHub Container Registry. An upgrade is an image pull and a restart. The app applies pending database migrations when its container starts, before it accepts requests.
 
 ## Standard upgrade
 
@@ -15,71 +13,49 @@ From the directory that holds your `docker-compose.yml` and `.env`:
 docker compose pull && docker compose up -d
 ```
 
-The application container starts, runs any pending database migrations
-in the same process before opening the HTTP listener, and reports
-healthy via `/api/health` once ready. There is no separate "migration
-container" — failure to migrate is failure to start, which is the
-behaviour you want.
+If a release changes the audio pipeline, its release notes say whether to start the pipeline first. Starting `audio-pipeline` before `app` is always safe:
+
+```bash
+docker compose pull && docker compose up -d audio-pipeline && docker compose up -d app
+```
+
+Migrations never run in a separate container. If a migration fails, the app does not start, and the logs show why.
 
 ## Picking a tag
 
-`RIFFADO_VERSION` in your `.env` controls which image tag Compose
-pulls.
+`OPENAUDIOHUB_VERSION` in your `.env` selects the image tag that Compose pulls.
 
-| Tag             | What you get                              | Use when                                |
-| --------------- | ----------------------------------------- | --------------------------------------- |
-| `latest`        | Newest stable release                     | Default; most users                     |
-| `0.4.2`, `0.4`  | Specific version / minor line             | Production; pin for reproducibility     |
-| `dev`           | Rolling build from `main`                 | Bleeding edge; accept occasional breakage |
+| Tag | What you get | Use when |
+| --- | --- | --- |
+| `latest` | The newest stable release | Most installations |
+| `1.0.0`, `1.0` | A specific release, or a minor line | Production, when you want repeatable installs |
+| `dev` | A build of `main` | Testing unreleased changes. Expect occasional breakage. |
 
-`main` is a **rolling integration branch** and may be broken at any
-commit. Stable deploys come from tagged releases. Do **not** deploy by
-cloning the repo and building from `main`; use the tagged images
-above. See [BRANCHING.md](https://github.com/riffado/riffado/blob/main/BRANCHING.md)
-for the branching model.
+`main` is the only long-lived branch and it can be broken at any commit. Deploy from tagged releases. Do not build production images from `main`. See [BRANCHING.md](https://github.com/JeremyL691/OpenAudioHub/blob/main/BRANCHING.md).
 
-## Update badge
+## Update notice
 
-The footer shows a small "Update available" badge when a newer release
-tag is available on GitHub. The badge is purely informational — it
-does not auto-update anything.
-
-The check calls `api.github.com` once per session. If your instance
-shouldn't phone home at all, set `DISABLE_UPDATE_CHECK=true` in your
-`.env` and the badge disappears unconditionally.
+The footer shows an "Update available" notice when GitHub has a newer release. The notice does not install anything. The app checks GitHub once per session. To stop those checks, set `DISABLE_UPDATE_CHECK=true` in `.env`.
 
 ## Rolling back
 
-To roll back, set `RIFFADO_VERSION` to the previous tag and re-run
-the upgrade command:
-
-```bash
-# In .env
-RIFFADO_VERSION=0.4.1
-```
+To return to an earlier release, set `OPENAUDIOHUB_VERSION` to that tag, then run the upgrade command again:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-This works because Riffado's database migrations are
-**additive by default** — dropping columns is treated as a deliberate
-breaking change with a CHANGELOG migration note. If you're rolling
-back across a release that explicitly dropped state (rare; called out
-loudly in CHANGELOG), check the release notes first.
+Migrations are additive by default, so an older image can usually run against a newer schema. A release that drops data says so in its changelog, and you should read those notes before you roll back across it.
 
-## Backing up before an upgrade
+Migration `0041_rebrand_source_values` rewrites stored transcript source values. If you roll back to a build from before that migration, run the SQL in the [migration guide](https://github.com/JeremyL691/OpenAudioHub/blob/main/docs/MIGRATION_FROM_RIFFADO.md#rollback) first.
 
-Two things to back up before a major-version upgrade:
+## What to back up before an upgrade
 
-1. The Postgres volume (whichever path your compose file binds to
-   `postgres:/var/lib/postgresql/data`).
-2. The audio volume (`/app/audio` in the app container) — or your S3
-   bucket if you've migrated to remote storage.
+Back up these before any major upgrade:
 
-You can also create a logical export via **Settings → Export/Backup
-→ Create Backup**, which produces a JSON archive of recordings +
-transcripts.
-That export is **plaintext** by design (it's your data), so store it
-with the same care you'd give your unencrypted database. See
-[Backup and restore](../guides/backup-and-restore).
+1. The database volume, `openaudiohub_pgdata` by default. Or take a logical dump with `pg_dump`.
+2. The audio volume, `openaudiohub_audio`, if you use local storage. If you use S3, back up the bucket.
+3. The pipeline data volume, `openaudiohub_audio-pipeline-data`, if the pipeline is enabled.
+4. Your `.env` file, and a copy of `ENCRYPTION_KEY` stored separately from the database.
+
+For a portable copy of your content, use **Settings → Export/Backup**. The ZIP it produces is plaintext, so store it as carefully as an unencrypted database. See [Backup and restore](/docs/guides/backup-and-restore).

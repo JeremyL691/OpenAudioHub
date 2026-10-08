@@ -1,0 +1,53 @@
+OpenAudioHub
+Copyright (C) OpenAudioHub contributors
+
+OpenAudioHub is licensed under the GNU Affero General Public License,
+version 3. The full license text is in the LICENSE file.
+
+
+Origin
+------
+
+OpenAudioHub is based on Riffado v0.6.4 (commit 712e74f), an AGPL-3.0
+project created by Perier and maintained by the Riffado community. The
+long-audio pipeline in this repository was developed in a fork of Riffado
+based on upstream commit b518379. The copyright notices and license terms
+of the upstream code are preserved in the repository history.
+
+Some identifiers, such as the `op_` API key prefix, come from an earlier
+project name, OpenPlaud. OpenAudioHub still accepts them, so existing keys
+and integrations keep working.
+
+
+Browser connector
+-----------------
+
+The Plaud connector browser extension can sign in to Plaud and send the
+resulting token to an OpenAudioHub instance. It is a separate project,
+maintained at https://github.com/riffado/connector under AGPL-3.0. This
+repository does not include its code.
+
+
+Bundled and loaded third-party components
+-----------------------------------------
+
+- Silero VAD model, audio-pipeline/models/silero_vad.onnx.
+  Copyright (c) 2020-present Silero Team. Licensed under the MIT License.
+  The license text is in audio-pipeline/models/SILERO_LICENSE.txt.
+  Upstream: https://github.com/snakers4/silero-vad
+
+- Geist and Geist Mono typefaces, loaded at build time through
+  next/font/google. Licensed under the SIL Open Font License, version 1.1.
+  Upstream: https://github.com/vercel/geist-font
+
+Other dependencies are listed in package.json, pnpm-lock.yaml,
+audio-pipeline/pyproject.toml, and uv.lock. Their licenses are carried by
+the packages themselves.
+
+
+Trademarks
+----------
+
+Plaud is a trademark of its owner. OpenAudioHub is independent of Plaud Inc.
+and is not endorsed by Plaud. Device and service names are used only to
+describe interoperability. "Riffado" is the name of the upstream project.

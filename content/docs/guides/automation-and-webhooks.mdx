@@ -1,99 +1,75 @@
 ---
 title: Automation API and webhooks
-description: Personal API keys, signed webhook deliveries, and using the /api/v1 surface from external tools.
+description: Personal API keys, signed webhook deliveries, and the /api/v1 surface for external tools.
 ---
 
-Riffado exposes a small, stable automation surface for external
-tools — Zapier-style integrations, n8n flows, your own scripts. Two
-moving parts:
+OpenAudioHub has a small, stable automation surface for external tools such as Zapier, n8n, and your own scripts. It has two parts:
 
-- **Personal API keys** authenticate read access to the `/api/v1/*`
-  surface.
-- **Webhook endpoints** push events at your own server when something
-  interesting happens (a new recording, a finished transcription).
+- **Personal API keys** give read access to the `/api/v1/*` surface.
+- **Webhooks** send events to a server you choose when something happens, such as a new recording or a finished transcription.
 
-For the full endpoint reference and code samples, see
-[Public API](../reference/public-api).
+The full endpoint reference is in [Public API](/docs/reference/public-api).
 
 ## Personal API keys
 
-**Settings → Developer → API keys → Create API key.** Give it a name,
-optionally an expiry, and copy the key shown once. The key is shown
-exactly once — store it in your password manager or the secret manager
-of whatever tool will use it.
+Open **Settings → Integrations → API Keys** and create a key. Give it a name and, optionally, an expiry date. The key is shown once, so store it in a password manager or in the secret store of the tool that will use it.
 
-Format: `op_<24 url-safe chars>` (e.g. `op_K7vR8x...`). Keys carry
-read-only scope today; writes are not part of the public surface.
+A key starts with `oah_`, followed by 34 characters. Keys created before version 1.0.0 start with `op_`, and they keep working.
 
-You authenticate by sending the key as a Bearer token:
+Send the key as a Bearer token:
 
 ```bash
-curl -H "Authorization: Bearer op_K7vR8x..." \
-  https://your-riffado-host/api/v1/recordings
+curl -H "Authorization: Bearer oah_..." \
+  https://your-openaudiohub-host/api/v1/recordings
 ```
 
-Internally, Riffado stores an HMAC-SHA256 hash of the key (keyed off
-`API_TOKEN_HASH_SECRET`, falling back to `BETTER_AUTH_SECRET`) rather
-than the key itself. A database breach does not leak usable tokens. The
-key prefix (first 12 characters) is stored in plaintext so the UI can
-show you "which key was that?" without being able to reconstruct it.
+Keys are read-only today. OpenAudioHub stores only an HMAC-SHA256 hash of each key, so a database leak does not expose usable keys. You can revoke a key at any time, and a revoked or expired key is rejected at once.
 
-**Revoking a key** is a soft revoke — the row is marked `revokedAt` and
-authentication starts rejecting it immediately. You can also set an
-`expiresAt` at creation time; expired keys are rejected the same way.
+## Webhooks
 
-## Webhook endpoints
+Open **Settings → Integrations → Webhooks** and create an endpoint. Provide:
 
-**Settings → Developer → Webhooks → Create webhook.** Provide:
+- **URL:** where OpenAudioHub sends events.
+- **Events:** one or more of the event types below.
+- **Description:** optional, for your own reference.
 
-- **URL** the endpoint to POST events to.
-- **Events** one or more of the supported event types (see below).
-- **Description** optional, for your own bookkeeping.
-
-You get back a signing secret of the form `whsec_<32 chars>`. The
-secret is shown once and stored encrypted at rest. Use it to verify
-incoming requests.
+OpenAudioHub returns a signing secret that starts with `whsec_`. Copy it when it is shown. The secret is stored encrypted, and you use it to verify each delivery.
 
 ### Supported events
 
-| Event                       | When it fires                                  |
-| --------------------------- | ---------------------------------------------- |
-| `recording.synced`          | A new recording finished syncing from Plaud    |
-| `recording.updated`         | An existing recording's metadata changed       |
-| `recording.deleted`         | A recording was soft-deleted                   |
-| `transcription.completed`   | Transcription finished successfully            |
-| `transcription.failed`      | Transcription failed (final, after retries)    |
-| `summary.completed`         | Auto-summary finished successfully             |
-| `summary.failed`            | Auto-summary failed (transcript still kept)    |
+| Event | When it fires |
+| --- | --- |
+| `recording.synced` | A new recording finished syncing from Plaud |
+| `recording.updated` | A recording's metadata changed |
+| `recording.deleted` | A recording was deleted |
+| `transcription.completed` | A transcription finished successfully |
+| `transcription.failed` | A transcription failed after its retries |
+| `summary.completed` | An automatic summary finished |
+| `summary.failed` | An automatic summary failed. The transcript is kept. |
 
-### Delivery shape
+### Delivery format
 
-Each delivery is a `POST` to your URL with a JSON body and these
-headers:
+Each delivery is a `POST` with a JSON body and these headers:
 
-| Header                  | Meaning                                                 |
-| ----------------------- | ------------------------------------------------------- |
-| `X-Riffado-Event`     | The event name (e.g. `recording.synced`)                |
-| `X-Riffado-Delivery`  | Unique delivery id, useful for idempotent receivers     |
-| `X-Riffado-Timestamp` | Unix seconds, also embedded in the signature payload    |
-| `X-Riffado-Signature` | `t=<timestamp>,v1=<hex hmac>` — see below               |
+| Header | Meaning |
+| --- | --- |
+| `X-OpenAudioHub-Event` | The event name, such as `recording.synced` |
+| `X-OpenAudioHub-Delivery` | A unique delivery ID. Use it to ignore duplicates. |
+| `X-OpenAudioHub-Timestamp` | Unix time in seconds. It is also part of the signed payload. |
+| `X-OpenAudioHub-Signature` | `t=<timestamp>,v1=<hex HMAC>`. See below. |
 
-The body always contains the event name, the affected recording id,
-and a serialized recording payload matching the
-[`/api/v1/recordings/{id}`](../reference/public-api) shape.
+The User-Agent is `OpenAudioHub-Webhooks/1`.
+
+The body includes the event name, the recording ID, and a recording payload in the same shape as `/api/v1/recordings/{id}`.
 
 ### Verifying signatures
 
-Signature header format: `t=1700000000,v1=<hex>`.
+The signed payload is the timestamp, a period, and the raw request body. The signature is the HMAC-SHA256 of that payload, using your `whsec_` secret. Reject a delivery when:
 
-The signed payload is `${timestamp}.${rawBody}` and the algorithm is
-HMAC-SHA256 with your `whsec_…` secret. Reject deliveries where:
+- The `t=` timestamp is more than five minutes from your server's clock. This blocks replays.
+- The recomputed `v1` value does not match, using a constant-time comparison.
 
-- The `t=` value is more than **five minutes** away from the receiver's
-  clock (replay protection).
-- The recomputed `v1` digest does not match in constant time.
-
-Reference Node.js receiver:
+A Node.js receiver:
 
 ```js
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -117,31 +93,18 @@ function verify(secret, header, rawBody, toleranceSeconds = 300) {
 }
 ```
 
-The exact same algorithm lives in `src/lib/webhooks/signature.ts`.
+The same algorithm is implemented in `src/lib/webhooks/signature.ts`.
 
 ### Allowed URLs
 
-By default, webhook URLs may use `http://` or `https://` and may point
-at any host the Riffado container can reach. Docker-bridge service
-hostnames work (`http://n8n:5678/...`), so do private-network IPs.
-Credentials embedded in the URL are rejected.
+By default, a webhook URL can use `http://` or `https://`, and it can point at any host the OpenAudioHub container can reach. That includes Docker service names, such as `http://n8n:5678/webhook`, and private IP addresses. URLs with embedded credentials are rejected.
 
-If you want stricter validation — HTTPS only, public-IP destinations
-only, RFC1918/loopback/link-local/ULA explicitly rejected — set
-`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true` in your `.env`. Useful if your
-Riffado instance is exposed to other people and you don't want it to
-be usable as an SSRF relay against your private network.
+If your instance is reachable by other people, set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. Then URLs must use HTTPS, must resolve to public addresses, and must not contain credentials. This stops your instance from being used to reach your private network. See [Environment variables](/docs/self-hosting/environment-variables).
 
-### Retry behaviour
+### Retries
 
-Webhook deliveries are queued and processed by a background worker. A
-non-2xx response or network failure schedules an exponential-backoff
-retry. After the worker exhausts retries the delivery is marked failed
-and visible in **Settings → Developer → Webhooks → Recent deliveries**.
+A non-2xx response or a network error schedules a retry. Retries wait 30 seconds, 2 minutes, 10 minutes, 1 hour, and 6 hours. After six failed attempts, the delivery is marked dead. Failed deliveries are recorded, and you can review them in **Settings → Integrations → Webhooks**.
 
-## What writes look like
+## Write access
 
-There aren't any public write endpoints yet. The current `/api/v1/*`
-surface is read-only by design: list recordings, get a recording, get
-its transcript, stream its audio. If you need to push data *in*, run
-the Riffado UI or sync the source Plaud account.
+The `/api/v1/*` surface is read-only. It lists recordings, returns one recording, returns its transcript, and streams its audio. To add data, use the OpenAudioHub interface or sync from Plaud.

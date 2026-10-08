@@ -1,40 +1,25 @@
 ---
 title: S3-compatible storage
-description: Configure AWS S3, Cloudflare R2, MinIO, Backblaze B2, or any S3-compatible service.
+description: Store audio in AWS S3, Cloudflare R2, MinIO, Backblaze B2, or any S3-compatible service.
 ---
 
-By default, Riffado stores audio on the local filesystem (Docker
-volume mounted at `/app/audio`). That's the right default — zero setup,
-works offline, lives entirely under your control. Switch to S3 when you
-want offsite durability, lower per-byte cost, or to share storage
-between multiple instances.
+By default, OpenAudioHub stores audio on the local filesystem, in a Docker volume mounted at `/app/audio`. That needs no setup, works offline, and keeps everything under your control. Switch to S3-compatible storage when you want offsite durability, lower storage costs, or storage shared between instances.
 
-Riffado talks to any service that implements the S3 wire protocol —
-AWS S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, Wasabi,
-and so on.
+OpenAudioHub works with any service that speaks the S3 protocol, including AWS S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, and Wasabi.
 
-## Configuring S3
+## Configure S3
 
-You can configure storage in two ways:
+Storage is configured once for the instance, in the environment, and every account uses the same backend. Set `DEFAULT_STORAGE_TYPE=s3` and the `S3_*` variables listed in [Environment variables](./environment-variables), then restart the stack.
 
-1. **Per-user, via the Settings UI** — `Settings → Storage`. Each user
-   on a self-host instance can point at a different bucket. Credentials
-   are encrypted at rest.
-2. **Instance-wide, via environment variables** — set the
-   `DEFAULT_STORAGE_TYPE=s3` plus the `S3_*` vars listed below. Useful
-   when you want every new account to default to a shared bucket.
+The storage page in Settings shows the active backend and how much space your recordings use.
 
-The env-var config is the **default** that new users get. The UI config
-overrides it per user. See
-[Environment variables](./environment-variables) for the full
-list.
-
-## Provider settings
+## Provider examples
 
 ### AWS S3
 
 ```bash
-S3_ENDPOINT=        # leave blank
+DEFAULT_STORAGE_TYPE=s3
+S3_ENDPOINT=                  # leave blank
 S3_BUCKET=your-bucket-name
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=YOUR_KEY
@@ -44,32 +29,31 @@ S3_SECRET_ACCESS_KEY=YOUR_SECRET
 ### Cloudflare R2
 
 ```bash
+DEFAULT_STORAGE_TYPE=s3
 S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_BUCKET=riffado
+S3_BUCKET=openaudiohub
 S3_REGION=auto
 S3_ACCESS_KEY_ID=YOUR_KEY
 S3_SECRET_ACCESS_KEY=YOUR_SECRET
 ```
 
-R2 has 10 GB free storage and no egress fees, which makes it a good
-default for personal self-host instances.
-
 ### MinIO (self-hosted)
 
 ```bash
+DEFAULT_STORAGE_TYPE=s3
 S3_ENDPOINT=http://minio:9000
-S3_BUCKET=riffado
+S3_BUCKET=openaudiohub
 S3_REGION=us-east-1
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
+S3_ACCESS_KEY_ID=YOUR_KEY
+S3_SECRET_ACCESS_KEY=YOUR_SECRET
 ```
 
-If MinIO runs in the same Docker network as Riffado, the endpoint is
-the service hostname (`http://minio:9000`), not `localhost`.
+If MinIO runs on the same Docker network as OpenAudioHub, use the service name, as shown, rather than `localhost`.
 
 ### Backblaze B2
 
 ```bash
+DEFAULT_STORAGE_TYPE=s3
 S3_ENDPOINT=https://s3.<region>.backblazeb2.com
 S3_BUCKET=your-bucket-name
 S3_REGION=<region>
@@ -77,11 +61,10 @@ S3_ACCESS_KEY_ID=YOUR_KEY
 S3_SECRET_ACCESS_KEY=YOUR_SECRET
 ```
 
-B2 is the cheapest option for long-term cold storage.
-
 ### DigitalOcean Spaces
 
 ```bash
+DEFAULT_STORAGE_TYPE=s3
 S3_ENDPOINT=https://<region>.digitaloceanspaces.com
 S3_BUCKET=your-space-name
 S3_REGION=<region>
@@ -89,36 +72,19 @@ S3_ACCESS_KEY_ID=YOUR_KEY
 S3_SECRET_ACCESS_KEY=YOUR_SECRET
 ```
 
-## Test the connection
-
-The Settings UI exposes a **Test connection** button that calls
-`testConnection()` on the storage provider — a cheap round-trip that
-will surface bucket-permission and credentials issues before you flip
-the active backend.
-
 ## Encryption at the storage layer
 
-Riffado's at-rest encryption applies to **database** fields, not audio
-objects in storage. For S3, prefer **bucket-level server-side
-encryption** (SSE-S3, SSE-KMS, or the equivalent on your provider). Per-
-object app-layer encryption is a heavier change and not implemented
-today.
+OpenAudioHub's encryption at rest covers database fields, not audio objects. For S3, turn on server-side encryption at the bucket level, using SSE-S3, SSE-KMS, or your provider's equivalent. Per-object encryption inside the application is not implemented.
 
-See [Encryption at rest](../reference/encryption-at-rest) for the
-explicit scope of the database-layer encryption.
+See [Encryption at rest](/docs/reference/encryption-at-rest) for the exact scope.
 
-## Migrating between backends
+## Switching from local storage to S3
 
-Riffado does not ship a built-in "move all audio from local to S3"
-tool. The supported flow today:
+OpenAudioHub has no built-in tool that moves existing audio between backends. Because the backend is set for the whole instance, copy the audio before you switch:
 
-1. Stop sync (so no new files are written).
-2. Mirror the local audio directory to your bucket using `aws s3 sync`,
-   `rclone`, or the equivalent.
-3. Switch the storage config in Settings.
-4. Re-enable sync.
+1. Stop the OpenAudioHub container, so no new files are written during the copy.
+2. Copy the local audio directory to the bucket with `aws s3 sync`, `rclone`, or a similar tool. Recording rows store the storage key, and the key layout is the same for every backend, so a straight copy is enough.
+3. Set `DEFAULT_STORAGE_TYPE=s3` and the `S3_*` variables, then start the stack.
+4. Open a few recordings and confirm that the audio plays.
 
-Recording rows store the storage key directly; the layout is the same
-across backends (`{userId}/{filename}.mp3`, with `(2)`, `(3)`,&nbsp;…
-suffixes on collisions), so a straight mirror of the local audio
-directory into the bucket is enough.
+Keep the local audio directory until you have confirmed the copy.

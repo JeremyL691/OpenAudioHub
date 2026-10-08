@@ -1,333 +1,101 @@
-# Deployment Guide
+# Deployment guide
 
-This guide covers deploying Riffado to production environments.
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Docker Deployment (Recommended)](#docker-deployment-recommended)
-- [Manual Deployment](#manual-deployment)
-- [Environment Variables](#environment-variables)
-- [Database Setup](#database-setup)
-- [Reverse Proxy Setup](#reverse-proxy-setup)
-- [SSL/TLS Configuration](#ssltls-configuration)
-- [Backup & Restore](#backup--restore)
-- [Monitoring](#monitoring)
-- [Troubleshooting](#troubleshooting)
+This guide covers running OpenAudioHub in production with Docker Compose. For a first install, the [installer](../content/docs/self-hosting/install.mdx) is the quickest route. For upgrades, see [Upgrading](../content/docs/self-hosting/upgrading.mdx).
 
 ## Prerequisites
 
-### Required
-- Docker & Docker Compose (for Docker deployment)
-- PostgreSQL 16+ (if not using Docker)
-- Node.js 20+ (for manual deployment)
-- Domain name with DNS configured
-- SSL certificate (Let's Encrypt recommended)
+- Docker with Compose v2.
+- A domain name and a TLS certificate, for example from Let's Encrypt, if other machines will reach the instance.
+- A reverse proxy such as nginx or Caddy.
+- Optional: S3-compatible storage for audio, and an SMTP server for email notifications.
 
-### Recommended
-- Reverse proxy (nginx, Caddy, Traefik)
-- S3-compatible storage (for backups and file storage)
-- SMTP server (for email notifications)
+## Configure
 
-## Docker Deployment (Recommended)
+Copy `.env.example` to `.env`. Set `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `AUDIO_PIPELINE_TOKEN`, and `APP_URL`. Generate each secret separately with `openssl rand -hex 32`. Every variable and its default is listed in the [environment variables reference](../content/docs/self-hosting/environment-variables.mdx).
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/riffado/riffado.git
-cd riffado
-```
-
-### 2. Generate Secrets
-
-```bash
-# Generate BETTER_AUTH_SECRET
-openssl rand -hex 32
-
-# Generate ENCRYPTION_KEY
-openssl rand -hex 32
-
-# Generate POSTGRES_PASSWORD (bundled db service)
-openssl rand -hex 24
-```
-
-### 3. Configure Environment
-
-Create `.env` file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your values:
+A typical production configuration with S3 storage and email:
 
 ```env
-# Database (docker-compose.yml derives DATABASE_URL from this value)
-POSTGRES_PASSWORD=<generated-db-password>
+APP_URL=https://openaudiohub.example.com
 
-# Auth
-BETTER_AUTH_SECRET=<generated-secret>
-APP_URL=https://your-domain.com
-
-# Encryption
-ENCRYPTION_KEY=<generated-key>
-
-# Storage (use 's3' for production)
 DEFAULT_STORAGE_TYPE=s3
-S3_ENDPOINT=https://your-s3-endpoint.com
-S3_BUCKET=riffado
+S3_ENDPOINT=https://s3.example.com
+S3_BUCKET=openaudiohub
 S3_REGION=us-east-1
-S3_ACCESS_KEY_ID=<your-key>
-S3_SECRET_ACCESS_KEY=<your-secret>
+S3_ACCESS_KEY_ID=<key-id>
+S3_SECRET_ACCESS_KEY=<secret>
 
-# SMTP (for notifications)
-SMTP_HOST=smtp.gmail.com
+SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=noreply@your-domain.com
+SMTP_USER=<user>
+SMTP_PASSWORD=<password>
+SMTP_FROM="OpenAudioHub <noreply@example.com>"
+
+WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true
 ```
 
-### 4. Start Services
+Keep `ENCRYPTION_KEY` in a secure location outside the database backups. Without it, encrypted content cannot be recovered.
+
+## Start the stack
 
 ```bash
+docker compose pull
 docker compose up -d
+docker compose ps
 ```
 
-### 5. Verify Deployment
+The app runs its database migrations when its container starts, and it stops if a migration fails.
 
-```bash
-# Check logs
-docker compose logs -f app
+## Reverse proxy
 
-# Check health
-curl http://localhost:3000/api/health
-```
+The app listens on port 3000. Put a proxy in front of it for TLS.
 
-### 6. Run Database Migrations
-
-Migrations run automatically on container start. To run manually:
-
-```bash
-docker compose exec app pnpm db:migrate
-```
-
-## Manual Deployment
-
-### 1. Install Dependencies
-
-```bash
-pnpm install --frozen-lockfile
-```
-
-### 2. Set Up PostgreSQL
-
-```bash
-# Create database
-createdb riffado
-
-# Update DATABASE_URL in .env
-DATABASE_URL=postgresql://user:password@localhost:5432/riffado
-```
-
-### 3. Run Migrations
-
-```bash
-pnpm db:migrate
-```
-
-### 4. Build Application
-
-```bash
-pnpm build
-```
-
-### 5. Start Production Server
-
-```bash
-pnpm start
-```
-
-### 6. Process Manager (PM2)
-
-For production, use a process manager:
-
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start with PM2
-pm2 start pnpm --name riffado -- start
-
-# Save PM2 configuration
-pm2 save
-
-# Set up PM2 to start on boot
-pm2 startup
-```
-
-## Environment Variables
-
-### Required Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `BETTER_AUTH_SECRET` | Auth secret (32+ chars) | Generate with `openssl rand -hex 32` |
-| `ENCRYPTION_KEY` | Encryption key (64 hex chars) | Generate with `openssl rand -hex 32` |
-| `APP_URL` | Public URL of your app | `https://riffado.example.com` |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEFAULT_STORAGE_TYPE` | Storage backend (`local` or `s3`) | `local` |
-| `LOCAL_STORAGE_PATH` | Local storage directory | `./storage` |
-| `S3_ENDPOINT` | S3-compatible endpoint | AWS default |
-| `S3_BUCKET` | S3 bucket name | - |
-| `S3_REGION` | S3 region | - |
-| `S3_ACCESS_KEY_ID` | S3 access key | - |
-| `S3_SECRET_ACCESS_KEY` | S3 secret key | - |
-| `SMTP_HOST` | SMTP server hostname | - |
-| `SMTP_PORT` | SMTP server port | `587` |
-| `SMTP_SECURE` | Use TLS | `false` |
-| `SMTP_USER` | SMTP username | - |
-| `SMTP_PASSWORD` | SMTP password | - |
-| `SMTP_FROM` | From email address | - |
-
-## Database Setup
-
-Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
-The app reaches it over the Compose network (`db:5432`).
-
-### Rotating the bundled Postgres password
-
-Postgres applies `POSTGRES_PASSWORD` only on first init. Changing `.env`
-and recreating the `db` volume is not required and would wipe data.
-
-```bash
-NEW_PW="$(openssl rand -hex 24)"
-docker compose exec db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '${NEW_PW}'"
-# Write the same value to .env as POSTGRES_PASSWORD=<value>
-docker compose up -d --force-recreate app
-```
-
-### PostgreSQL Configuration
-
-For production, configure PostgreSQL for performance:
-
-```sql
--- postgresql.conf recommended settings
-
-# Memory
-shared_buffers = 256MB
-effective_cache_size = 1GB
-work_mem = 16MB
-maintenance_work_mem = 128MB
-
-# Connections
-max_connections = 100
-
-# Write-Ahead Log
-wal_buffers = 16MB
-checkpoint_completion_target = 0.9
-
-# Query Planning
-random_page_cost = 1.1  # For SSD
-effective_io_concurrency = 200  # For SSD
-```
-
-### Backup Strategy
-
-```bash
-# Daily backup script
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump riffado | gzip > /backups/riffado_$DATE.sql.gz
-
-# Keep last 30 days
-find /backups -name "riffado_*.sql.gz" -mtime +30 -delete
-```
-
-### Connection Pooling
-
-For high traffic, use connection pooling:
-
-```bash
-# Install PgBouncer
-apt-get install pgbouncer
-
-# Configure /etc/pgbouncer/pgbouncer.ini
-[databases]
-riffado = host=localhost port=5432 dbname=riffado
-
-[pgbouncer]
-listen_addr = 127.0.0.1
-listen_port = 6432
-pool_mode = transaction
-max_client_conn = 1000
-default_pool_size = 25
-```
-
-Update `DATABASE_URL` to use PgBouncer:
-```env
-DATABASE_URL=postgresql://user:pass@localhost:6432/riffado
-```
-
-## Reverse Proxy Setup
-
-### Nginx
+### nginx
 
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name riffado.example.com;
+    server_name openaudiohub.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/riffado.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/riffado.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/openaudiohub.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/openaudiohub.example.com/privkey.pem;
 
-    # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    client_max_body_size 100M;  # For large audio files
+    client_max_body_size 100M;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_cache_bypass $http_upgrade;
     }
 }
 
-# Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name riffado.example.com;
+    server_name openaudiohub.example.com;
     return 301 https://$server_name$request_uri;
 }
 ```
 
+The example sets `X-Forwarded-For` to the connecting address, so the client cannot supply its own value. Only set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` when your proxy overwrites this header in the same way.
+
 ### Caddy
 
 ```caddyfile
-riffado.example.com {
+openaudiohub.example.com {
     reverse_proxy localhost:3000
 
     header {
         X-Frame-Options "SAMEORIGIN"
         X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "no-referrer-when-downgrade"
+        Referrer-Policy "strict-origin-when-cross-origin"
     }
 
     request_body {
@@ -336,250 +104,62 @@ riffado.example.com {
 }
 ```
 
-## SSL/TLS Configuration
-
-### Let's Encrypt with Certbot
+### TLS with Certbot
 
 ```bash
-# Install Certbot
-apt-get install certbot python3-certbot-nginx
-
-# Get certificate
-certbot --nginx -d riffado.example.com
-
-# Auto-renewal (already set up by certbot)
-certbot renew --dry-run
+sudo apt-get install certbot python3-certbot-nginx
+sudo certbot --nginx -d openaudiohub.example.com
+sudo certbot renew --dry-run
 ```
 
-## Backup & Restore
+## Backups
 
-### Database Backup
+The Compose project is named `openaudiohub`, so its volumes are named `openaudiohub_*`. Back up three things: the database, the audio volume (unless you use S3), and the pipeline data volume if the pipeline is enabled.
+
+Dump the database in custom format:
 
 ```bash
-# Backup
-docker compose exec db pg_dump -U postgres riffado > backup.sql
-
-# Restore
-docker compose exec -T db psql -U postgres riffado < backup.sql
+docker compose exec -T db pg_dump -U postgres -Fc openaudiohub > openaudiohub-$(date +%Y%m%d).dump
 ```
 
-### File Storage Backup
+Archive the audio volume without changing it:
 
 ```bash
-# Local storage
-tar -czf storage-backup.tar.gz storage/
-
-# S3 storage - already backed up by S3
+docker run --rm -v openaudiohub_audio:/data -v "$PWD":/backup alpine \
+  tar czf /backup/audio-$(date +%Y%m%d).tar.gz -C /data .
 ```
 
-### Full Backup Script
+Keep the dump, the archive, and `.env` in a location with restricted access. Keep `ENCRYPTION_KEY` apart from them. Test a restore before you rely on the backups. For the full operations procedure, including the pipeline data, see [docs/audio-pipeline-operations.md](audio-pipeline-operations.md).
+
+Do not run `docker compose down -v` as a routine restart. It deletes the volumes.
+
+## Rotating the bundled database password
+
+Postgres reads `POSTGRES_PASSWORD` only when it creates the volume. To change the password of an existing database:
 
 ```bash
-#!/bin/bash
-# backup.sh
-
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backups/$DATE"
-mkdir -p $BACKUP_DIR
-
-# Database
-docker compose exec db pg_dump -U postgres riffado | gzip > $BACKUP_DIR/db.sql.gz
-
-# Environment config
-cp .env $BACKUP_DIR/env.backup
-
-# Docker volumes (if using local storage)
-docker run --rm -v riffado_audio:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/audio.tar.gz /data
-
-echo "Backup completed: $BACKUP_DIR"
+NEW_PW="$(openssl rand -hex 24)"
+docker compose exec db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '${NEW_PW}'"
+# Write the same value to .env as POSTGRES_PASSWORD, then recreate the app:
+docker compose up -d --force-recreate app
 ```
 
-## Monitoring
+## Health and monitoring
 
-### Health Checks
+- `GET /api/health` returns `"status":"ok"` when the app is ready.
+- `docker compose ps` shows the state of each container.
+- `docker compose logs -f app` follows the application log. Background worker messages are tagged, for example `[background-sync]`.
 
-```bash
-# Application health
-curl https://riffado.example.com/api/health
-
-# Database health
-docker compose exec db pg_isready
-
-# Docker container health
-docker compose ps
-```
-
-### Log Monitoring
-
-```bash
-# Application logs
-docker compose logs -f app
-
-# Database logs
-docker compose logs -f db
-
-# Nginx logs
-tail -f /var/log/nginx/access.log
-tail -f /var/log/nginx/error.log
-```
-
-### Uptime Monitoring
-
-Use external monitoring services:
-- UptimeRobot
-- Pingdom
-- Better Uptime
-- Healthchecks.io
-
-## Troubleshooting
-
-### Container Won't Start
-
-```bash
-# Check logs
-docker compose logs app
-
-# Common issues:
-# - Missing environment variables
-# - Database not ready
-# - Port already in use
-```
-
-### Database Connection Issues
-
-```bash
-# Verify database is running
-docker compose ps db
-
-# Check database logs
-docker compose logs db
-
-# Test connection
-docker compose exec db psql -U postgres -c "SELECT 1"
-```
-
-### Storage Issues
-
-```bash
-# Check disk space
-df -h
-
-# Check storage permissions
-ls -la storage/
-
-# For S3 issues, verify credentials and endpoint
-```
-
-### Migration Failures
-
-```bash
-# Reset database (CAUTION: deletes all data)
-docker compose down -v
-docker compose up -d
-
-# Or manually fix migration
-docker compose exec db psql -U postgres riffado
-```
-
-### Performance Issues
-
-1. **Check resource usage**
-   ```bash
-   docker stats
-   ```
-
-2. **Optimize database**
-   ```bash
-   docker compose exec db vacuumdb -U postgres -z riffado
-   ```
-
-3. **Enable caching**
-   - Add Redis for session storage
-   - Use CDN for static assets
-
-4. **Scale horizontally**
-   - Use load balancer
-   - Multiple app containers
-   - Read replicas for database
-
-## Production Checklist
-
-- [ ] Environment variables properly configured
-- [ ] Secrets generated securely
-- [ ] Database backups automated
-- [ ] SSL/TLS enabled
-- [ ] Reverse proxy configured
-- [ ] Health checks in place
-- [ ] Monitoring set up
-- [ ] Logs being collected
-- [ ] Firewall configured
-- [ ] S3 storage configured (recommended)
-- [ ] SMTP configured for notifications
-- [ ] Regular security updates planned
-- [ ] Disaster recovery plan documented
-
-## Security Hardening
-
-1. **Firewall**
-   ```bash
-   # UFW example
-   ufw allow 22/tcp   # SSH
-   ufw allow 80/tcp   # HTTP
-   ufw allow 443/tcp  # HTTPS
-   ufw enable
-   ```
-
-2. **Fail2Ban**
-   ```bash
-   apt-get install fail2ban
-   systemctl enable fail2ban
-   ```
-
-3. **Regular Updates**
-   ```bash
-   # System updates
-   apt-get update && apt-get upgrade
-
-   # Container updates
-   docker compose pull
-   docker compose up -d
-   ```
-
-4. **Secrets Management**
-   - Use Docker secrets
-   - Or use environment secrets manager (AWS Secrets Manager, HashiCorp Vault)
+Set up an external uptime check against `/api/health`.
 
 ## Scaling
 
-For high-traffic deployments:
+The default Compose file runs one app container and one database. The background workers claim their work in the database, so several app processes can share one database. That configuration has not been load tested for this release.
 
-1. **Horizontal Scaling**
-   ```yaml
-   # docker-compose.yml
-   services:
-     app:
-       deploy:
-         replicas: 3
-   ```
+## Troubleshooting
 
-2. **Load Balancing**
-   - nginx upstream
-   - HAProxy
-   - Cloud load balancers
-
-3. **Database Optimization**
-   - Connection pooling (PgBouncer)
-   - Read replicas
-   - Caching layer (Redis)
-
-4. **CDN**
-   - CloudFlare
-   - AWS CloudFront
-   - Fastly
-
-## Support
-
-For deployment help:
-- GitHub Discussions: https://github.com/riffado/riffado/discussions
-- Documentation: https://github.com/riffado/riffado/tree/main/docs
-- Issues: https://github.com/riffado/riffado/issues
+- **The app exits at startup.** The log names the invalid or missing variable. Fix `.env`, then run `docker compose up -d`.
+- **Migrations fail.** The app does not start. The log shows the failing migration. Restore from your backup if the database is in a partial state, then fix the cause and start again.
+- **The pipeline does not start.** `AUDIO_PIPELINE_TOKEN` must be at least 32 characters. Both services read the same variable, so set it once in `.env`.
+- **Uploads or audio fail on local storage.** Check that the audio directory is writable by the container, and that there is enough disk space.
+- **Long recordings run out of disk.** The pipeline writes decoded audio to disk. A 24-hour recording needs about 2.76 GB of decoded PCM, plus the source audio and temporary files. Jobs pause with a disk-space error when space runs out, and they resume when space is available.
