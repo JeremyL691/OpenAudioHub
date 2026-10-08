@@ -35,6 +35,7 @@ export default defineConfig({
     outputDir: "test-results",
     use: {
         baseURL: "http://localhost:3210",
+        storageState: resolve(__dirname, "e2e/.auth/user.json"),
         trace: "retain-on-failure",
         screenshot: "only-on-failure",
     },

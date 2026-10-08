@@ -1,0 +1,47 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`webhook contract > adds an error object only when delivery failed 1`] = `
+{
+  "data": null,
+  "delivered_at": "2026-01-01T00:00:00.000Z",
+  "error": {
+    "message": "receiver returned HTTP 500",
+  },
+  "event": "transcript.completed",
+}
+`;
+
+exports[`webhook contract > builds the outbound payload body 1`] = `
+{
+  "data": {
+    "id": "rec-1",
+    "title": "Weekly sync",
+  },
+  "delivered_at": "2026-01-01T00:00:00.000Z",
+  "event": "recording.created",
+}
+`;
+
+exports[`webhook contract > builds the redacted payload used when a stored body is unavailable 1`] = `
+{
+  "recording_id": "rec-1",
+  "redacted": true,
+  "redacted_at": "2026-01-01T00:00:00.000Z",
+}
+`;
+
+exports[`webhook contract > formats the signature header and verifies it round-trip 1`] = `"t=1767225600,v1=221d762bf427f527e494d414e4438a4d389172cf8f050bb398857b7f2d41a44b"`;
+
+exports[`webhook contract > lists the supported events in a fixed order 1`] = `
+[
+  "recording.synced",
+  "recording.updated",
+  "recording.deleted",
+  "transcription.completed",
+  "transcription.failed",
+  "summary.completed",
+  "summary.failed",
+]
+`;
+
+exports[`webhook contract > signs timestamp and body with HMAC-SHA256 hex 1`] = `"221d762bf427f527e494d414e4438a4d389172cf8f050bb398857b7f2d41a44b"`;
