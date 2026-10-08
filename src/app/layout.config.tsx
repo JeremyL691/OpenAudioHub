@@ -1,5 +1,6 @@
 import type { DocsLayoutProps } from "fumadocs-ui/layouts/docs";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import { ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import { Github } from "@/components/icons/icons";
 import { BRAND } from "@/lib/brand";
@@ -30,6 +31,13 @@ export const baseOptions: BaseLayoutProps = {
     // is an untitled svg with role="img", which axe reports. The app's Github
     // icon hides its svg and the link carries the label.
     links: [
+        {
+            type: "main",
+            text: "Back to app",
+            url: "/dashboard",
+            icon: <ArrowLeft className="size-4" />,
+            on: "all",
+        },
         {
             type: "icon",
             url: BRAND.repoUrl,
