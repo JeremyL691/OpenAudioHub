@@ -295,6 +295,20 @@
       "when": 1791441556739,
       "tag": "0041_rebrand_source_values",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791491194011,
+      "tag": "0042_resync_stripe_webhook_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791491233755,
+      "tag": "0043_source_default_openaudiohub",
+      "breakpoints": true
     }
   ]
 }

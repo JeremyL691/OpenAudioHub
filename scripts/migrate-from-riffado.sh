@@ -330,3 +330,9 @@ check "pipeline health" "$([[ "$pipe_status" == "ok" ]] && echo 1 || echo 0)" "/
 
 log "validation written to $VALIDATION (failures: $failures)"
 (( failures == 0 )) || exit 1
+
+# The launcher refuses to start a project that sits beside a Riffado install until this marker
+# exists, so a first start cannot come up on an empty database by accident.
+MARKER="$TARGET_DIR/.migrated-$TARGET_PROJECT"
+printf 'migrated_at=%s\nartifacts=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$OUT" > "$MARKER"
+log "marker written to $MARKER"

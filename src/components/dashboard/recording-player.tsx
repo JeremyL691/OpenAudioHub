@@ -39,6 +39,8 @@ interface RecordingPlayerProps {
         seekToMilliseconds: (milliseconds: number) => void,
     ) => void;
     onPlaybackTimeChange?: (milliseconds: number) => void;
+    /** Passed to the header: the page already shows the title and metadata. */
+    hideIdentity?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export function RecordingPlayer({
     initialVolume = 75,
     initialAutoPlayNext = false,
     scrubberStyle = "waveform",
+    hideIdentity = false,
     onRegisterSeek,
     onPlaybackTimeChange,
 }: RecordingPlayerProps) {
@@ -163,6 +166,7 @@ export function RecordingPlayer({
                     waveformStatus={waveformStatus}
                     onDecodeWaveform={triggerWaveformDecode}
                     onRenamed={onRenamed}
+                    hideIdentity={hideIdentity}
                 />
                 <CardContent>
                     <RecordingPlayerControls

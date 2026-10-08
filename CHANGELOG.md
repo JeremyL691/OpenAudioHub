@@ -18,7 +18,7 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - The audio pipeline's job field and request field are named `core_job_id`. The pipeline still accepts the previous request field, and it renames its column on startup. Upgrade the pipeline before Core.
 - `docker-compose.yml` enables the audio pipeline by default and requires `AUDIO_PIPELINE_TOKEN`, which must be at least 32 characters.
 - Hosted-only environment variables, including `IS_HOSTED`, are removed. Unknown variables are ignored.
-- Migration `0041_rebrand_source_values` rewrites stored legacy source values to `openaudiohub`. Reads accept both values.
+- Migration `0041_rebrand_source_values` rewrites stored legacy source values to `openaudiohub`. Reads accept both values. Migration `0043_source_default_openaudiohub` makes `openaudiohub` the column default for new rows.
 
 ### Added
 
@@ -42,6 +42,9 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - Long recordings get an automatic summary after the audio pipeline commits the transcript, as direct transcription already did. A job that is replayed does not summarize twice.
 - The recording page no longer scrolls sideways at 1280 px when a title is long. Titles truncate.
 - Uploaded recordings are labelled Upload, not Plaud.
+- The default export format in Settings › Export/Backup can be set to TXT, SRT, or VTT. The server used to reject those choices and accept `csv` and `zip`, which the exporter cannot produce. A saved `csv` or `zip` default now falls back to JSON.
+- Recordings that the audio pipeline is processing show their phase in the library and on the overview, and they appear under the Processing filter.
+- The recording page shows the title, date, and size once, in the page header. File sizes use the same units everywhere.
 
 ### Removed
 
@@ -49,14 +52,16 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - Database tables and columns that supported those features remain in place as deprecated objects. No data is dropped.
 - `docker-compose.enhanced.yml`. Its settings are in `docker-compose.yml`.
 - `.github/FUNDING.yml` and `SPONSORS.md`.
+- `EMAIL_SEND_RATE_PER_SECOND`. It only paced the removed marketing email.
 
 ### Security
 
 - The bundled Postgres service publishes its port on `127.0.0.1` only.
 - The installer generates `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, and `AUDIO_PIPELINE_TOKEN`.
+- `next` is upgraded from 16.2.10 to 16.3.8, which fixes three critical remote code execution advisories (GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4, GHSA-vcvr-r3jv-pc5j).
 
 ### Known issues
 
-- `pnpm audit --prod` reports critical advisories in `next` 16.2.10 (remote code execution, fixed in 16.3.8 or later). Upgrade `next` before publishing a public release.
+- `pnpm audit --prod` reports one critical advisory, in `protobufjs` 6.11.4 (GHSA-xq3m-2v4x-88gg). It arrives through `@xenova/transformers`, which runs in-browser transcription, and has no fixed 6.x release.
 - Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
 - The feature list once named translation of summaries. The imported code never had it, so it is not in this release.

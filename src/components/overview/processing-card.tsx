@@ -1,17 +1,8 @@
 import Link from "next/link";
 import { ProgressBar } from "@/components/app/progress-bar";
-import {
-    STATUS_BADGE_STATUSES,
-    StatusBadge,
-    type StatusBadgeStatus,
-} from "@/components/app/status-badge";
+import { StatusBadge } from "@/components/app/status-badge";
 import type { ProcessingItem } from "@/components/overview/overview-view";
-
-function badgeFor(phase: string): StatusBadgeStatus {
-    return (STATUS_BADGE_STATUSES as readonly string[]).includes(phase)
-        ? (phase as StatusBadgeStatus)
-        : "running";
-}
+import { pipelinePhaseStatus } from "@/lib/recordings/transcript-status";
 
 /** Pipeline jobs that are still running, with their phase and progress. */
 export function ProcessingCard({ items }: { items: ProcessingItem[] }) {
@@ -46,7 +37,9 @@ export function ProcessingCard({ items }: { items: ProcessingItem[] }) {
                                     label={`${item.title} progress`}
                                 />
                             </div>
-                            <StatusBadge status={badgeFor(item.phase)} />
+                            <StatusBadge
+                                status={pipelinePhaseStatus(item.phase)}
+                            />
                         </li>
                     ))}
                 </ul>

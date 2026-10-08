@@ -9,7 +9,7 @@ test.describe("landing page", () => {
         await page.goto("/");
 
         await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-            "Open-source AI transcription for the recorder you already own.",
+            "Long recordings, intelligently transcribed.",
         );
         await expect(page.getByRole("heading", { level: 3 })).toHaveCount(6);
         await expect(

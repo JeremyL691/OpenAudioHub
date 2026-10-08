@@ -3,6 +3,7 @@ import { OverviewView } from "@/components/overview/overview-view";
 import { isSettingsSection } from "@/components/settings-nav-config";
 import {
     getActivePipelineJobs,
+    getActivePipelinePhases,
     getOverviewTotals,
     getPlaudStatus,
     getRecentRecordings,
@@ -31,9 +32,10 @@ export default async function DashboardPage({
     const session = await requireAuth();
     const userId = session.user.id;
 
-    const [totals, jobs, recent, plaud, providers] = await Promise.all([
+    const [totals, jobs, phases, recent, plaud, providers] = await Promise.all([
         getOverviewTotals(userId),
         getActivePipelineJobs(userId),
+        getActivePipelinePhases(userId),
         getRecentRecordings(userId, 8),
         getPlaudStatus(userId),
         listUserProviders(userId),
@@ -51,6 +53,7 @@ export default async function DashboardPage({
             {
                 hasTranscript: flags.transcribed.has(row.id),
                 hasSummary: flags.summarized.has(row.id),
+                pipelinePhase: phases.get(row.id) ?? null,
             },
         ),
     );

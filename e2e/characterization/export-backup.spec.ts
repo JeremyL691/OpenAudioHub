@@ -1,10 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
-// Formats served by GET /api/export. The settings UI offers the same four, but
-// the default-format validator in /api/settings/user accepts only json, csv, and
-// zip. Selecting txt, srt, or vtt in the UI is rejected and reverted. That is the
-// current behavior this file characterizes; see docs/dev/BLOCKERS.md.
+// Formats served by GET /api/export. The settings UI offers the same four, and
+// /api/settings/user accepts the same four as the saved default (B-001, D-201;
+// before that the validator accepted json, csv, and zip, so TXT was reverted).
 const EXPORT_FORMATS = ["json", "txt", "srt", "vtt"] as const;
 
 async function openExportSection(page: Page): Promise<void> {
@@ -20,6 +19,14 @@ test.describe("export and backup", () => {
         await openExportSection(page);
     });
 
+    // Other tests expect JSON as the default, so put it back after each test.
+    test.afterEach(async ({ page }) => {
+        const response = await page.request.put("/api/settings/user", {
+            data: { defaultExportFormat: "json" },
+        });
+        expect(response.ok()).toBeTruthy();
+    });
+
     test("Export text downloads the default JSON format", async ({ page }) => {
         const request = page.waitForRequest(
             (req) =>
@@ -30,20 +37,29 @@ test.describe("export and backup", () => {
         await request;
     });
 
-    test("selecting TXT in the UI is rejected and reverts to JSON", async ({
+    test("selecting TXT saves it as the default export format", async ({
         page,
     }) => {
         await page.getByTestId("export-format").click();
-        await page.getByRole("option", { name: /^TXT\b/ }).click();
-
-        // Only the root layout mounts a Toaster (the duplicate in (app)/layout.tsx
-        // was removed in T4.2), so the message renders once.
-        const message = page.getByText(
-            "Failed to save settings. Changes reverted.",
+        const saved = page.waitForResponse(
+            (res) =>
+                new URL(res.url()).pathname === "/api/settings/user" &&
+                res.request().method() === "PUT",
         );
-        await expect(message).toHaveCount(1);
-        await expect(message).toBeVisible();
-        await expect(page.getByTestId("export-format")).toContainText("JSON");
+        await page.getByRole("option", { name: /^TXT\b/ }).click();
+        expect((await saved).ok()).toBeTruthy();
+        await expect(page.getByTestId("export-format")).toContainText("TXT");
+
+        await page.reload();
+        await expect(page.getByTestId("export-format")).toContainText("TXT");
+
+        const request = page.waitForRequest(
+            (req) =>
+                new URL(req.url()).pathname === "/api/export" &&
+                new URL(req.url()).searchParams.get("format") === "txt",
+        );
+        await page.getByRole("button", { name: "Export text" }).click();
+        await request;
     });
 
     for (const format of EXPORT_FORMATS) {

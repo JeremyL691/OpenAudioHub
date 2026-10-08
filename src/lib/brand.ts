@@ -4,9 +4,9 @@
  */
 export const BRAND = {
     name: "OpenAudioHub",
-    slogan: "Open-source AI transcription for the recorder you already own.",
+    slogan: "Long recordings, intelligently transcribed.",
     description:
-        "Self-hosted AI transcription and summaries for Plaud recordings.",
+        "Open-source, self-hosted AI audio workspace for long recordings.",
     repoUrl: "https://github.com/JeremyL691/OpenAudioHub",
     issuesUrl: "https://github.com/JeremyL691/OpenAudioHub/issues",
     docsPath: "/docs",

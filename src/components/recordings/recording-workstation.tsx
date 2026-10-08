@@ -11,10 +11,7 @@ import { PipelineStatus } from "@/components/recording/pipeline/pipeline-status"
 import { TranscriptCard } from "@/components/recording/transcript/transcript-card";
 import type { TranscriptOption } from "@/components/recording/transcript/types";
 import { RecordingActionsMenu } from "@/components/recordings/recording-actions-menu";
-import {
-    formatMegabytes,
-    RecordingDetailsCard,
-} from "@/components/recordings/recording-details-card";
+import { RecordingDetailsCard } from "@/components/recordings/recording-details-card";
 import { RecordingTitle } from "@/components/recordings/recording-title";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecordingTranscript } from "@/hooks/use-recording-transcript";
+import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
 import { recordingSource } from "@/lib/recordings/transcript-status";
 import type { Recording } from "@/types/recording";
@@ -210,7 +208,7 @@ export function RecordingWorkstation({
                             <span aria-hidden="true">·</span>
                             <span>{formatDurationMs(recording.duration)}</span>
                             <span aria-hidden="true">·</span>
-                            <span>{formatMegabytes(recording.filesize)}</span>
+                            <span>{formatBytes(recording.filesize)}</span>
                             <Badge variant="outline">
                                 {recordingSource(recording.deviceSn)}
                             </Badge>
@@ -238,6 +236,7 @@ export function RecordingWorkstation({
                         onRenamed={handleRenamed}
                         onRegisterSeek={handleRegisterSeek}
                         onPlaybackTimeChange={setPlaybackTimeMs}
+                        hideIdentity
                     />
                     {!cardShowsPipelineStatus && (
                         <PipelineStatus

@@ -154,7 +154,7 @@ export function RecordingList({
                 case "untranscribed":
                     return !transcribed;
                 case "processing":
-                    return inFlightActions.has(r.id);
+                    return inFlightActions.has(r.id) || r.pipelinePhase != null;
                 default:
                     return true;
             }

@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "OpenAudioHub",
         short_name: "OpenAudioHub",
         description:
-            "Open-source AI transcription for the voice recorder you already own.",
+            "Open-source, self-hosted AI audio workspace for long recordings.",
         start_url: "/",
         display: "standalone",
         background_color: themeColors.light,

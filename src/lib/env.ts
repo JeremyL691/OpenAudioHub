@@ -252,13 +252,6 @@ export const envSchema = z.object({
                     'SMTP_REPLY_TO must be an email address (e.g., "user@example.com") or formatted as "Name <user@example.com>"',
             },
         ),
-
-    EMAIL_SEND_RATE_PER_SECOND: z
-        .string()
-        .regex(/^\d+$/, "EMAIL_SEND_RATE_PER_SECOND must be a positive integer")
-        .optional()
-        .transform((val) => (val ? Number(val) : 5))
-        .pipe(z.number().int().positive().max(100)),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -314,7 +307,6 @@ function validateEnv(): Env {
             SMTP_PASSWORD: process.env.SMTP_PASSWORD,
             SMTP_FROM: process.env.SMTP_FROM,
             SMTP_REPLY_TO: process.env.SMTP_REPLY_TO,
-            EMAIL_SEND_RATE_PER_SECOND: process.env.EMAIL_SEND_RATE_PER_SECOND,
         });
 
         const isProductionBuildPhase =
