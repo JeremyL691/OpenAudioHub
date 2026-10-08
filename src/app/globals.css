@@ -3,61 +3,89 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* OpenAudioHub Color Scheme - Modern Audiophile Design */
+/*
+ * Design tokens. The Chalk theme comes from TweakCN (tweakcn.com/themes/...).
+ * The brand, waveform, transcript, and status tokens extend it (docs/dev/DESIGN.md).
+ * Brand colors are used only where docs/dev/DESIGN.md lists them.
+ */
 :root {
-    --background: oklch(0.9818 0.0054 95.0986);
-    --foreground: oklch(0.3438 0.0269 95.7226);
-    --card: oklch(0.9818 0.0054 95.0986);
-    --card-foreground: oklch(0.1908 0.002 106.5859);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2671 0.0196 98.939);
-    --primary: oklch(0.6171 0.1375 39.0427);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9245 0.0138 92.9892);
-    --secondary-foreground: oklch(0.4334 0.0177 98.6048);
-    --muted: oklch(0.9341 0.0153 90.239);
-    --muted-foreground: oklch(0.6059 0.0075 97.4233);
-    --accent: oklch(0.9245 0.0138 92.9892);
-    --accent-foreground: oklch(0.2671 0.0196 98.939);
-    --destructive: oklch(0.1908 0.002 106.5859);
+    --background: oklch(0.9745 0.0079 253.8524);
+    --foreground: oklch(0.1443 0.0191 261.1564);
+    --card: oklch(0.9897 0.0051 247.8755);
+    --card-foreground: oklch(0.1443 0.0191 261.1564);
+    --popover: oklch(0.9897 0.0051 247.8755);
+    --popover-foreground: oklch(0.1443 0.0191 261.1564);
+    --primary: oklch(0.2038 0.0264 260.9332);
+    --primary-foreground: oklch(0.9851 0 0);
+    --secondary: oklch(0.9442 0.0137 258.3455);
+    --secondary-foreground: oklch(0.2038 0.0264 260.9332);
+    --muted: oklch(0.9442 0.0137 258.3455);
+    --muted-foreground: oklch(0.5195 0.0188 262.6912);
+    --accent: oklch(0.9442 0.0137 258.3455);
+    --accent-foreground: oklch(0.2038 0.0264 260.9332);
+    --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.8847 0.0069 97.3627);
-    --input: oklch(0.7621 0.0156 98.3528);
-    --ring: oklch(0.6171 0.1375 39.0427);
-    --chart-1: oklch(0.5583 0.1276 42.9956);
-    --chart-2: oklch(0.6898 0.1581 290.4107);
-    --chart-3: oklch(0.8816 0.0276 93.128);
-    --chart-4: oklch(0.8822 0.0403 298.1792);
-    --chart-5: oklch(0.5608 0.1348 42.0584);
-    --sidebar: oklch(0.9663 0.008 98.8792);
-    --sidebar-foreground: oklch(0.359 0.0051 106.6524);
-    --sidebar-primary: oklch(0.6171 0.1375 39.0427);
-    --sidebar-primary-foreground: oklch(0.9881 0 0);
-    --sidebar-accent: oklch(0.9245 0.0138 92.9892);
-    --sidebar-accent-foreground: oklch(0.325 0 0);
-    --sidebar-border: oklch(0.9401 0 0);
-    --sidebar-ring: oklch(0.7731 0 0);
+    --border: oklch(0.9013 0.0156 257.2001);
+    --input: oklch(0.9013 0.0156 257.2001);
+    --ring: oklch(0.6503 0.022 257.4949);
+    --chart-1: oklch(0.81 0.1 252);
+    --chart-2: oklch(0.62 0.19 260);
+    --chart-3: oklch(0.55 0.22 263);
+    --chart-4: oklch(0.49 0.22 264);
+    --chart-5: oklch(0.42 0.18 266);
+    --sidebar: oklch(0.9601 0.0103 261.7889);
+    --sidebar-foreground: oklch(0.1443 0.0191 261.1564);
+    --sidebar-primary: oklch(0.2038 0.0264 260.9332);
+    --sidebar-primary-foreground: oklch(0.9851 0 0);
+    --sidebar-accent: oklch(0.9442 0.0137 258.3455);
+    --sidebar-accent-foreground: oklch(0.2038 0.0264 260.9332);
+    --sidebar-border: oklch(0.9013 0.0156 257.2001);
+    --sidebar-ring: oklch(0.6503 0.022 257.4949);
 
-    /* Theme-stable surface for marketing chrome (auth split-panel, etc.).
-       Locked to the light-mode foreground / background pair so the panel
-       stays dark-sepia + cream-text in BOTH light and dark themes -- it
-       intentionally does NOT invert. */
-    --auth-brand: oklch(0.3438 0.0269 95.7226);
-    --auth-brand-foreground: oklch(0.9818 0.0054 95.0986);
+    --brand-cyan: oklch(0.72 0.15 230);
+    --brand-blue: oklch(0.58 0.22 262);
+    --brand-violet: oklch(0.55 0.25 290);
+    --brand-gradient: linear-gradient(
+        135deg,
+        var(--brand-cyan),
+        var(--brand-blue),
+        var(--brand-violet)
+    );
+
+    --waveform-played: var(--brand-blue);
+    --waveform-unplayed: color-mix(
+        in oklch,
+        var(--muted-foreground) 35%,
+        transparent
+    );
+    --waveform-cursor: var(--brand-cyan);
+    --transcript-active: color-mix(
+        in oklch,
+        var(--brand-blue) 10%,
+        transparent
+    );
+
+    --success: oklch(0.45 0.12 150);
+    --success-foreground: oklch(0.99 0 0);
+    --warning: oklch(0.85 0.16 85);
+    --warning-foreground: oklch(0.2 0.02 60);
+    --info: oklch(0.5 0.16 250);
+    --info-foreground: oklch(0.99 0 0);
 
     --font-sans:
-        ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+        var(--font-geist-sans), ui-sans-serif, system-ui, "PingFang SC",
+        "Noto Sans SC", sans-serif;
     --font-mono:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
-    --radius: 0.5rem;
-    --shadow-x: 0;
-    --shadow-y: 1px;
+        var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --radius: 0.625rem;
+    --shadow-color: oklch(0 0 0);
+    --shadow-opacity: 0.1;
     --shadow-blur: 3px;
     --shadow-spread: 0px;
-    --shadow-opacity: 0.1;
-    --shadow-color: oklch(0 0 0);
+    --shadow-offset-x: 0;
+    --shadow-offset-y: 1px;
     --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-sm:
@@ -72,89 +100,93 @@
         0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
     --tracking-normal: 0em;
-    --spacing: 0.25rem;
 
-    /* Hardware Design System Colors (Light Mode) */
+    /* Hardware aliases. Removed with the hardware classes in T3.3. */
     --app-background: var(--background);
     --rack-background: var(--card);
     --panel-surface: var(--secondary);
     --panel-border: var(--border);
     --panel-inset: var(--muted);
-
-    /* Accent Colors */
     --accent-primary: var(--primary);
     --accent-primary-fg: var(--primary-foreground);
     --accent-green: oklch(0.65 0.2 145);
     --accent-blue: oklch(0.6 0.18 240);
     --accent-purple: oklch(0.65 0.2 290);
-
-    /* LED Status Indicators */
     --led-active: var(--accent-green);
     --led-warning: oklch(0.75 0.15 85);
     --led-error: var(--destructive);
     --led-record: var(--destructive);
-
-    /* Text Hierarchy */
     --text-primary: var(--foreground);
     --text-secondary: var(--muted-foreground);
     --text-muted: var(--muted-foreground);
 }
 
 .dark {
-    --background: oklch(0.2679 0.0036 106.6427);
-    --foreground: oklch(0.8074 0.0142 93.0137);
-    --card: oklch(0.2679 0.0036 106.6427);
-    --card-foreground: oklch(0.9818 0.0054 95.0986);
-    --popover: oklch(0.3085 0.0035 106.6039);
-    --popover-foreground: oklch(0.9211 0.004 106.4781);
-    --primary: oklch(0.6724 0.1308 38.7559);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9818 0.0054 95.0986);
-    --secondary-foreground: oklch(0.3085 0.0035 106.6039);
-    --muted: oklch(0.2213 0.0038 106.707);
-    --muted-foreground: oklch(0.7713 0.0169 99.0657);
-    --accent: oklch(0.213 0.0078 95.4245);
-    --accent-foreground: oklch(0.9663 0.008 98.8792);
-    --destructive: oklch(0.6368 0.2078 25.3313);
-    --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.3618 0.0101 106.8928);
-    --input: oklch(0.4336 0.0113 100.2195);
-    --ring: oklch(0.6724 0.1308 38.7559);
-    --chart-1: oklch(0.5583 0.1276 42.9956);
-    --chart-2: oklch(0.6898 0.1581 290.4107);
-    --chart-3: oklch(0.213 0.0078 95.4245);
-    --chart-4: oklch(0.3074 0.0516 289.323);
-    --chart-5: oklch(0.5608 0.1348 42.0584);
-    --sidebar: oklch(0.2357 0.0024 67.7077);
-    --sidebar-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-primary: oklch(0.325 0 0);
-    --sidebar-primary-foreground: oklch(0.9881 0 0);
-    --sidebar-accent: oklch(0.168 0.002 106.6177);
-    --sidebar-accent-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-border: oklch(0.9401 0 0);
-    --sidebar-ring: oklch(0.7731 0 0);
+    --background: oklch(0.2292 0.0304 259.0329);
+    --foreground: oklch(0.9392 0.0101 238.5151);
+    --card: oklch(0.261 0.0307 254.7604);
+    --card-foreground: oklch(0.9392 0.0101 238.5151);
+    --popover: oklch(0.2897 0.0338 255.7937);
+    --popover-foreground: oklch(0.9392 0.0101 238.5151);
+    --primary: oklch(0.8993 0.0119 239.9205);
+    --primary-foreground: oklch(0.2494 0.0304 256.8623);
+    --secondary: oklch(0.3056 0.0334 255.7755);
+    --secondary-foreground: oklch(0.9392 0.0101 238.5151);
+    --muted: oklch(0.2947 0.0308 258.3315);
+    --muted-foreground: oklch(0.6604 0.0245 248.1982);
+    --accent: oklch(0.3438 0.0389 254.6348);
+    --accent-foreground: oklch(0.9392 0.0101 238.5151);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(0.3299 0.0322 257.6775);
+    --input: oklch(0.3205 0.0336 253.9373);
+    --ring: oklch(0.5805 0.0297 251.8232);
+    --chart-1: oklch(0.81 0.1 252);
+    --chart-2: oklch(0.62 0.19 260);
+    --chart-3: oklch(0.55 0.22 263);
+    --chart-4: oklch(0.49 0.22 264);
+    --chart-5: oklch(0.42 0.18 266);
+    --sidebar: oklch(0.2452 0.0305 256.8649);
+    --sidebar-foreground: oklch(0.9392 0.0101 238.5151);
+    --sidebar-primary: oklch(0.4887 0.2427 263.9688);
+    --sidebar-primary-foreground: oklch(0.9851 0 0);
+    --sidebar-accent: oklch(0.3056 0.0334 255.7755);
+    --sidebar-accent-foreground: oklch(0.9392 0.0101 238.5151);
+    --sidebar-border: oklch(0.3053 0.0296 254.6806);
+    --sidebar-ring: oklch(0.5805 0.0297 251.8232);
 
-    /* Hardware Design System Colors (Dark Mode) */
+    --brand-cyan: oklch(0.8 0.13 230);
+    --brand-blue: oklch(0.7 0.19 262);
+    --brand-violet: oklch(0.68 0.22 290);
+
+    --transcript-active: color-mix(
+        in oklch,
+        var(--brand-blue) 16%,
+        transparent
+    );
+
+    --success: oklch(0.72 0.16 150);
+    --success-foreground: oklch(0.15 0.02 150);
+    --warning: oklch(0.85 0.15 85);
+    --warning-foreground: oklch(0.2 0.02 60);
+    --info: oklch(0.7 0.15 250);
+    --info-foreground: oklch(0.15 0.02 250);
+
+    /* Hardware aliases. Removed with the hardware classes in T3.3. */
     --app-background: var(--background);
     --rack-background: var(--card);
     --panel-surface: var(--accent);
     --panel-border: var(--border);
     --panel-inset: var(--muted);
-
-    /* Accent Colors */
     --accent-primary: var(--primary);
     --accent-primary-fg: var(--primary-foreground);
     --accent-green: oklch(0.7 0.2 145);
     --accent-blue: oklch(0.65 0.18 240);
     --accent-purple: oklch(0.7 0.2 290);
-
-    /* LED Status Indicators */
     --led-active: var(--accent-green);
     --led-warning: oklch(0.75 0.15 85);
     --led-error: var(--destructive);
     --led-record: var(--destructive);
-
-    /* Text Hierarchy */
     --text-primary: var(--foreground);
     --text-secondary: var(--muted-foreground);
     --text-muted: var(--muted-foreground);
@@ -193,8 +225,23 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
-    --color-auth-brand: var(--auth-brand);
-    --color-auth-brand-foreground: var(--auth-brand-foreground);
+
+    --color-brand-cyan: var(--brand-cyan);
+    --color-brand-blue: var(--brand-blue);
+    --color-brand-violet: var(--brand-violet);
+    --background-image-brand-gradient: var(--brand-gradient);
+
+    --color-waveform-played: var(--waveform-played);
+    --color-waveform-unplayed: var(--waveform-unplayed);
+    --color-waveform-cursor: var(--waveform-cursor);
+    --color-transcript-active: var(--transcript-active);
+
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
 
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
@@ -213,6 +260,14 @@
     --shadow-lg: var(--shadow-lg);
     --shadow-xl: var(--shadow-xl);
     --shadow-2xl: var(--shadow-2xl);
+
+    --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+    --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+    --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+    --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+    --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+
+    --spacing: 0.25rem;
 
     --animate-accordion-down: accordion-down 0.2s ease-out;
     --animate-accordion-up: accordion-up 0.2s ease-out;
@@ -243,6 +298,7 @@
     body {
         @apply text-foreground antialiased;
         background: var(--app-background);
+        letter-spacing: var(--tracking-normal);
         font-feature-settings:
             "rlig" 1,
             "calt" 1;
