@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
+import { LandingPage } from "@/components/landing/landing-page";
 import { getSession } from "@/lib/auth-server";
+import { env } from "@/lib/env";
 
-// Temporary root until the public landing page lands (PLAN T4.4): signed-in
-// users go to their recordings, everyone else to sign-in.
+/**
+ * Public front page. Signed-in visitors go to the app; everyone else sees the
+ * landing page, with Register hidden when the server disables registration.
+ */
 export default async function HomePage() {
     const session = await getSession();
-    redirect(session?.user ? "/recordings" : "/login");
+    if (session?.user) redirect("/dashboard");
+
+    return <LandingPage registrationEnabled={!env.DISABLE_REGISTRATION} />;
 }
