@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
     useDialogs,
     useSyncStatus,
+    useTranscribeStatus,
     useUploadStatus,
 } from "@/components/app-shell/providers";
 import { CommandPalette } from "@/components/dashboard/command-palette";
@@ -14,15 +15,10 @@ import {
     RecordingList,
     type RecordingListHandle,
 } from "@/components/dashboard/recording-list";
-import { ShortcutsDialog } from "@/components/dashboard/shortcuts-dialog";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
-import { WorkstationHeader } from "@/components/dashboard/workstation-header";
-import { OnboardingDialog } from "@/components/onboarding-dialog";
-import { SettingsDialog } from "@/components/settings-dialog";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
-import { useTranscribeQueue } from "@/hooks/use-transcribe-queue";
 import {
     applyFilenameOverrides,
     reconcileFilenameOverrides,
@@ -36,27 +32,9 @@ interface TranscriptionData {
     language?: string;
 }
 
-interface Provider {
-    id: string;
-    provider: string;
-    baseUrl: string | null;
-    defaultModel: string | null;
-    isDefaultTranscription: boolean;
-    isDefaultEnhancement: boolean;
-    createdAt: Date;
-}
-
-const EMPTY_PROVIDERS: Provider[] = [];
-
 interface WorkstationProps {
     recordings: Recording[];
     transcriptions: Map<string, TranscriptionData>;
-    /**
-     * Logged-in user's email. Passed down to the avatar menu for the
-     * identity block. Server-supplied -- never derive from any client
-     * state, which would risk a stale or attacker-influenced value.
-     */
-    userEmail?: string | null;
     initialSettings: InitialSettings;
     /**
      * True when Plaud has rejected the stored token (connection row carries
@@ -67,26 +45,22 @@ interface WorkstationProps {
 }
 
 /**
- * Top-level dashboard component. Composition root for the recording
- * list, the detail pane (player + transcription), and the four
- * modals (CommandPalette, ShortcutsDialog, SettingsDialog,
- * OnboardingDialog).
+ * Dashboard composition root: the recording list, the detail pane (player +
+ * transcription), and the command palette. Sync, uploads, transcribes, and the
+ * global dialogs (settings, shortcuts, onboarding) come from the app shell.
  *
  * State ownership is split:
  *  - selection / mobile master-detail toggle live here
- *  - sync loop, upload queue, and dialog flags -> AppShellProviders, which
- *    the page mounts (read here via useSyncStatus, useUploadStatus,
- *    useDialogs)
- *  - transcribes -> useTranscribeQueue
+ *  - sync, uploads, transcribes, and dialog flags -> AppShellProviders
+ *    (read via useSyncStatus, useUploadStatus, useTranscribeStatus, useDialogs)
  *  - theme -> useTheme
- *  - keyboard nav -> useListKeyboardNav
+ *  - list keys and ⌘K -> useListKeyboardNav
  *  - deletes stay here because they need access to currentRecording
  *    / visibleRecordings to pick the next selection.
  */
 export function Workstation({
     recordings,
     transcriptions,
-    userEmail = null,
     initialSettings,
     plaudNeedsReconnect,
 }: WorkstationProps) {
@@ -94,9 +68,6 @@ export function Workstation({
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
         recordings.length > 0 ? recordings[0] : null,
     );
-    // Dialog flags live in the app shell (AppShellProviders). Onboarding
-    // auto-opens on first paint when it is incomplete, and `mandatory`
-    // below keeps it non-dismissible in that case.
     const {
         paletteOpen,
         setPaletteOpen,
@@ -105,7 +76,7 @@ export function Workstation({
         settingsOpen,
         setSettingsOpen,
         onboardingOpen,
-        setOnboardingOpen,
+        setPaletteAvailable,
     } = useDialogs();
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
     const [filenameOverrides, setFilenameOverrides] = useState<
@@ -115,7 +86,6 @@ export function Workstation({
     // toggle between them instead of stacking. Desktop ignores this
     // state entirely (both panes render via the grid).
     const [mobileView, setMobileView] = useState<"list" | "detail">("list");
-    const [providers, setProviders] = useState<Provider[]>(EMPTY_PROVIDERS);
 
     const { theme, setTheme } = useTheme(initialSettings.theme);
     const listRef = useRef<RecordingListHandle>(null);
@@ -164,14 +134,8 @@ export function Workstation({
         );
     }, [recordings]);
 
-    // The auto-sync loop runs in AppShellProviders; this reads its state.
-    const {
-        isAutoSyncing,
-        lastSyncTime,
-        nextSyncTime,
-        lastSyncResult,
-        manualSync,
-    } = useSyncStatus();
+    // The auto-sync loop runs in the app shell; this reads its state.
+    const { isAutoSyncing, lastSyncResult, manualSync } = useSyncStatus();
 
     const handleSync = useCallback(async () => {
         await manualSync();
@@ -205,43 +169,13 @@ export function Workstation({
         manualSync();
     }, [refresh, manualSync]);
 
-    // Settings dialog needs the provider list at open-time so the
-    // Providers section seeds correctly. Fetching on open (rather
-    // than on mount) avoids loading a list the user may never see.
-    useEffect(() => {
-        if (settingsOpen) {
-            fetch("/api/settings/ai/providers")
-                .then((res) => res.json())
-                .then((data) => setProviders(data.providers || []))
-                .catch(() => setProviders([]));
-        }
-    }, [settingsOpen]);
+    // Uploads and transcribes run in the app shell; this reads their state.
+    const { pendingUploads, triggerUpload } = useUploadStatus();
+    const { inFlightActions, transcribeById } = useTranscribeStatus();
 
-    // The upload queue runs in AppShellProviders; this reads its state.
-    const {
-        isUploading,
-        pendingUploads,
-        uploadInputRef,
-        handleUpload,
-        triggerUpload,
-    } = useUploadStatus();
-
-    const { inFlightActions, transcribeById } = useTranscribeQueue({
-        onTranscribeComplete: refresh,
-    });
-
-    // Any transcribe in flight (across all recordings) blocks new
-    // uploads. The previous `isTranscribing` boolean conflated "this
-    // recording is being transcribed" with "some transcribe is
-    // happening"; splitting them fixes a concurrency bug where two
-    // pending transcribes would race each other's finally clauses.
-    const anyTranscribing = Array.from(inFlightActions.values()).some(
-        (kind) => kind === "transcribing",
-    );
     const isCurrentTranscribing =
         currentRecording !== null &&
         inFlightActions.get(currentRecording.id) === "transcribing";
-    const isProcessing = anyTranscribing || isUploading;
 
     const handleTranscribe = useCallback(async () => {
         if (!currentRecording) return;
@@ -293,41 +227,29 @@ export function Workstation({
         [currentRecording?.id, refresh],
     );
 
-    // Keyboard shortcuts (global). Disabled while any modal is open
-    // so the modal owns keyboard focus exclusively. The shortcuts
+    // List keys and ⌘K. The shell owns `?` and `,`. Disabled while any modal
+    // is open so the modal owns keyboard focus exclusively. The shortcuts
     // dialog itself uses these very keys to navigate its rows.
     useListKeyboardNav({
         onNext: () => listRef.current?.next(),
         onPrev: () => listRef.current?.prev(),
         onFocusSearch: () => listRef.current?.focusSearch(),
         onOpenPalette: () => setPaletteOpen(true),
-        onOpenShortcuts: () => setShortcutsOpen(true),
-        onOpenSettings: () => setSettingsOpen(true),
         enabled:
             !settingsOpen && !onboardingOpen && !paletteOpen && !shortcutsOpen,
     });
+
+    // The ⌘K button and shortcut appear only where this palette is mounted.
+    useEffect(() => {
+        setPaletteAvailable(true);
+        return () => setPaletteAvailable(false);
+    }, [setPaletteAvailable]);
 
     return (
         <>
             <div className="bg-background">
                 <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <WorkstationHeader
-                        userEmail={userEmail}
-                        initialTheme={initialSettings.theme}
-                        lastSyncTime={lastSyncTime}
-                        nextSyncTime={nextSyncTime}
-                        isAutoSyncing={isAutoSyncing}
-                        lastSyncResult={lastSyncResult}
-                        onSync={handleSync}
-                        isUploading={isUploading}
-                        isProcessing={isProcessing}
-                        uploadInputRef={uploadInputRef}
-                        onTriggerUpload={triggerUpload}
-                        onUploadInputChange={handleUpload}
-                        onOpenPalette={() => setPaletteOpen(true)}
-                        onOpenSettings={() => setSettingsOpen(true)}
-                        onOpenShortcuts={() => setShortcutsOpen(true)}
-                    />
+                    <h1 className="sr-only">Recordings</h1>
 
                     <PlaudReconnectBanner
                         show={showReconnect}
@@ -431,32 +353,6 @@ export function Workstation({
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
                 onTranscribeRecording={transcribeById}
-            />
-
-            <ShortcutsDialog
-                open={shortcutsOpen}
-                onOpenChange={setShortcutsOpen}
-            />
-
-            <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                initialProviders={providers}
-                onReRunOnboarding={() => {
-                    setSettingsOpen(false);
-                    setOnboardingOpen(true);
-                }}
-                onPlaudReconnected={handleReconnected}
-            />
-
-            <OnboardingDialog
-                open={onboardingOpen}
-                onOpenChange={setOnboardingOpen}
-                onComplete={() => {
-                    setOnboardingOpen(false);
-                    refresh();
-                }}
-                mandatory={!initialSettings.onboardingCompleted}
             />
         </>
     );

@@ -59,7 +59,7 @@ export function UserMenu({
                     size="icon"
                     aria-label="Account menu"
                     data-testid="user-menu"
-                    className="font-semibold"
+                    className="size-10 font-semibold sm:size-9"
                 >
                     {emailInitial(userEmail)}
                 </Button>
