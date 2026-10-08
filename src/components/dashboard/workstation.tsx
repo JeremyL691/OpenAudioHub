@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    useDialogs,
+    useSyncStatus,
+    useUploadStatus,
+} from "@/components/app-shell/providers";
 import { CommandPalette } from "@/components/dashboard/command-palette";
 import { PlaudReconnectBanner } from "@/components/dashboard/plaud-reconnect-banner";
 import {
@@ -15,22 +20,14 @@ import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-
 import { WorkstationHeader } from "@/components/dashboard/workstation-header";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { useAutoSync } from "@/hooks/use-auto-sync";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
 import { useTranscribeQueue } from "@/hooks/use-transcribe-queue";
-import { useUploadQueue } from "@/hooks/use-upload-queue";
-import {
-    requestNotificationPermission,
-    showNewRecordingNotification,
-    showSyncCompleteNotification,
-} from "@/lib/notifications/browser";
 import {
     applyFilenameOverrides,
     reconcileFilenameOverrides,
 } from "@/lib/recordings/filename-overrides";
 import type { InitialSettings } from "@/lib/settings/initial-settings";
-import { SYNC_CONFIG } from "@/lib/sync-config";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -77,9 +74,10 @@ interface WorkstationProps {
  *
  * State ownership is split:
  *  - selection / mobile master-detail toggle live here
- *  - uploads -> useUploadQueue
+ *  - sync loop, upload queue, and dialog flags -> AppShellProviders, which
+ *    the page mounts (read here via useSyncStatus, useUploadStatus,
+ *    useDialogs)
  *  - transcribes -> useTranscribeQueue
- *  - sync loop -> useAutoSync
  *  - theme -> useTheme
  *  - keyboard nav -> useListKeyboardNav
  *  - deletes stay here because they need access to currentRecording
@@ -96,16 +94,19 @@ export function Workstation({
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
         recordings.length > 0 ? recordings[0] : null,
     );
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    // Auto-opens on first paint when the account hasn't finished
-    // onboarding yet (server-supplied truth, re-evaluated on every fresh
-    // navigation to this page). Everyone must finish onboarding --
-    // `mandatory` below keeps it non-dismissible in that case.
-    const [onboardingOpen, setOnboardingOpen] = useState(
-        () => !initialSettings.onboardingCompleted,
-    );
-    const [paletteOpen, setPaletteOpen] = useState(false);
-    const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    // Dialog flags live in the app shell (AppShellProviders). Onboarding
+    // auto-opens on first paint when it is incomplete, and `mandatory`
+    // below keeps it non-dismissible in that case.
+    const {
+        paletteOpen,
+        setPaletteOpen,
+        shortcutsOpen,
+        setShortcutsOpen,
+        settingsOpen,
+        setSettingsOpen,
+        onboardingOpen,
+        setOnboardingOpen,
+    } = useDialogs();
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
     const [filenameOverrides, setFilenameOverrides] = useState<
         Map<string, string>
@@ -163,44 +164,14 @@ export function Workstation({
         );
     }, [recordings]);
 
+    // The auto-sync loop runs in AppShellProviders; this reads its state.
     const {
         isAutoSyncing,
         lastSyncTime,
         nextSyncTime,
         lastSyncResult,
         manualSync,
-    } = useAutoSync({
-        interval: initialSettings.syncInterval ?? SYNC_CONFIG.defaultInterval,
-        minInterval: SYNC_CONFIG.minInterval,
-        syncOnMount: initialSettings.syncOnMount,
-        syncOnVisibilityChange: initialSettings.syncOnVisibilityChange,
-        enabled: initialSettings.autoSyncEnabled,
-        onSuccess: (newRecordings) => {
-            if (initialSettings.syncNotifications !== false) {
-                if (newRecordings > 0) {
-                    toast.success(
-                        `Synced ${newRecordings} new recording${newRecordings !== 1 ? "s" : ""}`,
-                    );
-                } else {
-                    toast.success("Sync complete - no new recordings");
-                }
-            }
-            if (initialSettings.browserNotifications) {
-                (async () => {
-                    const granted = await requestNotificationPermission();
-                    if (!granted) return;
-                    if (newRecordings > 0) {
-                        showNewRecordingNotification(newRecordings);
-                    } else {
-                        showSyncCompleteNotification();
-                    }
-                })();
-            }
-        },
-        onError: (error) => {
-            toast.error(error);
-        },
-    });
+    } = useSyncStatus();
 
     const handleSync = useCallback(async () => {
         await manualSync();
@@ -246,13 +217,14 @@ export function Workstation({
         }
     }, [settingsOpen]);
 
+    // The upload queue runs in AppShellProviders; this reads its state.
     const {
         isUploading,
         pendingUploads,
         uploadInputRef,
         handleUpload,
         triggerUpload,
-    } = useUploadQueue({ onUploadComplete: refresh });
+    } = useUploadStatus();
 
     const { inFlightActions, transcribeById } = useTranscribeQueue({
         onTranscribeComplete: refresh,
