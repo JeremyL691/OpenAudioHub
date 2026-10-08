@@ -1,6 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
+import { ProgressBar } from "@/components/app/progress-bar";
 import { Button } from "@/components/ui/button";
 import type { PipelineJob } from "@/hooks/use-pipeline-status";
 
@@ -87,11 +88,10 @@ function InlinePipelineStatus({
                         )}
                     </div>
                     {isPipelineRunning && (
-                        <progress
-                            className="h-2 w-full accent-primary"
-                            max={1}
+                        <ProgressBar
                             value={progressValue(job)}
-                            aria-label="Audio preprocessing progress"
+                            label="Audio preprocessing progress"
+                            className="h-2"
                         />
                     )}
                 </div>
@@ -189,11 +189,10 @@ function EmptyPipelineStatus({
                         Cancel
                     </Button>
                 </div>
-                <progress
-                    className="h-2 w-full accent-primary"
-                    max={1}
+                <ProgressBar
                     value={progressValue(job)}
-                    aria-label="Audio preprocessing progress"
+                    label="Audio preprocessing progress"
+                    className="h-2"
                 />
             </div>
         );

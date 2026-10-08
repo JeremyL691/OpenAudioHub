@@ -17,6 +17,7 @@ import {
 } from "@/components/dashboard/recording-list";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
+import { RenameRecordingDialog } from "@/components/recordings/rename-recording-dialog";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -24,6 +25,7 @@ import {
     reconcileFilenameOverrides,
 } from "@/lib/recordings/filename-overrides";
 import type { InitialSettings } from "@/lib/settings/initial-settings";
+import { runBrowserTranscription } from "@/lib/transcription/browser-run";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -234,6 +236,40 @@ export function Workstation({
         [currentRecording?.id, refresh],
     );
 
+    // Rename and in-browser transcription from a row's menu. The row is not the
+    // detail pane, so these take the recording directly.
+    const [renameTarget, setRenameTarget] = useState<Recording | null>(null);
+
+    const handleRenameFromList = useCallback(
+        (recordingId: string, filename: string) => {
+            setFilenameOverrides((prev) =>
+                new Map(prev).set(recordingId, filename),
+            );
+            refresh();
+        },
+        [refresh],
+    );
+
+    const handleTranscribeInBrowser = useCallback(
+        (recording: Recording) => {
+            toast.promise(
+                runBrowserTranscription(recording.id, "whisper-base", () => {}),
+                {
+                    loading: "Transcribing in browser…",
+                    success: () => {
+                        refresh();
+                        return "Transcribed in browser";
+                    },
+                    error: (error) =>
+                        error instanceof Error
+                            ? error.message
+                            : "Browser transcription failed",
+                },
+            );
+        },
+        [refresh],
+    );
+
     // List keys and ⌘K. The shell owns `?` and `,`. Disabled while any modal
     // is open so the modal owns keyboard focus exclusively. The shortcuts
     // dialog itself uses these very keys to navigate its rows.
@@ -302,6 +338,12 @@ export function Workstation({
                                         setMobileView("detail");
                                     }}
                                     onDelete={handleDelete}
+                                    onRename={(recording) =>
+                                        setRenameTarget(recording)
+                                    }
+                                    onTranscribeInBrowser={
+                                        handleTranscribeInBrowser
+                                    }
                                     onTranscribe={(recording) => {
                                         void transcribeById(recording.id);
                                     }}
@@ -362,6 +404,11 @@ export function Workstation({
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
                 onTranscribeRecording={transcribeById}
+            />
+            <RenameRecordingDialog
+                recording={renameTarget}
+                onClose={() => setRenameTarget(null)}
+                onRenamed={handleRenameFromList}
             />
         </>
     );

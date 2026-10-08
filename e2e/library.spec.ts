@@ -39,7 +39,7 @@ test.describe("library", () => {
 
         await row.getByRole("button", { name: "Row actions" }).click();
         await expect(
-            page.getByRole("menuitem", { name: "Transcribe" }),
+            page.getByRole("menuitem", { name: "Transcribe", exact: true }),
         ).toBeVisible();
         await page.keyboard.press("Escape");
     });
@@ -58,5 +58,32 @@ test.describe("library", () => {
             "href",
             /\/recordings\/[^/]+$/,
         );
+    });
+
+    test("renames a recording from the row menu, then restores its name", async ({
+        page,
+    }) => {
+        const renamed = `${RECORDINGS.untranscribed} (renamed)`;
+
+        const rename = async (from: string, to: string) => {
+            await page
+                .getByTestId("recording-row")
+                .filter({ hasText: from })
+                .getByRole("button", { name: "Row actions" })
+                .click();
+            await page.getByRole("menuitem", { name: "Rename" }).click();
+            await page
+                .getByRole("textbox", { name: "Name", exact: true })
+                .fill(to);
+            await page
+                .getByRole("button", { name: "Save", exact: true })
+                .click();
+            await expect(
+                page.getByTestId("recording-row").filter({ hasText: to }),
+            ).toHaveCount(1);
+        };
+
+        await rename(RECORDINGS.untranscribed, renamed);
+        await rename(renamed, RECORDINGS.untranscribed);
     });
 });

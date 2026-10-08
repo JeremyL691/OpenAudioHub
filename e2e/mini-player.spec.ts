@@ -27,9 +27,10 @@ async function scrollPlayer(page: Page, deltaY: number): Promise<void> {
     }, deltaY);
 }
 
-// The transcript and summary load after the player shows, so the page can still
-// be too short to scroll the player out of view. Wait until the bottom of the
-// player can be scrolled past the top of the viewport.
+// The transcript and summary load after the player shows, and the page is shorter
+// than the viewport plus the player on tall screens. Wait until the bottom of the
+// player can be scrolled past the top of the viewport. A test that scrolls the
+// player away calls this first.
 async function waitForScrollableDocument(page: Page): Promise<void> {
     await page.waitForFunction(() => {
         const card = document.querySelector('[data-testid="player"]');
@@ -51,7 +52,6 @@ async function openFullPage(page: Page, title: string): Promise<void> {
         .getAttribute("data-id");
     await page.goto(`/recordings/${id}`);
     await expect(page.getByTestId("player")).toBeVisible();
-    await waitForScrollableDocument(page);
 }
 
 test.describe("mini player", () => {
@@ -124,6 +124,9 @@ test.describe("mini player", () => {
     });
 
     test("the full recording page gets the same bar", async ({ page }) => {
+        // The two-column page is shorter than a tall window, so use a shorter
+        // viewport for the player to be able to scroll out of view.
+        await page.setViewportSize({ width: 1280, height: 600 });
         await page.getByTestId("open-full-view").click();
         await expect(page.getByTestId("player")).toBeVisible();
         await waitForScrollableDocument(page);
@@ -136,9 +139,38 @@ test.describe("mini player", () => {
 test.describe("mini player captures", () => {
     test.skip(!SHOT_SET, "set SHOT_SET to write captures");
 
+    const outDir = () =>
+        path.resolve(
+            __dirname,
+            "../.dev-artifacts/screenshots",
+            SHOT_SET ?? "",
+        );
+
     for (const width of [375, 1280] as const) {
         for (const scheme of ["light", "dark"] as const) {
-            test(`player and compact bar at ${width}px in ${scheme} mode`, async ({
+            test(`compact bar at ${width}px in ${scheme} mode`, async ({
+                page,
+            }) => {
+                // The long recording's page is taller than this viewport, so the
+                // player can scroll out of view.
+                await page.setViewportSize({ width, height: 560 });
+                await page.emulateMedia({ colorScheme: scheme });
+                await signIn(page);
+                await openFullPage(page, RECORDINGS.long);
+                await waitForScrollableDocument(page);
+
+                await scrollPlayer(page, 1500);
+                await expect(page.getByTestId("mini-player")).toBeVisible();
+                mkdirSync(outDir(), { recursive: true });
+                await page.screenshot({
+                    path: path.join(
+                        outDir(),
+                        `mini-player-${width}-${scheme}.png`,
+                    ),
+                });
+            });
+
+            test(`player with a played waveform at ${width}px in ${scheme} mode`, async ({
                 page,
             }) => {
                 await page.setViewportSize({ width, height: 800 });
@@ -147,25 +179,6 @@ test.describe("mini player captures", () => {
                 // The short recording decodes its waveform, so the played part can be
                 // shown. The long one waits for a manual decode.
                 await openFullPage(page, RECORDINGS.weekly);
-
-                const outDir = path.resolve(
-                    __dirname,
-                    "../.dev-artifacts/screenshots",
-                    SHOT_SET ?? "",
-                );
-                mkdirSync(outDir, { recursive: true });
-
-                await scrollPlayer(page, 1500);
-                await expect(page.getByTestId("mini-player")).toBeVisible();
-                await page.screenshot({
-                    path: path.join(
-                        outDir,
-                        `mini-player-${width}-${scheme}.png`,
-                    ),
-                });
-
-                await scrollPlayer(page, -5000);
-                await expect(page.getByTestId("player")).toBeInViewport();
                 await expect(page.getByTestId("player-time")).toContainText(
                     "0:01",
                 );
@@ -187,8 +200,9 @@ test.describe("mini player captures", () => {
                     /^(4[5-9]|5[0-5])$/,
                 );
 
+                mkdirSync(outDir(), { recursive: true });
                 await page.getByTestId("player").screenshot({
-                    path: path.join(outDir, `player-${width}-${scheme}.png`),
+                    path: path.join(outDir(), `player-${width}-${scheme}.png`),
                 });
             });
         }

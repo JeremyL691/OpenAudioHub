@@ -47,6 +47,8 @@ interface RecordingListProps {
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
     onTranscribe?: (recording: Recording) => void;
+    onTranscribeInBrowser?: (recording: Recording) => void;
+    onRename?: (recording: Recording) => void;
     initialDateTimeFormat: DateTimeFormat;
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
@@ -91,6 +93,8 @@ export function RecordingList({
     onSelect,
     onDelete,
     onTranscribe,
+    onTranscribeInBrowser,
+    onRename,
     initialDateTimeFormat,
     initialSortOrder,
     initialDensity,
@@ -344,6 +348,10 @@ export function RecordingList({
                                         onSelect={onSelect}
                                         onDelete={onDelete}
                                         onTranscribe={onTranscribe}
+                                        onTranscribeInBrowser={
+                                            onTranscribeInBrowser
+                                        }
+                                        onRename={onRename}
                                         registerRef={registerRowRef}
                                     />
                                 ))}

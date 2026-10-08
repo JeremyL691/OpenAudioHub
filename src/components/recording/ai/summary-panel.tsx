@@ -34,12 +34,12 @@ export function SummaryPanel({ summary }: { summary: SummaryState }) {
     return (
         <Card data-testid="summary-panel">
             <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2">
                         <ListChecks className="size-5" />
                         Summary
                     </CardTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {!isSummarizing && (
                             <PromptSelect
                                 value={summaryPreset}
