@@ -1,0 +1,77 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`export archive contract > writes manifest.json and timeline.json with the documented shape 1`] = `
+[
+  "2026-01-01T00-00-00-000Z_rec-normalized/audio.mp3",
+  "2026-01-01T00-00-00-000Z_rec-normalized/timeline.json",
+  "2026-01-01T00-00-00-000Z_rec-normalized/transcript.txt",
+  "manifest.json",
+]
+`;
+
+exports[`export archive contract > writes manifest.json and timeline.json with the documented shape 2`] = `
+{
+  "audio_complete": true,
+  "createdAt": "<normalized>",
+  "missing_audio_count": 0,
+  "recordings": [
+    {
+      "audio": {
+        "included": true,
+        "path": "2026-01-01T00-00-00-000Z_rec-normalized/audio.mp3",
+      },
+      "deviceSn": "SN1",
+      "duration": 60000,
+      "endTime": "2026-01-01T00:01:00.000Z",
+      "filename": "decrypted:enc-filename",
+      "filesize": 5,
+      "id": "rec-normalized",
+      "startTime": "2026-01-01T00:00:00.000Z",
+      "summary": {
+        "included": false,
+        "path": null,
+      },
+      "timeline": {
+        "included": true,
+        "path": "2026-01-01T00-00-00-000Z_rec-normalized/timeline.json",
+      },
+      "transcript": {
+        "included": true,
+        "path": "2026-01-01T00-00-00-000Z_rec-normalized/transcript.txt",
+      },
+    },
+  ],
+  "userId": "user-1",
+  "version": "2.0",
+}
+`;
+
+exports[`export archive contract > writes manifest.json and timeline.json with the documented shape 3`] = `
+{
+  "processing": {
+    "timestamp_policy": {
+      "ignored_blank_segment_count": 2,
+      "name": "chunk_end_guard_50ms_v1",
+      "normalized_segment_count": 1,
+    },
+  },
+  "schema_version": 1,
+  "segments": [
+    {
+      "chunk_index": 4,
+      "end_ms": 1000,
+      "speaker_id": "speaker_0",
+      "start_ms": 900,
+      "text": "last word",
+      "timestamp_correction": {
+        "chunk_index": 4,
+        "normalized_end_ms": 1000,
+        "original_end_ms": 1025,
+        "reason": "chunk_end_guard",
+      },
+      "timestamp_source": "normalized",
+    },
+  ],
+  "timestamp_source": "normalized",
+}
+`;

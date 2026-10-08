@@ -72,6 +72,7 @@ type RecordingSpec = {
     audio: "sample" | "long";
     daysAgo: number;
     transcript?: TranscriptSpec;
+    extraTranscript?: TranscriptSpec;
     summary: boolean;
     job?: JobSpec;
 };
@@ -80,6 +81,11 @@ const RECORDING_SPECS: RecordingSpec[] = [
     {
         key: "e2e-weekly-sync",
         filename: "Weekly team sync",
+        extraTranscript: {
+            source: "plaud",
+            segments: SHORT_SEGMENTS,
+            withTimeline: false,
+        },
         audio: "sample",
         daysAgo: 1,
         transcript: {
@@ -345,6 +351,21 @@ async function insertRecording(
                 : null,
             timelineSource: withTimeline ? "native" : null,
             source,
+        });
+    }
+
+    if (spec.extraTranscript) {
+        await db.insert(transcriptions).values({
+            recordingId,
+            userId,
+            text: encryptText(joinSegmentText(spec.extraTranscript.segments)),
+            detectedLanguage: "en",
+            transcriptionType: "server",
+            provider: "plaud",
+            model: "plaud-native",
+            timeline: null,
+            timelineSource: null,
+            source: spec.extraTranscript.source,
         });
     }
 
