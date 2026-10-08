@@ -20,7 +20,7 @@ import {
 
 const TITLES: [prefix: string, title: string][] = [
     ["/recordings", "Recordings"],
-    ["/dashboard", "Recordings"],
+    ["/dashboard", "Overview"],
     ["/dev/demo-dashboard", "Recordings"],
     ["/settings", "Settings"],
 ];

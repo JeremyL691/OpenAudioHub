@@ -20,5 +20,5 @@ test.describe("landing page", () => {
 
 test("signed-in visitors skip the landing page", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/recordings$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
 });

@@ -7,10 +7,13 @@ test.describe("url map", () => {
         await signIn(page);
     });
 
-    test("/dashboard forwards to /recordings", async ({ page }) => {
+    test("/dashboard is the overview", async ({ page }) => {
         await page.goto("/dashboard");
-        await expect(page).toHaveURL(/\/recordings$/);
-        await expect(page.getByTestId("recording-list")).toBeVisible();
+        await expect(page).toHaveURL(/\/dashboard$/);
+        await expect(page.getByTestId("nav-overview")).toHaveAttribute(
+            "data-active",
+            "true",
+        );
     });
 
     test("/dashboard?settings=<section> opens that settings section", async ({

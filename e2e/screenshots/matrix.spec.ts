@@ -37,18 +37,20 @@ const TARGETS: Target[] = [
         },
     },
     {
-        slug: "dashboard",
+        slug: "overview",
         authed: true,
         open: async (page) => {
             await page.goto("/dashboard");
-            await expect(page.getByTestId("recording-list")).toBeVisible();
+            await expect(
+                page.getByRole("region", { name: "Totals" }),
+            ).toBeVisible();
         },
     },
     {
         slug: "recording-detail",
         authed: true,
         open: async (page) => {
-            await page.goto("/dashboard");
+            await page.goto("/recordings");
             await expect(page.getByTestId("recording-list")).toBeVisible();
             const id = await page
                 .getByTestId("recording-row")
