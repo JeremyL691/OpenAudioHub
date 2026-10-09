@@ -81,6 +81,8 @@ function pickTranscription<T extends { source: string }>(
     return rows.find((row) => isOwnSource(row.source)) ?? rows[0];
 }
 
+const SUMMARY_MAX_TOKENS = 16384;
+
 /** Removes a code fence that wraps the whole reply, which some models add anyway. */
 function stripCodeFence(text: string): string {
     return text
@@ -255,12 +257,28 @@ export async function generateSummaryForRecording(
                 { role: "user", content: prompt },
             ],
             temperature: 0.5,
-            maxTokens: 4096,
+            maxTokens: SUMMARY_MAX_TOKENS,
         }),
     );
 
-    const rawContent = response.choices[0]?.message?.content?.trim() || "";
+    const choice = response.choices[0];
+    const rawContent = choice?.message?.content?.trim() || "";
     const content = stripCodeFence(rawContent);
+
+    if (!content) {
+        throw new AppError(
+            ErrorCode.UPSTREAM_BAD_RESPONSE,
+            choice?.finish_reason === "length"
+                ? "The model used its whole output budget before writing a summary. Try again, or choose a non-reasoning model in Settings."
+                : "The model returned an empty summary. Try again or choose another model.",
+            502,
+        );
+    }
+    if (choice?.finish_reason === "length") {
+        console.warn(
+            `Summary for recording ${recordingId} hit the output limit and may be cut off`,
+        );
+    }
 
     // Templates write Markdown, which becomes the summary as it is. A custom
     // prompt can still ask for the older JSON shape, so read that when it

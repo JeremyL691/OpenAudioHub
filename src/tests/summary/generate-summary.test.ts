@@ -45,6 +45,7 @@ vi.mock("openai", () => {
 import { db } from "@/db";
 import { ErrorCode } from "@/lib/errors";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
+import { upsertEnhancement } from "@/lib/transcription/persist";
 
 const userId = "user-1";
 const recordingId = "rec-1";
@@ -205,5 +206,69 @@ describe("generateSummaryForRecording -- transcript source", () => {
             messages: { content: string }[];
         };
         expect(payload.messages[1]?.content).toContain("own text");
+    });
+});
+
+describe("generateSummaryForRecording -- model output", () => {
+    const openAiCredentials = [
+        {
+            id: "creds-oai",
+            provider: "OpenAI",
+            apiKey: "enc-1",
+            baseUrl: null,
+            defaultModel: "gpt-4o-mini",
+            isDefaultEnhancement: true,
+            createdAt: new Date("2026-01-01"),
+        },
+    ];
+
+    it("asks for a token budget that leaves room for reasoning", async () => {
+        mockLookups(openAiCredentials);
+        await generateSummaryForRecording(userId, recordingId);
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            max_tokens?: number;
+        };
+        expect(payload.max_tokens).toBe(16384);
+    });
+
+    it("rejects an empty reply cut off at the limit without saving", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [{ finish_reason: "length", message: { content: "" } }],
+        });
+        mockLookups(openAiCredentials);
+        await expect(
+            generateSummaryForRecording(userId, recordingId),
+        ).rejects.toMatchObject({
+            code: ErrorCode.UPSTREAM_BAD_RESPONSE,
+        });
+        expect(upsertEnhancement).not.toHaveBeenCalled();
+    });
+
+    it("rejects a whitespace-only reply without saving", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [{ finish_reason: "stop", message: { content: " \n " } }],
+        });
+        mockLookups(openAiCredentials);
+        await expect(
+            generateSummaryForRecording(userId, recordingId),
+        ).rejects.toMatchObject({
+            code: ErrorCode.UPSTREAM_BAD_RESPONSE,
+        });
+        expect(upsertEnhancement).not.toHaveBeenCalled();
+    });
+
+    it("saves a reply cut off at the limit when it has text", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [
+                {
+                    finish_reason: "length",
+                    message: { content: "Partial summary" },
+                },
+            ],
+        });
+        mockLookups(openAiCredentials);
+        const result = await generateSummaryForRecording(userId, recordingId);
+        expect(result.summary).toBe("Partial summary");
+        expect(upsertEnhancement).toHaveBeenCalledOnce();
     });
 });

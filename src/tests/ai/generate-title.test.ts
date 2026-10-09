@@ -132,4 +132,26 @@ describe("generateTitleFromTranscription -- enhancement provider exclusion", () 
         expect(title).toBeNull();
         expect(chatCompletionsCreate).not.toHaveBeenCalled();
     });
+
+    it("leaves room for a reasoning model before the title", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-oai",
+                provider: "OpenAI",
+                apiKey: "enc-1",
+                baseUrl: null,
+                defaultModel: "gpt-4o-mini",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateTitleFromTranscription("user-1", "some transcript text");
+
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            max_tokens?: number;
+        };
+        expect(payload.max_tokens).toBe(2048);
+    });
 });
