@@ -33,9 +33,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / ".dev-artifacts"
-SMOKE = ART / "smoke"
-LOGS = ART / "logs"
+SMOKE = Path(os.environ.get("OAH_SMOKE_DIR", ART / "smoke"))
+LOGS = Path(os.environ.get("OAH_SMOKE_LOGS", ART / "logs"))
 BASE = os.environ.get("OAH_SMOKE_BASE_URL", "http://localhost:3100")
+# Desktop runs (PLAN T16.4) sign in with an existing session of the Mac app instead of a password, and restart
+# the app with a command instead of `docker restart`. Both are unset for the Docker stack, which is unchanged.
+SESSION_COOKIE = os.environ.get("OAH_SMOKE_SESSION_COOKIE", "")  # "name=value"
+RESTART_CMD = os.environ.get("OAH_SMOKE_RESTART_CMD", "")
+PIPELINE_LOG_SOURCE = os.environ.get("OAH_SMOKE_PIPELINE_LOG", "")
 COMPOSE_FILE = ROOT / "scripts/dev/docker-smoke.compose.yml"
 ENV_FILE = ART / "oah-e2e.env"
 COMPOSE = [
@@ -164,6 +169,8 @@ def call(opener, method: str, path: str, body=None, raw: bytes | None = None,
          headers: dict | None = None, expect: tuple[int, ...] = (200,)):
     data = raw
     hdrs = {"Origin": BASE, **(headers or {})}
+    if SESSION_COOKIE:
+        hdrs["Cookie"] = SESSION_COOKIE
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         hdrs["Content-Type"] = "application/json"
@@ -184,6 +191,8 @@ def load_creds() -> dict:
 
 
 def signed_in():
+    if SESSION_COOKIE:
+        return make_opener()  # the cookie is sent with every request (see call)
     creds = load_creds()
     opener, jar = make_opener()
     call(opener, "POST", "/api/auth/sign-in/email",
@@ -192,6 +201,9 @@ def signed_in():
 
 
 def session_cookie(jar) -> tuple[str, str]:
+    if SESSION_COOKIE:
+        name, _, value = SESSION_COOKIE.partition("=")
+        return name, value
     for cookie in jar:
         if "session_token" in cookie.name:
             return cookie.name, cookie.value
@@ -200,22 +212,27 @@ def session_cookie(jar) -> tuple[str, str]:
 
 def stage_setup() -> None:
     SMOKE.mkdir(parents=True, exist_ok=True)
-    if CREDS_FILE.exists():
-        creds = load_creds()
+    if SESSION_COOKIE:
+        # The desktop app's local account is already signed in: no sign-up, and no password to keep.
+        creds = {"providerKey": secrets.token_urlsafe(16)}
+        log("setup", "using the desktop app's session (no sign-up)")
     else:
-        # Test values for the local smoke stack only. Stored with mode 600, never printed.
-        creds = {
-            "email": f"smoke-{uuid.uuid4().hex[:10]}@example.test",
-            "password": secrets.token_urlsafe(24),
-            "name": "Smoke Test",
-            "providerKey": secrets.token_urlsafe(16),
-        }
-        CREDS_FILE.write_text(json.dumps(creds), encoding="utf-8")
-        os.chmod(CREDS_FILE, 0o600)
-    opener, _ = make_opener()
-    call(opener, "POST", "/api/auth/sign-up/email",
-         body={"name": creds["name"], "email": creds["email"], "password": creds["password"]},
-         expect=(200, 201, 400, 422))  # already exists on a re-run
+        if CREDS_FILE.exists():
+            creds = load_creds()
+        else:
+            # Test values for the local smoke stack only. Stored with mode 600, never printed.
+            creds = {
+                "email": f"smoke-{uuid.uuid4().hex[:10]}@example.test",
+                "password": secrets.token_urlsafe(24),
+                "name": "Smoke Test",
+                "providerKey": secrets.token_urlsafe(16),
+            }
+            CREDS_FILE.write_text(json.dumps(creds), encoding="utf-8")
+            os.chmod(CREDS_FILE, 0o600)
+        opener, _ = make_opener()
+        call(opener, "POST", "/api/auth/sign-up/email",
+             body={"name": creds["name"], "email": creds["email"], "password": creds["password"]},
+             expect=(200, 201, 400, 422))  # already exists on a re-run
     opener, jar = signed_in()
     log("setup", "signed in as the smoke user (credentials not printed)")
     # The smoke user skips the onboarding UI; the detail route redirects until it is done.
@@ -312,21 +329,33 @@ def stage_run() -> None:
             break
         if (restart is None and progress is not None
                 and RESTART_WINDOW[0] <= progress <= RESTART_WINDOW[1]):
-            cid = pipeline_container_id()
             t0 = time.monotonic()
-            subprocess.run(["docker", "restart", cid], check=True, capture_output=True)
-            restart = {"container": cid[:12], "progress_before": progress,
+            if RESTART_CMD:
+                # The desktop app: the hook quits it, starts it again, and returns once it answers.
+                subprocess.run(RESTART_CMD, shell=True, check=True)
+                target = "app"
+            else:
+                cid = pipeline_container_id()
+                subprocess.run(["docker", "restart", cid], check=True, capture_output=True)
+                target = cid[:12]
+            restart = {"container": target, "progress_before": progress,
                        "at_seconds": round(elapsed, 1),
                        "restart_seconds": round(time.monotonic() - t0, 1)}
-            log("run", f"restarted the audio-pipeline container at progress {progress:.2f}")
+            log("run", f"restarted the {target if RESTART_CMD else 'audio-pipeline container'} "
+                       f"at progress {progress:.2f}")
         time.sleep(1)
 
     statuses = sorted({p["status"] for p in trail if p["status"]})
     log("run", f"final status {status} after {round(time.monotonic() - started, 1)} s; "
                f"statuses seen {statuses}")
-    PIPELINE_LOG.write_text(
-        subprocess.run(COMPOSE + ["logs", "--no-color", "audio-pipeline"],
-                       capture_output=True, text=True).stdout, encoding="utf-8")
+    if PIPELINE_LOG_SOURCE:
+        PIPELINE_LOG.write_text(
+            Path(PIPELINE_LOG_SOURCE).read_text(encoding="utf-8", errors="replace"),
+            encoding="utf-8")
+    elif not RESTART_CMD:
+        PIPELINE_LOG.write_text(
+            subprocess.run(COMPOSE + ["logs", "--no-color", "audio-pipeline"],
+                           capture_output=True, text=True).stdout, encoding="utf-8")
     RUN_FILE.write_text(json.dumps({
         "recordingId": rid,
         "finalStatus": status,
@@ -421,9 +450,11 @@ def stage_verify() -> None:
 
 
 def audio_range_total(opener, rid: str) -> tuple[int, int | None]:
+    headers = {"Origin": BASE, "Range": "bytes=0-1023"}
+    if SESSION_COOKIE:
+        headers["Cookie"] = SESSION_COOKIE
     req = urllib.request.Request(
-        BASE + f"/api/recordings/{rid}/audio",
-        headers={"Origin": BASE, "Range": "bytes=0-1023"})
+        BASE + f"/api/recordings/{rid}/audio", headers=headers)
     with opener.open(req, timeout=120) as resp:
         status = resp.status
         content_range = resp.headers.get("Content-Range", "")
