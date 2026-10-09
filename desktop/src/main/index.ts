@@ -12,6 +12,7 @@ import {
     app,
     type BrowserWindow,
     dialog,
+    Notification,
     session,
     shell,
     type Tray,
@@ -156,6 +157,19 @@ async function main(): Promise<void> {
     const chosen = await choosePorts(loadedConfig.config.ports);
     let config = { ...loadedConfig.config, ports: chosen.ports };
     saveConfig(paths.config, config);
+    if (chosen.moved.length > 0) {
+        // The window's origin includes the app port, so browser storage (not the app data) starts over.
+        const moved = chosen.moved
+            .map((key) => `${key} ${chosen.ports[key]}`)
+            .join(", ");
+        log(`a saved port was busy; moved to ${moved}`);
+        if (Notification.isSupported()) {
+            new Notification({
+                title: "OpenAudioHub moved to other ports",
+                body: `A port it used before is in use by another program, so it now uses ${moved}. Preferences that the browser keeps for this address may need to be set again.`,
+            }).show();
+        }
+    }
     const ports = chosen.ports;
     const appOrigin = `http://127.0.0.1:${ports.app}`;
     const launchSecret = randomBytes(32).toString("hex");
