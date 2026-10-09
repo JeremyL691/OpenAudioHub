@@ -5,7 +5,7 @@
  * runs from a development build (desktop/build) and from the packaged app.
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { app, dialog, utilityProcess } from "electron";
 import { loadConfig, saveConfig } from "./config.js";
@@ -45,6 +45,14 @@ async function main(): Promise<void> {
     const paths = resolvePaths(process.env);
     mkdirSync(paths.userData, { recursive: true, mode: 0o700 });
     mkdirSync(paths.logs, { recursive: true, mode: 0o700 });
+    const log = (message: string): void => {
+        appendFileSync(
+            join(paths.logs, "main.log"),
+            `${new Date().toISOString()} ${message}\n`,
+            { mode: 0o600 },
+        );
+    };
+    log("main process started");
 
     const loadedConfig = loadConfig(paths.config);
     const databaseExists = readPgVersion(paths.pgdata) !== null;
@@ -101,15 +109,19 @@ async function main(): Promise<void> {
             : {}),
     });
 
-    const migrate = new ProcessService("migrate", () =>
-        fromUtilityProcess(
-            utilityProcess.fork(join(serverDir, "migrate.mjs"), [], {
-                env: { ...webEnv, DATABASE_URL: databaseUrl },
-                stdio: "pipe",
-                serviceName: "oah-migrate",
-            }),
-            join(paths.logs, "migrate.log"),
-        ),
+    const migrate = new ProcessService(
+        "migrate",
+        () =>
+            fromUtilityProcess(
+                utilityProcess.fork(join(serverDir, "migrate.mjs"), [], {
+                    env: { ...webEnv, DATABASE_URL: databaseUrl },
+                    stdio: "pipe",
+                    serviceName: "oah-migrate",
+                }),
+                join(paths.logs, "migrate.log"),
+            ),
+        undefined,
+        true,
     );
 
     const pipeline = new ProcessService(
@@ -155,6 +167,7 @@ async function main(): Promise<void> {
         log: (message) => console.info(`[supervisor] ${message}`),
     });
     supervisor.onEvent((event) => {
+        log(`supervisor ${JSON.stringify(event)}`);
         if (event.type === "failed") {
             dialog.showErrorBox(
                 "OpenAudioHub stopped",
@@ -176,11 +189,33 @@ async function main(): Promise<void> {
         reauthenticate: () =>
             exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch }),
     });
-    await exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch });
-    await window.loadURL(`${appOrigin}/dashboard`);
+    try {
+        await exchangeSession({
+            appOrigin,
+            launchSecret,
+            fetch: partitionFetch,
+        });
+        await window.loadURL(`${appOrigin}/dashboard`);
+        log("window loaded /dashboard");
+    } catch (error) {
+        log(
+            `window start failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw error;
+    }
 
-    app.on("before-quit", () => {
-        void supervisor.stop();
+    // Electron does not wait for before-quit listeners. Prevent the quit, stop the services in order
+    // (no orphan processes), then quit for real.
+    let quitting = false;
+    app.on("before-quit", (event) => {
+        if (quitting) return;
+        event.preventDefault();
+        quitting = true;
+        log("quitting: stopping services");
+        void supervisor.stop().finally(() => {
+            log("services stopped");
+            app.quit();
+        });
     });
 }
 

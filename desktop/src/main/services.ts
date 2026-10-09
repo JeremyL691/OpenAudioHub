@@ -28,7 +28,11 @@ export interface ProcessHandle {
 
 export type ProcessFactory = () => ProcessHandle;
 
-/** A service backed by a child process. A stop request sets `requested` so the exit is not reported as a crash. */
+/**
+ * A service backed by a child process. A stop request sets `requested` so the exit is not reported as a
+ * crash. A one-shot service (the migration) is done when it exits with code 0: start() resolves then, and
+ * a non-zero exit makes start() reject. Its exit is not reported as a crash.
+ */
 export class ProcessService implements Service {
     private handle: ProcessHandle | null = null;
     private requested = false;
@@ -40,6 +44,7 @@ export class ProcessService implements Service {
         private readonly readiness: (
             handle: ProcessHandle,
         ) => Promise<void> = async () => undefined,
+        private readonly oneShot = false,
     ) {}
 
     onUnexpectedExit(callback: (reason: string) => void): void {
@@ -50,12 +55,23 @@ export class ProcessService implements Service {
         this.requested = false;
         const handle = this.factory();
         this.handle = handle;
-        handle.onExit((code) => {
-            if (this.handle !== handle) return;
-            this.handle = null;
-            if (!this.requested)
-                this.exitCallback?.(`exited with code ${code ?? "signal"}`);
+        const finished = new Promise<number | null>((resolve) => {
+            handle.onExit((code) => {
+                if (this.handle !== handle) return;
+                this.handle = null;
+                resolve(code);
+                if (!this.requested && !this.oneShot)
+                    this.exitCallback?.(`exited with code ${code ?? "signal"}`);
+            });
         });
+        if (this.oneShot) {
+            const code = await finished;
+            if (code !== 0)
+                throw new Error(
+                    `${this.name} exited with code ${code ?? "signal"}`,
+                );
+            return;
+        }
         await this.readiness(handle);
     }
 
