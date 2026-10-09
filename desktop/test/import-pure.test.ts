@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,10 @@ import {
     readManifest,
     versionMigrationHashes,
 } from "../src/main/import/manifest.js";
+import {
+    checkEncryptionSample,
+    verifyStorageFiles,
+} from "../src/main/import/verify.js";
 
 let dir: string;
 
@@ -23,6 +27,23 @@ afterEach(() => {
 });
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/** The App's cipher (src/lib/encryption.ts): AES-256-GCM, `iv:authTag:ciphertext` in hex. */
+const KEY = "ab".repeat(32);
+const SAMPLE = "oah-desktop-export-check";
+function encryptSample(keyHex: string, plaintext: string): string {
+    const iv = randomBytes(16);
+    const cipher = createCipheriv(
+        "aes-256-gcm",
+        Buffer.from(keyHex, "hex"),
+        iv,
+    );
+    const body = Buffer.concat([
+        cipher.update(plaintext, "utf8"),
+        cipher.final(),
+    ]);
+    return `${iv.toString("hex")}:${cipher.getAuthTag().toString("hex")}:${body.toString("hex")}`;
+}
 
 /** Writes a valid export folder; `contents` overrides a file's text. */
 function writeExport(target: string, contents: Record<string, string> = {}) {
@@ -40,7 +61,7 @@ function writeExport(target: string, contents: Record<string, string> = {}) {
         join(target, "manifest.json"),
         JSON.stringify({
             format: "openaudiohub-desktop-export",
-            version: 1,
+            version: 2,
             exportedAt: "2026-10-09T00:00:00Z",
             sourceProject: "openaudiohub-rehearsal",
             sourceImage: "oah-baseline-app:d6fef64",
@@ -48,6 +69,11 @@ function writeExport(target: string, contents: Record<string, string> = {}) {
             migrations: { count: 0, hashes: [] },
             counts: { users: 1 },
             apiCredentialsDigest: "none",
+            storageFiles: [],
+            encryptionCheck: {
+                ciphertext: encryptSample(KEY, SAMPLE),
+                plaintextSha256: sha(SAMPLE),
+            },
             files,
         }),
     );
@@ -65,6 +91,20 @@ describe("readManifest", () => {
         writeFileSync(join(folder, "db.dump"), "tampered");
 
         expect(() => readManifest(folder)).toThrow("db.dump");
+    });
+
+    it("refuses a version 1 export and asks for a new one", () => {
+        const folder = join(dir, "old");
+        mkdirSync(folder);
+        writeFileSync(
+            join(folder, "manifest.json"),
+            JSON.stringify({
+                format: "openaudiohub-desktop-export",
+                version: 1,
+            }),
+        );
+
+        expect(() => readManifest(folder)).toThrow("Export again");
     });
 
     it("refuses a folder that is not an export", () => {
@@ -197,5 +237,92 @@ describe("chooseUser", () => {
 
     it("refuses an export with no users", () => {
         expect(() => chooseUser([])).toThrow("no user account");
+    });
+});
+
+describe("verifyStorageFiles", () => {
+    /** A storage folder with one audio file; `listed` describes the export's entry for it. */
+    function audioFolder(): string {
+        const root = join(dir, "storage");
+        mkdirSync(join(root, "uploads"), { recursive: true });
+        writeFileSync(join(root, "uploads", "a.opus"), "audio a");
+        return root;
+    }
+    const listed = (path: string, text: string) => ({
+        path,
+        sha256: sha(text),
+        bytes: Buffer.byteLength(text),
+    });
+
+    it("accepts a folder whose files are exactly the listed ones", () => {
+        const root = audioFolder();
+        expect(() =>
+            verifyStorageFiles(root, [listed("uploads/a.opus", "audio a")]),
+        ).not.toThrow();
+    });
+
+    it("refuses a file whose content differs from the export", () => {
+        const root = audioFolder();
+        writeFileSync(join(root, "uploads", "a.opus"), "audio b");
+
+        expect(() =>
+            verifyStorageFiles(root, [listed("uploads/a.opus", "audio a")]),
+        ).toThrow("does not match its sha256");
+    });
+
+    it("refuses a file that the export does not list", () => {
+        const root = audioFolder();
+        writeFileSync(join(root, "uploads", "extra.opus"), "extra");
+
+        expect(() =>
+            verifyStorageFiles(root, [listed("uploads/a.opus", "audio a")]),
+        ).toThrow("does not list");
+    });
+
+    it("refuses a listed file that is missing", () => {
+        const root = audioFolder();
+
+        expect(() =>
+            verifyStorageFiles(root, [listed("uploads/b.opus", "audio b")]),
+        ).toThrow("is missing after extraction");
+    });
+
+    it("refuses a listed path that leaves the storage folder", () => {
+        const root = audioFolder();
+
+        expect(() =>
+            verifyStorageFiles(root, [listed("../escape.opus", "x")]),
+        ).toThrow("outside its folder");
+    });
+});
+
+describe("checkEncryptionSample", () => {
+    const check = (ciphertext: string) => ({
+        ciphertext,
+        plaintextSha256: sha(SAMPLE),
+    });
+
+    it("accepts the key that made the sample", () => {
+        expect(() =>
+            checkEncryptionSample(check(encryptSample(KEY, SAMPLE)), KEY),
+        ).not.toThrow();
+    });
+
+    it("refuses a key that does not decrypt the sample, without printing either key", () => {
+        expect(() =>
+            checkEncryptionSample(
+                check(encryptSample(KEY, SAMPLE)),
+                "cd".repeat(32),
+            ),
+        ).toThrow("does not decrypt");
+    });
+
+    it("refuses a sample that decrypts to something else", () => {
+        expect(() =>
+            checkEncryptionSample(
+                check(encryptSample(KEY, "something else")),
+                KEY,
+            ),
+        ).toThrow("unexpected value");
     });
 });

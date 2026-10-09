@@ -23,6 +23,7 @@ import {
     readManifest,
     versionMigrationHashes,
 } from "./manifest.js";
+import { checkEncryptionSample, verifyStorageFiles } from "./verify.js";
 
 export const APP_DATABASE = "openaudiohub";
 export const IMPORT_DATABASE = "openaudiohub_import";
@@ -362,6 +363,8 @@ export async function runImport(
         rmSync(storageStaging, { recursive: true, force: true });
         rmSync(pipelineStaging, { recursive: true, force: true });
         extractSafely(join(dir, "storage.tar"), storageStaging, postgresBin);
+        verifyStorageFiles(storageStaging, manifest.storageFiles);
+        log("audio files match the export's list (sha256 and size)");
         extractSafely(
             join(dir, "pipeline-data.tar"),
             pipelineStaging,
@@ -371,6 +374,11 @@ export async function runImport(
             readFileSync(join(dir, "secrets.env"), "utf8"),
         );
         const mergedSecrets = mergeExportedKeys(secrets, keys);
+        checkEncryptionSample(
+            manifest.encryptionCheck,
+            mergedSecrets.ENCRYPTION_KEY,
+        );
+        log("the imported ENCRYPTION_KEY decrypts the export's check");
         const envText = readFileSync(join(dir, "config.env"), "utf8");
         const config = loadConfig(paths.config).config;
         const previousBoundUserId = config.boundUserId ?? null;

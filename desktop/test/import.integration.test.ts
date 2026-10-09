@@ -40,7 +40,7 @@ const serverDir = join(here, "..", "build", "server");
 const migrationsDir = join(serverDir, "src", "db", "migrations");
 /** The rehearsal export from scripts/export-for-desktop.sh (PLAN T15.1). It is git-ignored, so the suite skips without it. */
 const exportDir = fileURLToPath(
-    new URL("../../.dev-artifacts/rehearsal/export-1", import.meta.url),
+    new URL("../../.dev-artifacts/rehearsal/export-2", import.meta.url),
 );
 const ready =
     existsSync(join(binDir, "initdb")) &&
