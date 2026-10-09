@@ -16,6 +16,8 @@ export interface DesktopConfig {
     boundUserId?: string;
     /** Start at login (D-305). Off until the cutover turns it on. */
     launchAtLogin?: boolean;
+    /** The app version that last started successfully on this data (T13.6: backups and downgrade refusal). */
+    lastVersion?: string;
 }
 
 /** Defaults from PLAN D-310. They sit next to the Docker stack's ports and avoid the test ports. */
@@ -77,6 +79,12 @@ function parseConfig(text: string): DesktopConfig | null {
     }
     if (typeof candidate.launchAtLogin === "boolean") {
         config.launchAtLogin = candidate.launchAtLogin;
+    }
+    if (
+        typeof candidate.lastVersion === "string" &&
+        candidate.lastVersion.length > 0
+    ) {
+        config.lastVersion = candidate.lastVersion;
     }
     return config;
 }
