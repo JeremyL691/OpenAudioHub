@@ -106,7 +106,13 @@ async function main(): Promise<void> {
                 log(`quarantine removal failed: ${errorText(error)}`);
             }
         }
-        if (!app.isInApplicationsFolder() && app.moveToApplicationsFolder()) {
+        // OAH_SKIP_MOVE_TO_APPLICATIONS=1 is for automated runs of a packaged build outside /Applications: the
+        // move prompt is modal and would block them.
+        if (
+            process.env.OAH_SKIP_MOVE_TO_APPLICATIONS !== "1" &&
+            !app.isInApplicationsFolder() &&
+            app.moveToApplicationsFolder()
+        ) {
             // The app moved itself to /Applications and relaunches from there.
             log("moved to Applications");
             return;

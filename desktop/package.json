@@ -8,6 +8,8 @@
     "main": "build/main/main.cjs",
     "scripts": {
         "postinstall": "node node_modules/electron/install.js",
+        "build:main": "node scripts/build-main.mjs",
+        "dist": "node scripts/dist.mjs",
         "format": "biome check . --write",
         "lint": "biome check .",
         "type-check": "tsc --noEmit",

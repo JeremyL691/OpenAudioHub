@@ -53,8 +53,10 @@ cpSync(join(repoRoot, ".next", "standalone"), out, {
     recursive: true,
     verbatimSymlinks: true,
 });
-// The standalone entry point is replaced by the desktop launcher.
+// The standalone entry point is replaced by the desktop launcher. The tracer can also copy the desktop build
+// folder into the standalone output (desktop/build/server/desktop); it is not part of the server.
 rmSync(join(out, "server.js"), { force: true });
+rmSync(join(out, "desktop"), { recursive: true, force: true });
 copyFileSync(
     join(desktopRoot, "resources", "server-desktop.js"),
     join(out, "server-desktop.js"),
