@@ -8,7 +8,7 @@
 // Then it quits and checks that the test ports are free. Runs against desktop/build (run build-main.mjs
 // first). It uses its own data directory and test ports (>= 38500), never the real app data directory.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,7 @@ const repoRoot = resolve(desktopRoot, "..");
 const electronBinary = createRequire(join(desktopRoot, "package.json"))(
     "electron",
 );
-const mainJs = join(desktopRoot, "build", "main", "main.cjs");
+const mainDir = join(desktopRoot, "build", "main");
 
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const userData = join(
@@ -85,7 +85,7 @@ function isRunning(pid) {
 function launch() {
     return electron.launch({
         executablePath: electronBinary,
-        args: [mainJs],
+        args: [mainDir],
         env: launchEnv(),
         timeout: LAUNCH_TIMEOUT,
     });
@@ -143,7 +143,7 @@ try {
     results.appRunningWithDashboardClosed = isRunning(mainPid);
     // A second launch while the app runs is the single-instance path: it brings the window back.
     const reopened = app.waitForEvent("window", { timeout: LAUNCH_TIMEOUT });
-    const second = spawnSync(electronBinary, [mainJs], {
+    const second = spawnSync(electronBinary, [mainDir], {
         env: launchEnv(),
         timeout: 30_000,
     });
@@ -174,6 +174,15 @@ results.leftoverAfterKill = spawnSync("pgrep", ["-f", "desktop/build/(postgres|p
     .split("\n")
     .filter(Boolean).length;
 
+// Pretend the data was written by an older version, so the restart takes the pre-upgrade backup (T13.6).
+const configPath = join(userData, "config.json");
+const savedConfig = JSON.parse(readFileSync(configPath, "utf8"));
+writeFileSync(
+    configPath,
+    JSON.stringify({ ...savedConfig, lastVersion: "0.0.1" }),
+    { mode: 0o600 },
+);
+
 app = await launch();
 try {
     const page = await app.firstWindow({ timeout: LAUNCH_TIMEOUT });
@@ -183,6 +192,9 @@ try {
     await app.close();
 }
 results.portsFreeAfterSecondQuit = await waitForPortsFree(15_000);
+results.upgradeBackups = readdirSync(join(userData, "backups")).filter((name) =>
+    name.endsWith(".dump"),
+).length;
 
 // Clean up anything the forced kill left behind (test processes only: they run from desktop/build).
 spawnSync("pkill", ["-9", "-f", "desktop/build/(postgres|python|server)"]);
@@ -201,5 +213,6 @@ const pass =
     results.secondLaunchExitCode === 0 &&
     results.reopenedDashboard &&
     results.restartedDashboard &&
+    results.upgradeBackups >= 1 &&
     results.portsFreeAfterSecondQuit;
 process.exitCode = pass ? 0 : 1;
