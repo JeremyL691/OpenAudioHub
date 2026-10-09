@@ -185,12 +185,18 @@ async function performRestart() {
     writeFileSync(doneFile, "ok");
 }
 
-phase("starting the fake AI server (3000 ms per transcription, as the Docker smoke runs it)");
+phase(
+    "starting the fake AI server (3000 ms per transcription, as the Docker smoke runs it)",
+);
 // Without the latency the job finishes in about six seconds, before the flow's restart window (progress 0.2 to 0.95)
 // can be observed. The Docker smoke uses FAKE_AI_LATENCY_MS=3000 for the same reason (TEST_RESULTS, T7.4).
 fakeProvider = spawn("bun", ["scripts/dev/fake-ai-server.ts"], {
     cwd: repoRoot,
-    env: { ...process.env, FAKE_AI_PORT: String(providerPort), FAKE_AI_LATENCY_MS: "3000" },
+    env: {
+        ...process.env,
+        FAKE_AI_PORT: String(providerPort),
+        FAKE_AI_LATENCY_MS: "3000",
+    },
     stdio: "ignore",
 });
 if (
