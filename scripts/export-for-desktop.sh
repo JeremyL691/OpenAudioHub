@@ -10,7 +10,8 @@
 #   pipeline-data.tar  the audio pipeline's data volume (/data), read-only
 #   secrets.env        ENCRYPTION_KEY, BETTER_AUTH_SECRET, API_TOKEN_HASH_SECRET (0600)
 #   config.env         the App's allow-listed settings (0600), from desktop/src/main/user-env.ts
-#   manifest.json      sha256 and size of each file, row counts, migration journal, API credential digest
+#   manifest.json      sha256 and size of each file, the audio files' sha256 and size, row counts, migration
+#                      hashes, an API credential digest, and an encryption check (a sample encrypted with the source key)
 #
 # The source is only read: no writes to its database, volumes, or containers. The app and the pipeline must be
 # stopped for a real run (the database must not change during the dump). Real runs are refused for the live
@@ -130,6 +131,10 @@ tar_volume "$AUDIO_VOLUME" "$TMP/storage.tar"
 tar_volume "$PIPELINE_VOLUME" "$TMP/pipeline-data.tar"
 chmod 600 "$TMP/storage.tar" "$TMP/pipeline-data.tar"
 
+echo "== audio file list (sha256 and size of each file, read-only)"
+docker run --rm -v "$AUDIO_VOLUME":/src:ro postgres:16-alpine sh -c 'cd /src && find . -type f | sort | while IFS= read -r f; do printf "%s\t%s\t%s\n" "$(sha256sum "$f" | cut -d" " -f1)" "$(stat -c %s "$f")" "$f"; done' > "$TMP/storage-files.tsv"
+storage_files_json="$(jq -R -s 'split("\n") | map(select(length > 0) | split("\t") | {sha256: .[0], bytes: (.[1] | tonumber), path: (.[2] | ltrimstr("./"))})' "$TMP/storage-files.tsv")"
+
 echo "== settings and keys (values are not printed)"
 umask 077
 {
@@ -149,6 +154,29 @@ ALLOWLIST="$(sed -n '/USER_ENV_ALLOWLIST/,/\]);/p' "$(dirname "$0")/../desktop/s
         [ -n "$value" ] && echo "$key=$value"
     done <<< "$ALLOWLIST"
 } > "$TMP/config.env"
+
+echo "== encryption check (one sample, encrypted with the source key by the app's own image)"
+# The sample is encrypted in a one-off container from the app's image, so the key never leaves Docker's env file (0600)
+# and the cipher is the one the app uses (aes-256-gcm, iv:tag:ciphertext in hex). Only the ciphertext and the sha256 of
+# the plaintext are stored; the App decrypts the sample with the imported key to prove the key matches the data.
+ENC_PLAIN="oah-desktop-export-check"
+ENC_ENV="$TMP/enc.env"
+# Both values go through the env file: the image's `node` is Bun, which does not pass `-e` arguments through argv.
+{
+    echo "ENCRYPTION_KEY=$(env_of "$APP" ENCRYPTION_KEY)"
+    echo "ENC_PLAIN=$ENC_PLAIN"
+} > "$ENC_ENV"
+ENC_CIPHER="$(docker run --rm --env-file "$ENC_ENV" --entrypoint node "$(docker inspect "$APP" --format '{{.Config.Image}}')" -e '
+const { createCipheriv, randomBytes } = require("node:crypto");
+const key = Buffer.from(process.env.ENCRYPTION_KEY, "hex");
+const iv = randomBytes(16);
+const cipher = createCipheriv("aes-256-gcm", key, iv);
+const body = Buffer.concat([cipher.update(process.env.ENC_PLAIN, "utf8"), cipher.final()]);
+process.stdout.write(`${iv.toString("hex")}:${cipher.getAuthTag().toString("hex")}:${body.toString("hex")}`);
+')"
+rm -f "$ENC_ENV"
+[ -n "$ENC_CIPHER" ] || die "the encryption check could not be made"
+ENC_SHA="$(printf '%s' "$ENC_PLAIN" | shasum -a 256 | cut -d' ' -f1)"
 
 echo "== manifest"
 counts_json="{"
@@ -178,6 +206,8 @@ jq -n \
     --argjson counts "$counts_json" \
     --argjson migrations "$migrations_json" \
     --arg apiDigest "$api_digest" \
+    --argjson storageFiles "$storage_files_json" \
+    --argjson encryptionCheck "$(jq -n --arg c "$ENC_CIPHER" --arg s "$ENC_SHA" '{ciphertext: $c, plaintextSha256: $s}')" \
     --argjson db "$(file_entry "$TMP/db.dump")" \
     --argjson storage "$(file_entry "$TMP/storage.tar")" \
     --argjson pipeline "$(file_entry "$TMP/pipeline-data.tar")" \
@@ -185,7 +215,7 @@ jq -n \
     --argjson config "$(file_entry "$TMP/config.env")" \
     '{
         format: "openaudiohub-desktop-export",
-        version: 1,
+        version: 2,
         exportedAt: $exported,
         sourceProject: $project,
         sourceImage: $image,
@@ -193,6 +223,8 @@ jq -n \
         migrations: {count: ($migrations | length), hashes: $migrations},
         counts: $counts,
         apiCredentialsDigest: $apiDigest,
+        storageFiles: $storageFiles,
+        encryptionCheck: $encryptionCheck,
         files: {
             "db.dump": $db,
             "storage.tar": $storage,
