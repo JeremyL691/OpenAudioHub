@@ -30,5 +30,11 @@ const ffmpegBin = join(desktopRoot, "build", "ffmpeg", "bin");
 if (existsSync(ffmpegBin)) {
     cpSync(ffmpegBin, join(desktopRoot, "build", "bin"), { recursive: true });
 }
+// The menu-bar icons live in Resources/tray in the packaged app (tray.ts).
+cpSync(
+    join(desktopRoot, "resources", "tray"),
+    join(desktopRoot, "build", "tray"),
+    { recursive: true },
+);
 
 console.log(`built ${join(outdir, "main.cjs")}`);
