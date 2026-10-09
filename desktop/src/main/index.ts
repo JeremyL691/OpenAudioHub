@@ -405,6 +405,7 @@ async function main(): Promise<void> {
         if (quitting) return;
         event.preventDefault();
         quitting = true;
+        tray?.destroy();
         log("quitting: stopping services");
         void supervisor.stop().finally(() => {
             log("services stopped");
