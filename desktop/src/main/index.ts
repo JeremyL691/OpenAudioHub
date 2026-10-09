@@ -515,6 +515,11 @@ async function main(): Promise<void> {
     });
 }
 
+// Electron's own profile (cookies, local storage, caches) is kept in the data folder too. The default is the same
+// folder as before, so the installed app does not move; a test run with OAH_USER_DATA_DIR no longer writes into the
+// real folder. It must be set before the app is ready.
+app.setPath("userData", resolvePaths(process.env).userData);
+
 if (process.env.OAH_SKIP_MAIN !== "1") {
     void app
         .whenReady()
