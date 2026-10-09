@@ -6,6 +6,11 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+### Added
+
+- A Mac app (beta) for Apple Silicon Macs running macOS 14 or later. It runs the same web app and audio pipeline without Docker, with a menu-bar item, its data in your user account, and a DMG download. The beta is ad-hoc signed and not notarized; the Mac app guide explains the first launch.
+- An import tool for moving a Docker install into the Mac app: choose **Import from Docker…** in the menu bar, or run `OpenAudioHub --import <folder> [--user-email <address>]` from Terminal. The import checks the export, including the audio files and the encryption key, before it changes anything, and `--rollback-import` puts the previous data back.
+
 ## [1.0.1]
 
 ### Fixed
@@ -86,3 +91,5 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - `pnpm audit --prod` reports one critical advisory, in `protobufjs` 6.11.4 (GHSA-xq3m-2v4x-88gg). It arrives through `@xenova/transformers`, which runs in-browser transcription, and has no fixed 6.x release.
 - Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
 - The feature list once named translation of summaries. The imported code never had it, so it is not in this release.
+
+[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.1...HEAD

@@ -42,6 +42,12 @@ Bundled and loaded third-party components
   next/font/google. Licensed under the SIL Open Font License, version 1.1.
   Upstream: https://github.com/vercel/geist-font
 
+- Components of the Mac app: Electron, PostgreSQL 16, ffmpeg and LAME
+  (built from source with the LGPL configuration), the Python runtime of the
+  audio pipeline with its locked wheels, and the Node.js runtime. The app
+  bundle lists each one, with its license text, in THIRD_PARTY_NOTICES.md and
+  the licenses folder. Both ship inside OpenAudioHub.app under Contents/Resources.
+
 Other dependencies are listed in package.json, pnpm-lock.yaml,
 audio-pipeline/pyproject.toml, and uv.lock. Their licenses are carried by
 the packages themselves.
