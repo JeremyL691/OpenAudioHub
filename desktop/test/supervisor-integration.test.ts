@@ -19,6 +19,8 @@ const fs = require("node:fs");
 const [log, name, mode] = process.argv.slice(2);
 const record = (event) => fs.appendFileSync(log, event + " " + name + " " + process.pid + "\\n");
 record("start");
+if (mode === "finish") process.exit(0);
+if (mode === "fail") process.exit(2);
 if (mode === "ignore-term") {
   process.on("SIGTERM", () => {});
 } else {
@@ -89,7 +91,11 @@ async function waitUntil(condition: () => boolean, ms = 10_000): Promise<void> {
     throw new Error("condition not met in time");
 }
 
-function serviceFor(name: string, mode = "normal"): ProcessService {
+function serviceFor(
+    name: string,
+    mode = "normal",
+    oneShot = false,
+): ProcessService {
     const factory = () =>
         fromChildProcess(
             spawn(
@@ -98,8 +104,11 @@ function serviceFor(name: string, mode = "normal"): ProcessService {
                 { stdio: "ignore" },
             ),
         );
-    return new ProcessService(name, factory, () =>
-        waitUntil(() => pidsOf(name).length > 0, 10_000),
+    return new ProcessService(
+        name,
+        factory,
+        () => waitUntil(() => pidsOf(name).length > 0, 10_000),
+        oneShot,
     );
 }
 
@@ -219,5 +228,34 @@ describe("supervisor with real child processes", () => {
 
         await waitUntil(() => events.some((e) => e.type === "failed"));
         expect(supervisor.isFailed("pipeline")).toBe(true);
+    }, 20_000);
+
+    it("does not report a one-shot service that finishes with code 0", async () => {
+        const events: SupervisorEvent[] = [];
+        const supervisor = supervisorFor(
+            [serviceFor("migrate", "finish", true), serviceFor("next")],
+            { oneShot: ["migrate"], parallel: ["next"] },
+        );
+        supervisor.onEvent((event) => events.push(event));
+
+        await supervisor.start();
+
+        expect(pidsOf("migrate")).toHaveLength(1);
+        expect(pidsOf("next")).toHaveLength(1);
+        expect(events.some((e) => e.type === "failed")).toBe(false);
+        expect(supervisor.isFailed("migrate")).toBe(false);
+    }, 20_000);
+
+    it("rejects startup when a one-shot service exits with an error", async () => {
+        const supervisor = supervisorFor(
+            [serviceFor("migrate", "fail", true)],
+            {
+                oneShot: ["migrate"],
+            },
+        );
+
+        await expect(supervisor.start()).rejects.toThrow(
+            "migrate exited with code 2",
+        );
     }, 20_000);
 });
