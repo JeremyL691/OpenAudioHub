@@ -18,6 +18,7 @@ import {
     utilityProcess,
 } from "electron";
 import { writeFileAtomic } from "./atomic-file.js";
+import { backupDatabase } from "./backup.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { exportSecrets } from "./export-keys.js";
 import { buildTrayTemplate } from "./menu.js";
@@ -34,9 +35,10 @@ import {
     pipelineFactory,
 } from "./services.js";
 import { exchangeSession } from "./session.js";
-import { Supervisor } from "./supervisor.js";
+import { type Service, Supervisor } from "./supervisor.js";
 import { createTray } from "./tray.js";
 import { parseUserEnv } from "./user-env.js";
+import { isDowngrade } from "./versioning.js";
 import { APP_PARTITION, createAppWindow } from "./window.js";
 
 const DATABASE_NAME = "openaudiohub";
@@ -55,6 +57,21 @@ export function bundleRootFor(): string {
 
 function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/** Writes a start-up failure to the main log, so the reason survives the error dialog. Never throws. */
+function recordStartupFailure(error: unknown): void {
+    try {
+        const paths = resolvePaths(process.env);
+        mkdirSync(paths.logs, { recursive: true, mode: 0o700 });
+        appendFileSync(
+            join(paths.logs, "main.log"),
+            `${new Date().toISOString()} could not start: ${errorText(error)}\n`,
+            { mode: 0o600 },
+        );
+    } catch {
+        // The dialog still shows the reason.
+    }
 }
 
 async function main(): Promise<void> {
@@ -97,6 +114,14 @@ async function main(): Promise<void> {
     }
 
     const loadedConfig = loadConfig(paths.config);
+    const currentVersion = app.getVersion();
+    const lastVersion = loadedConfig.config.lastVersion;
+    if (lastVersion && isDowngrade(lastVersion, currentVersion)) {
+        // A newer version wrote this data; its migrations may not be understood here (T13.6).
+        throw new Error(
+            `These files were written by OpenAudioHub ${lastVersion}, which is newer than this app (${currentVersion}). Install ${lastVersion} or later.`,
+        );
+    }
     const databaseExists = readPgVersion(paths.pgdata) !== null;
     const { secrets } = loadOrCreateSecrets({
         path: paths.secrets,
@@ -157,6 +182,8 @@ async function main(): Promise<void> {
         () =>
             fromUtilityProcess(
                 utilityProcess.fork(join(serverDir, "migrate.mjs"), [], {
+                    // The migrations folder is read relative to the working directory (migrate-idempotent.ts).
+                    cwd: serverDir,
                     env: { ...webEnv, DATABASE_URL: databaseUrl },
                     stdio: "pipe",
                     serviceName: "oah-migrate",
@@ -196,16 +223,40 @@ async function main(): Promise<void> {
         ),
     );
 
+    // Before an upgrade that may change the database, take a dump (T13.6). A failed dump stops startup, so
+    // the migration never runs without one. A first start and a restart of the same version take none.
+    const upgradeBackup: Service = {
+        name: "backup",
+        async start() {
+            if (!databaseExists || lastVersion === currentVersion) return;
+            const file = backupDatabase({
+                pgDumpBin: join(postgresBin, "pg_dump"),
+                host: "127.0.0.1",
+                port: ports.postgres,
+                user: DATABASE_USER,
+                database: DATABASE_NAME,
+                password: secrets.POSTGRES_PASSWORD,
+                dir: paths.backups,
+                label: `from-${lastVersion ?? "unknown"}-to-${currentVersion}`,
+                env: childEnvironment(postgresBin, {}),
+            });
+            log(`database backup written before the upgrade: ${file}`);
+        },
+        async stop() {},
+        onUnexpectedExit() {},
+    };
+
     const supervisor = new Supervisor({
         services: [
             new PostgresService(manager, () =>
                 ensureDatabase(postgresAdminUrl, DATABASE_NAME),
             ),
+            upgradeBackup,
             migrate,
             pipeline,
             web,
         ],
-        oneShot: ["migrate"],
+        oneShot: ["backup", "migrate"],
         parallel: ["pipeline", "next"],
         log: (message) => console.info(`[supervisor] ${message}`),
     });
@@ -219,6 +270,9 @@ async function main(): Promise<void> {
         }
     });
     await supervisor.start();
+    // The data now works with this version. The next start compares against it (T13.6).
+    config = { ...config, lastVersion: currentVersion };
+    saveConfig(paths.config, config);
 
     const partitionFetch = (
         url: string,
@@ -358,6 +412,7 @@ if (process.env.OAH_SKIP_MAIN !== "1") {
         .whenReady()
         .then(main)
         .catch((error: unknown) => {
+            recordStartupFailure(error);
             dialog.showErrorBox(
                 "OpenAudioHub could not start",
                 errorText(error),

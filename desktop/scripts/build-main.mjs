@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 // Bundles the Electron main process into desktop/build/main/main.cjs (CommonJS, Electron's Node).
 // `electron` stays external: the runtime provides it.
-import { cpSync, existsSync, mkdirSync } from "node:fs";
+import {
+    cpSync,
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -35,6 +41,24 @@ cpSync(
     join(desktopRoot, "resources", "tray"),
     join(desktopRoot, "build", "tray"),
     { recursive: true },
+);
+// app.getVersion() reads the package.json next to the entry. The version comes from the root package.json
+// (D-312), so the development build reports the same version as the packaged app.
+const rootPackage = JSON.parse(
+    readFileSync(join(desktopRoot, "..", "package.json"), "utf8"),
+);
+writeFileSync(
+    join(outdir, "package.json"),
+    `${JSON.stringify(
+        {
+            name: "openaudiohub",
+            productName: "OpenAudioHub",
+            version: rootPackage.version,
+            main: "main.cjs",
+        },
+        null,
+        2,
+    )}\n`,
 );
 
 console.log(`built ${join(outdir, "main.cjs")}`);
