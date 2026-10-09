@@ -1,0 +1,101 @@
+---
+title: Mac app (beta)
+description: Run OpenAudioHub as a macOS app on an Apple Silicon Mac, without Docker.
+---
+
+The Mac app runs the same web application and audio pipeline as the Docker install, on your own Mac. It has a menu-bar item, keeps its data in your user account, and does not need Docker. It is a beta.
+
+## Requirements
+
+- An Apple Silicon Mac (M1 or later) running macOS 14 Sonoma or later.
+- About 300 MB for the app, plus space for your recordings.
+- A transcription provider, as described in [Install](/docs/self-hosting/install).
+
+## Install
+
+1. Download `OpenAudioHub-<version>-arm64.dmg` from the release page.
+2. Open the disk image and drag **OpenAudioHub** into **Applications**.
+3. Open OpenAudioHub from **Applications**.
+
+The beta is signed ad hoc, not with a Developer ID, and it is not notarized. macOS stops it the first time you open it. To allow it, open **System Settings › Privacy & Security**, find the message about OpenAudioHub, and choose **Open Anyway**. You can also remove the download flag yourself:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/OpenAudioHub.app
+```
+
+After you allow the app once, it opens normally.
+
+## Your data
+
+Everything the app keeps is in your user account:
+
+- `~/Library/Application Support/OpenAudioHub/`: the database (`pgdata`), audio (`storage`), pipeline data, backups, `config.json`, `openaudiohub.env`, and the keys in `secrets.json`, which only your user can read.
+- `~/Library/Logs/OpenAudioHub/`: the app's logs. They do not contain keys.
+
+Do not share the Application Support folder. It holds your keys.
+
+## Settings
+
+Choose **Edit Configuration…** from the menu bar to open `openaudiohub.env`. Restart the app after you change it. Only the settings listed in [Environment variables](/docs/self-hosting/environment-variables) are read from this file.
+
+## Keep a copy of your keys
+
+Choose **Export Keys…** from the menu bar to save the encryption keys to a file. Store that file somewhere safe. Without the keys, encrypted data cannot be read, for example after you move to another Mac. See [Encryption at rest](/docs/reference/encryption-at-rest).
+
+## Quit, upgrade, and launch at login
+
+- Quit with **Quit OpenAudioHub** from the menu bar before you replace the app. Closing the window keeps the app running in the menu bar.
+- Before an upgrade changes the database, the app saves a backup in `backups/`. The five most recent backups are kept.
+- The app will not open data written by a newer version. Install that version or a later one.
+- **Launch at Login** starts the app when you sign in. It starts in the menu bar only, without a window.
+
+## Import from Docker
+
+If you run OpenAudioHub with Docker Compose, you can move your data into the Mac app.
+
+1. From a checkout of this repository, export the Compose project. Stop the app and the audio pipeline first, and wait for active jobs to finish. The script checks both.
+
+   ```bash
+   scripts/export-for-desktop.sh --project <compose project> --out <folder>
+   ```
+
+   In this release the script does not export a project named `openaudiohub`. Use `--dry-run` to see the plan without writing anything.
+
+2. In the menu bar, choose **Import from Docker…**, pick the folder, and confirm. The app stops its services, imports the data, and opens.
+
+If the export has more than one account, the menu cannot choose one. Run the import from Terminal and name the account:
+
+```bash
+/Applications/OpenAudioHub.app/Contents/MacOS/OpenAudioHub --import <folder> --user-email <address>
+```
+
+The command exits with one of these codes:
+
+- `0`: the import is done.
+- `1`: the import failed. Nothing was switched, or the message says what to restore.
+- `2`: the app is already running. Quit it, then run the command again.
+- `3`: the command needs a change, usually `--user-email`.
+
+The import checks the export before it changes anything, including the audio files and the encryption key. The previous database, audio, keys, and settings are kept beside the new ones, with a `.pre-import` name, and nothing is deleted. To put the previous data back:
+
+```bash
+/Applications/OpenAudioHub.app/Contents/MacOS/OpenAudioHub --rollback-import
+```
+
+Rollback moves the imported data aside with a `.rolled-back-` name. You can delete those copies yourself once you are sure you do not need them.
+
+## Ports
+
+The app listens on `127.0.0.1` only. By default it uses ports 38400 to 38402. If one is in use by another program, the app moves to the next free port and shows a notification. Browser preferences are stored per address, so they may need to be set again after a port changes.
+
+## Limits of the beta
+
+- Apple Silicon and macOS 14 or later only.
+- Not signed with a Developer ID, and not notarized. See [Install](#install).
+- One local account, signed in automatically. The Mac app has no log out.
+- Your data stays on this Mac. There is no sync and no remote access.
+- The import from Docker needs an export from the repository's script. A project named `openaudiohub` is refused in this release.
+
+## Remove the app
+
+Turn off **Launch at Login**, quit the app, and move **OpenAudioHub** from **Applications** to the Trash. Your data stays in `~/Library/Application Support/OpenAudioHub/` until you delete that folder.

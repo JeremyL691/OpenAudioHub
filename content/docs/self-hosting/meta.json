@@ -3,6 +3,7 @@
     "pages": [
         "index",
         "install",
+        "desktop",
         "environment-variables",
         "storage-s3",
         "email-smtp",
