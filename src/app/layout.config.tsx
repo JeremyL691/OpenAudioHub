@@ -31,12 +31,21 @@ export const baseOptions: BaseLayoutProps = {
     // is an untitled svg with role="img", which axe reports. The app's Github
     // icon hides its svg and the link carries the label.
     links: [
+        // A plain anchor, not a fumadocs link. A client-side route change keeps
+        // fumadocs' stylesheet loaded in the app, and its `.hidden` rule then
+        // hides the app sidebar.
         {
-            type: "main",
-            text: "Back to app",
-            url: "/dashboard",
-            icon: <ArrowLeft className="size-4" />,
+            type: "custom",
             on: "all",
+            children: (
+                <a
+                    href="/dashboard"
+                    className="flex flex-row items-center gap-2 rounded-lg p-2 text-start text-fd-muted-foreground transition-colors hover:bg-fd-accent/50 hover:text-fd-accent-foreground/80 [&_svg]:size-4 [&_svg]:shrink-0"
+                >
+                    <ArrowLeft />
+                    Back to app
+                </a>
+            ),
         },
         {
             type: "icon",
