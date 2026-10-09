@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import { createWriteStream, type WriteStream } from "node:fs";
 import { join } from "node:path";
 import type { UtilityProcess } from "electron";
 import type { PostgresManager } from "./postgres.js";
@@ -81,13 +82,38 @@ async function waitFor(condition: () => boolean, ms: number): Promise<boolean> {
     return condition();
 }
 
-/** Wraps a Node child process as a ProcessHandle. */
-export function fromChildProcess(child: ChildProcess): ProcessHandle {
+/**
+ * Appends a child's stdout and stderr to a log file. Without a reader the pipe fills up and the child
+ * blocks, so every piped service gets a sink (PLAN T13.3 logs).
+ */
+function attachLog(
+    child: {
+        stdout: NodeJS.ReadableStream | null;
+        stderr: NodeJS.ReadableStream | null;
+    },
+    logFile: string,
+): WriteStream {
+    const sink = createWriteStream(logFile, { flags: "a", mode: 0o600 });
+    child.stdout?.pipe(sink, { end: false });
+    child.stderr?.pipe(sink, { end: false });
+    return sink;
+}
+
+/** Wraps a Node child process as a ProcessHandle. Its output goes to `logFile` when one is given. */
+export function fromChildProcess(
+    child: ChildProcess,
+    logFile?: string,
+): ProcessHandle {
+    const sink = logFile ? attachLog(child, logFile) : null;
     return {
         pid: child.pid,
         kill: (signal) => child.kill(signal),
         onExit: (callback) => {
-            child.once("exit", (code) => callback(code));
+            // "close" follows the last output chunk, so the log has everything the child wrote.
+            child.once("close", (code) => {
+                sink?.end();
+                callback(code);
+            });
         },
     };
 }
@@ -102,6 +128,7 @@ export function pipelineFactory(options: {
     port: number;
     env: Record<string, string>;
     cwd: string;
+    logFile?: string;
 }): ProcessFactory {
     return () =>
         fromChildProcess(
@@ -114,6 +141,7 @@ export function pipelineFactory(options: {
                     stdio: ["pipe", "pipe", "pipe"],
                 },
             ),
+            options.logFile,
         );
 }
 
@@ -177,12 +205,19 @@ export class PostgresService implements Service {
 }
 
 /** Wraps an Electron utility process (used for the web server and the migration). */
-export function fromUtilityProcess(child: UtilityProcess): ProcessHandle {
+export function fromUtilityProcess(
+    child: UtilityProcess,
+    logFile?: string,
+): ProcessHandle {
+    const sink = logFile ? attachLog(child, logFile) : null;
     return {
         pid: child.pid,
         kill: () => child.kill(),
         onExit: (callback) => {
-            child.once("exit", (code) => callback(code));
+            child.once("exit", (code) => {
+                sink?.end();
+                callback(code);
+            });
         },
     };
 }
