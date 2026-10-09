@@ -210,6 +210,14 @@ test("a Docker export imports, shows its recordings, survives a restart, and rol
         rehearsalAccount,
     ]);
     expect(imported.status, imported.stderr).toBe(0);
+    // The export's account has a Plaud connection, and the background sync worker would contact Plaud with its
+    // token. The suite never lets that happen: the setting is written after the import, since the export's own
+    // settings file does not carry it.
+    writeFileSync(
+        join(dataDir, "openaudiohub.env"),
+        "BACKGROUND_SYNC_ENABLED=false\n",
+        { mode: 0o600 },
+    );
 
     let recordingCount = 0;
     let app = await launch(dataDir);
