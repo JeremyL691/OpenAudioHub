@@ -5,7 +5,7 @@
     "description": "macOS desktop shell for OpenAudioHub. Separate pnpm project; the web app is built from the repository root.",
     "license": "AGPL-3.0",
     "type": "module",
-    "main": "build/main/main.js",
+    "main": "build/main/main.cjs",
     "scripts": {
         "postinstall": "node node_modules/electron/install.js",
         "format": "biome check . --write",
