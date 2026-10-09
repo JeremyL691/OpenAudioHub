@@ -133,7 +133,7 @@ export async function generateTitleFromTranscription(
                     },
                 ],
                 temperature: 0.7,
-                maxTokens: 50, // Titles should be short
+                maxTokens: 2048,
             }),
         );
 
