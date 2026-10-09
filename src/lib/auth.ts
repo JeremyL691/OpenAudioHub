@@ -2,6 +2,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { isDesktopMode } from "./desktop/mode";
+import { desktopSessionPlugin } from "./desktop/session-plugin";
 import { env } from "./env";
 import { sendPasswordResetEmail } from "./notifications/email";
 
@@ -39,6 +41,7 @@ export const auth = betterAuth({
     },
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.APP_URL,
+    plugins: isDesktopMode() ? [desktopSessionPlugin()] : [],
 });
 
 export type Session = typeof auth.$Infer.Session;
