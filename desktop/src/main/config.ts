@@ -14,6 +14,8 @@ export interface DesktopConfig {
     ports: DesktopPorts;
     /** Local account the app signs in as. Unset until the first launch or import binds one. */
     boundUserId?: string;
+    /** Start at login (D-305). Off until the cutover turns it on. */
+    launchAtLogin?: boolean;
 }
 
 /** Defaults from PLAN D-310. They sit next to the Docker stack's ports and avoid the test ports. */
@@ -72,6 +74,9 @@ function parseConfig(text: string): DesktopConfig | null {
         candidate.boundUserId.length > 0
     ) {
         config.boundUserId = candidate.boundUserId;
+    }
+    if (typeof candidate.launchAtLogin === "boolean") {
+        config.launchAtLogin = candidate.launchAtLogin;
     }
     return config;
 }
