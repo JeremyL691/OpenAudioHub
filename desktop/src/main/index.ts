@@ -108,6 +108,7 @@ async function main(): Promise<void> {
                 stdio: "pipe",
                 serviceName: "oah-migrate",
             }),
+            join(paths.logs, "migrate.log"),
         ),
     );
 
@@ -124,6 +125,7 @@ async function main(): Promise<void> {
                 AUDIO_PIPELINE_CORE_URL: appOrigin,
             }),
             cwd: join(bundleRoot, "audio-pipeline"),
+            logFile: join(paths.logs, "pipeline.log"),
         }),
     );
 
@@ -135,6 +137,7 @@ async function main(): Promise<void> {
                 stdio: "pipe",
                 serviceName: "oah-next",
             }),
+            join(paths.logs, "next.log"),
         ),
     );
 
