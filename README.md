@@ -59,6 +59,10 @@ This installs the latest release into `$HOME/openaudiohub`, generates the secret
 curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
 ```
 
+### Mac app (beta)
+
+On an Apple Silicon Mac running macOS 14 or later, the Mac app runs the same stack without Docker. Download `OpenAudioHub-<version>-arm64.dmg` from the release page and drag the app into Applications. The beta is not notarized, so the first launch needs one approval in Privacy & Security. The [Mac app guide](https://github.com/JeremyL691/OpenAudioHub/blob/main/content/docs/self-hosting/desktop.mdx) explains the steps, where the data lives, and how to import an existing Docker install.
+
 ### From a checkout
 
 ```bash
