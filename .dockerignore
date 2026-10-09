@@ -52,6 +52,10 @@ next-env.d.ts
 .vscode
 .idea
 
+# Desktop app (macOS) and local development artifacts. Not part of the web image.
+/desktop/
+/.dev-artifacts/
+
 # README
 README.md
 

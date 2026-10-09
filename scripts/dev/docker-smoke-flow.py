@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / ".dev-artifacts"
 SMOKE = ART / "smoke"
 LOGS = ART / "logs"
-BASE = "http://localhost:3100"
+BASE = os.environ.get("OAH_SMOKE_BASE_URL", "http://localhost:3100")
 COMPOSE_FILE = ROOT / "scripts/dev/docker-smoke.compose.yml"
 ENV_FILE = ART / "oah-e2e.env"
 COMPOSE = [
@@ -49,7 +49,9 @@ VERIFY_FILE = SMOKE / "verify.json"
 DETAIL_SHOT = SMOKE / "detail.png"
 PROGRESS_LOG = LOGS / "T7-4-progress.jsonl"
 PIPELINE_LOG = LOGS / "T7-4-pipeline.log"
-PROVIDER_BASE_URL = "http://host.docker.internal:3299/v1"
+PROVIDER_BASE_URL = os.environ.get(
+    "OAH_SMOKE_PROVIDER_URL", "http://host.docker.internal:3299/v1"
+)
 
 BLOCK_SECONDS = 100
 SILENCE_SECONDS = 20
