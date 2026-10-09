@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { createWriteStream, type WriteStream } from "node:fs";
+import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import type { UtilityProcess } from "electron";
 import type { PostgresManager } from "./postgres.js";
@@ -100,7 +100,9 @@ async function waitFor(condition: () => boolean, ms: number): Promise<boolean> {
 
 /**
  * Appends a child's stdout and stderr to a log file. Without a reader the pipe fills up and the child
- * blocks, so every piped service gets a sink (PLAN T13.3 logs).
+ * blocks, so every piped service gets a sink (PLAN T13.3 logs). `done` resolves once the pipes have ended and
+ * every byte is written, so an exit callback never runs ahead of the log. A pipe that a grandchild keeps open
+ * gives up after two seconds rather than holding the exit.
  */
 function attachLog(
     child: {
@@ -108,11 +110,28 @@ function attachLog(
         stderr: NodeJS.ReadableStream | null;
     },
     logFile: string,
-): WriteStream {
+): { done: Promise<void> } {
     const sink = createWriteStream(logFile, { flags: "a", mode: 0o600 });
-    child.stdout?.pipe(sink, { end: false });
-    child.stderr?.pipe(sink, { end: false });
-    return sink;
+    const ended: Promise<void>[] = [];
+    for (const stream of [child.stdout, child.stderr]) {
+        if (!stream) continue;
+        stream.pipe(sink, { end: false });
+        ended.push(
+            new Promise<void>((resolve) => {
+                stream.once("end", () => resolve());
+                stream.once("close", () => resolve());
+            }),
+        );
+    }
+    const drained = Promise.race([
+        Promise.all(ended),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000).unref()),
+    ]);
+    return {
+        done: drained.then(
+            () => new Promise<void>((resolve) => sink.end(() => resolve())),
+        ),
+    };
 }
 
 /** Wraps a Node child process as a ProcessHandle. Its output goes to `logFile` when one is given. */
@@ -120,15 +139,15 @@ export function fromChildProcess(
     child: ChildProcess,
     logFile?: string,
 ): ProcessHandle {
-    const sink = logFile ? attachLog(child, logFile) : null;
+    const log = logFile ? attachLog(child, logFile) : null;
     return {
         pid: child.pid,
         kill: (signal) => child.kill(signal),
         onExit: (callback) => {
-            // "close" follows the last output chunk, so the log has everything the child wrote.
+            // "close" follows the last output chunk; the callback waits until that output is in the log file.
             child.once("close", (code) => {
-                sink?.end();
-                callback(code);
+                if (log) void log.done.then(() => callback(code));
+                else callback(code);
             });
         },
     };
@@ -225,14 +244,14 @@ export function fromUtilityProcess(
     child: UtilityProcess,
     logFile?: string,
 ): ProcessHandle {
-    const sink = logFile ? attachLog(child, logFile) : null;
+    const log = logFile ? attachLog(child, logFile) : null;
     return {
         pid: child.pid,
         kill: () => child.kill(),
         onExit: (callback) => {
             child.once("exit", (code) => {
-                sink?.end();
-                callback(code);
+                if (log) void log.done.then(() => callback(code));
+                else callback(code);
             });
         },
     };
