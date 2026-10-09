@@ -1,0 +1,80 @@
+name: Desktop build
+
+# Builds and verifies the macOS app (desktop/scripts/ci-build.sh). Called by desktop.yml and release.yml.
+# Runs on an Apple Silicon runner, because the bundle is arm64 only (D-301, D-312). The build is ad-hoc signed
+# and not notarized (no Developer ID account, D-303).
+
+on:
+  workflow_call:
+    outputs:
+      dmg:
+        description: File name of the DMG
+        value: ${{ jobs.build.outputs.dmg }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 120
+    outputs:
+      dmg: ${{ steps.artifact.outputs.dmg }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # The desktop lockfile was written by pnpm 12.9.1 (D-341).
+          version: 12.9.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.20.0'
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            desktop/pnpm-lock.yaml
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.23'
+          python-version: '3.12'
+
+      - name: Install pkg-config for the ffmpeg build
+        run: brew install pkg-config
+
+      - name: Cache desktop downloads and the ffmpeg build
+        uses: actions/cache@v4
+        with:
+          path: desktop/.cache
+          key: desktop-cache-${{ runner.os }}-${{ hashFiles('desktop/scripts/lib/pins.mjs', 'desktop/scripts/build-ffmpeg.sh') }}
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C desktop install --frozen-lockfile
+
+      - name: Build, verify and package
+        run: bash desktop/scripts/ci-build.sh
+
+      - name: Record the DMG name
+        id: artifact
+        run: |
+          dmg="$(find desktop/dist -maxdepth 1 -name 'OpenAudioHub-*-arm64.dmg' -exec basename {} \; | sort | tail -n 1)"
+          echo "dmg=${dmg}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the DMG and its checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenAudioHub-macos-arm64
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 14

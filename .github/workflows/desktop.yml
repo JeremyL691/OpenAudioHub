@@ -1,0 +1,30 @@
+name: Desktop
+
+# The desktop app's own checks and build. Runs for changes to the desktop shell and the web code it shares
+# with the desktop mode (src/lib/desktop, src/app/api/desktop, src/components/desktop-mode-provider.tsx).
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'src/lib/desktop/**'
+      - 'src/app/api/desktop/**'
+      - 'src/components/desktop-mode-provider.tsx'
+      - '.github/workflows/desktop*.yml'
+  push:
+    branches:
+      - feature/desktop-app
+    paths:
+      - 'desktop/**'
+      - 'src/lib/desktop/**'
+      - 'src/app/api/desktop/**'
+      - 'src/components/desktop-mode-provider.tsx'
+      - '.github/workflows/desktop*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/desktop-build.yml
