@@ -1,0 +1,28 @@
+{
+    "name": "openaudiohub-desktop",
+    "version": "0.0.0",
+    "private": true,
+    "description": "macOS desktop shell for OpenAudioHub. Separate pnpm project; the web app is built from the repository root.",
+    "license": "AGPL-3.0",
+    "type": "module",
+    "main": "build/main/main.js",
+    "scripts": {
+        "postinstall": "node node_modules/electron/install.js",
+        "format": "biome check . --write",
+        "lint": "biome check .",
+        "type-check": "tsc --noEmit",
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.3.7",
+        "@types/node": "24.19.1",
+        "electron": "44.7.0",
+        "electron-builder": "26.15.3",
+        "esbuild": "0.28.2",
+        "typescript": "5.9.3",
+        "vitest": "4.1.10"
+    },
+    "dependencies": {
+        "postgres": "3.4.9"
+    }
+}
