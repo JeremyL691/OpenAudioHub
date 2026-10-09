@@ -1,8 +1,8 @@
 "use client";
 
-import { FileText, RefreshCw, Sparkles } from "lucide-react";
+import { ChevronDown, FileText, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
 import { TranscribeInBrowserButton } from "@/components/dashboard/transcribe-in-browser-button";
@@ -14,7 +14,9 @@ import { TranscriptToolbar } from "@/components/recording/transcript/transcript-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { usePersistedToggle } from "@/hooks/use-persisted-toggle";
 import type { RecordingTranscript } from "@/hooks/use-recording-transcript";
+import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
 interface TranscriptCardProps {
@@ -53,6 +55,12 @@ export function TranscriptCard({
     const router = useRouter();
     const confirm = useConfirm();
     const [followPlayback, setFollowPlayback] = useState(true);
+    const contentId = useId();
+    const [open, toggleOpen] = usePersistedToggle("oah.card.transcript.open");
+    const expandThen = (action: () => void) => () => {
+        if (!open) toggleOpen();
+        action();
+    };
     const {
         activeTranscript,
         transcriptList,
@@ -106,10 +114,31 @@ export function TranscriptCard({
         <Card>
             <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2">
-                        <FileText className="size-5" />
-                        Transcription
-                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-expanded={open}
+                            aria-controls={contentId}
+                            aria-label={
+                                open
+                                    ? "Collapse transcription"
+                                    : "Expand transcription"
+                            }
+                            onClick={toggleOpen}
+                        >
+                            <ChevronDown
+                                className={cn(
+                                    "size-4 transition-transform",
+                                    !open && "-rotate-90",
+                                )}
+                            />
+                        </Button>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="size-5" />
+                            Transcription
+                        </CardTitle>
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                         {isDetail && activeTranscript?.text && hasTimeline && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -123,7 +152,7 @@ export function TranscriptCard({
                         )}
                         {!isDetail && activeTranscript?.text && (
                             <Button
-                                onClick={onTranscribe}
+                                onClick={expandThen(onTranscribe)}
                                 size="sm"
                                 variant="outline"
                                 disabled={
@@ -137,7 +166,7 @@ export function TranscriptCard({
                         {!activeTranscript?.text && !isTranscribing && (
                             <>
                                 <Button
-                                    onClick={onTranscribe}
+                                    onClick={expandThen(onTranscribe)}
                                     size="sm"
                                     disabled={
                                         isTranscribing ||
@@ -167,7 +196,7 @@ export function TranscriptCard({
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent id={contentId} hidden={!open}>
                 {isTranscribing && !activeTranscript?.text ? (
                     <div className="flex flex-col items-center justify-center py-12">
                         <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />

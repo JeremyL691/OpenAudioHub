@@ -80,7 +80,6 @@ export function useTranscriptionSummary({
     );
     const summarizingIdsRef = useRef(summarizingIds);
     const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
-    const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPresetState] = useState("general");
     const [summaryLanguage, setSummaryLanguageState] = useState("auto");
     // Same guard as the preset: a choice made before the settings fetch
@@ -352,8 +351,6 @@ export function useTranscriptionSummary({
     return {
         summaryData,
         isSummarizing,
-        summaryExpanded,
-        setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
         summaryLanguage,
