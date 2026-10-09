@@ -1,0 +1,62 @@
+# electron-builder configuration for the macOS app (PLAN T14.1; D-301, D-303, D-312, D-313, D-342, D-343).
+# scripts/dist.mjs stages desktop/build first and passes the version from the root package.json and the
+# output folder (outside the File Provider-synced ~/Desktop, D-342). Ad-hoc signed (identity "-"), no
+# hardened runtime, no notarization (no Developer ID account, D-303).
+appId: io.github.jeremyl691.openaudiohub
+productName: OpenAudioHub
+copyright: Copyright (c) 2026 Jeremy Liu
+electronVersion: 44.7.0
+directories:
+    output: dist
+    buildResources: build
+files:
+    - build/main/**/*
+    - package.json
+    - "!**/*.map"
+extraResources:
+    - from: build/postgres
+      to: postgres
+    - from: build/python
+      to: python
+    - from: build/audio-pipeline
+      to: audio-pipeline
+    - from: build/pipeline-launcher.py
+      to: pipeline-launcher.py
+    # The default filter drops node_modules (and its hidden .pnpm store) from a directory copy; the server
+    # needs both, so the server is selected with an explicit filter (the spike bundle verified this layout).
+    - from: build
+      to: .
+      filter:
+          - server/**/*
+    - from: build/bin
+      to: bin
+    - from: build/tray
+      to: tray
+    - from: build/THIRD_PARTY_NOTICES.md
+      to: THIRD_PARTY_NOTICES.md
+    - from: build/licenses
+      to: licenses
+afterPack: scripts/after-pack.cjs
+mac:
+    target:
+        - target: dmg
+          arch:
+              - arm64
+    category: public.app-category.productivity
+    identity: "-"
+    hardenedRuntime: false
+    gatekeeperAssess: false
+    minimumSystemVersion: "14.0"
+    icon: icon.icns
+dmg:
+    format: ULFO
+    artifactName: OpenAudioHub-${version}-arm64.${ext}
+electronFuses:
+    runAsNode: false
+    enableCookieEncryption: false
+    enableNodeOptionsEnvironmentVariable: false
+    enableNodeCliInspectArguments: false
+    enableEmbeddedAsarIntegrityValidation: false
+    onlyLoadAppFromAsar: true
+    loadBrowserProcessSpecificV8Snapshot: false
+    grantFileProtocolExtraPrivileges: false

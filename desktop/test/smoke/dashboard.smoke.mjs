@@ -56,6 +56,13 @@ function anyListening() {
     return [ports.app, ports.pipeline, ports.postgres].some(listening);
 }
 
+function listenersText() {
+    return [ports.app, ports.pipeline, ports.postgres]
+        .map((port) => spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"]).stdout.toString().trim())
+        .filter(Boolean)
+        .join("\n");
+}
+
 async function waitForPortsFree(ms) {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline && anyListening()) {
@@ -64,13 +71,26 @@ async function waitForPortsFree(ms) {
     return !anyListening();
 }
 
+// OAH_SMOKE_APP=<path to OpenAudioHub.app> runs the same checks against a packaged build (T14.1, T16.3).
+const packagedApp = process.env.OAH_SMOKE_APP
+    ? resolve(process.env.OAH_SMOKE_APP)
+    : null;
+const packagedExecutable = packagedApp
+    ? join(packagedApp, "Contents", "MacOS", "OpenAudioHub")
+    : null;
+
 function launchEnv() {
     return {
         PATH: process.env.PATH ?? "/usr/bin:/bin",
         HOME: process.env.HOME ?? "",
         TZ: "UTC",
         OAH_USER_DATA_DIR: userData,
+        ...(packagedApp ? { OAH_SKIP_MOVE_TO_APPLICATIONS: "1" } : {}),
     };
+}
+
+function phase(name) {
+    console.log(`[smoke] ${new Date().toISOString()} ${name}`);
 }
 
 function isRunning(pid) {
@@ -84,8 +104,8 @@ function isRunning(pid) {
 
 function launch() {
     return electron.launch({
-        executablePath: electronBinary,
-        args: [mainDir],
+        executablePath: packagedExecutable ?? electronBinary,
+        args: packagedExecutable ? [] : [mainDir],
         env: launchEnv(),
         timeout: LAUNCH_TIMEOUT,
     });
@@ -97,6 +117,7 @@ async function reachDashboard(page) {
     return new URL(page.url()).pathname;
 }
 
+phase("A: first launch");
 // --- A. first launch -------------------------------------------------------------------------------
 let app = await launch();
 // Playwright's handle can become unusable once the last window closes, so keep the main pid now.
@@ -123,6 +144,8 @@ try {
         .then(() => true)
         .catch(() => false);
 
+    phase("B: window lifecycle");
+
     // --- B. window lifecycle (D-305) ---------------------------------------------------------------
     // Playwright quits the app when its last window closes, which is not the app's behavior. So a hidden
     // holder window stays open while the dashboard window is closed. The zero-window case is a manual
@@ -143,7 +166,7 @@ try {
     results.appRunningWithDashboardClosed = isRunning(mainPid);
     // A second launch while the app runs is the single-instance path: it brings the window back.
     const reopened = app.waitForEvent("window", { timeout: LAUNCH_TIMEOUT });
-    const second = spawnSync(electronBinary, [mainDir], {
+    const second = spawnSync(packagedExecutable ?? electronBinary, packagedExecutable ? [] : [mainDir], {
         env: launchEnv(),
         timeout: 30_000,
     });
@@ -155,7 +178,9 @@ try {
     await app.close();
 }
 results.portsFreeAfterFirstQuit = await waitForPortsFree(15_000);
+if (!results.portsFreeAfterFirstQuit) results.listenersAfterFirstQuit = listenersText();
 
+phase("C: force-kill and restart");
 // --- C. force-killed main process, then a fresh launch on the same data ----------------------------
 app = await launch();
 const killed = app.process().pid;
@@ -168,7 +193,7 @@ try {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
 }
 results.killedMainPid = killed;
-results.leftoverAfterKill = spawnSync("pgrep", ["-f", "desktop/build/(postgres|python|server)"])
+results.leftoverAfterKill = spawnSync("pgrep", ["-f", "(desktop/build|OpenAudioHub\.app/Contents/Resources)/(postgres|python|server)"])
     .stdout.toString()
     .trim()
     .split("\n")
@@ -192,12 +217,13 @@ try {
     await app.close();
 }
 results.portsFreeAfterSecondQuit = await waitForPortsFree(15_000);
+if (!results.portsFreeAfterSecondQuit) results.listenersAfterSecondQuit = listenersText();
 results.upgradeBackups = readdirSync(join(userData, "backups")).filter((name) =>
     name.endsWith(".dump"),
 ).length;
 
 // Clean up anything the forced kill left behind (test processes only: they run from desktop/build).
-spawnSync("pkill", ["-9", "-f", "desktop/build/(postgres|python|server)"]);
+spawnSync("pkill", ["-9", "-f", "(desktop/build|OpenAudioHub\.app/Contents/Resources)/(postgres|python|server)"]);
 results.portsFreeAtEnd = !anyListening();
 results.userData = userData;
 
