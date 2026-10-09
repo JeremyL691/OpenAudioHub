@@ -192,3 +192,17 @@ test("the session route refuses a wrong Host and a wrong bearer", async () => {
     });
     expect(wrongBearer).toBe(401);
 });
+
+test("development-only routes answer 404 to a signed-in page (F24)", async () => {
+    // The first test left the app running with its window open, so the page is already signed in.
+    expect(app, "the app from the first test is running").not.toBeNull();
+    const page = await app!.firstWindow({ timeout: LAUNCH_TIMEOUT });
+    const apiStatus = await page.evaluate(
+        async () => (await fetch("/api/dev/plaud/info")).status,
+    );
+    expect(apiStatus).toBe(404);
+    const pageResponse = await page.goto(
+        new URL("/dev/demo-dashboard", page.url()).toString(),
+    );
+    expect(pageResponse?.status()).toBe(404);
+});
