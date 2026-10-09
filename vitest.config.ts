@@ -9,6 +9,11 @@ export default defineConfig({
     },
     test: {
         environment: "node",
-        exclude: [...configDefaults.exclude, ".next/**", "e2e/**"],
+        exclude: [
+            ...configDefaults.exclude,
+            ".next/**",
+            "e2e/**",
+            "desktop/**",
+        ],
     },
 });

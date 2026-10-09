@@ -60,7 +60,9 @@ export default defineConfig({
             timeout: 30_000,
         },
         {
-            command: "pnpm build && pnpm start -p 3210",
+            command:
+                process.env.E2E_SERVER_COMMAND ??
+                "pnpm build && pnpm start -p 3210",
             url: "http://localhost:3210/api/health",
             reuseExistingServer: false,
             env: appEnv,
