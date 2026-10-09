@@ -1,17 +1,30 @@
 /**
  * Electron main process entry (PLAN §20, T13.3–T13.5). Start order: data layout and secrets, ports,
  * PostgreSQL, the one-shot migration, then the pipeline and the web server, then the session exchange
- * and the window. The layout under `bundleRoot` matches the app's Resources folder, so the same code
- * runs from a development build (desktop/build) and from the packaged app.
+ * and the window. Closing the window keeps the app in the menu bar (D-305). The layout under `bundleRoot`
+ * matches the app's Resources folder, so the same code runs from a development build (desktop/build) and
+ * from the packaged app.
  */
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { app, dialog, utilityProcess } from "electron";
+import {
+    app,
+    type BrowserWindow,
+    dialog,
+    session,
+    shell,
+    type Tray,
+    utilityProcess,
+} from "electron";
+import { writeFileAtomic } from "./atomic-file.js";
 import { loadConfig, saveConfig } from "./config.js";
+import { exportSecrets } from "./export-keys.js";
+import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
 import { choosePorts } from "./ports.js";
 import { ensureDatabase, PostgresManager, readPgVersion } from "./postgres.js";
+import { bundleOf, removeQuarantine } from "./quarantine.js";
 import { loadOrCreateSecrets } from "./secrets.js";
 import {
     childEnvironment,
@@ -22,16 +35,26 @@ import {
 } from "./services.js";
 import { exchangeSession } from "./session.js";
 import { Supervisor } from "./supervisor.js";
+import { createTray } from "./tray.js";
 import { parseUserEnv } from "./user-env.js";
-import { createAppWindow } from "./window.js";
+import { APP_PARTITION, createAppWindow } from "./window.js";
 
 const DATABASE_NAME = "openaudiohub";
 const DATABASE_USER = "oah";
+const ENV_TEMPLATE =
+    "# OpenAudioHub settings. Only the keys listed in the documentation are read.\n# Restart the app after changing this file.\n";
+
+/** The menu-bar item. Kept at module level so it is not garbage collected. */
+let tray: Tray | null = null;
 
 /** Bundle root: the Resources folder in the packaged app, desktop/build in development. */
 export function bundleRootFor(): string {
     if (app.isPackaged) return process.resourcesPath;
     return resolve(__dirname, "..", "..", "build");
+}
+
+function errorText(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 async function main(): Promise<void> {
@@ -54,6 +77,25 @@ async function main(): Promise<void> {
     };
     log("main process started");
 
+    if (app.isPackaged) {
+        // D-346: a browser download leaves quarantine on the bundle, and quarantined ad-hoc binaries are
+        // killed on first run. Remove it before any child process starts.
+        const bundle = bundleOf(process.execPath);
+        if (bundle) {
+            try {
+                if (removeQuarantine(bundle))
+                    log("removed quarantine from the app bundle");
+            } catch (error) {
+                log(`quarantine removal failed: ${errorText(error)}`);
+            }
+        }
+        if (!app.isInApplicationsFolder() && app.moveToApplicationsFolder()) {
+            // The app moved itself to /Applications and relaunches from there.
+            log("moved to Applications");
+            return;
+        }
+    }
+
     const loadedConfig = loadConfig(paths.config);
     const databaseExists = readPgVersion(paths.pgdata) !== null;
     const { secrets } = loadOrCreateSecrets({
@@ -62,7 +104,8 @@ async function main(): Promise<void> {
     });
 
     const chosen = await choosePorts(loadedConfig.config.ports);
-    saveConfig(paths.config, { ...loadedConfig.config, ports: chosen.ports });
+    let config = { ...loadedConfig.config, ports: chosen.ports };
+    saveConfig(paths.config, config);
     const ports = chosen.ports;
     const appOrigin = `http://127.0.0.1:${ports.app}`;
     const launchSecret = randomBytes(32).toString("hex");
@@ -181,28 +224,119 @@ async function main(): Promise<void> {
         url: string,
         init: { method: string; headers: Record<string, string> },
     ) =>
-        window.webContents.session.fetch(url, init) as unknown as Promise<{
+        session
+            .fromPartition(APP_PARTITION)
+            .fetch(url, init) as unknown as Promise<{
             status: number;
         }>;
-    const window = createAppWindow({
-        appOrigin,
-        reauthenticate: () =>
-            exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch }),
-    });
-    try {
-        await exchangeSession({
-            appOrigin,
-            launchSecret,
-            fetch: partitionFetch,
+    const reauthenticate = () =>
+        exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch });
+
+    let mainWindow: BrowserWindow | null = null;
+
+    /**
+     * Opens the window, or brings the open one forward. Closing the window destroys it, which releases the
+     * renderer, and the Dock icon follows the window (D-305). The app keeps running in the menu bar.
+     */
+    async function openWindow(): Promise<void> {
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+            return;
+        }
+        const win = createAppWindow({ appOrigin, reauthenticate });
+        mainWindow = win;
+        app.dock?.show();
+        win.on("closed", () => {
+            mainWindow = null;
+            app.dock?.hide();
         });
-        await window.loadURL(`${appOrigin}/dashboard`);
-        log("window loaded /dashboard");
-    } catch (error) {
-        log(
-            `window start failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        throw error;
+        try {
+            await reauthenticate();
+            await win.loadURL(`${appOrigin}/dashboard`);
+            log("window loaded /dashboard");
+        } catch (error) {
+            log(`window start failed: ${errorText(error)}`);
+            throw error;
+        }
     }
+
+    function showOpenError(error: unknown): void {
+        log(`could not open the window: ${errorText(error)}`);
+        dialog.showErrorBox(
+            "OpenAudioHub could not open the window",
+            errorText(error),
+        );
+    }
+
+    async function exportKeysInteractively(): Promise<void> {
+        const confirmation = await dialog.showMessageBox({
+            type: "warning",
+            message: "Export the encryption keys?",
+            detail: "The file contains the keys that protect your data. Store it somewhere safe and never share it.",
+            buttons: ["Export…", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+        });
+        if (confirmation.response !== 0) return;
+        const target = await dialog.showSaveDialog({
+            defaultPath: "openaudiohub-keys.json",
+        });
+        if (target.canceled || !target.filePath) return;
+        exportSecrets(paths.secrets, target.filePath);
+        log("exported the keys to a file the user chose");
+    }
+
+    tray = createTray(
+        join(bundleRoot, "tray"),
+        buildTrayTemplate(
+            {
+                openWindow: () => void openWindow().catch(showOpenError),
+                openDataFolder: () => void shell.openPath(paths.userData),
+                openLogsFolder: () => void shell.openPath(paths.logs),
+                editConfiguration: () => {
+                    if (!existsSync(paths.userEnv))
+                        writeFileAtomic(paths.userEnv, ENV_TEMPLATE, 0o600);
+                    void shell.openPath(paths.userEnv);
+                },
+                exportKeys: () => void exportKeysInteractively(),
+                setLaunchAtLogin: (enabled) => {
+                    if (!app.isPackaged) return;
+                    app.setLoginItemSettings({ openAtLogin: enabled });
+                    config = { ...config, launchAtLogin: enabled };
+                    saveConfig(paths.config, config);
+                    log(`launch at login set to ${enabled}`);
+                },
+                quit: () => app.quit(),
+            },
+            {
+                launchAtLogin: config.launchAtLogin === true,
+                launchAtLoginAvailable: app.isPackaged,
+            },
+        ),
+    );
+
+    // Started at login: the menu-bar item only, as D-305 asks. A normal launch opens the window.
+    if (app.getLoginItemSettings().wasOpenedAtLogin) {
+        log("started at login: menu bar only");
+        app.dock?.hide();
+    } else {
+        try {
+            await openWindow();
+        } catch (error) {
+            log(`window start failed: ${errorText(error)}`);
+            throw error;
+        }
+    }
+
+    // A click on the Dock icon with no window open brings the window back.
+    app.on("activate", () => {
+        void openWindow().catch(showOpenError);
+    });
+    // Opening the app again while it runs (single instance, T13.5) brings the window forward.
+    app.on("second-instance", () => {
+        void openWindow().catch(showOpenError);
+    });
 
     // Electron does not wait for before-quit listeners. Prevent the quit, stop the services in order
     // (no orphan processes), then quit for real.
@@ -226,7 +360,7 @@ if (process.env.OAH_SKIP_MAIN !== "1") {
         .catch((error: unknown) => {
             dialog.showErrorBox(
                 "OpenAudioHub could not start",
-                error instanceof Error ? error.message : String(error),
+                errorText(error),
             );
             app.quit();
         });
