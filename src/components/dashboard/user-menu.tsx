@@ -2,6 +2,7 @@
 
 import { Keyboard, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useDesktopMode } from "@/components/desktop-mode-provider";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -46,6 +47,7 @@ export function UserMenu({
 }: UserMenuProps) {
     const { push, refresh } = useRouter();
     const { theme, setTheme } = useTheme(initialTheme);
+    const isDesktop = useDesktopMode();
 
     const themeOptions = [
         { value: "light" as const, label: "Light", icon: Sun },
@@ -76,10 +78,12 @@ export function UserMenu({
                     </div>
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
-                            {userEmail || "Signed in"}
+                            {isDesktop
+                                ? "OpenAudioHub"
+                                : userEmail || "Signed in"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            Signed in
+                            {isDesktop ? "Local account" : "Signed in"}
                         </p>
                     </div>
                 </div>
@@ -120,20 +124,22 @@ export function UserMenu({
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator className="my-0" />
 
-                {/* Sign out */}
-                <div className="p-1">
-                    <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={async () => {
-                            await signOut();
-                            push("/");
-                            refresh();
-                        }}
-                    >
-                        <LogOut />
-                        Log out
-                    </DropdownMenuItem>
-                </div>
+                {/* Sign out. The desktop app signs itself in, so there is nothing to sign out of. */}
+                {!isDesktop && (
+                    <div className="p-1">
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={async () => {
+                                await signOut();
+                                push("/");
+                                refresh();
+                            }}
+                        >
+                            <LogOut />
+                            Log out
+                        </DropdownMenuItem>
+                    </div>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

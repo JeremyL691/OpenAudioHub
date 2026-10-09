@@ -2,9 +2,11 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppProgress } from "@/components/app-progress";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
+import { DesktopModeProvider } from "@/components/desktop-mode-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { isDesktopMode } from "@/lib/desktop/mode";
 import { env } from "@/lib/env";
 import { themeColors } from "@/lib/notifications/email-templates/brand-colors";
 import "./globals.css";
@@ -77,22 +79,23 @@ export default function RootLayout({
             className={`${geistSans.variable} ${geistMono.variable}`}
         >
             <body className="antialiased">
-                <AppProgress>
-                    <ThemeProvider
-                        attribute="class"
-                        defaultTheme="system"
-                        enableSystem
-                        disableTransitionOnChange
-                    >
-                        {/*
+                <DesktopModeProvider value={isDesktopMode()}>
+                    <AppProgress>
+                        <ThemeProvider
+                            attribute="class"
+                            defaultTheme="system"
+                            enableSystem
+                            disableTransitionOnChange
+                        >
+                            {/*
                           Tooltip provider wraps the app so any descendant
                           `<Tooltip>` works without a local provider. 200ms
                           delay is the shadcn default-ish: short enough to
                           feel responsive, long enough to avoid firing on
                           incidental mouseovers.
                         */}
-                        <TooltipProvider delayDuration={200}>
-                            {/*
+                            <TooltipProvider delayDuration={200}>
+                                {/*
                               App-wide imperative confirm dialog. Any
                               client component can `useConfirm()` to get
                               a Promise-returning function for destructive
@@ -101,13 +104,14 @@ export default function RootLayout({
                               One instance, one dialog node, consistent
                               look + pending-state handling.
                             */}
-                            <ConfirmDialogProvider>
-                                {children}
-                                <Toaster />
-                            </ConfirmDialogProvider>
-                        </TooltipProvider>
-                    </ThemeProvider>
-                </AppProgress>
+                                <ConfirmDialogProvider>
+                                    {children}
+                                    <Toaster />
+                                </ConfirmDialogProvider>
+                            </TooltipProvider>
+                        </ThemeProvider>
+                    </AppProgress>
+                </DesktopModeProvider>
             </body>
         </html>
     );

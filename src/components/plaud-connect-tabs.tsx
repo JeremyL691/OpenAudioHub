@@ -3,6 +3,7 @@
 import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useDesktopMode } from "@/components/desktop-mode-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,6 +183,7 @@ function ConnectorPane({
     onUseToken,
 }: ConnectorPaneProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const isDesktop = useDesktopMode();
 
     const handleConnect = useCallback(async () => {
         const bridge = readConnectorBridge();
@@ -218,6 +220,25 @@ function ConnectorPane({
             setIsLoading(false);
         }
     }, [onConnected]);
+
+    if (!hasConnector && isDesktop) {
+        return (
+            <div className="space-y-3">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                    The browser extension cannot reach the desktop app. Connect
+                    with an{" "}
+                    <button
+                        type="button"
+                        onClick={onUseEmail}
+                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                    >
+                        email code
+                    </button>{" "}
+                    or paste a token instead.
+                </p>
+            </div>
+        );
+    }
 
     if (!hasConnector) {
         return (
