@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+    closeSync,
+    existsSync,
+    openSync,
+    readdirSync,
+    readFileSync,
+    readSync,
+    statSync,
+} from "node:fs";
 import { join } from "node:path";
 
-/** The export written by scripts/export-for-desktop.sh (PLAN T15.1). */
+/** The export written by scripts/export-for-desktop.sh (PLAN T15.1). Version 2 adds the audio list and the check. */
 export interface ExportManifest {
     format: "openaudiohub-desktop-export";
-    version: 1;
+    version: 2;
     exportedAt: string;
     sourceProject: string;
     sourceImage: string;
@@ -13,6 +21,10 @@ export interface ExportManifest {
     migrations: { count: number; hashes: string[] };
     counts: Record<string, number>;
     apiCredentialsDigest: string;
+    /** Every audio file in the storage archive, relative to the storage folder (PLAN T15.2 step 5). */
+    storageFiles: Array<{ path: string; sha256: string; bytes: number }>;
+    /** A sample encrypted with the source ENCRYPTION_KEY: the imported key must decrypt it. */
+    encryptionCheck: { ciphertext: string; plaintextSha256: string };
     files: Record<string, { sha256: string; bytes: number }>;
 }
 
@@ -24,8 +36,21 @@ export const EXPORT_FILES = [
     "config.env",
 ] as const;
 
-function sha256File(path: string): string {
-    return createHash("sha256").update(readFileSync(path)).digest("hex");
+/** sha256 of a file, read in chunks so a large archive is never held in memory. */
+export function sha256File(path: string): string {
+    const hash = createHash("sha256");
+    const fd = openSync(path, "r");
+    try {
+        const buffer = Buffer.alloc(1024 * 1024);
+        for (;;) {
+            const read = readSync(fd, buffer, 0, buffer.length, null);
+            if (read === 0) break;
+            hash.update(buffer.subarray(0, read));
+        }
+    } finally {
+        closeSync(fd);
+    }
+    return hash.digest("hex");
 }
 
 /**
@@ -42,12 +67,12 @@ export function readManifest(dir: string): ExportManifest {
         throw new Error("manifest.json is not valid JSON");
     }
     const manifest = parsed as ExportManifest;
-    if (
-        manifest?.format !== "openaudiohub-desktop-export" ||
-        manifest.version !== 1
-    ) {
+    if (manifest?.format !== "openaudiohub-desktop-export") {
+        throw new Error("manifest.json is not an OpenAudioHub desktop export");
+    }
+    if (manifest.version !== 2) {
         throw new Error(
-            "manifest.json is not an OpenAudioHub desktop export (version 1)",
+            `the export is version ${String(manifest.version)}; this App imports version 2. Export again with scripts/export-for-desktop.sh.`,
         );
     }
     for (const file of EXPORT_FILES) {
@@ -64,6 +89,15 @@ export function readManifest(dir: string): ExportManifest {
     }
     if (!Array.isArray(manifest.migrations?.hashes)) {
         throw new Error("manifest has no migration hashes");
+    }
+    if (!Array.isArray(manifest.storageFiles)) {
+        throw new Error("manifest has no list of audio files");
+    }
+    if (
+        typeof manifest.encryptionCheck?.ciphertext !== "string" ||
+        typeof manifest.encryptionCheck?.plaintextSha256 !== "string"
+    ) {
+        throw new Error("manifest has no encryption check");
     }
     return manifest;
 }
