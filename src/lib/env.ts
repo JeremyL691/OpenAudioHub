@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateDesktopEnv } from "./desktop/config";
 
 const optionalStrictBoolean = z
     .string()
@@ -39,6 +40,37 @@ export const envSchema = z.object({
             message: "API_TOKEN_HASH_SECRET must be at least 32 characters",
         }),
     APP_URL: z.string().url("APP_URL must be a valid URL").optional(),
+
+    /**
+     * Desktop (macOS app) mode. Set to "1" only by the Electron shell. Unset,
+     * empty, or "0" leaves Docker and web self-host behaviour unchanged. See
+     * src/lib/desktop/mode.ts.
+     */
+    OAH_DESKTOP: z
+        .string()
+        .optional()
+        .transform((val, ctx) => {
+            if (val === undefined || val === "" || val === "0")
+                return undefined;
+            if (val === "1") return true;
+            ctx.addIssue({
+                code: "custom",
+                message: 'OAH_DESKTOP must be "1" or unset',
+            });
+            return z.NEVER;
+        }),
+
+    /** Per-launch secret for POST /api/desktop/session. Required when OAH_DESKTOP=1. */
+    OAH_DESKTOP_LAUNCH_SECRET: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Local account to bind in desktop mode. Unset binds the earliest-created user. */
+    OAH_DESKTOP_USER_ID: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
 
     /** Require public HTTPS webhook targets. Defaults to false. */
     WEBHOOKS_REQUIRE_PUBLIC_TARGETS: optionalStrictBoolean,
@@ -272,6 +304,9 @@ function validateEnv(): Env {
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
             API_TOKEN_HASH_SECRET: process.env.API_TOKEN_HASH_SECRET,
             APP_URL: process.env.APP_URL,
+            OAH_DESKTOP: process.env.OAH_DESKTOP,
+            OAH_DESKTOP_LAUNCH_SECRET: process.env.OAH_DESKTOP_LAUNCH_SECRET,
+            OAH_DESKTOP_USER_ID: process.env.OAH_DESKTOP_USER_ID,
             WEBHOOKS_REQUIRE_PUBLIC_TARGETS:
                 process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
             RATE_LIMIT_TRUST_PROXY_HEADERS:
@@ -352,6 +387,10 @@ function validateEnv(): Env {
                 throw new Error(
                     "ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)",
                 );
+            }
+
+            if (parsed.OAH_DESKTOP) {
+                validateDesktopEnv(parsed);
             }
         }
 
