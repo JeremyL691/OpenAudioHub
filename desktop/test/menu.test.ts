@@ -9,6 +9,7 @@ function actions(): MenuActions {
         openLogsFolder: vi.fn(),
         editConfiguration: vi.fn(),
         exportKeys: vi.fn(),
+        importFromDocker: vi.fn(),
         setLaunchAtLogin: vi.fn(),
         quit: vi.fn(),
     };
@@ -38,6 +39,7 @@ describe("tray menu template", () => {
             "Open Logs Folder",
             "Edit Configuration…",
             "Export Keys…",
+            "Import from Docker…",
             "separator",
             "Launch at Login",
             "separator",
@@ -67,6 +69,11 @@ describe("tray menu template", () => {
             undefined,
             {} as never,
         );
+        itemLabeled(template, "Import from Docker…").click?.(
+            {} as never,
+            undefined,
+            {} as never,
+        );
         itemLabeled(template, "Quit OpenAudioHub").click?.(
             {} as never,
             undefined,
@@ -76,6 +83,7 @@ describe("tray menu template", () => {
         expect(handlers.openWindow).toHaveBeenCalledOnce();
         expect(handlers.openDataFolder).toHaveBeenCalledOnce();
         expect(handlers.exportKeys).toHaveBeenCalledOnce();
+        expect(handlers.importFromDocker).toHaveBeenCalledOnce();
         expect(handlers.quit).toHaveBeenCalledOnce();
     });
 

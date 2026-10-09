@@ -6,6 +6,7 @@ export interface MenuActions {
     openLogsFolder(): void;
     editConfiguration(): void;
     exportKeys(): void;
+    importFromDocker(): void;
     setLaunchAtLogin(enabled: boolean): void;
     quit(): void;
 }
@@ -34,6 +35,10 @@ export function buildTrayTemplate(
             click: () => actions.editConfiguration(),
         },
         { label: "Export Keys…", click: () => actions.exportKeys() },
+        {
+            label: "Import from Docker…",
+            click: () => actions.importFromDocker(),
+        },
         { type: "separator" },
         {
             label: "Launch at Login",
