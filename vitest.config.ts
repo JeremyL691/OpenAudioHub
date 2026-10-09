@@ -14,6 +14,7 @@ export default defineConfig({
             ".next/**",
             "e2e/**",
             "desktop/**",
+            ".dev-artifacts/**",
         ],
     },
 });
