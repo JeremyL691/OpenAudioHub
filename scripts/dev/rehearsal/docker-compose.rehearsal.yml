@@ -1,0 +1,57 @@
+# Rehearsal stack for the Docker → App import (PLAN T15.1, D-313). The project name is openaudiohub-rehearsal, and
+# it never uses the live project's ports (3000, 18787) or volumes. The images are the v1.0.1 baseline builds, so
+# the desktop app has to migrate forward from the same schema the live stack has. All values come from the env
+# file written by rehearsal.sh (0600, outside the repository); nothing here holds a secret.
+name: openaudiohub-rehearsal
+
+services:
+    db:
+        image: postgres:16-alpine
+        restart: "no"
+        env_file: ${REHEARSAL_ENV_FILE:?set REHEARSAL_ENV_FILE}
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_DB: openaudiohub
+        ports:
+            - "127.0.0.1:54340:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d openaudiohub"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    app:
+        image: oah-baseline-app:d6fef64
+        pull_policy: never
+        restart: "no"
+        env_file: ${REHEARSAL_ENV_FILE:?set REHEARSAL_ENV_FILE}
+        environment:
+            LOCAL_STORAGE_PATH: /app/audio
+            DEFAULT_STORAGE_TYPE: local
+        ports:
+            - "127.0.0.1:3310:3000"
+        volumes:
+            - audio:/app/audio
+            - storage:/app/storage
+        depends_on:
+            db:
+                condition: service_healthy
+
+    audio-pipeline:
+        image: oah-baseline-pipeline:d6fef64
+        pull_policy: never
+        restart: "no"
+        env_file: ${REHEARSAL_ENV_FILE:?set REHEARSAL_ENV_FILE}
+        environment:
+            AUDIO_PIPELINE_CORE_URL: http://app:3000
+            AUDIO_PIPELINE_DATA_DIR: /data
+        volumes:
+            - audio-pipeline-data:/data
+
+volumes:
+    pgdata:
+    audio:
+    storage:
+    audio-pipeline-data:
