@@ -19,8 +19,10 @@ import {
 } from "electron";
 import { writeFileAtomic } from "./atomic-file.js";
 import { backupDatabase } from "./backup.js";
+import { parseCli } from "./cli.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { exportSecrets } from "./export-keys.js";
+import { runCliCommand } from "./import-command.js";
 import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
 import { choosePorts } from "./ports.js";
@@ -75,7 +77,23 @@ function recordStartupFailure(error: unknown): void {
 }
 
 async function main(): Promise<void> {
+    const cli = parseCli(process.argv);
+    if (cli && "error" in cli) {
+        console.error(`openaudiohub: ${cli.error}`);
+        app.exit(3);
+        return;
+    }
+    // A command runs without a window, services or Dock icon, and exits with its code (cli.ts).
+    const command = cli && "command" in cli ? cli.command : null;
+    if (command) app.dock?.hide();
     if (!app.requestSingleInstanceLock()) {
+        if (command) {
+            console.error(
+                "openaudiohub: OpenAudioHub is already running; quit it and run the command again",
+            );
+            app.exit(2);
+            return;
+        }
         app.quit();
         return;
     }
@@ -109,6 +127,7 @@ async function main(): Promise<void> {
         // OAH_SKIP_MOVE_TO_APPLICATIONS=1 is for automated runs of a packaged build outside /Applications: the
         // move prompt is modal and would block them.
         if (
+            !command &&
             process.env.OAH_SKIP_MOVE_TO_APPLICATIONS !== "1" &&
             !app.isInApplicationsFolder() &&
             app.moveToApplicationsFolder()
@@ -140,6 +159,39 @@ async function main(): Promise<void> {
     const ports = chosen.ports;
     const appOrigin = `http://127.0.0.1:${ports.app}`;
     const launchSecret = randomBytes(32).toString("hex");
+
+    if (command) {
+        // The App is not running (the lock above), so the cluster port is free for the command's own cluster.
+        const say = (message: string): void => {
+            console.info(message);
+            log(message);
+        };
+        const result = await runCliCommand({
+            command,
+            paths,
+            secrets,
+            bundleRoot,
+            port: ports.postgres,
+            log: say,
+        });
+        if (result.code === 0) {
+            say(result.message);
+        } else {
+            console.error(result.message);
+            log(result.message);
+        }
+        if (command.kind === "rollback" || !command.thenOpen) {
+            app.exit(result.code);
+            return;
+        }
+        // From the menu, after its restart: the App opens as usual, and a failed import is said plainly.
+        if (result.code !== 0) {
+            dialog.showErrorBox(
+                "The Docker export was not imported",
+                result.message,
+            );
+        }
+    }
 
     const userEnvText = existsSync(paths.userEnv)
         ? readFileSync(paths.userEnv, "utf8")
@@ -347,6 +399,37 @@ async function main(): Promise<void> {
         log("exported the keys to a file the user chose");
     }
 
+    // Set by "Import from Docker…": the services stop first, then the App restarts with these arguments.
+    let relaunchArgs: string[] | null = null;
+
+    async function importFromDockerInteractively(): Promise<void> {
+        const picked = await dialog.showOpenDialog({
+            title: "Choose the export folder from Docker",
+            properties: ["openDirectory"],
+        });
+        if (picked.canceled || picked.filePaths.length === 0) return;
+        const confirmation = await dialog.showMessageBox({
+            type: "warning",
+            message: "Import this Docker export?",
+            detail: "The database, audio files, keys and settings of this app are replaced by the export. What they replace is kept beside them.",
+            buttons: ["Import", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+        });
+        if (confirmation.response !== 0) return;
+        relaunchArgs = ["--import", picked.filePaths[0], "--then-open"];
+        log("restarting to import a Docker export");
+        app.quit();
+    }
+
+    function showImportError(error: unknown): void {
+        log(`could not start the import: ${errorText(error)}`);
+        dialog.showErrorBox(
+            "The Docker export could not be imported",
+            errorText(error),
+        );
+    }
+
     tray = createTray(
         join(bundleRoot, "tray"),
         buildTrayTemplate(
@@ -360,6 +443,8 @@ async function main(): Promise<void> {
                     void shell.openPath(paths.userEnv);
                 },
                 exportKeys: () => void exportKeysInteractively(),
+                importFromDocker: () =>
+                    void importFromDockerInteractively().catch(showImportError),
                 setLaunchAtLogin: (enabled) => {
                     if (!app.isPackaged) return;
                     app.setLoginItemSettings({ openAtLogin: enabled });
@@ -409,6 +494,8 @@ async function main(): Promise<void> {
         log("quitting: stopping services");
         void supervisor.stop().finally(() => {
             log("services stopped");
+            // The menu's import restarts the App once the services are down, so the import gets the cluster.
+            if (relaunchArgs) app.relaunch({ args: relaunchArgs });
             app.quit();
         });
     });
