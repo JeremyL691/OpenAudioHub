@@ -16,6 +16,7 @@ import {
     PortInUseError,
     PostgresManager,
     readPgVersion,
+    stopStalePostmaster,
 } from "../src/main/postgres.js";
 
 /** Staged binaries from `node desktop/scripts/stage-postgres.mjs`. The suite is skipped when they are absent. */
@@ -222,6 +223,35 @@ describe.skipIf(!hasBinaries)(
                 expect(existsSync(pidFile)).toBe(false);
                 expect(() => process.kill(pid, 0)).toThrow();
                 expect(await manager.isReady()).toBe(false);
+            },
+        );
+
+        it(
+            "stops a postmaster that an earlier run left on the data directory, and frees its port",
+            { timeout: 180_000 },
+            async () => {
+                // Stands for the server a killed main process leaves behind: nothing in this run owns it.
+                manager = newManager();
+                await manager.initialize();
+                await manager.start();
+                const dataDir = join(root, "pgdata");
+                const pid = Number.parseInt(
+                    readFileSync(join(dataDir, "postmaster.pid"), "utf8").split(
+                        "\n",
+                    )[0] ?? "",
+                    10,
+                );
+                expect(await manager.isReady()).toBe(true);
+
+                await stopStalePostmaster({
+                    binDir,
+                    dataDir,
+                    childEnv,
+                });
+
+                expect(existsSync(join(dataDir, "postmaster.pid"))).toBe(false);
+                expect(() => process.kill(pid, 0)).toThrow();
+                expect(await isLoopbackPortFree(port)).toBe(true);
             },
         );
     },

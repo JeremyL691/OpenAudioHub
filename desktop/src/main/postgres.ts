@@ -150,21 +150,90 @@ function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export interface PostgresManagerOptions {
+/** What a server on a data directory needs to be found and stopped. */
+export interface PostmasterLocation {
     /** Directory with initdb, pg_ctl, postgres, pg_isready (the staged bin directory). */
     binDir: string;
     dataDir: string;
+    /** Child environment: PATH limited to the bundle, TZ=UTC (PLAN D-319). */
+    childEnv: Record<string, string>;
+}
+
+export interface PostgresManagerOptions extends PostmasterLocation {
     logFile: string;
     port: number;
     /** Superuser password, written to a 0600 file only for initdb. */
     password: string;
     userName?: string;
-    /** Child environment: PATH limited to the bundle, TZ=UTC (PLAN D-319). */
-    childEnv: Record<string, string>;
     /** Directory where the temporary password file is created (inside the user data folder). */
     scratchDir: string;
     /** Receives notices such as a discarded interrupted initialization. Defaults to console.warn. */
     log?: (message: string) => void;
+}
+
+/**
+ * Fast shutdown of the server on `location.dataDir` (pg_ctl stop -m fast). Does nothing when no live server
+ * holds the data directory; a pid file whose process is gone is removed.
+ */
+export async function stopPostmaster(
+    location: PostmasterLocation,
+): Promise<void> {
+    const pidFile = join(location.dataDir, "postmaster.pid");
+    if (!existsSync(pidFile)) {
+        return;
+    }
+    const pid = readPostmasterPid(pidFile);
+    if (pid === null || !processAlive(pid)) {
+        rmSync(pidFile, { force: true });
+        return;
+    }
+    const result = await runCommand(
+        join(location.binDir, "pg_ctl"),
+        ["-D", location.dataDir, "-m", "fast", "-w", "-t", "30", "stop"],
+        { env: location.childEnv, timeoutMs: 60_000 },
+    );
+    if (
+        result.code !== 0 &&
+        !/is not running|No such file/i.test(`${result.stdout}${result.stderr}`)
+    ) {
+        throw new Error(`pg_ctl stop failed (exit ${result.code})`);
+    }
+}
+
+/**
+ * Stops a postmaster that an earlier run of the App left on this data directory. When the App's main process is
+ * killed, the server keeps running with no parent to stop it, and its port stays busy. Calling this before the
+ * ports are chosen keeps the saved port free, so the App does not move Postgres for its own orphan.
+ *
+ * Only a process whose command line is a postgres server on exactly this data directory is stopped (see
+ * isPostmasterFor). The pid file is removed when its process is gone, or after that server was stopped. Call it
+ * only while the App holds the single-instance lock: a running App owns its postmaster, and must not be stopped.
+ */
+export async function stopStalePostmaster(
+    location: PostmasterLocation,
+): Promise<void> {
+    const pidFile = join(location.dataDir, "postmaster.pid");
+    if (!existsSync(pidFile)) return;
+    const pid = Number.parseInt(
+        readFileSync(pidFile, "utf8").split("\n")[0] ?? "",
+        10,
+    );
+    if (!Number.isInteger(pid) || pid <= 0 || !processAlive(pid)) {
+        rmSync(pidFile, { force: true });
+        return;
+    }
+    const command = await runCommand(
+        "ps",
+        ["-o", "command=", "-p", String(pid)],
+        {
+            env: {},
+            timeoutMs: 5_000,
+        },
+    );
+    if (isPostmasterFor(command.stdout, location.dataDir)) {
+        await stopPostmaster(location);
+    }
+    rmSync(pidFile, { force: true });
 }
 
 export class PostgresManager {
@@ -257,7 +326,7 @@ export class PostgresManager {
      */
     async start(): Promise<void> {
         applyManagedConf(this.confPath, this.options.port);
-        await this.clearStalePostmaster();
+        await stopStalePostmaster(this.options);
         if (await this.isReady()) {
             return;
         }
@@ -297,59 +366,7 @@ export class PostgresManager {
 
     /** Fast shutdown: active transactions are rolled back and the data is flushed. */
     async stop(): Promise<void> {
-        const pidFile = join(this.options.dataDir, "postmaster.pid");
-        if (!existsSync(pidFile)) {
-            return;
-        }
-        const pid = readPostmasterPid(pidFile);
-        if (pid === null || !processAlive(pid)) {
-            rmSync(pidFile, { force: true });
-            return;
-        }
-        const result = await runCommand(
-            this.bin("pg_ctl"),
-            [
-                "-D",
-                this.options.dataDir,
-                "-m",
-                "fast",
-                "-w",
-                "-t",
-                "30",
-                "stop",
-            ],
-            { env: this.options.childEnv, timeoutMs: 60_000 },
-        );
-        if (
-            result.code !== 0 &&
-            !/is not running|No such file/i.test(
-                `${result.stdout}${result.stderr}`,
-            )
-        ) {
-            throw new Error(`pg_ctl stop failed (exit ${result.code})`);
-        }
-    }
-
-    private async clearStalePostmaster(): Promise<void> {
-        const pidFile = join(this.options.dataDir, "postmaster.pid");
-        if (!existsSync(pidFile)) return;
-        const pid = Number.parseInt(
-            readFileSync(pidFile, "utf8").split("\n")[0] ?? "",
-            10,
-        );
-        if (!Number.isInteger(pid) || pid <= 0 || !processAlive(pid)) {
-            rmSync(pidFile, { force: true });
-            return;
-        }
-        const command = await runCommand(
-            "ps",
-            ["-o", "command=", "-p", String(pid)],
-            { env: {}, timeoutMs: 5_000 },
-        );
-        if (isPostmasterFor(command.stdout, this.options.dataDir)) {
-            await this.stop();
-        }
-        rmSync(pidFile, { force: true });
+        await stopPostmaster(this.options);
     }
 }
 
