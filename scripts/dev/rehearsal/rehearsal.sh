@@ -89,9 +89,19 @@ cmd_up() {
     echo "rehearsal app: http://127.0.0.1:$APP_PORT (database port $DB_PORT)"
 }
 
+# The fake AI server's PID is global so the EXIT trap can reach it when `set -e` aborts cmd_seed (a RETURN trap would not run).
+FAKE_AI_PID=""
+
+stop_fake_ai() {
+    if [ -n "$FAKE_AI_PID" ]; then
+        kill "$FAKE_AI_PID" 2>/dev/null || true
+        FAKE_AI_PID=""
+    fi
+}
+
 cmd_seed() {
     write_env
-    local password fake_pid seed_dir
+    local password seed_dir
     password="$(env_value POSTGRES_PASSWORD)"
     seed_dir="$WORK/audio-seed"
     rm -rf "$seed_dir"
@@ -99,8 +109,8 @@ cmd_seed() {
 
     (cd "$REPO" && FAKE_AI_PORT="$FAKE_AI_PORT" exec bun scripts/dev/fake-ai-server.ts) \
         > "$WORK/fake-ai.log" 2>&1 &
-    fake_pid=$!
-    trap 'kill "$fake_pid" 2>/dev/null || true' RETURN
+    FAKE_AI_PID=$!
+    trap stop_fake_ai EXIT
 
     wait_for "the fake AI server" 60 curl -fsS "http://127.0.0.1:$FAKE_AI_PORT/v1/models"
 
@@ -124,6 +134,8 @@ cmd_seed() {
         -v "$seed_dir":/src:ro \
         postgres:16-alpine sh -c 'cp -a /src/. /dst/'
     echo "seeded: $(find "$seed_dir" -type f | wc -l | tr -d ' ') audio file(s) copied into $PROJECT"_audio
+
+    stop_fake_ai
 }
 
 cmd_stop() {
