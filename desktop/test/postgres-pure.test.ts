@@ -12,6 +12,7 @@ import {
     isPostmasterFor,
     PostgresManager,
     readPgVersion,
+    stopStalePostmaster,
 } from "../src/main/postgres.js";
 
 const BIN = "/Applications/OpenAudioHub.app/Contents/Resources/pg/bin";
@@ -135,5 +136,48 @@ describe("readPgVersion and interrupted initialization", () => {
         expect(readdirSync(root)).not.toContain("pgdata");
         expect(notices).toHaveLength(1);
         expect(notices[0]).toContain("interrupted");
+    });
+});
+
+describe("stopStalePostmaster without a running server", () => {
+    let root: string;
+    let dataDir: string;
+
+    beforeEach(() => {
+        root = mkdtempSync(join(tmpdir(), "oah-stale-pure-"));
+        dataDir = join(root, "pgdata");
+        mkdirSync(dataDir, { recursive: true });
+    });
+
+    afterEach(() => {
+        rmSync(root, { recursive: true, force: true });
+    });
+
+    const location = () => ({
+        binDir: join(root, "missing-bin"),
+        dataDir,
+        childEnv: { PATH: "/usr/bin:/bin" },
+    });
+
+    it("does nothing when the data directory has no pid file", async () => {
+        await expect(stopStalePostmaster(location())).resolves.toBeUndefined();
+        expect(readdirSync(dataDir)).toEqual([]);
+    });
+
+    it("removes a pid file whose process is gone, without calling pg_ctl", async () => {
+        // 2147483647 is not a process id this machine can have.
+        writeFileSync(join(dataDir, "postmaster.pid"), "2147483647\n");
+
+        await stopStalePostmaster(location());
+
+        expect(readdirSync(dataDir)).not.toContain("postmaster.pid");
+    });
+
+    it("removes a pid file that holds no process id", async () => {
+        writeFileSync(join(dataDir, "postmaster.pid"), "not-a-pid\n");
+
+        await stopStalePostmaster(location());
+
+        expect(readdirSync(dataDir)).not.toContain("postmaster.pid");
     });
 });

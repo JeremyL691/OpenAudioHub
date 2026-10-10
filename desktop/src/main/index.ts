@@ -22,12 +22,18 @@ import { writeFileAtomic } from "./atomic-file.js";
 import { backupDatabase } from "./backup.js";
 import { parseCli } from "./cli.js";
 import { loadConfig, saveConfig } from "./config.js";
+import { describeShortage, freeBytesAt, MIN_FREE_BYTES } from "./disk.js";
 import { exportSecrets } from "./export-keys.js";
 import { runCliCommand } from "./import-command.js";
 import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
 import { choosePorts } from "./ports.js";
-import { ensureDatabase, PostgresManager, readPgVersion } from "./postgres.js";
+import {
+    ensureDatabase,
+    PostgresManager,
+    readPgVersion,
+    stopStalePostmaster,
+} from "./postgres.js";
 import { bundleOf, removeQuarantine } from "./quarantine.js";
 import { loadOrCreateSecrets } from "./secrets.js";
 import {
@@ -52,6 +58,8 @@ const DATABASE_NAME = "openaudiohub";
 const DATABASE_USER = "oah";
 const ENV_TEMPLATE =
     "# OpenAudioHub settings. Only the keys listed in the documentation are read.\n# Restart the app after changing this file.\n";
+/** The exit code of a command refused because the data disk is nearly full (documented in cli.ts). */
+const EXIT_LOW_DISK = 4;
 
 /** The menu-bar item. Kept at module level so it is not garbage collected. */
 let tray: Tray | null = null;
@@ -66,19 +74,65 @@ function errorText(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Writes a start-up failure to the main log, so the reason survives the error dialog. Never throws. */
-function recordStartupFailure(error: unknown): void {
+/**
+ * Appends one line to main.log, creating the folder first. Never throws: it runs when a start has failed, and
+ * possibly when the disk is full, and the caller still shows the reason on screen.
+ */
+function recordInMainLog(logsDir: string, line: string): void {
     try {
-        const paths = resolvePaths(process.env);
-        mkdirSync(paths.logs, { recursive: true, mode: 0o700 });
+        mkdirSync(logsDir, { recursive: true, mode: 0o700 });
         appendFileSync(
-            join(paths.logs, "main.log"),
-            `${new Date().toISOString()} could not start: ${errorText(error)}\n`,
+            join(logsDir, "main.log"),
+            `${new Date().toISOString()} ${line}\n`,
             { mode: 0o600 },
         );
     } catch {
-        // The dialog still shows the reason.
+        // The dialog or the console still shows the reason.
     }
+}
+
+/** Writes a start-up failure to the main log, so the reason survives the error dialog. Never throws. */
+function recordStartupFailure(error: unknown): void {
+    recordInMainLog(
+        resolvePaths(process.env).logs,
+        `could not start: ${errorText(error)}`,
+    );
+}
+
+/**
+ * The reason a start must stop because the data folder's disk is nearly full, or null when the start may go on.
+ * A volume that cannot be read returns null too: refusing to start on a healthy disk would be worse.
+ */
+function diskShortage(dataFolder: string): string | null {
+    const free = freeBytesAt(dataFolder);
+    if (free === null || free >= MIN_FREE_BYTES) return null;
+    return describeShortage(free, dataFolder);
+}
+
+/**
+ * Stops a start because the disk is full. Nothing has been started at this point, so there is nothing to stop.
+ * A command prints the reason and exits with 4 (cli.ts), since it has no window to show it in. The App shows a
+ * dialog and exits with 1. The reason is also written to main.log when it can be.
+ */
+async function refuseOnLowDisk(
+    logsDir: string,
+    shortage: string,
+    asCommand: boolean,
+): Promise<void> {
+    recordInMainLog(logsDir, `not started: ${shortage}`);
+    if (asCommand) {
+        console.error(`openaudiohub: ${shortage}`);
+        app.exit(EXIT_LOW_DISK);
+        return;
+    }
+    await dialog
+        .showMessageBox({
+            type: "error",
+            message: "OpenAudioHub needs more free disk space",
+            detail: shortage,
+        })
+        .catch(() => undefined);
+    app.exit(1);
 }
 
 async function main(): Promise<void> {
@@ -91,7 +145,22 @@ async function main(): Promise<void> {
     // A command runs without a window, services or Dock icon, and exits with its code (cli.ts).
     const command = cli && "command" in cli ? cli.command : null;
     if (command) app.dock?.hide();
+    // Checked before the single-instance lock and before anything is written. On a full disk Chromium cannot
+    // create its lock file, the lock call reports "already running", and the App used to quit without a word
+    // (A4 check 10). The data folder may not exist yet; its nearest existing parent is measured instead.
+    const paths = resolvePaths(process.env);
+    const shortage = diskShortage(paths.userData);
+    if (shortage) {
+        await refuseOnLowDisk(paths.logs, shortage, command !== null);
+        return;
+    }
     if (!app.requestSingleInstanceLock()) {
+        // The disk may have filled since the check above, which is when the lock fails. Say why, not "running".
+        const lateShortage = diskShortage(paths.userData);
+        if (lateShortage) {
+            await refuseOnLowDisk(paths.logs, lateShortage, command !== null);
+            return;
+        }
         if (command) {
             console.error(
                 "openaudiohub: OpenAudioHub is already running; quit it and run the command again",
@@ -118,7 +187,6 @@ async function main(): Promise<void> {
     app.on("second-instance", requestWindow);
 
     const bundleRoot = bundleRootFor();
-    const paths = resolvePaths(process.env);
     mkdirSync(paths.userData, { recursive: true, mode: 0o700 });
     mkdirSync(paths.logs, { recursive: true, mode: 0o700 });
     const log = (message: string): void => {
@@ -170,6 +238,20 @@ async function main(): Promise<void> {
         path: paths.secrets,
         databaseExists,
     });
+
+    const postgresBin = join(bundleRoot, "postgres", "bin");
+    // This point is past the single-instance lock, so a postmaster on this data folder belongs to an earlier run
+    // that was killed, not to a running App. Stopping it first keeps the saved port free (A4 issue 2). A failure
+    // is logged here; PostgresManager.start() runs the same stop and reports the failure as before.
+    try {
+        await stopStalePostmaster({
+            binDir: postgresBin,
+            dataDir: paths.pgdata,
+            childEnv: childEnvironment(postgresBin, {}),
+        });
+    } catch (error) {
+        log(`could not stop an earlier PostgreSQL: ${errorText(error)}`);
+    }
 
     const chosen = await choosePorts(loadedConfig.config.ports);
     let config = { ...loadedConfig.config, ports: chosen.ports };
@@ -230,7 +312,6 @@ async function main(): Promise<void> {
         : "";
     const userEnv = parseUserEnv(userEnvText).values;
 
-    const postgresBin = join(bundleRoot, "postgres", "bin");
     const manager = new PostgresManager({
         binDir: postgresBin,
         dataDir: paths.pgdata,
@@ -349,7 +430,16 @@ async function main(): Promise<void> {
         ],
         oneShot: ["backup", "migrate"],
         parallel: ["pipeline", "next"],
-        log: (message) => console.info(`[supervisor] ${message}`),
+        log: (message) => {
+            console.info(`[supervisor] ${message}`);
+            // The restart path calls this inside its start chain. A log write that fails (a full disk) must not
+            // turn a successful restart into a failed one, so the failure is dropped here.
+            try {
+                log(`supervisor: ${message}`);
+            } catch {
+                // The console line above is the fallback.
+            }
+        },
     });
     supervisor.onEvent((event) => {
         log(`supervisor ${JSON.stringify(event)}`);

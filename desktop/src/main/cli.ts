@@ -4,6 +4,7 @@
  *   1  the import or the rollback failed; the message says what was left as it was
  *   2  the App is already running (single instance); quit it and run the command again
  *   3  the command line is wrong, or the export has several accounts and --user-email names none
+ *   4  the data disk has less than MIN_FREE_BYTES free (disk.ts); nothing was started or changed
  * `--then-open` is what the menu's "Import from Docker…" uses after it restarts the App: the import runs, and the
  * App then starts as usual.
  */
