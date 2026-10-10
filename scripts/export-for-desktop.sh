@@ -33,6 +33,11 @@ die() {
     exit 1
 }
 
+# sha256 of a file, or of stdin when no file is given. macOS has shasum, Linux has sha256sum.
+sha256_of() {
+    if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -d' ' -f1
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --project) PROJECT="${2:-}"; shift 2 ;;
@@ -146,7 +151,8 @@ umask 077
 } > "$TMP/secrets.env"
 
 # The App's allow-list is the single source in desktop/src/main/user-env.ts.
-ALLOWLIST="$(sed -n '/USER_ENV_ALLOWLIST/,/\]);/p' "$(dirname "$0")/../desktop/src/main/user-env.ts" | grep -o '"[A-Z0-9_]*"' | tr -d '"')"
+ALLOWLIST="$(sed -n '/USER_ENV_ALLOWLIST/,/\]);/p' "$(dirname "$0")/../desktop/src/main/user-env.ts" | grep -o '"[A-Z0-9_]*"' | tr -d '"')" || ALLOWLIST=""
+[ -n "$ALLOWLIST" ] || die "could not read the settings allow-list from desktop/src/main/user-env.ts"
 {
     while IFS= read -r key; do
         [ -n "$key" ] || continue
@@ -176,7 +182,7 @@ process.stdout.write(`${iv.toString("hex")}:${cipher.getAuthTag().toString("hex"
 ')"
 rm -f "$ENC_ENV"
 [ -n "$ENC_CIPHER" ] || die "the encryption check could not be made"
-ENC_SHA="$(printf '%s' "$ENC_PLAIN" | shasum -a 256 | cut -d' ' -f1)"
+ENC_SHA="$(printf '%s' "$ENC_PLAIN" | sha256_of)"
 
 echo "== manifest"
 counts_json="{"
@@ -189,12 +195,22 @@ for table in $(psql_db "select table_name from information_schema.tables where t
 done
 counts_json+="}"
 
-migrations_json="$(psql_db "select coalesce(json_agg(hash order by id), '[]'::json) from drizzle.__drizzle_migrations" 2>/dev/null || echo '[]')"
-api_digest="$(psql_db "select md5(coalesce(string_agg(t::text, '|' order by t::text), '')) from api_credentials t" 2>/dev/null || echo "none")"
+migrations_json="$(psql_db "select coalesce(json_agg(hash order by id), '[]'::json) from drizzle.__drizzle_migrations")" \
+    || die "could not read the applied migrations"
+# A missing api_credentials table is recorded as "none"; any other failure stops the export.
+has_api_credentials="$(psql_db "select to_regclass('public.api_credentials') is not null")" \
+    || die "could not check for the API credentials table"
+if [ "$has_api_credentials" = "t" ]; then
+    api_digest="$(psql_db "select md5(coalesce(string_agg(t::text, '|' order by t::text), '')) from api_credentials t")" \
+        || die "could not compute the API credential digest"
+else
+    api_digest="none"
+fi
 
 file_entry() {
-    local path="$1"
-    jq -n --arg sha "$(shasum -a 256 "$path" | cut -d' ' -f1)" --argjson bytes "$(stat -f %z "$path")" \
+    local path="$1" bytes
+    bytes="$(wc -c < "$path" | tr -d ' ')"
+    jq -n --arg sha "$(sha256_of "$path")" --argjson bytes "$bytes" \
         '{sha256: $sha, bytes: $bytes}'
 }
 
