@@ -1,6 +1,6 @@
 {
     "name": "openaudiohub",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": "Open-source, self-hosted AI audio workspace for long recordings.",
     "author": "OpenAudioHub Contributors",
     "license": "AGPL-3.0",
