@@ -97,6 +97,18 @@ PIPELINE_VOLUME="$(volume_at "$PIPELINE" /data)"
 [ -n "$AUDIO_VOLUME" ] || die "the app has no volume at /app/audio"
 [ -n "$PIPELINE_VOLUME" ] || die "the pipeline has no volume at /data"
 
+# Keys are checked before anything is stopped or written, so a dry run against the running stack finds a missing one.
+# API_TOKEN_HASH_SECRET is optional: without it the app hashes API tokens with BETTER_AUTH_SECRET, and the importer
+# makes the same choice (desktop/src/main/import/keys.ts), so existing API keys keep working.
+for key in ENCRYPTION_KEY BETTER_AUTH_SECRET; do
+    [ -n "$(env_of "$APP" "$key")" ] || die "the app has no $key"
+done
+if [ -n "$(env_of "$APP" API_TOKEN_HASH_SECRET)" ]; then
+    token_key_note="set"
+else
+    token_key_note="not set (API tokens use BETTER_AUTH_SECRET, as in the app)"
+fi
+
 psql_db() {
     docker exec "$DB" psql -U "$DB_USER" -d "$DB_NAME" -X -A -t -v ON_ERROR_STOP=1 -c "$1"
 }
@@ -113,6 +125,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "  audio volume:        $AUDIO_VOLUME -> storage.tar"
     echo "  pipeline volume:     $PIPELINE_VOLUME -> pipeline-data.tar"
     echo "  active pipeline jobs: $active_jobs (must be 0 for a real run)"
+    echo "  keys:                ENCRYPTION_KEY and BETTER_AUTH_SECRET set; API_TOKEN_HASH_SECRET $token_key_note"
     echo "  outputs:             db.dump, storage.tar, pipeline-data.tar, secrets.env, config.env, manifest.json"
     if [ "$app_state" = "running" ] || [ "$pipeline_state" = "running" ]; then
         echo "  note: stop the app and the pipeline before a real run (docker compose -p $PROJECT stop app audio-pipeline)"
@@ -151,8 +164,8 @@ umask 077
 {
     for key in ENCRYPTION_KEY BETTER_AUTH_SECRET API_TOKEN_HASH_SECRET; do
         value="$(env_of "$APP" "$key")"
-        [ -n "$value" ] || die "the app has no $key"
-        echo "$key=$value"
+        # Only the optional API_TOKEN_HASH_SECRET can be empty here (checked above); it is left out of the file.
+        if [ -n "$value" ]; then echo "$key=$value"; fi
     done
 } > "$TMP/secrets.env"
 
@@ -163,7 +176,7 @@ ALLOWLIST="$(sed -n '/USER_ENV_ALLOWLIST/,/\]);/p' "$(dirname "$0")/../desktop/s
     while IFS= read -r key; do
         [ -n "$key" ] || continue
         value="$(env_of "$APP" "$key")"
-        [ -n "$value" ] && echo "$key=$value"
+        if [ -n "$value" ]; then echo "$key=$value"; fi
     done <<< "$ALLOWLIST"
 } > "$TMP/config.env"
 
