@@ -48,9 +48,8 @@ Bundled and loaded third-party components
   wheels. The Mac app bundle has a THIRD_PARTY_NOTICES.md file that lists each
   of these components with its license, and a licenses folder with the license
   files that the upstream packages provide. Both are inside
-  OpenAudioHub.app under Contents/Resources. The Silero VAD entry in that file
-  names its license without a copy of the text; the text is in
-  audio-pipeline/models/SILERO_LICENSE.txt in this repository.
+  OpenAudioHub.app under Contents/Resources, including the Silero VAD model's
+  license (audio-pipeline/models/SILERO_LICENSE.txt in this repository).
 
 Other dependencies are listed in package.json, pnpm-lock.yaml,
 audio-pipeline/pyproject.toml, and uv.lock. Their licenses are carried by
