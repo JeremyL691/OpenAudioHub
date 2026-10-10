@@ -4,10 +4,11 @@ import {
     existsSync,
     mkdirSync,
     readFileSync,
+    renameSync,
     rmSync,
     writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import postgres from "postgres";
 import { writeFileAtomic } from "./atomic-file.js";
 
@@ -66,10 +67,51 @@ export function runCommand(
     });
 }
 
-/** Returns the data directory's major version, or null when the cluster does not exist yet. */
+/**
+ * True when initdb was interrupted: it writes PG_VERSION before it finishes, so the file can exist while
+ * global/pg_control, the last thing bootstrap writes, does not. Such a directory is not a cluster.
+ */
+function isInterruptedInit(dataDir: string): boolean {
+    return (
+        existsSync(join(dataDir, "PG_VERSION")) &&
+        !existsSync(join(dataDir, "global", "pg_control"))
+    );
+}
+
+/**
+ * Returns the data directory's major version, or null when no usable cluster exists yet. An interrupted
+ * initialization counts as no cluster, so index.ts sees no database and initialize() can discard it.
+ */
 export function readPgVersion(dataDir: string): string | null {
+    if (isInterruptedInit(dataDir)) return null;
     const file = join(dataDir, "PG_VERSION");
     return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
+}
+
+/**
+ * True when `commandLine` (from `ps -o command=`) is a postgres server running on `dataDir`. The check is
+ * exact: the executable must be named postgres or postmaster, and `-D` must be followed by the whole data
+ * directory as one argument. A substring match would also accept `pgdata-old`, or an editor that has the path
+ * in its arguments, and the caller signals the pid this returns true for. The executable's folder is not
+ * checked: a postmaster left by this app before it moved (to /Applications) or was replaced by an update runs
+ * from another bundle path, and it must still be stopped before its pid file goes. The executable is the text
+ * before the first ` -` flag, so a path containing spaces still matches.
+ */
+export function isPostmasterFor(commandLine: string, dataDir: string): boolean {
+    const flagStart = commandLine.search(/\s-/);
+    const head = (
+        flagStart === -1 ? commandLine : commandLine.slice(0, flagStart)
+    ).trim();
+    // A second absolute path before the flags means another program was given the binary as an argument
+    // (`vim /…/postgres -D …`). Spaces inside one path are fine; a space followed by `/` is not.
+    if (/\s\//.test(head)) return false;
+    const executable = resolve(head);
+    const name = basename(executable);
+    if (name !== "postgres" && name !== "postmaster") return false;
+    const pattern = new RegExp(
+        `(?:^|\\s)-D ?${escapeRegExp(resolve(dataDir))}/?(?=\\s|$)`,
+    );
+    return pattern.test(commandLine);
 }
 
 /** The managed block that every start rewrites (D-306): loopback only, UTC, scram, no unix socket. */
@@ -121,6 +163,8 @@ export interface PostgresManagerOptions {
     childEnv: Record<string, string>;
     /** Directory where the temporary password file is created (inside the user data folder). */
     scratchDir: string;
+    /** Receives notices such as a discarded interrupted initialization. Defaults to console.warn. */
+    log?: (message: string) => void;
 }
 
 export class PostgresManager {
@@ -138,8 +182,18 @@ export class PostgresManager {
         return join(this.options.dataDir, "postgresql.conf");
     }
 
-    /** Creates the cluster on first use and refuses data written by another major version. */
+    /**
+     * Creates the cluster on first use and refuses data written by another major version. An interrupted
+     * initdb is moved aside, never deleted, so its files stay available for diagnosis.
+     */
     async initialize(): Promise<{ created: boolean }> {
+        if (isInterruptedInit(this.options.dataDir)) {
+            const aside = `${resolve(this.options.dataDir)}.failed-init-${Date.now()}`;
+            renameSync(this.options.dataDir, aside);
+            (this.options.log ?? console.warn)(
+                `PostgreSQL initialization was interrupted; moved the data directory to ${aside} and initializing again`,
+            );
+        }
         const version = readPgVersion(this.options.dataDir);
         if (version !== null) {
             if (version !== POSTGRES_MAJOR) {
@@ -292,7 +346,7 @@ export class PostgresManager {
             ["-o", "command=", "-p", String(pid)],
             { env: {}, timeoutMs: 5_000 },
         );
-        if (command.stdout.includes(this.options.dataDir)) {
+        if (isPostmasterFor(command.stdout, this.options.dataDir)) {
             await this.stop();
         }
         rmSync(pidFile, { force: true });
