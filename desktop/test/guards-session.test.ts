@@ -6,7 +6,11 @@ import {
     needsSessionExchange,
     safeDownloadName,
 } from "../src/main/guards.js";
-import { exchangeSession, SessionExchangeError } from "../src/main/session.js";
+import {
+    exchangeSession,
+    loadWithSession,
+    SessionExchangeError,
+} from "../src/main/session.js";
 
 const ORIGIN = "http://127.0.0.1:38400";
 
@@ -118,5 +122,91 @@ describe("exchangeSession", () => {
             }),
         ).rejects.toBeInstanceOf(SessionExchangeError);
         expect(attempts).toBe(1);
+    });
+});
+
+describe("loadWithSession (B-013)", () => {
+    const noSleep = async () => {};
+
+    it("exchanges once and loads once when the first load works", async () => {
+        const calls: string[] = [];
+        await loadWithSession({
+            reauthenticate: async () => void calls.push("exchange"),
+            load: async () => void calls.push("load"),
+            isDestroyed: () => false,
+            sleep: noSleep,
+        });
+        expect(calls).toEqual(["exchange", "load"]);
+    });
+
+    it("exchanges again and reloads after a cancelled sign-in redirect", async () => {
+        const calls: string[] = [];
+        const logged: string[] = [];
+        let loads = 0;
+        await loadWithSession({
+            reauthenticate: async () => void calls.push("exchange"),
+            load: async () => {
+                calls.push("load");
+                loads += 1;
+                if (loads === 1)
+                    throw new Error("ERR_FAILED (-2) loading '/dashboard'");
+            },
+            isDestroyed: () => false,
+            log: (message) => logged.push(message),
+            sleep: noSleep,
+        });
+        expect(calls).toEqual(["exchange", "load", "exchange", "load"]);
+        expect(logged).toHaveLength(1);
+        expect(logged[0]).toContain("attempt 1 of 3");
+    });
+
+    it("gives up after the last attempt with the load's error", async () => {
+        let loads = 0;
+        await expect(
+            loadWithSession({
+                reauthenticate: async () => {},
+                load: async () => {
+                    loads += 1;
+                    throw new Error("ERR_FAILED");
+                },
+                isDestroyed: () => false,
+                attempts: 3,
+                sleep: noSleep,
+            }),
+        ).rejects.toThrow("ERR_FAILED");
+        expect(loads).toBe(3);
+    });
+
+    it("does not retry once the window is destroyed", async () => {
+        let loads = 0;
+        await expect(
+            loadWithSession({
+                reauthenticate: async () => {},
+                load: async () => {
+                    loads += 1;
+                    throw new Error("ERR_ABORTED");
+                },
+                isDestroyed: () => true,
+                sleep: noSleep,
+            }),
+        ).rejects.toThrow("ERR_ABORTED");
+        expect(loads).toBe(1);
+    });
+
+    it("does not load when the exchange fails", async () => {
+        let loads = 0;
+        await expect(
+            loadWithSession({
+                reauthenticate: async () => {
+                    throw new SessionExchangeError("no", 401);
+                },
+                load: async () => {
+                    loads += 1;
+                },
+                isDestroyed: () => false,
+                sleep: noSleep,
+            }),
+        ).rejects.toThrow(SessionExchangeError);
+        expect(loads).toBe(0);
     });
 });

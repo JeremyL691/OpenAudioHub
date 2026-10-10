@@ -75,3 +75,46 @@ export async function exchangeSession(options: ExchangeOptions): Promise<void> {
         lastStatus,
     );
 }
+
+export interface LoadWithSessionOptions {
+    /** Exchanges the launch secret for a session (exchangeSession bound to the window's partition). */
+    reauthenticate: () => Promise<void>;
+    /** Loads the dashboard in the window (`win.loadURL`). */
+    load: () => Promise<void>;
+    /** True once the window is gone; a destroyed window is not retried. */
+    isDestroyed: () => boolean;
+    log?: (message: string) => void;
+    attempts?: number;
+    retryDelayMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Exchanges the session and loads the dashboard, and does both again when the load fails (B-013). A load fails
+ * with ERR_FAILED when the server answers the first request with a redirect to the sign-in page and the window's
+ * navigation guard cancels that redirect: the cookie from the exchange was not used yet. A fresh exchange and a
+ * second load recover; only a load that keeps failing is an error.
+ */
+export async function loadWithSession(
+    options: LoadWithSessionOptions,
+): Promise<void> {
+    const attempts = options.attempts ?? 3;
+    const retryDelayMs = options.retryDelayMs ?? 300;
+    const sleep =
+        options.sleep ??
+        ((ms: number) =>
+            new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let attempt = 1; ; attempt += 1) {
+        await options.reauthenticate();
+        try {
+            await options.load();
+            return;
+        } catch (error) {
+            if (options.isDestroyed() || attempt >= attempts) throw error;
+            options.log?.(
+                `loading the window failed (attempt ${attempt} of ${attempts}): ${error instanceof Error ? error.message : String(error)}; trying again`,
+            );
+            await sleep(retryDelayMs * attempt);
+        }
+    }
+}
