@@ -6,10 +6,18 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-09
+
 ### Added
 
 - A Mac app (beta) for Apple Silicon Macs running macOS 14 or later. It runs the same web app and audio pipeline without Docker, with a menu-bar item, its data in your user account, and a DMG download. The beta is ad-hoc signed and not notarized; the Mac app guide explains the first launch.
-- An import tool for moving a Docker install into the Mac app: choose **Import from Docker…** in the menu bar, or run `OpenAudioHub --import <folder> [--user-email <address>]` from Terminal. The import checks the export, including the audio files and the encryption key, before it changes anything, and `--rollback-import` puts the previous data back.
+- An import tool for moving a Docker install into the Mac app: export with `scripts/export-for-desktop.sh`, then choose **Import from Docker…** in the menu bar, or run `OpenAudioHub --import <folder> [--user-email <address>]` from Terminal. The import checks the export, including the audio files and the encryption key, before it changes anything, and `--rollback-import` puts the previous data back.
+- The transcript and summary cards collapse to their titles. The choice is kept per browser, and Transcribe and Summarize open a collapsed card.
+
+### Fixed
+
+- Summaries from reasoning models (such as OpenCode Go's DeepSeek) are no longer saved empty. Summaries get a larger output budget, and an empty reply is reported as an error and leaves the stored summary unchanged.
+- **Back to app** in the documentation reloads the page, so the dashboard sidebar shows again.
 
 ## [1.0.1]
 
@@ -92,4 +100,5 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
 - The feature list once named translation of summaries. The imported code never had it, so it is not in this release.
 
-[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.1...HEAD
+[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.1...v1.1.0
