@@ -193,8 +193,17 @@ function extractFromArchive(archive, member, destDir) {
 }
 
 {
-    const silero = join(repoRoot, "audio-pipeline", "models", "LICENSE");
-    const files = existsSync(silero) ? [copyInto("silero-vad", silero)] : [];
+    // The license ships next to the model (audio-pipeline/models). A missing file is an error: an optional lookup
+    // once pointed at the wrong name and left the notice without its license text.
+    const silero = join(
+        repoRoot,
+        "audio-pipeline",
+        "models",
+        "SILERO_LICENSE.txt",
+    );
+    if (!existsSync(silero))
+        throw new Error(`missing Silero VAD license: ${silero}`);
+    const files = [copyInto("silero-vad", silero, "LICENSE")];
     components.push({
         group: "native",
         name: "Silero VAD model (audio-pipeline/models/silero_vad.onnx)",
