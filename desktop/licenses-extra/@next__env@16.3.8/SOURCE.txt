@@ -1,0 +1,7 @@
+Package: @next__env@16.3.8 (name and version as in desktop/build/server/node_modules)
+License file: LICENSE
+Source: local copy: node_modules/.pnpm/next@16.3.8_*/node_modules/next/license.md (next 16.3.8, MIT, Copyright (c) 2025 Vercel, Inc.)
+Upstream repository: https://github.com/vercel/next.js (packages/next-env, per its package.json repository field)
+Ref: local, no download (next 16.3.8, same version as @next/env)
+sha256(LICENSE): ee765244e2d59f5234d474f62e0766fa0c8b99af967fdd4c0cb8dcb0c76ea224
+Note: Package declares MIT and ships no LICENSE file; the text is the license of the vercel/next.js monorepo, which contains packages/next-env.

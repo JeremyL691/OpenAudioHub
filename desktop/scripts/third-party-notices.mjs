@@ -287,6 +287,12 @@ for (const entry of readdirSync(sitePackages)
 const nodeModules = join(build, "server", "node_modules");
 const LICENSE_FILE = /^(LICEN[SC]E|COPYING|NOTICE)/i;
 const NO_TEXT = "license text not included in the package";
+// Packages without a license file whose license needs no shipped text (see desktop/licenses-extra/ for the rest).
+const NO_TEXT_NOTES = {
+    "string-hash": "CC0-1.0: public-domain dedication; no notice required",
+};
+// Texts for packages that ship no license file, each with a SOURCE.txt (upstream repository, ref, sha256).
+const extraRoot = join(desktopRoot, "licenses-extra");
 const repoPnpm = join(repoRoot, "node_modules", ".pnpm");
 const repoPnpmEntries = existsSync(repoPnpm) ? readdirSync(repoPnpm) : [];
 
@@ -437,15 +443,34 @@ for (const c of candidates) {
     const sources = [c.dir, ...installedCopies(c)];
     const found = licenseFilesIn(sources);
     const dirName = `${c.pkg.name.replaceAll("/", "__")}@${version}`;
+    const extraDir = join(extraRoot, dirName);
+    const useExtra =
+        found.files.length === 0 && existsSync(join(extraDir, "LICENSE"));
     const entry = {
         name: c.pkg.name,
         version,
         license: declared ?? "not declared in package.json",
-        files: found.files.map((f) =>
-            copyInto(join("node", dirName), join(found.dir, f), f),
+        files: (useExtra ? ["LICENSE"] : found.files).map((f) =>
+            copyInto(
+                join("node", dirName),
+                join(useExtra ? extraDir : found.dir, f),
+                f,
+            ),
         ),
         notes: [],
     };
+    if (useExtra) {
+        entry.files.push(
+            copyInto(
+                join("node", dirName),
+                join(extraDir, "SOURCE.txt"),
+                "SOURCE.txt",
+            ),
+        );
+        entry.notes.push(
+            "license text from the upstream repository (see SOURCE.txt)",
+        );
+    }
     if (c.vendoredRel) entry.notes.push("copy vendored by Next.js");
     if (declared === null)
         entry.notes.push(
@@ -542,7 +567,7 @@ for (const e of uniqueNode) {
     const text =
         e.files.length > 0
             ? e.files.map((f) => `\`licenses/${f}\``).join(", ")
-            : NO_TEXT;
+            : (NO_TEXT_NOTES[e.name] ?? NO_TEXT);
     lines.push(
         `| ${e.name} | ${e.version} | ${e.license} | ${text} | ${e.notes.join("; ")} |`,
     );
@@ -562,10 +587,12 @@ const withText = uniqueNode.filter((e) => e.files.length > 0);
 const withoutText = uniqueNode.filter((e) => e.files.length === 0);
 if (withoutText.length > 0) {
     console.log(
-        `Node packages without license text (${withoutText.length}), each noted "${NO_TEXT}":`,
+        `Node packages without license text (${withoutText.length}), each with its note:`,
     );
     for (const e of withoutText)
-        console.log(`  - ${e.name}@${e.version} (${e.license})`);
+        console.log(
+            `  - ${e.name}@${e.version} (${e.license}): ${NO_TEXT_NOTES[e.name] ?? NO_TEXT}`,
+        );
 }
 console.log(
     `Node packages: ${uniqueNode.length}, with license text: ${withText.length}, without: ${withoutText.length}`,
