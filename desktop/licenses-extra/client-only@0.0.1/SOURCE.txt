@@ -1,0 +1,3 @@
+Source: react@19.2.0/node_modules/react/LICENSE (react 19.2.0, MIT, Copyright (c) Meta Platforms, Inc. and affiliates.)
+Basis: client-only 0.0.1 has no repository field and no license file; its package.json names homepage https://reactjs.org/ and bugs https://github.com/facebook/react/issues, so the React project license is used.
+sha256: da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93

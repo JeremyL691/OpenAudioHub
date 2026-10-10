@@ -1,0 +1,7 @@
+Package: @edge-runtime__cookies@6.0.0 (name and version as in desktop/build/server/node_modules)
+License file: LICENSE
+Source: local copy: node_modules/.pnpm/next@16.3.8_*/node_modules/next/dist/compiled/edge-runtime/LICENSE (vendored edge-runtime package, Copyright (c) 2024 Vercel, Inc.)
+Upstream repository: not declared by the package (no repository field); sibling package from the same Vercel edge-runtime project
+Ref: local, no download
+sha256(LICENSE): e4f76a7a19ef2989dd79339bd3abf8afcf1d6f065e5a10c76c19415ffd727eb3
+Note: Package declares MIT and ships no LICENSE file; its package.json has no repository field, so no download was made. Text is the MIT LICENSE of the sibling edge-runtime package.
