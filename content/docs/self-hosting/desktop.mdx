@@ -8,7 +8,7 @@ The Mac app runs the same web application and audio pipeline as the Docker insta
 ## Requirements
 
 - An Apple Silicon Mac (M1 or later) running macOS 14 Sonoma or later.
-- About 300 MB for the app, plus space for your recordings.
+- About 280 MB to download the disk image, and about 770 MB for the installed app, plus space for your recordings.
 - A transcription provider, as described in [Install](/docs/self-hosting/install).
 
 ## Install
@@ -59,7 +59,7 @@ If you run OpenAudioHub with Docker Compose, you can move your data into the Mac
    scripts/export-for-desktop.sh --project <compose project> --out <folder>
    ```
 
-   The script refuses a project named `openaudiohub` unless you pass `--allow-live`. That flag is for the maintainer's cutover only. Use `--dry-run` to see the plan without writing anything.
+   By default the script refuses to export a project named `openaudiohub` (the live project name), and it refuses to run while the app or the pipeline is running or while pipeline jobs are active. Use `--dry-run` to see the plan without writing anything.
 
 2. In the menu bar, choose **Import from Docker…**, pick the folder, and confirm. The app stops its services, imports the data, and opens.
 
@@ -93,8 +93,9 @@ The app listens on `127.0.0.1` only. By default it uses ports 38400 to 38402. If
 - Apple Silicon and macOS 14 or later only.
 - Not signed with a Developer ID, and not notarized. See [Install](#install).
 - One local account, signed in automatically. The Mac app has no log out.
-- Your data stays on this Mac. There is no sync and no remote access.
-- The import from Docker needs an export from the repository's script. A project named `openaudiohub` is refused in this release.
+- Your data is stored on this Mac, and the app has no remote access. The AI providers you configure receive the audio or text you send them for transcription and summaries, and Plaud sync contacts Plaud's service.
+- The Plaud browser extension cannot connect to the Mac app. Connect Plaud with a one-time code or by pasting a token instead.
+- The import from Docker needs an export from the repository's script.
 
 ## Remove the app
 
