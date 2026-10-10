@@ -1,5 +1,11 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+    mkdirSync,
+    mkdtempSync,
+    rmSync,
+    symlinkSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +18,7 @@ import {
     versionMigrationHashes,
 } from "../src/main/import/manifest.js";
 import {
+    assertPlainTree,
     checkEncryptionSample,
     verifyStorageFiles,
 } from "../src/main/import/verify.js";
@@ -240,6 +247,28 @@ describe("chooseUser", () => {
     });
 });
 
+describe("assertPlainTree", () => {
+    it("accepts a tree of plain files and folders", () => {
+        const root = join(dir, "tree");
+        mkdirSync(join(root, "nested", "deeper"), { recursive: true });
+        writeFileSync(join(root, "nested", "deeper", "file.bin"), "x");
+
+        expect(() => assertPlainTree(root)).not.toThrow();
+    });
+
+    it("refuses a symlink, even one that points at a file outside the tree", () => {
+        const root = join(dir, "tree");
+        mkdirSync(root);
+        const outside = join(dir, "outside.txt");
+        writeFileSync(outside, "secret");
+        symlinkSync(outside, join(root, "link"));
+
+        expect(() => assertPlainTree(root)).toThrow(
+            "is not a regular file or folder",
+        );
+    });
+});
+
 describe("verifyStorageFiles", () => {
     /** A storage folder with one audio file; `listed` describes the export's entry for it. */
     function audioFolder(): string {
@@ -293,6 +322,18 @@ describe("verifyStorageFiles", () => {
         expect(() =>
             verifyStorageFiles(root, [listed("../escape.opus", "x")]),
         ).toThrow("outside its folder");
+    });
+
+    it("refuses a listed audio file that is a symlink, even when the target has the same content", () => {
+        const root = audioFolder();
+        const target = join(dir, "target.opus");
+        writeFileSync(target, "audio a");
+        rmSync(join(root, "uploads", "a.opus"));
+        symlinkSync(target, join(root, "uploads", "a.opus"));
+
+        expect(() =>
+            verifyStorageFiles(root, [listed("uploads/a.opus", "audio a")]),
+        ).toThrow("is not a regular file or folder");
     });
 });
 

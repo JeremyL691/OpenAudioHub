@@ -23,7 +23,12 @@ import {
     readManifest,
     versionMigrationHashes,
 } from "./manifest.js";
-import { checkEncryptionSample, verifyStorageFiles } from "./verify.js";
+import { runSteps, type Step } from "./steps.js";
+import {
+    assertPlainTree,
+    checkEncryptionSample,
+    verifyStorageFiles,
+} from "./verify.js";
 
 export const APP_DATABASE = "openaudiohub";
 export const IMPORT_DATABASE = "openaudiohub_import";
@@ -270,7 +275,13 @@ function replaceDirectory(
     }
     const had = existsSync(current);
     if (had) renameSync(current, preserved);
-    renameSync(incoming, current);
+    try {
+        renameSync(incoming, current);
+    } catch (error) {
+        // Put the original back here, so this call either finishes or changes nothing.
+        if (had) renameSync(preserved, current);
+        throw error;
+    }
     return had;
 }
 
@@ -283,6 +294,52 @@ function replaceFile(current: string, preserved: string): boolean {
     }
     copyFileSync(current, preserved);
     return true;
+}
+
+/**
+ * A switch step for a folder. `state.had` records whether there was a folder to keep, so the undo knows whether
+ * to move it back. The undo moves the incoming folder back to staging first, so a retry can use it again.
+ */
+function directoryStep(
+    name: string,
+    current: string,
+    incoming: string,
+    preserved: string,
+    state: { had: boolean },
+): Step {
+    return {
+        name,
+        run: () => {
+            state.had = replaceDirectory(current, incoming, preserved);
+        },
+        undo: () => {
+            if (existsSync(current)) renameSync(current, incoming);
+            if (state.had) renameSync(preserved, current);
+        },
+    };
+}
+
+/**
+ * A switch step for a file: the original is copied to `preserved` before anything writes the file. The undo puts
+ * the copy back, or removes the file when there was none. The write that follows has no undo of its own, because
+ * this one restores the original over it.
+ */
+function keepFileStep(
+    name: string,
+    current: string,
+    preserved: string,
+    state: { had: boolean },
+): Step {
+    return {
+        name,
+        run: () => {
+            state.had = replaceFile(current, preserved);
+        },
+        undo: () => {
+            if (state.had) renameSync(preserved, current);
+            else rmSync(current, { force: true });
+        },
+    };
 }
 
 /**
@@ -370,6 +427,7 @@ export async function runImport(
             pipelineStaging,
             postgresBin,
         );
+        assertPlainTree(pipelineStaging);
         const keys = parseEnvLines(
             readFileSync(join(dir, "secrets.env"), "utf8"),
         );
@@ -384,57 +442,129 @@ export async function runImport(
         const previousBoundUserId = config.boundUserId ?? null;
         log("storage and keys staged");
 
-        // The switch. Nothing is removed: the previous state is renamed or copied to *.pre-import.
+        // The switch. Nothing is removed: the previous state is renamed or copied to *.pre-import. Each change is a
+        // step with an undo, so a failure part-way puts the App back as it was, while Postgres still runs. The
+        // record is written last, so a record exists only for a switch that finished.
         const previousDatabase = await databaseExists(adminUrl, APP_DATABASE);
+        const storageState = { had: false };
+        const pipelineState = { had: false };
+        const secretsState = { had: false };
+        const envState = { had: false };
+        const recordFile = join(paths.imports, `${timestamp()}.json`);
+        const lastFile = join(paths.imports, "last.json");
+        let recordText = "";
+        let lastBefore: string | null = null;
+        const steps: Step[] = [
+            {
+                name: "keep the previous database",
+                run: async () => {
+                    if (previousDatabase)
+                        await renameDatabase(
+                            adminUrl,
+                            APP_DATABASE,
+                            PRE_IMPORT_DATABASE,
+                        );
+                },
+                undo: async () => {
+                    if (previousDatabase)
+                        await renameDatabase(
+                            adminUrl,
+                            PRE_IMPORT_DATABASE,
+                            APP_DATABASE,
+                        );
+                },
+            },
+            {
+                name: "activate the imported database",
+                run: () =>
+                    renameDatabase(adminUrl, IMPORT_DATABASE, APP_DATABASE),
+                undo: () =>
+                    renameDatabase(adminUrl, APP_DATABASE, IMPORT_DATABASE),
+            },
+            directoryStep(
+                "storage",
+                paths.storage,
+                storageStaging,
+                `${paths.storage}.pre-import`,
+                storageState,
+            ),
+            directoryStep(
+                "pipeline data",
+                paths.pipelineData,
+                pipelineStaging,
+                `${paths.pipelineData}.pre-import`,
+                pipelineState,
+            ),
+            keepFileStep(
+                "secrets",
+                paths.secrets,
+                `${paths.secrets}.pre-import`,
+                secretsState,
+            ),
+            {
+                name: "write the imported secrets",
+                run: () => saveSecrets(paths.secrets, mergedSecrets),
+                // The keep step's undo puts the original back over this file.
+                undo: () => undefined,
+            },
+            keepFileStep(
+                "env",
+                paths.userEnv,
+                `${paths.userEnv}.pre-import`,
+                envState,
+            ),
+            {
+                name: "write the imported env",
+                run: () => writeFileAtomic(paths.userEnv, envText, 0o600),
+                // The keep step's undo puts the original back over this file.
+                undo: () => undefined,
+            },
+            {
+                name: "bind the imported user",
+                run: () =>
+                    saveConfig(paths.config, {
+                        ...config,
+                        boundUserId: user.id,
+                    } as DesktopConfig),
+                undo: () => saveConfig(paths.config, config as DesktopConfig),
+            },
+            {
+                name: "write the import record",
+                run: () => {
+                    const record: ImportRecord = {
+                        importedAt: new Date().toISOString(),
+                        previousDatabase,
+                        previousStorage: storageState.had,
+                        previousPipelineData: pipelineState.had,
+                        previousSecrets: secretsState.had,
+                        previousEnv: envState.had,
+                        previousBoundUserId,
+                        boundUserId: user.id,
+                    };
+                    recordText = `${JSON.stringify(record, null, 2)}\n`;
+                    mkdirSync(paths.imports, { recursive: true, mode: 0o700 });
+                    writeFileAtomic(recordFile, recordText);
+                },
+                undo: () => rmSync(recordFile, { force: true }),
+            },
+            {
+                name: "point last.json at this import",
+                run: () => {
+                    lastBefore = existsSync(lastFile)
+                        ? readFileSync(lastFile, "utf8")
+                        : null;
+                    writeFileAtomic(lastFile, recordText);
+                },
+                // An earlier record (kept after its rollback) goes back as it was; otherwise the file is removed.
+                undo: () => {
+                    if (lastBefore === null) rmSync(lastFile, { force: true });
+                    else writeFileAtomic(lastFile, lastBefore);
+                },
+            },
+        ];
         switched = true;
-        if (previousDatabase)
-            await renameDatabase(adminUrl, APP_DATABASE, PRE_IMPORT_DATABASE);
-        await renameDatabase(adminUrl, IMPORT_DATABASE, APP_DATABASE);
-        const previousStorage = replaceDirectory(
-            paths.storage,
-            storageStaging,
-            `${paths.storage}.pre-import`,
-        );
-        const previousPipelineData = replaceDirectory(
-            paths.pipelineData,
-            pipelineStaging,
-            `${paths.pipelineData}.pre-import`,
-        );
-        const previousSecrets = replaceFile(
-            paths.secrets,
-            `${paths.secrets}.pre-import`,
-        );
-        saveSecrets(paths.secrets, mergedSecrets);
-        const previousEnv = replaceFile(
-            paths.userEnv,
-            `${paths.userEnv}.pre-import`,
-        );
-        writeFileAtomic(paths.userEnv, envText, 0o600);
-        saveConfig(paths.config, {
-            ...config,
-            boundUserId: user.id,
-        } as DesktopConfig);
+        await runSteps(steps, log);
         log("switched to the imported database, storage, keys and settings");
-
-        const record: ImportRecord = {
-            importedAt: new Date().toISOString(),
-            previousDatabase,
-            previousStorage,
-            previousPipelineData,
-            previousSecrets,
-            previousEnv,
-            previousBoundUserId,
-            boundUserId: user.id,
-        };
-        mkdirSync(paths.imports, { recursive: true, mode: 0o700 });
-        writeFileAtomic(
-            join(paths.imports, `${timestamp()}.json`),
-            `${JSON.stringify(record, null, 2)}\n`,
-        );
-        writeFileAtomic(
-            join(paths.imports, "last.json"),
-            `${JSON.stringify(record, null, 2)}\n`,
-        );
 
         return {
             sourceProject: manifest.sourceProject,
