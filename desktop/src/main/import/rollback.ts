@@ -14,6 +14,7 @@ import {
     renameDatabase,
     withClient,
 } from "./run.js";
+import { runSteps, type Step } from "./steps.js";
 
 export interface RollbackOptions {
     paths: DesktopPaths;
@@ -80,7 +81,16 @@ export async function rollbackImport(options: RollbackOptions): Promise<void> {
             "postgres",
             secrets.POSTGRES_PASSWORD,
         );
-        await switchDatabases(adminUrl, record.previousDatabase, stamp);
+        await checkKeptDatabase(adminUrl, record.previousDatabase);
+        // One list, so a failure anywhere puts back what the earlier steps moved. Postgres keeps running until
+        // the undo has finished (the finally below stops it).
+        const steps: Step[] = [
+            ...databaseSteps(adminUrl, record.previousDatabase, stamp),
+            ...restores.flatMap(([previous, current]) =>
+                restoreSteps(current, previous, stamp),
+            ),
+        ];
+        await runSteps(steps, log);
     } finally {
         await manager.stop();
     }
@@ -89,11 +99,6 @@ export async function rollbackImport(options: RollbackOptions): Promise<void> {
             ? `database restored from ${PRE_IMPORT_DATABASE}`
             : "the imported database was moved aside (the App had none before)",
     );
-
-    for (const [previous, current] of restores) {
-        moveAside(current, stamp);
-        if (previous) renameSync(`${current}.pre-import`, current);
-    }
     log("storage, keys and settings restored");
 
     const { boundUserId: _imported, ...config } = loadConfig(
@@ -112,35 +117,82 @@ export async function rollbackImport(options: RollbackOptions): Promise<void> {
     );
 }
 
-/** Moves the imported database aside and, when the import kept one, puts the previous database back. */
-async function switchDatabases(
+/** Refuses to start the database switch when the import's kept database is missing. */
+async function checkKeptDatabase(
     adminUrl: string,
     previousDatabase: boolean,
-    stamp: string,
 ): Promise<void> {
-    if (previousDatabase) {
-        const kept = await withClient(
-            adminUrl,
-            (sql) =>
-                sql`select 1 from pg_database where datname = ${PRE_IMPORT_DATABASE}`,
-        );
-        if (kept.length === 0) {
-            throw new Error(
-                `${PRE_IMPORT_DATABASE} is missing; the rollback cannot restore the database`,
-            );
-        }
-    }
-    await renameDatabase(
+    if (!previousDatabase) return;
+    const kept = await withClient(
         adminUrl,
-        APP_DATABASE,
-        `${APP_DATABASE}_rolled_back_${stamp}`,
+        (sql) =>
+            sql`select 1 from pg_database where datname = ${PRE_IMPORT_DATABASE}`,
     );
-    if (previousDatabase) {
-        await renameDatabase(adminUrl, PRE_IMPORT_DATABASE, APP_DATABASE);
+    if (kept.length === 0) {
+        throw new Error(
+            `${PRE_IMPORT_DATABASE} is missing; the rollback cannot restore the database`,
+        );
     }
 }
 
-/** Renames `path` to `path.rolled-back-<stamp>` when it exists; it is never deleted. */
-function moveAside(path: string, stamp: string): void {
-    if (existsSync(path)) renameSync(path, `${path}.rolled-back-${stamp}`);
+/**
+ * The database switch: the imported database is renamed aside, and when the import kept one, the previous database
+ * is renamed back into the App's name. Each rename is undone by the reverse rename.
+ */
+function databaseSteps(
+    adminUrl: string,
+    previousDatabase: boolean,
+    stamp: string,
+): Step[] {
+    const aside = `${APP_DATABASE}_rolled_back_${stamp}`;
+    const steps: Step[] = [
+        {
+            name: "move the imported database aside",
+            run: () => renameDatabase(adminUrl, APP_DATABASE, aside),
+            undo: () => renameDatabase(adminUrl, aside, APP_DATABASE),
+        },
+    ];
+    if (previousDatabase) {
+        steps.push({
+            name: "restore the previous database",
+            run: () =>
+                renameDatabase(adminUrl, PRE_IMPORT_DATABASE, APP_DATABASE),
+            undo: () =>
+                renameDatabase(adminUrl, APP_DATABASE, PRE_IMPORT_DATABASE),
+        });
+    }
+    return steps;
+}
+
+/**
+ * Moves `current` aside (`current.rolled-back-<stamp>`, never deleted), then, when the import kept a copy, puts
+ * `current.pre-import` in its place. Each part is its own step, so each rename has an exact inverse.
+ */
+function restoreSteps(
+    current: string,
+    previous: boolean,
+    stamp: string,
+): Step[] {
+    const aside = `${current}.rolled-back-${stamp}`;
+    const moved = { had: false };
+    const steps: Step[] = [
+        {
+            name: `move ${current} aside`,
+            run: () => {
+                moved.had = existsSync(current);
+                if (moved.had) renameSync(current, aside);
+            },
+            undo: () => {
+                if (moved.had) renameSync(aside, current);
+            },
+        },
+    ];
+    if (previous) {
+        steps.push({
+            name: `restore ${current} from ${current}.pre-import`,
+            run: () => renameSync(`${current}.pre-import`, current),
+            undo: () => renameSync(current, `${current}.pre-import`),
+        });
+    }
+    return steps;
 }

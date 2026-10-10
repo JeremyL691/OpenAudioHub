@@ -1,5 +1,5 @@
 import { createDecipheriv, createHash } from "node:crypto";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { isAbsolute, join, normalize, sep } from "node:path";
 import { type ExportManifest, sha256File } from "./manifest.js";
 
@@ -17,6 +17,24 @@ function listFiles(root: string, prefix = ""): string[] {
 }
 
 /**
+ * Refuses any entry under `root` that is neither a regular file nor a folder. Symlinks are the danger: a link in
+ * an export could point at a file outside the App (such as a key), and it would be copied into the App's storage.
+ * The walk uses readdir's entry types, which do not follow links.
+ */
+export function assertPlainTree(root: string, prefix = ""): void {
+    for (const entry of readdirSync(join(root, prefix), {
+        withFileTypes: true,
+    })) {
+        const rel = join(prefix, entry.name);
+        if (entry.isDirectory()) assertPlainTree(root, rel);
+        else if (!entry.isFile())
+            throw new Error(
+                `the archive holds ${rel}, which is not a regular file or folder`,
+            );
+    }
+}
+
+/**
  * Checks the audio files that the import extracted against the export's list (PLAN T15.2 step 5). Each listed
  * file must exist with the recorded size and sha256, and the archive must hold nothing that the list does not name.
  */
@@ -24,6 +42,7 @@ export function verifyStorageFiles(
     root: string,
     files: ExportManifest["storageFiles"],
 ): void {
+    assertPlainTree(root);
     const listed = new Set<string>();
     for (const entry of files) {
         const rel = normalize(entry.path);
@@ -37,7 +56,8 @@ export function verifyStorageFiles(
         if (!existsSync(full)) {
             throw new Error(`audio file ${rel} is missing after extraction`);
         }
-        if (statSync(full).size !== entry.bytes) {
+        // lstat, not stat: a link would report the size of its target.
+        if (lstatSync(full).size !== entry.bytes) {
             throw new Error(`audio file ${rel} has the wrong size`);
         }
         if (sha256File(full) !== entry.sha256) {
