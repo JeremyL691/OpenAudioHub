@@ -91,22 +91,58 @@ export function parseUserEnv(text: string): UserEnvResult {
             unknownKeys.push(key);
             return;
         }
-        values[key] = unquote(rawValue);
+        const value = parseValue(rawValue);
+        if (value === null) {
+            badLines.push(index + 1);
+            return;
+        }
+        values[key] = value;
     });
     return { values, unknownKeys, managedKeys, badLines };
 }
 
-function unquote(value: string): string {
-    const trimmed = value.trim();
-    if (trimmed.length >= 2) {
-        const first = trimmed[0];
-        const last = trimmed[trimmed.length - 1];
-        if (
-            (first === '"' && last === '"') ||
-            (first === "'" && last === "'")
-        ) {
-            return trimmed.slice(1, -1);
-        }
+/** Escapes recognised inside double quotes. Any other backslash is kept as written. */
+const DOUBLE_QUOTE_ESCAPES: ReadonlyMap<string, string> = new Map([
+    ["n", "\n"],
+    ["t", "\t"],
+    ["\\", "\\"],
+    ['"', '"'],
+]);
+
+/**
+ * Reads the text after `KEY=` the way Docker Compose reads env_file, so a file that works for the
+ * containers also works here. Returns null when a quoted value is unterminated or has trailing text.
+ *
+ * - Unquoted: an inline comment starts at a `#` preceded by whitespace; a `#` inside a word is kept.
+ * - Double-quoted: escapes apply, and only whitespace or a comment may follow the closing quote.
+ * - Single-quoted: literal text up to the next single quote, with no escapes.
+ */
+function parseValue(rawValue: string): string | null {
+    const value = rawValue.trimStart();
+    const quote = value[0];
+    if (quote === '"' || quote === "'") {
+        return parseQuoted(value, quote);
     }
-    return trimmed;
+    return rawValue.replace(/\s#.*$/, "").trim();
+}
+
+function parseQuoted(value: string, quote: string): string | null {
+    let result = "";
+    for (let index = 1; index < value.length; index += 1) {
+        const char = value[index];
+        if (quote === '"' && char === "\\" && index + 1 < value.length) {
+            const escaped = DOUBLE_QUOTE_ESCAPES.get(value[index + 1]);
+            if (escaped !== undefined) {
+                result += escaped;
+                index += 1;
+                continue;
+            }
+        }
+        if (char === quote) {
+            const rest = value.slice(index + 1);
+            return /^\s*(#.*)?$/.test(rest) ? result : null;
+        }
+        result += char;
+    }
+    return null;
 }

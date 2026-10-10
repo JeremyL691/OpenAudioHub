@@ -83,6 +83,45 @@ describe("config", () => {
             ),
         ).toBe(true);
     });
+
+    it("refuses a file with a newer schemaVersion and leaves it in place", () => {
+        const path = join(dir, "config.json");
+        const newer = JSON.stringify({
+            schemaVersion: 2,
+            ports: { app: 38400, pipeline: 38401, postgres: 38402 },
+            lastVersion: "1.3.0",
+            boundUserId: "user_1",
+        });
+        writeFileSync(path, newer);
+
+        expect(() => loadConfig(path)).toThrow(
+            "config.json was written by a newer OpenAudioHub; install the newer version",
+        );
+        // Nothing was renamed or replaced, so lastVersion and boundUserId survive.
+        expect(readFileSync(path, "utf8")).toBe(newer);
+        expect(readdirSync(dir).some((name) => name.includes("corrupt"))).toBe(
+            false,
+        );
+    });
+
+    it("keeps the known fields of a same-version file", () => {
+        const path = join(dir, "config.json");
+        writeFileSync(
+            path,
+            JSON.stringify({
+                schemaVersion: 1,
+                ports: { app: 38400, pipeline: 38401, postgres: 38402 },
+                lastVersion: "1.2.0",
+                launchAtLogin: true,
+            }),
+        );
+
+        const loaded = loadConfig(path);
+
+        expect(loaded.config.lastVersion).toBe("1.2.0");
+        expect(loaded.config.launchAtLogin).toBe(true);
+        expect(loaded.replacedCorruptFile).toBeUndefined();
+    });
 });
 
 describe("choosePorts", () => {

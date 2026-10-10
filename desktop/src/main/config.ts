@@ -43,13 +43,31 @@ function isPort(value: unknown): value is number {
     );
 }
 
-function parseConfig(text: string): DesktopConfig | null {
-    let raw: unknown;
+/** Returns the parsed JSON, or null when the text is not JSON. */
+function readJson(text: string): unknown {
     try {
-        raw = JSON.parse(text);
+        return JSON.parse(text);
     } catch {
         return null;
     }
+}
+
+/**
+ * True when the file was written by a newer build. Such a file must not be parsed, renamed or replaced:
+ * this build would drop fields it does not know (lastVersion among them), and that would bypass the
+ * downgrade guard on the next start.
+ */
+function isNewerSchema(raw: unknown): boolean {
+    if (!raw || typeof raw !== "object") return false;
+    const version = (raw as { schemaVersion?: unknown }).schemaVersion;
+    return (
+        typeof version === "number" &&
+        Number.isInteger(version) &&
+        version > CONFIG_SCHEMA_VERSION
+    );
+}
+
+function parseConfig(raw: unknown): DesktopConfig | null {
     if (!raw || typeof raw !== "object") return null;
     const candidate = raw as Partial<DesktopConfig> & {
         ports?: Partial<DesktopPorts>;
@@ -98,6 +116,7 @@ export interface LoadedConfig {
 /**
  * Reads config.json. A missing file yields the defaults; an unreadable one is moved aside
  * (`config.json.corrupt-<timestamp>`) and the defaults are used. The config holds no secrets.
+ * A file with a newer schemaVersion throws and is left untouched (see isNewerSchema).
  */
 export function loadConfig(
     path: string,
@@ -106,7 +125,13 @@ export function loadConfig(
     if (!existsSync(path)) {
         return { config: defaultConfig() };
     }
-    const config = parseConfig(readFileSync(path, "utf8"));
+    const raw = readJson(readFileSync(path, "utf8"));
+    if (isNewerSchema(raw)) {
+        throw new Error(
+            "config.json was written by a newer OpenAudioHub; install the newer version",
+        );
+    }
+    const config = parseConfig(raw);
     if (config) {
         return { config };
     }
