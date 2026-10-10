@@ -30,6 +30,19 @@ await build({
     logLevel: "warning",
 });
 
+// The sandboxed preload for the app window (preload.cjs sits next to main.cjs).
+await build({
+    entryPoints: [join(desktopRoot, "src", "preload", "connector.ts")],
+    outfile: join(outdir, "preload.cjs"),
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node24",
+    external: ["electron"],
+    sourcemap: "linked",
+    logLevel: "warning",
+});
+
 // Development layout: the packaged app keeps ffmpeg in Resources/bin, so mirror it under build/bin
 // for runs from desktop/build (bundleRootFor in index.ts).
 const ffmpegBin = join(desktopRoot, "build", "ffmpeg", "bin");

@@ -44,6 +44,7 @@ export function createAppWindow(options: AppWindowOptions): AppWindow {
         title: app.getName(),
         webPreferences: {
             partition: APP_PARTITION,
+            preload: join(__dirname, "preload.cjs"),
             contextIsolation: true,
             sandbox: true,
             nodeIntegration: false,
