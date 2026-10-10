@@ -18,7 +18,8 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: false,
-        disableSignUp: env.DISABLE_REGISTRATION,
+        // Desktop mode has one local account, created by the session plugin; open sign-up would let a local process take it.
+        disableSignUp: env.DISABLE_REGISTRATION || isDesktopMode(),
         sendResetPassword: async ({ user, url }) => {
             await sendPasswordResetEmail(user.email, url);
         },
