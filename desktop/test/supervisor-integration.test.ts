@@ -143,7 +143,12 @@ describe("supervisor with real child processes", () => {
         const stops = readEvents()
             .filter((e) => e.event === "stop")
             .map((e) => e.name);
-        expect(stops).toEqual(["next", "pipeline", "postgres"]);
+        // The server and the pipeline stop together, so their order is not fixed. Postgres stops last.
+        expect(stops).toHaveLength(3);
+        expect(new Set(stops.slice(0, 2))).toEqual(
+            new Set(["pipeline", "next"]),
+        );
+        expect(stops[2]).toBe("postgres");
     }, 20_000);
 
     it("restarts a crashed service and keeps the others running", async () => {

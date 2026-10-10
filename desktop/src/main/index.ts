@@ -38,7 +38,11 @@ import {
     pipelineFactory,
 } from "./services.js";
 import { exchangeSession } from "./session.js";
-import { type Service, Supervisor } from "./supervisor.js";
+import {
+    type Service,
+    Supervisor,
+    SupervisorStoppedError,
+} from "./supervisor.js";
 import { createTray } from "./tray.js";
 import { parseUserEnv } from "./user-env.js";
 import { isDowngrade } from "./versioning.js";
@@ -365,14 +369,17 @@ async function main(): Promise<void> {
     // Electron does not wait for before-quit listeners. Prevent the quit, stop the services in order
     // (no orphan processes), then quit for real. Installed before the services start, so a quit at any
     // later point, including after a start-up failure, stops what was started.
-    let quitting = false;
+    // A quit that arrives while the services stop waits for the same stop; only the final quit goes through.
+    let quitState: "running" | "stopping" | "stopped" = "running";
     app.on("before-quit", (event) => {
-        if (quitting) return;
+        if (quitState === "stopped") return;
         event.preventDefault();
-        quitting = true;
+        if (quitState === "stopping") return;
+        quitState = "stopping";
         tray?.destroy();
         log("quitting: stopping services");
         void supervisor.stop().finally(() => {
+            quitState = "stopped";
             log("services stopped");
             // The menu's import restarts the App once the services are down, so the import gets the cluster.
             if (relaunchArgs) app.relaunch({ args: relaunchArgs });
@@ -553,6 +560,9 @@ if (process.env.OAH_SKIP_MAIN !== "1") {
         .whenReady()
         .then(main)
         .catch(async (error: unknown) => {
+            // A quit during start-up stops the services, and the interrupted start ends with this error. The quit
+            // is already under way (before-quit), so there is nothing to report.
+            if (error instanceof SupervisorStoppedError) return;
             recordStartupFailure(error);
             // Not showErrorBox: it blocks the main process, and a quit from the Dock or the system could not end
             // the app while it was open (B-013). The quit stops any services that started.

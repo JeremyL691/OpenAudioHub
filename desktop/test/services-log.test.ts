@@ -52,4 +52,29 @@ describe("service output", () => {
         expect(code).toBe(0);
         expect(statSync(logFile).size).toBe(size);
     }, 20_000);
+
+    it("keeps output written well after launch, not only in the first two seconds", async () => {
+        const logFile = join(dir, "late.log");
+
+        const code = await runScript(
+            'setTimeout(() => console.log("late line"), 2500);',
+            logFile,
+        );
+
+        expect(code).toBe(0);
+        expect(readFileSync(logFile, "utf8")).toContain("late line");
+    }, 20_000);
+
+    it("reports a spawn failure through the exit callback instead of throwing", async () => {
+        const logFile = join(dir, "missing.log");
+        const child = spawn(join(dir, "no-such-binary"), [], {
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        const code = await new Promise<number | null>((resolve) => {
+            fromChildProcess(child, logFile).onExit(resolve);
+        });
+
+        expect(code).toBeNull();
+    }, 20_000);
 });

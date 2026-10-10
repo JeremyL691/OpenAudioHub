@@ -75,17 +75,19 @@ export class ProcessService implements Service {
         await this.readiness(handle);
     }
 
+    /**
+     * Asks the process to exit (SIGTERM), then kills it. The exit callback clears `handle`. It is not cleared
+     * here, so a process that survives SIGKILL stays tracked and stop() reports it instead of hiding it.
+     */
     async stop(graceMs: number): Promise<void> {
         this.requested = true;
         const handle = this.handle;
         if (!handle) return;
         handle.kill("SIGTERM");
-        const exited = await waitFor(() => this.handle !== handle, graceMs);
-        if (!exited) {
-            handle.kill("SIGKILL");
-            await waitFor(() => this.handle !== handle, 1000);
-        }
-        this.handle = null;
+        if (await waitFor(() => this.handle !== handle, graceMs)) return;
+        handle.kill("SIGKILL");
+        if (!(await waitFor(() => this.handle !== handle, 1000)))
+            throw new Error(`${this.name} did not exit after SIGKILL`);
     }
 }
 
@@ -98,11 +100,20 @@ async function waitFor(condition: () => boolean, ms: number): Promise<boolean> {
     return condition();
 }
 
+/** How long a log waits for its pipes to end after the process exits. A grandchild can hold a pipe open. */
+const LOG_DRAIN_MS = 2000;
+
+interface OutputLog {
+    /** Resolves once every byte written so far is in the log file. Never rejects. */
+    finish(): Promise<void>;
+}
+
 /**
  * Appends a child's stdout and stderr to a log file. Without a reader the pipe fills up and the child
- * blocks, so every piped service gets a sink (PLAN T13.3 logs). `done` resolves once the pipes have ended and
- * every byte is written, so an exit callback never runs ahead of the log. A pipe that a grandchild keeps open
- * gives up after two seconds rather than holding the exit.
+ * blocks, so every piped service gets a sink (PLAN T13.3 logs). The exit path calls `finish()`, which ends
+ * the sink only after the pipes have ended. The drain timer starts at that call rather than at attach time,
+ * so output written while the service runs is always kept. Logging never crashes the main process: a sink
+ * error is dropped, and the pipes keep draining so the child does not block on a full pipe.
  */
 function attachLog(
     child: {
@@ -110,28 +121,56 @@ function attachLog(
         stderr: NodeJS.ReadableStream | null;
     },
     logFile: string,
-): { done: Promise<void> } {
+): OutputLog {
     const sink = createWriteStream(logFile, { flags: "a", mode: 0o600 });
-    const ended: Promise<void>[] = [];
-    for (const stream of [child.stdout, child.stderr]) {
-        if (!stream) continue;
-        stream.pipe(sink, { end: false });
-        ended.push(
+    const streams = [child.stdout, child.stderr].filter(
+        (stream): stream is NodeJS.ReadableStream => stream !== null,
+    );
+    const ended = streams.map(
+        (stream) =>
             new Promise<void>((resolve) => {
                 stream.once("end", () => resolve());
                 stream.once("close", () => resolve());
             }),
-        );
-    }
-    const drained = Promise.race([
-        Promise.all(ended),
-        new Promise<void>((resolve) => setTimeout(resolve, 2000).unref()),
-    ]);
+    );
+    for (const stream of streams) stream.pipe(sink, { end: false });
+    // Registered after pipe(): pipe() unpipes a source when the sink fails, and this listener then resumes it.
+    sink.on("error", () => {
+        for (const stream of streams) stream.resume();
+    });
     return {
-        done: drained.then(
-            () => new Promise<void>((resolve) => sink.end(() => resolve())),
-        ),
+        finish: async () => {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const gaveUp = new Promise<void>((resolve) => {
+                timer = setTimeout(resolve, LOG_DRAIN_MS);
+            });
+            await Promise.race([Promise.all(ended), gaveUp]);
+            clearTimeout(timer);
+            // A pipe that is still open here belongs to a grandchild. Its later output is discarded.
+            for (const stream of streams) {
+                stream.unpipe(sink);
+                stream.resume();
+            }
+            await new Promise<void>((resolve) => {
+                if (sink.destroyed) {
+                    resolve();
+                    return;
+                }
+                sink.once("close", () => resolve());
+                sink.end(() => resolve());
+            });
+        },
     };
+}
+
+/** Calls the exit callback once the output is in the log file, or at once when the service has no log. */
+function reportExit(
+    log: OutputLog | null,
+    code: number | null,
+    callback: (code: number | null) => void,
+): void {
+    if (log) void log.finish().then(() => callback(code));
+    else callback(code);
 }
 
 /** Wraps a Node child process as a ProcessHandle. Its output goes to `logFile` when one is given. */
@@ -144,10 +183,18 @@ export function fromChildProcess(
         pid: child.pid,
         kill: (signal) => child.kill(signal),
         onExit: (callback) => {
-            // "close" follows the last output chunk; the callback waits until that output is in the log file.
-            child.once("close", (code) => {
-                if (log) void log.done.then(() => callback(code));
-                else callback(code);
+            // "close" follows the last output chunk. A spawn failure (a missing binary, EACCES) emits "error"
+            // with no pid, and that counts as an exit with no code. An "error" after a successful spawn (a
+            // failed kill) is not an exit. Whichever report comes first wins, so the callback runs once.
+            let reported = false;
+            const report = (code: number | null) => {
+                if (reported) return;
+                reported = true;
+                reportExit(log, code, callback);
+            };
+            child.once("close", (code) => report(code));
+            child.on("error", () => {
+                if (child.pid === undefined) report(null);
             });
         },
     };
@@ -247,12 +294,22 @@ export function fromUtilityProcess(
     const log = logFile ? attachLog(child, logFile) : null;
     return {
         pid: child.pid,
-        kill: () => child.kill(),
+        kill: (signal) => {
+            // UtilityProcess.kill() takes no signal and always sends the default one, so a SIGKILL escalation
+            // goes to the OS directly. ESRCH means the process has already gone.
+            if (signal !== "SIGKILL" || child.pid === undefined)
+                return child.kill();
+            try {
+                process.kill(child.pid, "SIGKILL");
+                return true;
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "ESRCH")
+                    return false;
+                throw error;
+            }
+        },
         onExit: (callback) => {
-            child.once("exit", (code) => {
-                if (log) void log.done.then(() => callback(code));
-                else callback(code);
-            });
+            child.once("exit", (code) => reportExit(log, code, callback));
         },
     };
 }
