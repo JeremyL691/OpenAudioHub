@@ -11,6 +11,15 @@ on:
       - 'src/app/api/desktop/**'
       - 'src/components/desktop-mode-provider.tsx'
       - '.github/workflows/desktop*.yml'
+      - 'src/lib/auth.ts'
+      - 'src/lib/env.ts'
+      - 'src/db/queries/desktop-user.ts'
+      - 'src/app/layout.tsx'
+      - 'src/app/page.tsx'
+      - 'src/app/(auth)/login/page.tsx'
+      - 'src/components/dashboard/user-menu.tsx'
+      - 'src/components/plaud-connect-tabs.tsx'
+      - 'scripts/export-for-desktop.sh'
   push:
     branches:
       - feature/desktop-app
@@ -20,6 +29,15 @@ on:
       - 'src/app/api/desktop/**'
       - 'src/components/desktop-mode-provider.tsx'
       - '.github/workflows/desktop*.yml'
+      - 'src/lib/auth.ts'
+      - 'src/lib/env.ts'
+      - 'src/db/queries/desktop-user.ts'
+      - 'src/app/layout.tsx'
+      - 'src/app/page.tsx'
+      - 'src/app/(auth)/login/page.tsx'
+      - 'src/components/dashboard/user-menu.tsx'
+      - 'src/components/plaud-connect-tabs.tsx'
+      - 'scripts/export-for-desktop.sh'
   workflow_dispatch:
 
 permissions:
