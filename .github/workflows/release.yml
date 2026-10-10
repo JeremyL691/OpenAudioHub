@@ -33,9 +33,11 @@ jobs:
 
       - name: Determine tag
         id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "current=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "current=$INPUT_TAG" >> "$GITHUB_OUTPUT"
           else
             echo "current=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
@@ -132,6 +134,9 @@ jobs:
   # Builds the macOS app (desktop-build.yml). Runs in parallel with the release job above.
   desktop-build:
     uses: ./.github/workflows/desktop-build.yml
+    with:
+      # Build the same tag the release job publishes, not the dispatching branch.
+      ref: ${{ github.event.inputs.tag || github.ref }}
 
   # Attaches the DMG and its checksum to the draft release that the release job creates (needs: release).
   # It only uploads; it does not create or publish the release.

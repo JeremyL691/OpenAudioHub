@@ -6,6 +6,12 @@ name: Desktop build
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build. Empty builds the ref of the calling event.
+        type: string
+        required: false
+        default: ''
     outputs:
       dmg:
         description: File name of the DMG
@@ -24,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
