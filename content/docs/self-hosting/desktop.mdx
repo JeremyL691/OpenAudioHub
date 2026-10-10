@@ -59,7 +59,7 @@ If you run OpenAudioHub with Docker Compose, you can move your data into the Mac
    scripts/export-for-desktop.sh --project <compose project> --out <folder>
    ```
 
-   In this release the script does not export a project named `openaudiohub`. Use `--dry-run` to see the plan without writing anything.
+   The script refuses a project named `openaudiohub` unless you pass `--allow-live`. That flag is for the maintainer's cutover only. Use `--dry-run` to see the plan without writing anything.
 
 2. In the menu bar, choose **Import from Docker…**, pick the folder, and confirm. The app stops its services, imports the data, and opens.
 

@@ -2,7 +2,7 @@
 # Exports a Docker OpenAudioHub stack for the Mac app (PLAN T15.1, D-313). The App imports the result with
 # `OpenAudioHub --import <dir>` or from its menu.
 #
-#   scripts/export-for-desktop.sh --project <compose project> [--out <dir>] [--dry-run]
+#   scripts/export-for-desktop.sh --project <compose project> [--out <dir>] [--dry-run] [--allow-live]
 #
 # Output in <dir> (none of it is printed):
 #   db.dump            pg_dump -Fc of the application database
@@ -15,16 +15,18 @@
 #
 # The source is only read: no writes to its database, volumes, or containers. The app and the pipeline must be
 # stopped for a real run (the database must not change during the dump). Real runs are refused for the live
-# project name `openaudiohub` (its cutover is a separate, gated step). --dry-run prints the plan and writes nothing.
+# project name `openaudiohub` unless --allow-live is given (the gated cutover, docs/dev/DESKTOP_CUTOVER.md).
+# --dry-run prints the plan and writes nothing.
 set -euo pipefail
 
 PROJECT=""
 OUT=""
 DRY_RUN=0
+ALLOW_LIVE=0
 LIVE_PROJECT="openaudiohub"
 
 usage() {
-    echo "usage: $0 --project <compose project> [--out <dir>] [--dry-run]" >&2
+    echo "usage: $0 --project <compose project> [--out <dir>] [--dry-run] [--allow-live]" >&2
     exit 2
 }
 
@@ -43,6 +45,7 @@ while [ "$#" -gt 0 ]; do
         --project) PROJECT="${2:-}"; shift 2 ;;
         --out) OUT="${2:-}"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
+        --allow-live) ALLOW_LIVE=1; shift ;;
         -h | --help) usage ;;
         *) usage ;;
     esac
@@ -53,7 +56,10 @@ command -v docker >/dev/null || die "docker is not installed"
 command -v jq >/dev/null || die "jq is not installed"
 if [ "$DRY_RUN" -eq 0 ]; then
     [ -n "$OUT" ] || die "--out is required for a real run"
-    [ "$PROJECT" != "$LIVE_PROJECT" ] || die "refusing a real run on the live project '$LIVE_PROJECT' (see PLAN T15.1)"
+    if [ "$PROJECT" = "$LIVE_PROJECT" ]; then
+        [ "$ALLOW_LIVE" -eq 1 ] || die "refusing a real run on the live project '$LIVE_PROJECT'; pass --allow-live for the cutover (docs/dev/DESKTOP_CUTOVER.md)"
+        echo "== exporting the live project '$LIVE_PROJECT' (--allow-live)" >&2
+    fi
 fi
 
 # The containers of the project, by compose service label. Names are read from docker, never typed here.
