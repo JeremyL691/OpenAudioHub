@@ -3,7 +3,8 @@
 // Inventory sources:
 //   - native components: the pinned upstream archives (license files taken from the archives themselves)
 //   - Python packages: *.dist-info metadata in build/python
-//   - Node packages: package.json files under build/server/node_modules
+//   - Node packages: package.json files under build/server/node_modules, plus the copies Next.js vendors under
+//     next/dist/compiled. License texts come from the build copy, else the repo's installed copy of the same version.
 // The script fails when a packaged component has no entry, so a new dependency cannot ship unnoticed.
 import { execFileSync } from "node:child_process";
 import {
@@ -284,7 +285,28 @@ for (const entry of readdirSync(sitePackages)
 
 // ---- Node packages (Next.js standalone output) -------------------------------------------------
 const nodeModules = join(build, "server", "node_modules");
-const nodeEntries = [];
+const LICENSE_FILE = /^(LICEN[SC]E|COPYING|NOTICE)/i;
+const NO_TEXT = "license text not included in the package";
+const repoPnpm = join(repoRoot, "node_modules", ".pnpm");
+const repoPnpmEntries = existsSync(repoPnpm) ? readdirSync(repoPnpm) : [];
+
+// Next.js vendors copies of many packages under next/dist/compiled. collectPackageDirs stops at the next package, so
+// those copies are collected separately. Most declare no version; they are labelled with the Next version instead.
+function collectVendoredDirs(compiledDir) {
+    const found = [];
+    const stack = [compiledDir];
+    while (stack.length > 0) {
+        const dir = stack.pop();
+        for (const name of readdirSync(dir)) {
+            const path = join(dir, name);
+            if (name === ".bin" || !lstatSync(path).isDirectory()) continue;
+            if (existsSync(join(path, "package.json"))) found.push(path);
+            stack.push(path);
+        }
+    }
+    return found;
+}
+
 function collectPackageDirs(root) {
     const found = new Map(); // realpath -> directory
     const stack = [root];
@@ -317,40 +339,148 @@ function collectPackageDirs(root) {
     return [...found.values()];
 }
 
+const candidates = []; // { dir, pkg, vendoredRel, nextVersion }
 for (const dir of collectPackageDirs(nodeModules)) {
     const pkgJson = join(dir, "package.json");
     if (!existsSync(pkgJson)) continue;
     const pkg = JSON.parse(readFileSync(pkgJson, "utf8"));
-    if (!pkg.name || !pkg.version) continue;
-    let license = "UNKNOWN";
-    if (typeof pkg.license === "string") license = pkg.license;
-    else if (pkg.license && typeof pkg.license.type === "string")
-        license = pkg.license.type;
-    else if (Array.isArray(pkg.licenses))
-        license = pkg.licenses.map((l) => l.type || l).join(" OR ");
-    const files = [];
-    for (const f of readdirSync(dir)) {
-        if (
-            /^(LICEN[SC]E|COPYING|NOTICE)/i.test(f) &&
-            statSync(join(dir, f)).isFile()
-        ) {
-            files.push(
-                copyInto(
-                    join(
-                        "node",
-                        `${pkg.name}@${pkg.version}`.replace("/", "__"),
-                    ),
-                    join(dir, f),
-                    f,
-                ),
+    if (!pkg.name) continue;
+    candidates.push({ dir, pkg, vendoredRel: null, nextVersion: null });
+    const compiled = join(dir, "dist", "compiled");
+    if (pkg.name === "next" && existsSync(compiled)) {
+        for (const vdir of collectVendoredDirs(compiled)) {
+            const vpkg = JSON.parse(
+                readFileSync(join(vdir, "package.json"), "utf8"),
             );
+            if (!vpkg.name) continue;
+            candidates.push({
+                dir: vdir,
+                pkg: vpkg,
+                vendoredRel: relative(compiled, vdir),
+                nextVersion: pkg.version,
+            });
         }
     }
-    nodeEntries.push({ name: pkg.name, version: pkg.version, license, files });
 }
-const uniqueNode = [
-    ...new Map(nodeEntries.map((e) => [`${e.name}@${e.version}`, e])).values(),
-].sort((a, b) =>
+
+function declaredLicense(pkg) {
+    if (typeof pkg.license === "string") return pkg.license;
+    if (pkg.license && typeof pkg.license.type === "string")
+        return pkg.license.type;
+    if (Array.isArray(pkg.licenses))
+        return pkg.licenses.map((l) => l.type || l).join(" OR ");
+    return null;
+}
+
+// Other installed copies of the same package: the build copy's pnpm key in the repo's pnpm store, any peer-suffixed
+// key of name@version, and for vendored packages the repo's Next.js copy. Only same-version copies are used.
+function installedCopies(c) {
+    const out = [];
+    const marker = "/node_modules/.pnpm/";
+    const at = realpathSync(c.dir).indexOf(marker);
+    if (at >= 0)
+        out.push(join(repoPnpm, realpathSync(c.dir).slice(at + marker.length)));
+    const plus = c.pkg.name.replace("/", "+");
+    for (const entry of repoPnpmEntries) {
+        if (
+            entry === `${plus}@${c.pkg.version}` ||
+            entry.startsWith(`${plus}@${c.pkg.version}_`)
+        )
+            out.push(join(repoPnpm, entry, "node_modules", c.pkg.name));
+    }
+    if (c.vendoredRel)
+        out.push(
+            join(
+                repoRoot,
+                "node_modules",
+                "next",
+                "dist",
+                "compiled",
+                c.vendoredRel,
+            ),
+        );
+    return out;
+}
+
+function firstFile(dirs, name) {
+    for (const d of dirs) {
+        const path = join(d, name);
+        if (existsSync(path) && statSync(path).isFile()) return path;
+    }
+    return null;
+}
+
+function licenseFilesIn(dirs) {
+    for (const d of dirs) {
+        if (!existsSync(d) || !statSync(d).isDirectory()) continue;
+        const files = readdirSync(d).filter(
+            (f) => LICENSE_FILE.test(f) && statSync(join(d, f)).isFile(),
+        );
+        if (files.length > 0) return { dir: d, files };
+    }
+    return { dir: null, files: [] };
+}
+
+const nodeByKey = new Map();
+for (const c of candidates) {
+    let version = c.pkg.version;
+    if (!version) {
+        if (!c.vendoredRel)
+            throw new Error(
+                `node ${c.pkg.name} at ${c.dir}: no version in package.json`,
+            );
+        version = `vendored-in-next-${c.nextVersion}`;
+    }
+    const key = `${c.pkg.name}@${version}`;
+    if (nodeByKey.has(key)) continue;
+    const declared = declaredLicense(c.pkg);
+    const sources = [c.dir, ...installedCopies(c)];
+    const found = licenseFilesIn(sources);
+    const dirName = `${c.pkg.name.replaceAll("/", "__")}@${version}`;
+    const entry = {
+        name: c.pkg.name,
+        version,
+        license: declared ?? "not declared in package.json",
+        files: found.files.map((f) =>
+            copyInto(join("node", dirName), join(found.dir, f), f),
+        ),
+        notes: [],
+    };
+    if (c.vendoredRel) entry.notes.push("copy vendored by Next.js");
+    if (declared === null)
+        entry.notes.push(
+            entry.files.length > 0
+                ? "no license field in package.json; the license text is shipped"
+                : "no license field in package.json and no license file found",
+        );
+    if (c.pkg.name.startsWith("@img/sharp-libvips-")) {
+        // libvips ships no LICENSE file: its README has the licensing table, and versions.json names the libvips version.
+        const versionsPath = firstFile(sources, "versions.json");
+        if (!versionsPath) throw new Error(`${key}: versions.json not found`);
+        const vips = JSON.parse(readFileSync(versionsPath, "utf8")).vips;
+        if (typeof vips !== "string")
+            throw new Error(`${key}: no libvips version in versions.json`);
+        for (const f of ["README.md", "versions.json"]) {
+            const src = firstFile(sources, f);
+            if (src) entry.files.push(copyInto(join("libvips", vips), src, f));
+        }
+        // The LGPL-3.0 text (and the GPL-3.0 text it builds on) are taken from the pinned FFmpeg source archive,
+        // which carries both verbatim, so the bundle ships them rather than a link.
+        for (const f of ["COPYING.LGPLv3", "COPYING.GPLv3"]) {
+            const text = extractFromArchive(
+                join(downloads, PINS.ffmpeg.file),
+                `ffmpeg-${PINS.ffmpeg.version}/${f}`,
+                join(work, "ffmpeg"),
+            );
+            entry.files.push(copyInto(join("libvips", vips), text, f));
+        }
+        entry.notes.push(
+            `source offer: libvips ${vips} https://github.com/libvips/libvips/releases/tag/v${vips}; sharp-libvips ${version} https://github.com/lovell/sharp-libvips/releases/tag/v${version}`,
+        );
+    }
+    nodeByKey.set(key, entry);
+}
+const uniqueNode = [...nodeByKey.values()].sort((a, b) =>
     `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`),
 );
 
@@ -363,12 +493,6 @@ for (const entry of pythonEntries) {
     if (!entry.name) problems.push("python dist-info without a Name");
     if (!entry.license || entry.license === "UNKNOWN")
         problems.push(`python ${entry.name}: license not declared`);
-}
-for (const entry of uniqueNode) {
-    if (!entry.license || entry.license === "UNKNOWN")
-        problems.push(
-            `node ${entry.name}@${entry.version}: license not declared`,
-        );
 }
 for (const component of components) {
     for (const file of component.files) {
@@ -409,11 +533,20 @@ lines.push(
     "",
     "## Node packages (web server)",
     "",
-    "| Package | Version | License |",
-    "| --- | --- | --- |",
+    "Versions written as `vendored-in-next-<version>` are copies that Next.js bundles under `next/dist/compiled`; they declare no version of their own.",
+    "",
+    "| Package | Version | License | License text | Notes |",
+    "| --- | --- | --- | --- | --- |",
 );
-for (const e of uniqueNode)
-    lines.push(`| ${e.name} | ${e.version} | ${e.license} |`);
+for (const e of uniqueNode) {
+    const text =
+        e.files.length > 0
+            ? e.files.map((f) => `\`licenses/${f}\``).join(", ")
+            : NO_TEXT;
+    lines.push(
+        `| ${e.name} | ${e.version} | ${e.license} | ${text} | ${e.notes.join("; ")} |`,
+    );
+}
 lines.push("");
 writeFileSync(join(build, "THIRD_PARTY_NOTICES.md"), lines.join("\n"));
 
@@ -425,4 +558,15 @@ if (problems.length > 0) {
 console.log(
     `THIRD_PARTY_NOTICES.md written: ${components.length} native, ${pythonEntries.length} Python, ${uniqueNode.length} Node packages`,
 );
-void relative;
+const withText = uniqueNode.filter((e) => e.files.length > 0);
+const withoutText = uniqueNode.filter((e) => e.files.length === 0);
+if (withoutText.length > 0) {
+    console.log(
+        `Node packages without license text (${withoutText.length}), each noted "${NO_TEXT}":`,
+    );
+    for (const e of withoutText)
+        console.log(`  - ${e.name}@${e.version} (${e.license})`);
+}
+console.log(
+    `Node packages: ${uniqueNode.length}, with license text: ${withText.length}, without: ${withoutText.length}`,
+);

@@ -78,6 +78,13 @@ const packagedApp = process.env.OAH_SMOKE_APP
 const packagedExecutable = packagedApp
     ? join(packagedApp, "Contents", "MacOS", "OpenAudioHub")
     : null;
+// The processes this run starts (postgres, the pipeline, the server) run from the bundle it launched: the packaged
+// Resources folder, or desktop/build in dev. Cleanup and the leftover count match only that path (escaped), never
+// every postgres/python/server on the host: another run may be using its own app at the same time.
+const launchedRoot = packagedApp
+    ? join(packagedApp, "Contents", "Resources")
+    : join(desktopRoot, "build");
+const ownProcessPattern = `${launchedRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(postgres|python|server)`;
 
 function launchEnv() {
     return {
@@ -193,7 +200,7 @@ try {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
 }
 results.killedMainPid = killed;
-results.leftoverAfterKill = spawnSync("pgrep", ["-f", "(desktop/build|OpenAudioHub\.app/Contents/Resources)/(postgres|python|server)"])
+results.leftoverAfterKill = spawnSync("pgrep", ["-f", ownProcessPattern])
     .stdout.toString()
     .trim()
     .split("\n")
@@ -222,8 +229,8 @@ results.upgradeBackups = readdirSync(join(userData, "backups")).filter((name) =>
     name.endsWith(".dump"),
 ).length;
 
-// Clean up anything the forced kill left behind (test processes only: they run from desktop/build).
-spawnSync("pkill", ["-9", "-f", "(desktop/build|OpenAudioHub\.app/Contents/Resources)/(postgres|python|server)"]);
+// Clean up anything the forced kill left behind: only processes started from the bundle this run launched.
+spawnSync("pkill", ["-9", "-f", ownProcessPattern]);
 results.portsFreeAtEnd = !anyListening();
 results.userData = userData;
 
