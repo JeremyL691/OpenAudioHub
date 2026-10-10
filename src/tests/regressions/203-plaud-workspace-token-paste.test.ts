@@ -194,7 +194,7 @@ describe("POST /api/plaud/auth/connect-token (workspace-token guard)", () => {
         const body = await res.json();
         expect(body.code).toBe(ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED);
         expect(body.error).toMatch(/workspace token/i);
-        expect(body.error).toMatch(/pld_tokenstr/);
+        expect(body.error).toMatch(/pld_ut cookie/);
         // No Plaud round-trip — the guard short-circuits.
         expect(mockFetch).not.toHaveBeenCalled();
     });

@@ -7,45 +7,17 @@ import { useDesktopMode } from "@/components/desktop-mode-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toastApiError } from "@/lib/api-errors";
+import { getApiErrorMessage, toastApiError } from "@/lib/api-errors";
 import { BRAND } from "@/lib/brand";
 import {
-    LEGACY_CONNECTOR_GLOBAL,
-    LEGACY_CONNECTOR_REPO_URL,
-} from "@/lib/brand/legacy";
+    CONNECTOR_INSTALL_URL,
+    readConnectorBridge,
+} from "@/lib/plaud/connector-bridge";
 import {
     DEFAULT_SERVER_KEY,
     PLAUD_SERVERS,
     type PlaudServerKey,
 } from "@/lib/plaud/servers";
-
-const CONNECTOR_CHROME_URL = `${LEGACY_CONNECTOR_REPO_URL}#installation`;
-
-// API contract for the browser extension; bump `version` on both sides.
-interface ConnectorBridge {
-    version: number;
-    connect(): Promise<{
-        accessToken: string;
-        apiBase: string;
-        region: "global" | "euc1" | "apse1" | "unknown";
-        capturedAt: number;
-    }>;
-}
-
-declare global {
-    interface Window {
-        __openaudiohubConnector?: ConnectorBridge;
-    }
-}
-
-/** The extension publishes its bridge under the current name or the one it used before the rename. */
-function readConnectorBridge(): ConnectorBridge | undefined {
-    const scope = window as unknown as Record<
-        string,
-        ConnectorBridge | undefined
-    >;
-    return scope.__openaudiohubConnector ?? scope[LEGACY_CONNECTOR_GLOBAL];
-}
 
 type Mode = "connector" | "email" | "token";
 type EmailStep = "email" | "code";
@@ -169,6 +141,215 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
     );
 }
 
+interface HandoffStartResponse {
+    code: string;
+    expiresAt: number;
+}
+
+interface HandoffStatusResponse {
+    status: "pending" | "connected" | "expired";
+    error?: string;
+}
+
+const HANDOFF_POLL_MS = 2000;
+const HANDOFF_EXPIRED_MESSAGE = "The sign-in link expired. Try again.";
+
+interface DesktopConnectPaneProps {
+    hasConnector: boolean;
+    isLoading: boolean;
+    onConnected: () => void;
+    onConnectWindow: () => void;
+    onUseEmail: () => void;
+    onUseToken: () => void;
+}
+
+/** Desktop sign-in: hands off to the default browser and polls until the handoff completes. */
+function DesktopConnectPane({
+    hasConnector,
+    isLoading,
+    onConnected,
+    onConnectWindow,
+    onUseEmail,
+    onUseToken,
+}: DesktopConnectPaneProps) {
+    const [handoffCode, setHandoffCode] = useState<string | null>(null);
+    const [isStarting, setIsStarting] = useState(false);
+    const [handoffError, setHandoffError] = useState<string | null>(null);
+    const onConnectedRef = useRef(onConnected);
+
+    useEffect(() => {
+        onConnectedRef.current = onConnected;
+    }, [onConnected]);
+
+    useEffect(() => {
+        if (handoffCode === null) return;
+        let active = true;
+        const poll = async () => {
+            try {
+                const res = await fetch(
+                    `/api/plaud/auth/handoff?code=${encodeURIComponent(handoffCode)}`,
+                );
+                if (!active) return;
+                if (!res.ok) {
+                    const message = await getApiErrorMessage(
+                        res,
+                        "Could not check the sign-in status",
+                    );
+                    if (!active) return;
+                    setHandoffError(message);
+                    setHandoffCode(null);
+                    return;
+                }
+                const body = (await res.json()) as HandoffStatusResponse;
+                if (!active) return;
+                if (body.status === "connected") {
+                    setHandoffCode(null);
+                    toast.success("Plaud account connected");
+                    onConnectedRef.current();
+                    return;
+                }
+                if (body.status === "expired") {
+                    setHandoffCode(null);
+                    setHandoffError(HANDOFF_EXPIRED_MESSAGE);
+                    return;
+                }
+                setHandoffError(body.error ?? null);
+            } catch {}
+        };
+        const id = window.setInterval(poll, HANDOFF_POLL_MS);
+        return () => {
+            active = false;
+            window.clearInterval(id);
+        };
+    }, [handoffCode]);
+
+    const handleStart = useCallback(async () => {
+        setIsStarting(true);
+        setHandoffError(null);
+        try {
+            const res = await fetch("/api/plaud/auth/handoff", {
+                method: "POST",
+            });
+            if (!res.ok) {
+                await toastApiError(res, {
+                    fallback: "Could not start browser sign-in",
+                    errorContext: "start Plaud browser sign-in",
+                });
+                return;
+            }
+            const data = (await res.json()) as HandoffStartResponse;
+            window.open(
+                `${window.location.origin}/connect/plaud?code=${encodeURIComponent(data.code)}`,
+                "_blank",
+            );
+            setHandoffCode(data.code);
+        } catch (err) {
+            toast.error(
+                err instanceof Error
+                    ? err.message
+                    : "Could not start browser sign-in",
+            );
+        } finally {
+            setIsStarting(false);
+        }
+    }, []);
+
+    const handleCancel = useCallback(async () => {
+        const code = handoffCode;
+        if (code !== null) {
+            try {
+                await fetch(
+                    `/api/plaud/auth/handoff?code=${encodeURIComponent(code)}`,
+                    { method: "DELETE" },
+                );
+            } catch {}
+        }
+        setHandoffCode(null);
+        setHandoffError(null);
+    }, [handoffCode]);
+
+    return (
+        <div className="space-y-3">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+                Sign in with the Google, Apple, or email account you already use
+                in your browser.
+            </p>
+            {handoffCode === null ? (
+                <Button
+                    onClick={handleStart}
+                    disabled={isStarting}
+                    className="w-full"
+                >
+                    {isStarting
+                        ? "Opening your browser…"
+                        : "Continue in browser"}
+                </Button>
+            ) : (
+                <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                        Finish signing in in your browser. This window updates
+                        by itself.
+                    </p>
+                    <Button
+                        variant="outline"
+                        onClick={handleCancel}
+                        className="w-full"
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            )}
+            {handoffError && (
+                <p role="alert" className="text-xs text-destructive">
+                    {handoffError}
+                </p>
+            )}
+            <p className="text-xs text-muted-foreground leading-relaxed">
+                Needs the OpenAudioHub Connector extension in that browser.{" "}
+                <a
+                    href={CONNECTOR_INSTALL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                >
+                    Get it
+                </a>
+            </p>
+            {hasConnector && (
+                <Button
+                    variant="outline"
+                    onClick={onConnectWindow}
+                    disabled={isLoading}
+                    className="w-full"
+                >
+                    {isLoading
+                        ? "Waiting for Plaud sign-in…"
+                        : "Sign in in a window instead"}
+                </Button>
+            )}
+            <p className="text-xs text-muted-foreground leading-relaxed">
+                Sign-in blocked or not working?{" "}
+                <button
+                    type="button"
+                    onClick={onUseToken}
+                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                >
+                    Paste a token
+                </button>{" "}
+                (Google or Apple accounts) or use an{" "}
+                <button
+                    type="button"
+                    onClick={onUseEmail}
+                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                >
+                    email code
+                </button>{" "}
+                (email accounts).
+            </p>
+        </div>
+    );
+}
+
 interface ConnectorPaneProps {
     onConnected: () => void;
     hasConnector: boolean;
@@ -213,30 +394,28 @@ function ConnectorPane({
             toast.success("Plaud account connected");
             onConnected();
         } catch (err) {
-            toast.error(
-                err instanceof Error ? err.message : "Failed to connect",
-            );
+            const message =
+                err instanceof Error ? err.message : "Failed to connect";
+            if (message === "Plaud sign-in was cancelled.") {
+                toast.info(message);
+            } else {
+                toast.error(message);
+            }
         } finally {
             setIsLoading(false);
         }
     }, [onConnected]);
 
-    if (!hasConnector && isDesktop) {
+    if (isDesktop) {
         return (
-            <div className="space-y-3">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                    The browser extension cannot reach the desktop app. Connect
-                    with an{" "}
-                    <button
-                        type="button"
-                        onClick={onUseEmail}
-                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
-                    >
-                        email code
-                    </button>{" "}
-                    or paste a token instead.
-                </p>
-            </div>
+            <DesktopConnectPane
+                hasConnector={hasConnector}
+                isLoading={isLoading}
+                onConnected={onConnected}
+                onConnectWindow={handleConnect}
+                onUseEmail={onUseEmail}
+                onUseToken={onUseToken}
+            />
         );
     }
 
@@ -252,7 +431,7 @@ function ConnectorPane({
                 </p>
                 <Button asChild className="w-full">
                     <a
-                        href={CONNECTOR_CHROME_URL}
+                        href={CONNECTOR_INSTALL_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                     >
@@ -818,6 +997,14 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                             consoleHost={webHost}
                             ariaLabel="Copy the token-grab snippet"
                         />
+                        <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                            <p className="font-medium text-foreground">
+                                If that prints an error, open DevTools, go to
+                                Application, then Cookies, select {webOrigin},
+                                and copy the value of{" "}
+                                <span className="font-mono">pld_ut</span>.
+                            </p>
+                        </div>
                         <p>
                             Then paste it into the box above. If the console
                             shows a “don't paste here” warning, use the manual

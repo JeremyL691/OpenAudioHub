@@ -27,6 +27,7 @@ import { exportSecrets } from "./export-keys.js";
 import { runCliCommand } from "./import-command.js";
 import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
+import { registerPlaudConnectorIpc } from "./plaud-signin.js";
 import { choosePorts } from "./ports.js";
 import {
     ensureDatabase,
@@ -495,6 +496,11 @@ async function main(): Promise<void> {
         exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch });
 
     let mainWindow: BrowserWindow | null = null;
+    registerPlaudConnectorIpc({
+        appOrigin,
+        getParent: () => mainWindow ?? undefined,
+        log,
+    });
 
     /**
      * Opens the window, or brings the open one forward. Closing the window destroys it, which releases the
