@@ -101,10 +101,13 @@ jobs:
             printf '%s\n' "$BODY"
             printf '\n---\n\n'
             printf 'Full changelog: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' "$REPO" "$TAG"
+            # shellcheck disable=SC2016 # the backticks are Markdown, not command substitution
             printf 'Install: run the attached `install.sh`, or follow the [Quick start](https://github.com/%s#quick-start) in the README with the attached `docker-compose.yml` and `env.example`.\n' "$REPO"
           } > /tmp/release-body.md
-          # Output name uses an underscore so `${{ steps.notes.outputs.body_path }}`
-          # is parsed as a property access rather than `body - path`.
+          # Output name uses an underscore so the body_path output of this step is
+          # parsed as a property access rather than `body - path`. (No expression
+          # syntax in this comment: Actions evaluates expressions in run scripts,
+          # comments included.)
           echo "body_path=/tmp/release-body.md" >> "$GITHUB_OUTPUT"
 
       # softprops/action-gh-release renames hidden files (e.g. `.env.example`)
