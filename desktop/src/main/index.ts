@@ -100,6 +100,19 @@ async function main(): Promise<void> {
     }
     app.setName("OpenAudioHub");
 
+    // A second launch or a Dock click while the app is still starting is remembered and served once the
+    // window can open; the listeners are installed now so such a request is not lost.
+    let openWindowNow: (() => void) | null = null;
+    let windowRequested = false;
+    const requestWindow = (): void => {
+        if (openWindowNow) openWindowNow();
+        else windowRequested = true;
+    };
+    // A click on the Dock icon with no window open brings the window back.
+    app.on("activate", requestWindow);
+    // Opening the app again while it runs (single instance, T13.5) brings the window forward.
+    app.on("second-instance", requestWindow);
+
     const bundleRoot = bundleRootFor();
     const paths = resolvePaths(process.env);
     mkdirSync(paths.userData, { recursive: true, mode: 0o700 });
@@ -200,10 +213,11 @@ async function main(): Promise<void> {
         }
         // From the menu, after its restart: the App opens as usual, and a failed import is said plainly.
         if (result.code !== 0) {
-            dialog.showErrorBox(
-                "The Docker export was not imported",
-                result.message,
-            );
+            await dialog.showMessageBox({
+                type: "error",
+                message: "The Docker export was not imported",
+                detail: result.message,
+            });
         }
     }
 
@@ -272,8 +286,9 @@ async function main(): Promise<void> {
             pythonBin: join(bundleRoot, "python", "bin", "python3"),
             launcher: join(bundleRoot, "pipeline-launcher.py"),
             port: ports.pipeline,
+            // The pipeline reads none of the user's settings (audio-pipeline reads only AUDIO_PIPELINE_*), so the
+            // SMTP and S3 secrets in openaudiohub.env stay out of its environment (D-319).
             env: childEnvironment(ffmpegBin, {
-                ...userEnv,
                 AUDIO_PIPELINE_DATA_DIR: paths.pipelineData,
                 AUDIO_PIPELINE_TOKEN: secrets.AUDIO_PIPELINE_TOKEN,
                 AUDIO_PIPELINE_CORE_URL: appOrigin,
@@ -335,12 +350,36 @@ async function main(): Promise<void> {
     supervisor.onEvent((event) => {
         log(`supervisor ${JSON.stringify(event)}`);
         if (event.type === "failed") {
-            dialog.showErrorBox(
-                "OpenAudioHub stopped",
-                `${event.service} stopped: ${event.reason}`,
-            );
+            // Not showErrorBox: it blocks the main process, so the app could not quit while it is open (B-013).
+            void dialog.showMessageBox({
+                type: "error",
+                message: "OpenAudioHub stopped",
+                detail: `${event.service} stopped: ${event.reason}`,
+            });
         }
     });
+
+    // Set by "Import from Docker…": the services stop first, then the App restarts with these arguments.
+    let relaunchArgs: string[] | null = null;
+
+    // Electron does not wait for before-quit listeners. Prevent the quit, stop the services in order
+    // (no orphan processes), then quit for real. Installed before the services start, so a quit at any
+    // later point, including after a start-up failure, stops what was started.
+    let quitting = false;
+    app.on("before-quit", (event) => {
+        if (quitting) return;
+        event.preventDefault();
+        quitting = true;
+        tray?.destroy();
+        log("quitting: stopping services");
+        void supervisor.stop().finally(() => {
+            log("services stopped");
+            // The menu's import restarts the App once the services are down, so the import gets the cluster.
+            if (relaunchArgs) app.relaunch({ args: relaunchArgs });
+            app.quit();
+        });
+    });
+
     await supervisor.start();
     // The data now works with this version. The next start compares against it (T13.6).
     config = { ...config, lastVersion: currentVersion };
@@ -370,29 +409,32 @@ async function main(): Promise<void> {
             mainWindow.focus();
             return;
         }
-        const win = createAppWindow({ appOrigin, reauthenticate });
+        const appWindow = createAppWindow({ appOrigin, reauthenticate, log });
+        const win = appWindow.win;
         mainWindow = win;
         app.dock?.show();
         win.on("closed", () => {
-            mainWindow = null;
+            if (mainWindow === win) mainWindow = null;
             app.dock?.hide();
         });
         try {
-            await reauthenticate();
-            await win.loadURL(`${appOrigin}/dashboard`);
+            await appWindow.load();
             log("window loaded /dashboard");
         } catch (error) {
-            log(`window start failed: ${errorText(error)}`);
+            // A hidden window that never loaded would be shown blank by the next open; start over instead.
+            if (!win.isDestroyed()) win.destroy();
             throw error;
         }
     }
 
+    /** The services keep running: the window can be opened again from the menu bar. */
     function showOpenError(error: unknown): void {
         log(`could not open the window: ${errorText(error)}`);
-        dialog.showErrorBox(
-            "OpenAudioHub could not open the window",
-            errorText(error),
-        );
+        void dialog.showMessageBox({
+            type: "error",
+            message: "OpenAudioHub could not open the window",
+            detail: `${errorText(error)}\n\nOpen it again from the menu bar. If the problem continues, check the log folder from the menu.`,
+        });
     }
 
     async function exportKeysInteractively(): Promise<void> {
@@ -413,8 +455,14 @@ async function main(): Promise<void> {
         log("exported the keys to a file the user chose");
     }
 
-    // Set by "Import from Docker…": the services stop first, then the App restarts with these arguments.
-    let relaunchArgs: string[] | null = null;
+    function showExportError(error: unknown): void {
+        log(`could not export the keys: ${errorText(error)}`);
+        void dialog.showMessageBox({
+            type: "error",
+            message: "The keys could not be exported",
+            detail: errorText(error),
+        });
+    }
 
     async function importFromDockerInteractively(): Promise<void> {
         const picked = await dialog.showOpenDialog({
@@ -438,10 +486,11 @@ async function main(): Promise<void> {
 
     function showImportError(error: unknown): void {
         log(`could not start the import: ${errorText(error)}`);
-        dialog.showErrorBox(
-            "The Docker export could not be imported",
-            errorText(error),
-        );
+        void dialog.showMessageBox({
+            type: "error",
+            message: "The Docker export could not be imported",
+            detail: errorText(error),
+        });
     }
 
     tray = createTray(
@@ -452,11 +501,18 @@ async function main(): Promise<void> {
                 openDataFolder: () => void shell.openPath(paths.userData),
                 openLogsFolder: () => void shell.openPath(paths.logs),
                 editConfiguration: () => {
-                    if (!existsSync(paths.userEnv))
-                        writeFileAtomic(paths.userEnv, ENV_TEMPLATE, 0o600);
+                    try {
+                        if (!existsSync(paths.userEnv))
+                            writeFileAtomic(paths.userEnv, ENV_TEMPLATE, 0o600);
+                    } catch (error) {
+                        log(
+                            `could not create the settings file: ${errorText(error)}`,
+                        );
+                    }
                     void shell.openPath(paths.userEnv);
                 },
-                exportKeys: () => void exportKeysInteractively(),
+                exportKeys: () =>
+                    void exportKeysInteractively().catch(showExportError),
                 importFromDocker: () =>
                     void importFromDockerInteractively().catch(showImportError),
                 setLaunchAtLogin: (enabled) => {
@@ -475,44 +531,16 @@ async function main(): Promise<void> {
         ),
     );
 
-    // Started at login: the menu-bar item only, as D-305 asks. A normal launch opens the window.
-    if (app.getLoginItemSettings().wasOpenedAtLogin) {
+    openWindowNow = () => void openWindow().catch(showOpenError);
+    // Started at login: the menu-bar item only, as D-305 asks, unless the app was opened again meanwhile.
+    // A normal launch opens the window.
+    if (app.getLoginItemSettings().wasOpenedAtLogin && !windowRequested) {
         log("started at login: menu bar only");
         app.dock?.hide();
     } else {
-        try {
-            await openWindow();
-        } catch (error) {
-            log(`window start failed: ${errorText(error)}`);
-            throw error;
-        }
+        // The services are up; a window that does not load is reported, not a reason to quit (B-013).
+        await openWindow().catch(showOpenError);
     }
-
-    // A click on the Dock icon with no window open brings the window back.
-    app.on("activate", () => {
-        void openWindow().catch(showOpenError);
-    });
-    // Opening the app again while it runs (single instance, T13.5) brings the window forward.
-    app.on("second-instance", () => {
-        void openWindow().catch(showOpenError);
-    });
-
-    // Electron does not wait for before-quit listeners. Prevent the quit, stop the services in order
-    // (no orphan processes), then quit for real.
-    let quitting = false;
-    app.on("before-quit", (event) => {
-        if (quitting) return;
-        event.preventDefault();
-        quitting = true;
-        tray?.destroy();
-        log("quitting: stopping services");
-        void supervisor.stop().finally(() => {
-            log("services stopped");
-            // The menu's import restarts the App once the services are down, so the import gets the cluster.
-            if (relaunchArgs) app.relaunch({ args: relaunchArgs });
-            app.quit();
-        });
-    });
 }
 
 // Electron's own profile (cookies, local storage, caches) is kept in the data folder too. The default is the same
@@ -524,12 +552,17 @@ if (process.env.OAH_SKIP_MAIN !== "1") {
     void app
         .whenReady()
         .then(main)
-        .catch((error: unknown) => {
+        .catch(async (error: unknown) => {
             recordStartupFailure(error);
-            dialog.showErrorBox(
-                "OpenAudioHub could not start",
-                errorText(error),
-            );
+            // Not showErrorBox: it blocks the main process, and a quit from the Dock or the system could not end
+            // the app while it was open (B-013). The quit stops any services that started.
+            await dialog
+                .showMessageBox({
+                    type: "error",
+                    message: "OpenAudioHub could not start",
+                    detail: errorText(error),
+                })
+                .catch(() => undefined);
             app.quit();
         });
 }
