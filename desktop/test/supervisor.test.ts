@@ -3,10 +3,13 @@ import {
     type Service,
     Supervisor,
     type SupervisorEvent,
+    SupervisorStoppedError,
 } from "../src/main/supervisor.js";
 
 interface FakeOptions {
     startFails?: boolean;
+    /** When it returns a promise, start() waits for it. Lets a test hold a start open. */
+    gate?: () => Promise<void> | undefined;
     log: string[];
 }
 
@@ -21,6 +24,8 @@ function fakeService(name: string, options: FakeOptions) {
         async start() {
             options.log.push(`start:${name}`);
             if (options.startFails) throw new Error(`${name} cannot start`);
+            const gate = options.gate?.();
+            if (gate) await gate;
             running = true;
         },
         async stop() {
@@ -213,5 +218,109 @@ describe("Supervisor restarts", () => {
             service: "migrate",
         });
         expect(h.timers).toHaveLength(0);
+    });
+});
+
+/** Lets pending promise callbacks and zero-delay timers run. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("Supervisor stop during start", () => {
+    it("stops while a start is blocked: later services never start, and started ones are stopped", async () => {
+        const log: string[] = [];
+        let release: () => void = () => undefined;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const services = [
+            fakeService("postgres", { log }),
+            fakeService("migrate", { log, gate: () => gate }),
+            fakeService("pipeline", { log }),
+            fakeService("next", { log }),
+        ];
+        const supervisor = new Supervisor({
+            services,
+            oneShot: ["migrate"],
+            parallel: ["pipeline", "next"],
+        });
+
+        const starting = supervisor.start();
+        await settle();
+        expect(log).toEqual(["start:postgres", "start:migrate"]);
+
+        const stopping = supervisor.stop();
+        release();
+        await stopping;
+
+        await expect(starting).rejects.toBeInstanceOf(SupervisorStoppedError);
+        await expect(starting).rejects.toThrow("stopped while starting");
+        expect(log).toEqual([
+            "start:postgres",
+            "start:migrate",
+            "stop:next",
+            "stop:pipeline",
+            "stop:migrate",
+            "stop:postgres",
+        ]);
+    });
+
+    it("stops a service whose start was still running when stop() began", async () => {
+        const log: string[] = [];
+        const timers: Array<() => void> = [];
+        let hold: Promise<void> | undefined;
+        let release: () => void = () => undefined;
+        const pipeline = fakeService("pipeline", {
+            log,
+            gate: () => hold,
+        });
+        const services = [
+            fakeService("postgres", { log }),
+            pipeline,
+            fakeService("next", { log }),
+        ];
+        const supervisor = new Supervisor({
+            services,
+            parallel: ["pipeline", "next"],
+            setTimer: (callback) => timers.push(callback),
+        });
+        await supervisor.start();
+
+        hold = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        pipeline.crash("boom");
+        const [restart] = timers.splice(0);
+        restart?.();
+        expect(log).toContain("start:pipeline");
+
+        const stopping = supervisor.stop();
+        release();
+        await stopping;
+
+        expect(pipeline.running()).toBe(false);
+        expect(log.at(-1)).toBe("stop:postgres");
+        expect(log.filter((line) => line === "start:pipeline")).toHaveLength(2);
+    });
+});
+
+describe("Supervisor stop", () => {
+    it("stops each service once when stop() is called twice", async () => {
+        const h = harness();
+        await h.supervisor.start();
+        h.log.length = 0;
+
+        await Promise.all([h.supervisor.stop(), h.supervisor.stop()]);
+
+        expect(h.log.filter((line) => line.startsWith("stop:")).sort()).toEqual(
+            ["stop:migrate", "stop:next", "stop:pipeline", "stop:postgres"],
+        );
+    });
+
+    it("does nothing when stop() is called before start()", async () => {
+        const h = harness();
+
+        await h.supervisor.stop();
+
+        expect(h.log).toEqual([]);
+        expect(h.events).toEqual([]);
     });
 });
