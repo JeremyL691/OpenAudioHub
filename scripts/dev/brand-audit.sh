@@ -83,6 +83,13 @@ allowed() {
     return 1
 }
 
+if ! command -v rg > /dev/null; then
+    echo "brand-audit: ripgrep (rg) is required and was not found." >&2
+    exit 1
+fi
+
+# rg exits 1 when nothing matches. Any higher status is an error, not a clean result.
+rg_status=0
 hits=$(rg --no-heading --line-number --ignore-case --color never \
     --glob '!**/node_modules/**' \
     --glob '!**/.git/**' \
@@ -92,7 +99,11 @@ hits=$(rg --no-heading --line-number --ignore-case --color never \
     --glob '!**/.dev-artifacts/**' \
     --glob '!pnpm-lock.yaml' \
     --glob '!uv.lock' \
-    -e "$PATTERN" . || true)
+    -e "$PATTERN" .) || rg_status=$?
+if [ "$rg_status" -gt 1 ]; then
+    echo "brand-audit: rg failed with exit status $rg_status." >&2
+    exit 1
+fi
 
 violations=0
 while IFS= read -r hit; do

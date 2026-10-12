@@ -40,7 +40,7 @@ const PLAUD_CN_API_BASE = "https://api.plaud.cn";
 const READ_TOKEN_SCRIPT =
     '(()=>{try{return localStorage.getItem("pld_tokenstr")}catch{return null}})()';
 
-export interface OpenPlaudSignInOptions {
+export interface PlaudSignInWindowOptions {
     parent?: BrowserWindowType;
     webOrigin?: string;
     log?: (message: string) => void;
@@ -101,8 +101,8 @@ function guardContents(
  * Opens the Plaud sign-in window and resolves with the captured token. Only one sign-in runs at a time: a second call
  * brings the open window forward and returns the same promise.
  */
-export function openPlaudSignIn(
-    options: OpenPlaudSignInOptions,
+export function showPlaudSignIn(
+    options: PlaudSignInWindowOptions,
 ): Promise<PlaudConnectPayload> {
     if (inFlight) {
         if (!inFlight.win.isDestroyed()) {
@@ -286,7 +286,7 @@ export function registerPlaudConnectorIpc(options: {
             return { ok: false, error: "Not allowed." };
         }
         try {
-            const payload = await openPlaudSignIn({
+            const payload = await showPlaudSignIn({
                 parent: options.getParent(),
                 log: options.log,
             });
