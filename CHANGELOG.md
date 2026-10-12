@@ -115,5 +115,6 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
 - The feature list once named translation of summaries. The imported code never had it, so it is not in this release.
 
-[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
+[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.1...v1.1.0
