@@ -140,7 +140,7 @@ export function SyncButton({
                     variant="outline"
                     size="sm"
                     className={cn(
-                        "h-9",
+                        "h-10 rounded-md sm:h-8",
                         // Subtle destructive accent on failure: keeps
                         // the outline shape (so the header doesn't get
                         // a loud filled red button) but tints the
@@ -163,7 +163,7 @@ export function SyncButton({
                         <RefreshCw
                             className={cn(
                                 "size-4 lg:mr-2",
-                                isAutoSyncing && "animate-spin",
+                                isAutoSyncing && "motion-safe:animate-spin",
                             )}
                             aria-hidden="true"
                         />
@@ -171,7 +171,16 @@ export function SyncButton({
                     {/* Icon only up to lg: at md the library's header also holds
                         the search and upload buttons, and would overflow the
                         content column. The button keeps its aria-label. */}
-                    <span className="hidden lg:inline">{label}</span>
+                    <span
+                        className={cn(
+                            "hidden lg:inline",
+                            !failed &&
+                                !isAutoSyncing &&
+                                "text-muted-foreground",
+                        )}
+                    >
+                        {label}
+                    </span>
                 </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{title}</TooltipContent>

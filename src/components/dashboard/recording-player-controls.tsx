@@ -62,13 +62,13 @@ export function RecordingPlayerControls({
     // play, time and speed, then volume. Every control fits at 320 px, so the
     // waveform is never squeezed to zero width. From sm up it is one row.
     return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4 lg:flex-nowrap 2xl:min-w-0 2xl:flex-1">
             <Button
                 onClick={onTogglePlay}
                 data-testid="player-play"
                 size="lg"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="order-2 size-12 shrink-0 rounded-full sm:order-none"
+                className="order-2 size-10 shrink-0 rounded-full bg-primary px-0 text-primary-foreground sm:order-none"
             >
                 {isPlaying ? (
                     <Pause className="size-5" />
@@ -86,7 +86,7 @@ export function RecordingPlayerControls({
             */}
             <span
                 data-testid="player-time"
-                className="order-2 min-w-0 flex-1 font-mono text-xs tabular-nums text-muted-foreground sm:order-none sm:flex-none"
+                className="order-2 min-w-0 flex-1 font-mono text-xs tabular-nums text-muted-foreground sm:order-none sm:flex-none lg:flex-none lg:whitespace-nowrap"
                 aria-live="off"
             >
                 <span className="text-foreground">
@@ -101,7 +101,7 @@ export function RecordingPlayerControls({
               doesn't expand the parent when bars are dense.
             */}
             <div
-                className="order-1 min-w-0 basis-full sm:order-none sm:flex-1"
+                className="order-1 min-w-0 basis-full sm:order-none sm:flex-1 lg:basis-auto"
                 data-testid="player-scrubber"
             >
                 {scrubberStyle === "waveform" && waveformPeaks ? (

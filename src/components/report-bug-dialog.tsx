@@ -42,7 +42,7 @@ export function ReportBugDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="gap-4 sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Report a bug</DialogTitle>
                     <DialogDescription>
@@ -53,16 +53,16 @@ export function ReportBugDialog({
                 </DialogHeader>
 
                 <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">
+                    <p className="text-[11px] font-semibold text-muted-foreground">
                         Preview
                     </p>
-                    <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 p-3 text-xs whitespace-pre-wrap break-words">
+                    <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 p-3 font-mono text-[11px] whitespace-pre-wrap break-words">
                         {preview}
                     </pre>
                 </div>
 
-                <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-                    <Button asChild>
+                <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button asChild className="h-10 px-4 sm:h-8">
                         <a
                             href={githubUrl}
                             target="_blank"

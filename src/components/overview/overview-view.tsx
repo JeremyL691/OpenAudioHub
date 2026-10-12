@@ -32,6 +32,9 @@ interface OverviewViewProps {
     hasProvider: boolean;
 }
 
+const totalCell =
+    "min-w-0 px-5 first:pl-0 border-border max-lg:odd:pl-0 max-lg:odd:border-r lg:border-r lg:last:border-r-0 max-lg:[&:nth-child(n+3)]:border-t";
+
 /**
  * The signed-in home page. Server-rendered: the figures and lists come from the
  * overview queries. Only the sync card and the actions are client components.
@@ -45,7 +48,7 @@ export function OverviewView({
 }: OverviewViewProps) {
     if (totals.total === 0) {
         return (
-            <div className="container mx-auto max-w-4xl space-y-6 px-4 py-10">
+            <div className="mx-auto max-w-5xl space-y-6 px-6 py-8 lg:px-9">
                 <h1 className="sr-only">Overview</h1>
                 <EmptyState
                     icon={AudioLines}
@@ -67,54 +70,57 @@ export function OverviewView({
     );
 
     return (
-        <div className="container mx-auto max-w-6xl space-y-6 px-4 py-6">
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-9">
             <h1 className="sr-only">Overview</h1>
 
             <section
                 aria-label="Totals"
-                className="grid grid-cols-2 gap-4 lg:grid-cols-4"
+                className="grid grid-cols-2 border-y border-border lg:grid-cols-4"
             >
                 <StatCard
                     label="Recordings"
                     value={totals.total}
                     icon={AudioLines}
+                    className={totalCell}
                 />
                 <StatCard
                     label="Total time"
                     value={formatHoursCompact(totals.totalMs)}
                     icon={Clock}
+                    className={totalCell}
                 />
                 <StatCard
                     label="Transcribed"
                     value={`${transcribedPct}%`}
                     hint={`${totals.transcribed} of ${totals.total}`}
                     icon={FileText}
+                    className={totalCell}
                 />
                 <StatCard
                     label="Summarized"
                     value={totals.summarized}
                     icon={Sparkles}
+                    className={totalCell}
                 />
             </section>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="space-y-6 lg:col-span-2">
+            <div className="mt-9 grid grid-cols-1 gap-9 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                <div className="min-w-0 space-y-9">
                     <ProcessingCard items={processing} />
                     <RecentRecordings items={recent} />
                 </div>
-                <div className="space-y-6">
+                <div className="min-w-0 space-y-9">
                     <OverviewSyncCard plaud={plaud} />
-                    <section
-                        aria-labelledby="quick-actions-heading"
-                        className="space-y-3 rounded-xl border bg-card p-5"
-                    >
+                    <section aria-labelledby="quick-actions-heading">
                         <h2
                             id="quick-actions-heading"
-                            className="text-sm font-semibold"
+                            className="mb-2 text-[13px] font-semibold text-muted-foreground"
                         >
                             Quick actions
                         </h2>
-                        <OverviewActions hasProvider={hasProvider} />
+                        <div className="overflow-hidden rounded-xl bg-muted/60 dark:bg-muted [&>div]:flex [&>div]:flex-col [&>div]:items-stretch [&>div]:justify-start [&>div]:gap-0 [&>div]:divide-y [&>div]:divide-border [&_a]:h-11 [&_a]:w-full [&_a]:justify-start [&_a]:gap-2.5 [&_a]:rounded-none [&_a]:border-0 [&_a]:bg-transparent [&_a]:px-4 [&_a]:shadow-none [&_a]:hover:bg-accent [&_button]:h-11 [&_button]:w-full [&_button]:justify-start [&_button]:gap-2.5 [&_button]:rounded-none [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-4 [&_button]:shadow-none [&_button]:hover:bg-accent">
+                            <OverviewActions hasProvider={hasProvider} />
+                        </div>
                     </section>
                 </div>
             </div>

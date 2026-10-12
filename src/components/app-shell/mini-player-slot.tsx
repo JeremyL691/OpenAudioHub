@@ -14,7 +14,7 @@ export function MiniPlayerHost({ children }: { children: ReactNode }) {
     const [slot, setSlot] = useState<HTMLDivElement | null>(null);
     return (
         <MiniPlayerSlotContext.Provider value={slot}>
-            <div ref={setSlot} className="sticky top-14 z-30 h-0" />
+            <div ref={setSlot} className="sticky top-13 z-30 h-0" />
             {children}
         </MiniPlayerSlotContext.Provider>
     );

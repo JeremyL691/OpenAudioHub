@@ -19,6 +19,7 @@ import {
     SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
+    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuButton,
@@ -33,6 +34,7 @@ interface NavItem {
     testId: string;
     /** Path prefixes that mark this item as active. */
     prefixes: string[];
+    group: "Library" | "App";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -42,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
         icon: LayoutDashboard,
         testId: "nav-overview",
         prefixes: ["/dashboard"],
+        group: "Library",
     },
     {
         href: "/recordings",
@@ -49,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
         icon: AudioLines,
         testId: "nav-recordings",
         prefixes: ["/recordings", "/dev/demo-dashboard"],
+        group: "Library",
     },
     {
         href: "/settings",
@@ -56,6 +60,7 @@ const NAV_ITEMS: NavItem[] = [
         icon: Settings,
         testId: "nav-settings",
         prefixes: ["/settings"],
+        group: "App",
     },
     {
         href: "/docs",
@@ -63,8 +68,11 @@ const NAV_ITEMS: NavItem[] = [
         icon: BookOpen,
         testId: "nav-docs",
         prefixes: ["/docs"],
+        group: "App",
     },
 ];
+
+const NAV_GROUPS: NavItem["group"][] = ["Library", "App"];
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
     return prefixes.some(
@@ -81,44 +89,55 @@ export function AppSidebar({ footer }: { footer: ReactNode }) {
 
     return (
         <Sidebar collapsible="offcanvas" data-testid="app-sidebar">
-            <SidebarHeader className="px-4 py-4">
-                <Link
-                    href="/dashboard"
-                    aria-label="OpenAudioHub home"
-                    className="w-fit"
-                >
-                    <Logo className="text-base" />
-                </Link>
+            <SidebarHeader className="app-drag gap-0 p-0">
+                <div className="desktop-only h-13" />
+                <div className="px-4 pb-3">
+                    <div className="web-only h-4" />
+                    <Link
+                        href="/dashboard"
+                        aria-label="OpenAudioHub home"
+                        className="w-fit"
+                    >
+                        <Logo className="text-base" />
+                    </Link>
+                </div>
             </SidebarHeader>
             <SidebarContent>
-                <SidebarGroup>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {NAV_ITEMS.map((item) => (
-                                <SidebarMenuItem key={item.href}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={matchesPrefix(
-                                            pathname,
-                                            item.prefixes,
-                                        )}
-                                        className="h-10 md:h-8"
-                                    >
-                                        <Link
-                                            href={item.href}
-                                            data-testid={item.testId}
+                {NAV_GROUPS.map((group) => (
+                    <SidebarGroup key={group}>
+                        <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground">
+                            {group}
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {NAV_ITEMS.filter(
+                                    (item) => item.group === group,
+                                ).map((item) => (
+                                    <SidebarMenuItem key={item.href}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            isActive={matchesPrefix(
+                                                pathname,
+                                                item.prefixes,
+                                            )}
+                                            className="h-10 gap-2.5 rounded-md text-[13px] data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold md:h-8 [&[data-active=true]>svg]:text-primary"
                                         >
-                                            <item.icon />
-                                            <span>{item.label}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                                            <Link
+                                                href={item.href}
+                                                data-testid={item.testId}
+                                            >
+                                                <item.icon />
+                                                <span>{item.label}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                ))}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                ))}
             </SidebarContent>
-            <SidebarFooter className="gap-3 px-4 py-3 text-xs text-muted-foreground">
+            <SidebarFooter className="gap-3 px-4 py-3 text-[11px] text-muted-foreground">
                 {footer}
                 <div className="flex items-center gap-3 font-mono">
                     <Link

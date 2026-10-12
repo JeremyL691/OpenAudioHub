@@ -72,7 +72,7 @@ export function ToggleRow({
     const row = (
         <div
             className={cn(
-                "flex items-center justify-between gap-4 py-1",
+                "flex items-center justify-between gap-4 py-3",
                 rowClickable &&
                     !disabled &&
                     "-mx-2 cursor-pointer rounded-md px-2 transition-colors hover:bg-accent/40",

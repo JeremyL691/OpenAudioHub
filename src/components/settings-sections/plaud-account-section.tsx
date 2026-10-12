@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -175,7 +174,7 @@ export function PlaudAccountSection({
                     description="Your connection to the Plaud cloud used to pull recordings."
                     icon={Mic}
                 />
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                     The Plaud account OpenAudioHub pulls recordings from.
                     Switching accounts keeps your existing recordings; only
                     future syncs change.
@@ -183,85 +182,77 @@ export function PlaudAccountSection({
             </div>
 
             {info?.connected ? (
-                <Card className="py-4">
-                    <CardContent className="space-y-4">
-                        <div className="flex items-start gap-3">
-                            <CheckCircle2 className="size-5 text-primary mt-0.5 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
-                                    {currentEmail ? (
-                                        <span className="font-mono">
-                                            {currentEmail}
-                                        </span>
-                                    ) : (
-                                        <span className="text-muted-foreground">
-                                            Connected (email unknown)
-                                        </span>
-                                    )}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    Region:{" "}
-                                    {regionLabel(info.server, info.apiBase)}
-                                    {!currentEmail && (
-                                        <>
-                                            {" · "}
-                                            <span>
-                                                Use “Switch account” below to
-                                                display the email
-                                            </span>
-                                        </>
-                                    )}
-                                </p>
-                            </div>
-                        </div>
-
-                        {info.needsReconnect && (
-                            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
-                                Plaud stopped accepting this sign-in, so syncing
-                                is paused. Reconnect to resume — your recordings
-                                stay put.
-                            </p>
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
-                            {info.needsReconnect && (
-                                <Button
-                                    onClick={() => setReconnectDialogOpen(true)}
-                                >
-                                    <RefreshCw className="size-4 mr-2" />
-                                    Reconnect
-                                </Button>
+                <div className="rounded-xl bg-muted/60 divide-y divide-border">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                        <CheckCircle2 className="size-5 text-success shrink-0" />
+                        <p className="flex-1 min-w-0 text-[13px] font-medium truncate">
+                            {currentEmail ? (
+                                <span className="font-mono">
+                                    {currentEmail}
+                                </span>
+                            ) : (
+                                <span className="text-muted-foreground">
+                                    Connected (email unknown)
+                                </span>
                             )}
+                        </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 px-4 py-3">
+                        <span className="text-[13px]">Region: </span>
+                        <span className="text-[13px] text-muted-foreground tabular-nums text-right">
+                            {regionLabel(info.server, info.apiBase)}
+                        </span>
+                    </div>
+                    {!currentEmail && (
+                        <p className="px-4 py-3 text-xs text-muted-foreground">
+                            Use “Switch account” below to display the email
+                        </p>
+                    )}
+
+                    {info.needsReconnect && (
+                        <p className="px-4 py-3 text-xs bg-warning text-warning-foreground">
+                            Plaud stopped accepting this sign-in, so syncing is
+                            paused. Reconnect to resume — your recordings stay
+                            put.
+                        </p>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 px-4 py-3">
+                        {info.needsReconnect && (
                             <Button
-                                variant="outline"
-                                onClick={() => setConfirmOpen("switch")}
+                                className="h-10 sm:h-8"
+                                onClick={() => setReconnectDialogOpen(true)}
                             >
                                 <RefreshCw className="size-4 mr-2" />
-                                Switch account
+                                Reconnect
                             </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={() => setConfirmOpen("disconnect")}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                                <Link2Off className="size-4 mr-2" />
-                                Disconnect
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                        )}
+                        <Button
+                            variant="outline"
+                            className="h-10 sm:h-8"
+                            onClick={() => setConfirmOpen("switch")}
+                        >
+                            <RefreshCw className="size-4 mr-2" />
+                            Switch account
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => setConfirmOpen("disconnect")}
+                            className="h-10 sm:h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                            <Link2Off className="size-4 mr-2" />
+                            Disconnect
+                        </Button>
+                    </div>
+                </div>
             ) : (
-                <Card className="py-4">
-                    <CardContent className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
-                            No Plaud account connected. Sign in below to start
-                            syncing recordings.
-                        </p>
-                        <PlaudConnectTabs
-                            onConnected={() => fetchConnection()}
-                        />
-                    </CardContent>
-                </Card>
+                <div className="rounded-xl bg-muted/60 px-4 py-3 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                        No Plaud account connected. Sign in below to start
+                        syncing recordings.
+                    </p>
+                    <PlaudConnectTabs onConnected={() => fetchConnection()} />
+                </div>
             )}
 
             {/* Confirm: switch or disconnect */}

@@ -72,14 +72,16 @@ export default function RootLayout({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const desktop = isDesktopMode();
     return (
         <html
             lang="en"
             suppressHydrationWarning
             className={`${geistSans.variable} ${geistMono.variable}`}
+            data-desktop={desktop ? "" : undefined}
         >
             <body className="antialiased">
-                <DesktopModeProvider value={isDesktopMode()}>
+                <DesktopModeProvider value={desktop}>
                     <AppProgress>
                         <ThemeProvider
                             attribute="class"

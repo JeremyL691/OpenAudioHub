@@ -353,341 +353,379 @@ export function TranscriptionSection() {
                 icon={FileText}
             />
             <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label htmlFor="auto-transcribe" className="text-base">
-                            Auto-transcribe new recordings
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Automatically transcribe recordings when they are
-                            synced from your Plaud device
-                        </p>
-                    </div>
-                    <Switch
-                        id="auto-transcribe"
-                        checked={autoTranscribe}
-                        onCheckedChange={handleAutoTranscribeChange}
-                        disabled={isSavingSettings || isSaving}
-                    />
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label
-                            htmlFor="import-plaud-content"
-                            className="text-base"
-                        >
-                            Import Plaud transcripts and summaries
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            When Plaud already transcribed a recording, import
-                            its transcript and summary on sync instead of
-                            re-doing the work with your own AI provider.
-                        </p>
-                    </div>
-                    <Switch
-                        id="import-plaud-content"
-                        checked={importPlaudContent}
-                        onCheckedChange={(checked) =>
-                            handleImportSettingChange({
-                                importPlaudContent: checked,
-                            })
-                        }
-                        disabled={isSavingSettings || isSaving}
-                    />
-                </div>
-
-                {importPlaudContent && (
-                    <>
-                        <div className="space-y-2">
-                            <Label htmlFor="transcript-mode">
-                                When Plaud has a transcript
-                            </Label>
-                            <Select
-                                value={transcriptMode}
-                                onValueChange={(value) =>
-                                    handleImportSettingChange({
-                                        transcriptMode: value,
-                                    })
-                                }
-                                disabled={isSavingSettings || isSaving}
+                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="auto-transcribe"
+                                className="text-[13px] font-medium"
                             >
-                                <SelectTrigger
-                                    id="transcript-mode"
-                                    className="w-full"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="plaud_only">
-                                        Use Plaud only (saves AI credits)
-                                    </SelectItem>
-                                    <SelectItem value="keep_both">
-                                        Keep both — also run my provider
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                                Auto-transcribe new recordings
+                            </Label>
                             <p className="text-xs text-muted-foreground">
-                                Keep both also transcribes with your own
-                                provider so you can compare them.
+                                Automatically transcribe recordings when they
+                                are synced from your Plaud device
                             </p>
                         </div>
+                        <Switch
+                            id="auto-transcribe"
+                            checked={autoTranscribe}
+                            onCheckedChange={handleAutoTranscribeChange}
+                            disabled={isSavingSettings || isSaving}
+                        />
+                    </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="preferred-transcript-source">
-                                Primary transcript
-                            </Label>
-                            <Select
-                                value={preferredTranscriptSource}
-                                onValueChange={(value) =>
-                                    handleImportSettingChange({
-                                        preferredTranscriptSource: value,
-                                    })
-                                }
-                                disabled={isSavingSettings || isSaving}
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="import-plaud-content"
+                                className="text-[13px] font-medium"
                             >
-                                <SelectTrigger
-                                    id="preferred-transcript-source"
-                                    className="w-full"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="plaud">Plaud</SelectItem>
-                                    <SelectItem value="openaudiohub">
-                                        My provider
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
+                                Import Plaud transcripts and summaries
+                            </Label>
                             <p className="text-xs text-muted-foreground">
-                                Shown by default and used for summaries when
-                                both exist.
+                                When Plaud already transcribed a recording,
+                                import its transcript and summary on sync
+                                instead of re-doing the work with your own AI
+                                provider.
                             </p>
                         </div>
-                    </>
-                )}
-
-                <div className="space-y-2">
-                    <Label htmlFor="transcription-language">
-                        Default transcription language
-                    </Label>
-                    <Select
-                        value={defaultTranscriptionLanguage || "auto"}
-                        onValueChange={(value) => {
-                            const lang = value === "auto" ? null : value;
-                            setDefaultTranscriptionLanguage(lang);
-                            handleTranscriptionSettingChange({
-                                defaultTranscriptionLanguage: lang,
-                            });
-                        }}
-                        disabled={isSavingSettings || isSaving}
-                    >
-                        <SelectTrigger
-                            id="transcription-language"
-                            className="w-full"
-                        >
-                            <SelectValue>
-                                {languageOptions.find(
-                                    (opt) =>
-                                        opt.value ===
-                                        defaultTranscriptionLanguage,
-                                )?.label || "Auto-detect"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {languageOptions.map((option) => (
-                                <SelectItem
-                                    key={option.value || "auto"}
-                                    value={option.value || "auto"}
-                                >
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                        Language to use for transcription. Auto-detect will
-                        identify the language automatically.
-                    </p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label
-                            htmlFor="speaker-diarization"
-                            className="text-base"
-                        >
-                            Speaker labels
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Splits the transcript by speaker (Speaker 1:,
-                            Speaker 2:). Supported by ElevenLabs Scribe; other
-                            providers ignore it.
-                        </p>
-                    </div>
-                    <Switch
-                        id="speaker-diarization"
-                        checked={speakerDiarization}
-                        onCheckedChange={(checked) => {
-                            setSpeakerDiarization(checked);
-                            handleTranscriptionSettingChange({
-                                speakerDiarization: checked,
-                            });
-                        }}
-                        disabled={isSavingSettings || isSaving}
-                    />
-                </div>
-
-                {speakerDiarization && (
-                    <div className="space-y-2 pl-4 border-l-2 border-primary/20">
-                        <Label htmlFor="diarization-speaker-count">
-                            Expected speakers
-                        </Label>
-                        <Select
-                            value={
-                                diarizationSpeakerCount === null
-                                    ? "auto"
-                                    : String(diarizationSpeakerCount)
+                        <Switch
+                            id="import-plaud-content"
+                            checked={importPlaudContent}
+                            onCheckedChange={(checked) =>
+                                handleImportSettingChange({
+                                    importPlaudContent: checked,
+                                })
                             }
+                            disabled={isSavingSettings || isSaving}
+                        />
+                    </div>
+
+                    {importPlaudContent && (
+                        <>
+                            <div className="flex items-center justify-between gap-4 py-3 pl-4 border-l-2 border-primary/20">
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                    <Label
+                                        htmlFor="transcript-mode"
+                                        className="text-[13px] font-medium"
+                                    >
+                                        When Plaud has a transcript
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Keep both also transcribes with your own
+                                        provider so you can compare them.
+                                    </p>
+                                </div>
+                                <Select
+                                    value={transcriptMode}
+                                    onValueChange={(value) =>
+                                        handleImportSettingChange({
+                                            transcriptMode: value,
+                                        })
+                                    }
+                                    disabled={isSavingSettings || isSaving}
+                                >
+                                    <SelectTrigger
+                                        id="transcript-mode"
+                                        className="w-64 max-w-[55%] shrink-0"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="plaud_only">
+                                            Use Plaud only (saves AI credits)
+                                        </SelectItem>
+                                        <SelectItem value="keep_both">
+                                            Keep both — also run my provider
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-4 py-3 pl-4 border-l-2 border-primary/20">
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                    <Label
+                                        htmlFor="preferred-transcript-source"
+                                        className="text-[13px] font-medium"
+                                    >
+                                        Primary transcript
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Shown by default and used for summaries
+                                        when both exist.
+                                    </p>
+                                </div>
+                                <Select
+                                    value={preferredTranscriptSource}
+                                    onValueChange={(value) =>
+                                        handleImportSettingChange({
+                                            preferredTranscriptSource: value,
+                                        })
+                                    }
+                                    disabled={isSavingSettings || isSaving}
+                                >
+                                    <SelectTrigger
+                                        id="preferred-transcript-source"
+                                        className="w-64 max-w-[55%] shrink-0"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="plaud">
+                                            Plaud
+                                        </SelectItem>
+                                        <SelectItem value="openaudiohub">
+                                            My provider
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="transcription-language"
+                                className="text-[13px] font-medium"
+                            >
+                                Default transcription language
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                Language to use for transcription. Auto-detect
+                                will identify the language automatically.
+                            </p>
+                        </div>
+                        <Select
+                            value={defaultTranscriptionLanguage || "auto"}
                             onValueChange={(value) => {
-                                const count =
-                                    value === "auto" ? null : Number(value);
+                                const lang = value === "auto" ? null : value;
+                                setDefaultTranscriptionLanguage(lang);
                                 handleTranscriptionSettingChange({
-                                    diarizationSpeakerCount: count,
+                                    defaultTranscriptionLanguage: lang,
                                 });
                             }}
                             disabled={isSavingSettings || isSaving}
                         >
                             <SelectTrigger
-                                id="diarization-speaker-count"
-                                className="w-full"
+                                id="transcription-language"
+                                className="w-64 max-w-[55%] shrink-0"
                             >
                                 <SelectValue>
-                                    {diarizationSpeakerCount === null
-                                        ? "Auto"
-                                        : String(diarizationSpeakerCount)}
+                                    {languageOptions.find(
+                                        (opt) =>
+                                            opt.value ===
+                                            defaultTranscriptionLanguage,
+                                    )?.label || "Auto-detect"}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="auto">Auto</SelectItem>
-                                {Array.from(
-                                    { length: 32 },
-                                    (_, i) => i + 1,
-                                ).map((count) => (
+                                {languageOptions.map((option) => (
                                     <SelectItem
-                                        key={count}
-                                        value={String(count)}
+                                        key={option.value || "auto"}
+                                        value={option.value || "auto"}
                                     >
-                                        {count}
+                                        {option.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
-                            A hint, not a hard limit. Auto works well for most
-                            recordings.
-                        </p>
                     </div>
-                )}
 
-                <div className="space-y-2">
-                    <Label htmlFor="transcription-quality">
-                        Transcription quality
-                    </Label>
-                    <Select
-                        value={transcriptionQuality}
-                        onValueChange={(value) => {
-                            setTranscriptionQuality(value);
-                            handleTranscriptionSettingChange({
-                                transcriptionQuality: value,
-                            });
-                        }}
-                        disabled={isSavingSettings || isSaving}
-                    >
-                        <SelectTrigger
-                            id="transcription-quality"
-                            className="w-full"
-                        >
-                            <SelectValue>
-                                {qualityOptions.find(
-                                    (opt) => opt.value === transcriptionQuality,
-                                )?.label || "Balanced"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {qualityOptions.map((option) => (
-                                <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    <div>
-                                        <div>{option.label}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {option.description}
-                                        </div>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                        Balance between transcription speed and accuracy
-                    </p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label
-                            htmlFor="auto-generate-title"
-                            className="text-base"
-                        >
-                            Auto-generate titles
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Automatically generate descriptive titles from
-                            transcriptions using AI
-                        </p>
-                    </div>
-                    <Switch
-                        id="auto-generate-title"
-                        checked={autoGenerateTitle}
-                        onCheckedChange={(checked) => {
-                            setAutoGenerateTitle(checked);
-                            handleTranscriptionSettingChange({
-                                autoGenerateTitle: checked,
-                            });
-                        }}
-                        disabled={isSavingSettings || isSaving}
-                    />
-                </div>
-
-                {autoGenerateTitle && (
-                    <div className="flex items-center justify-between pl-4 border-l-2 border-primary/20">
-                        <div className="space-y-0.5 flex-1">
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
-                                htmlFor="sync-title-plaud"
-                                className="text-base"
+                                htmlFor="speaker-diarization"
+                                className="text-[13px] font-medium"
                             >
-                                Sync titles to Plaud
+                                Speaker labels
                             </Label>
-                            <p className="text-sm text-muted-foreground">
-                                Update the filename in your Plaud device when
-                                titles are generated
+                            <p className="text-xs text-muted-foreground">
+                                Splits the transcript by speaker (Speaker 1:,
+                                Speaker 2:). Supported by ElevenLabs Scribe;
+                                other providers ignore it.
                             </p>
                         </div>
                         <Switch
-                            id="sync-title-plaud"
-                            checked={syncTitleToPlaud}
+                            id="speaker-diarization"
+                            checked={speakerDiarization}
                             onCheckedChange={(checked) => {
-                                setSyncTitleToPlaud(checked);
+                                setSpeakerDiarization(checked);
                                 handleTranscriptionSettingChange({
-                                    syncTitleToPlaud: checked,
+                                    speakerDiarization: checked,
                                 });
                             }}
                             disabled={isSavingSettings || isSaving}
                         />
                     </div>
-                )}
+
+                    {speakerDiarization && (
+                        <div className="flex items-center justify-between gap-4 py-3 pl-4 border-l-2 border-primary/20">
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                                <Label
+                                    htmlFor="diarization-speaker-count"
+                                    className="text-[13px] font-medium"
+                                >
+                                    Expected speakers
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    A hint, not a hard limit. Auto works well
+                                    for most recordings.
+                                </p>
+                            </div>
+                            <Select
+                                value={
+                                    diarizationSpeakerCount === null
+                                        ? "auto"
+                                        : String(diarizationSpeakerCount)
+                                }
+                                onValueChange={(value) => {
+                                    const count =
+                                        value === "auto" ? null : Number(value);
+                                    handleTranscriptionSettingChange({
+                                        diarizationSpeakerCount: count,
+                                    });
+                                }}
+                                disabled={isSavingSettings || isSaving}
+                            >
+                                <SelectTrigger
+                                    id="diarization-speaker-count"
+                                    className="w-64 max-w-[55%] shrink-0"
+                                >
+                                    <SelectValue>
+                                        {diarizationSpeakerCount === null
+                                            ? "Auto"
+                                            : String(diarizationSpeakerCount)}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="auto">Auto</SelectItem>
+                                    {Array.from(
+                                        { length: 32 },
+                                        (_, i) => i + 1,
+                                    ).map((count) => (
+                                        <SelectItem
+                                            key={count}
+                                            value={String(count)}
+                                        >
+                                            {count}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="transcription-quality"
+                                className="text-[13px] font-medium"
+                            >
+                                Transcription quality
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                Balance between transcription speed and accuracy
+                            </p>
+                        </div>
+                        <Select
+                            value={transcriptionQuality}
+                            onValueChange={(value) => {
+                                setTranscriptionQuality(value);
+                                handleTranscriptionSettingChange({
+                                    transcriptionQuality: value,
+                                });
+                            }}
+                            disabled={isSavingSettings || isSaving}
+                        >
+                            <SelectTrigger
+                                id="transcription-quality"
+                                className="w-64 max-w-[55%] shrink-0"
+                            >
+                                <SelectValue>
+                                    {qualityOptions.find(
+                                        (opt) =>
+                                            opt.value === transcriptionQuality,
+                                    )?.label || "Balanced"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {qualityOptions.map((option) => (
+                                    <SelectItem
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        <div>
+                                            <div>{option.label}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {option.description}
+                                            </div>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="auto-generate-title"
+                                className="text-[13px] font-medium"
+                            >
+                                Auto-generate titles
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                Automatically generate descriptive titles from
+                                transcriptions using AI
+                            </p>
+                        </div>
+                        <Switch
+                            id="auto-generate-title"
+                            checked={autoGenerateTitle}
+                            onCheckedChange={(checked) => {
+                                setAutoGenerateTitle(checked);
+                                handleTranscriptionSettingChange({
+                                    autoGenerateTitle: checked,
+                                });
+                            }}
+                            disabled={isSavingSettings || isSaving}
+                        />
+                    </div>
+
+                    {autoGenerateTitle && (
+                        <div className="flex items-center justify-between gap-4 py-3 pl-4 border-l-2 border-primary/20">
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                                <Label
+                                    htmlFor="sync-title-plaud"
+                                    className="text-[13px] font-medium"
+                                >
+                                    Sync titles to Plaud
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Update the filename in your Plaud device
+                                    when titles are generated
+                                </p>
+                            </div>
+                            <Switch
+                                id="sync-title-plaud"
+                                checked={syncTitleToPlaud}
+                                onCheckedChange={(checked) => {
+                                    setSyncTitleToPlaud(checked);
+                                    handleTranscriptionSettingChange({
+                                        syncTitleToPlaud: checked,
+                                    });
+                                }}
+                                disabled={isSavingSettings || isSaving}
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -81,6 +81,7 @@ export function WebhooksSection() {
                 action={
                     <Button
                         size="sm"
+                        className="h-10 sm:h-8"
                         data-testid="webhook-create"
                         onClick={() => openEditor(null)}
                     >
@@ -95,11 +96,12 @@ export function WebhooksSection() {
                     <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
                 </div>
             ) : webhooks.length === 0 ? (
-                <div className="text-center py-12 border rounded-lg">
-                    <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No webhooks</h3>
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <Webhook className="size-12 text-muted-foreground" />
+                    <h3 className="text-[13px] font-semibold">No webhooks</h3>
                     <Button
                         size="sm"
+                        className="h-10 sm:h-8"
                         data-testid="webhook-create"
                         onClick={() => openEditor(null)}
                     >
@@ -108,7 +110,7 @@ export function WebhooksSection() {
                     </Button>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
                     {webhooks.map((webhook) => (
                         <WebhookRow
                             key={webhook.id}
@@ -137,6 +139,14 @@ export function WebhooksSection() {
     );
 }
 
+function deliveryStatusClass(status: string): string {
+    if (status === "success" || status === "delivered") {
+        return "bg-success text-success-foreground";
+    }
+    if (status === "failed") return "bg-destructive/10 text-destructive";
+    return "bg-muted text-muted-foreground";
+}
+
 /**
  * One row in the webhook list. Pure presentation -- all mutation goes
  * through the callbacks the parent owns.
@@ -153,23 +163,25 @@ function WebhookRow({
     onShowDeliveries: (webhook: WebhookEndpoint) => void;
 }) {
     return (
-        <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0 space-y-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <h3 className="min-w-0 truncate font-medium">
+                    <h3 className="min-w-0 truncate text-[13px] font-medium">
                         {webhook.description || webhook.url}
                     </h3>
                     <span
-                        className={`rounded border px-2 py-0.5 text-xs ${
+                        className={`rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium ${
                             webhook.enabled
-                                ? "text-primary"
+                                ? "text-link"
                                 : "text-muted-foreground"
                         }`}
                     >
                         {webhook.enabled ? "Enabled" : "Disabled"}
                     </span>
                     {webhook.lastDeliveryStatus && (
-                        <span className="rounded border px-2 py-0.5 text-xs">
+                        <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${deliveryStatusClass(webhook.lastDeliveryStatus)}`}
+                        >
                             {webhook.lastDeliveryStatus}
                         </span>
                     )}
@@ -181,17 +193,17 @@ function WebhookRow({
                     {webhook.events.map((event) => (
                         <span
                             key={event}
-                            className="rounded bg-muted px-2 py-0.5 text-xs"
+                            className="rounded-md bg-background px-2 py-0.5 text-xs"
                         >
                             {event}
                         </span>
                     ))}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground tabular-nums">
                     Last delivery: {formatWebhookDate(webhook.lastDeliveryAt)}
                 </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1 sm:justify-end">
                 <Button
                     variant="outline"
                     size="sm"

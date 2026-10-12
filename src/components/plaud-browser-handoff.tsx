@@ -81,28 +81,28 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
     let body: ReactNode;
     if (code === null) {
         body = (
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 This sign-in link is invalid. Start again from the OpenAudioHub
                 app.
             </p>
         );
     } else if (phase === "done") {
         body = (
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Plaud is connected. Return to the OpenAudioHub app. You can
                 close this tab.
             </p>
         );
     } else if (detection === "checking") {
         body = (
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Looking for the OpenAudioHub Connector…
             </p>
         );
     } else if (detection === "missing") {
         body = (
             <div className="space-y-3">
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                     Install the OpenAudioHub Connector extension in this
                     browser, then reload this page.
                 </p>
@@ -128,7 +128,7 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
         const working = phase === "working";
         body = (
             <div className="space-y-3">
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                     Sign in to Plaud in this browser. If you are already signed
                     in to Google here, it usually takes one click.
                 </p>
@@ -142,7 +142,10 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
                         : "Continue with Plaud"}
                 </Button>
                 {error && (
-                    <p role="alert" className="text-sm text-destructive">
+                    <p
+                        role="alert"
+                        className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+                    >
                         {error}
                     </p>
                 )}
@@ -155,7 +158,7 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
             <div className="flex justify-center">
                 <Logo className="text-xl text-foreground" />
             </div>
-            <Card className="space-y-6">
+            <Card className="space-y-4 rounded-xl border-0 bg-muted/60 p-6 shadow-none dark:bg-muted">
                 <h1 className="text-xl font-semibold tracking-tight">
                     Connect Plaud to OpenAudioHub
                 </h1>

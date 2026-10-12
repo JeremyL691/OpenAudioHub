@@ -149,19 +149,25 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     closeWithResult(false);
                 }}
             >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
+                <AlertDialogContent className="gap-4 p-5 sm:max-w-[420px]">
+                    <AlertDialogHeader className="gap-1.5 sm:text-left">
+                        <AlertDialogTitle className="text-[15px] font-semibold">
                             {active?.title ?? ""}
                         </AlertDialogTitle>
                         {active?.description !== undefined && (
-                            <AlertDialogDescription asChild>
+                            <AlertDialogDescription
+                                asChild
+                                className="text-[13px]"
+                            >
                                 <div>{active.description}</div>
                             </AlertDialogDescription>
                         )}
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isRunning}>
+                    <AlertDialogFooter className="gap-2 sm:justify-end">
+                        <AlertDialogCancel
+                            disabled={isRunning}
+                            className="h-10 px-4 sm:h-8"
+                        >
                             {active?.cancelLabel ?? "Cancel"}
                         </AlertDialogCancel>
                         <AlertDialogAction
@@ -174,6 +180,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                 void handleConfirm();
                             }}
                             className={cn(
+                                "h-10 px-4 sm:h-8",
                                 active?.destructive &&
                                     "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40",
                             )}

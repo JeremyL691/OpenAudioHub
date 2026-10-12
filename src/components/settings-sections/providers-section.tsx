@@ -156,7 +156,7 @@ export function ProvidersSection({
                         onClick={() => setAiSubSection("providers")}
                         className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                             aiSubSection === "providers"
-                                ? "border-primary text-primary"
+                                ? "border-primary text-link"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
@@ -167,7 +167,7 @@ export function ProvidersSection({
                         onClick={() => setAiSubSection("prompts")}
                         className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                             aiSubSection === "prompts"
-                                ? "border-primary text-primary"
+                                ? "border-primary text-link"
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
@@ -239,7 +239,7 @@ function ProvidersList({
 }) {
     if (providers.length === 0) {
         return (
-            <div className="text-center py-12">
+            <div className="text-center py-10">
                 <Bot className="size-16 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-semibold mb-2">No providers configured</h3>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -253,31 +253,31 @@ function ProvidersList({
         );
     }
     return (
-        <div className="space-y-3">
+        <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
             {providers.map((provider) => {
                 return (
                     <div
                         key={provider.id}
-                        className="flex flex-col gap-3 p-4 border rounded-lg hover:bg-accent transition-colors sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <h3 className="font-semibold">
+                                <h3 className="text-[13px] font-medium">
                                     {provider.provider}
                                 </h3>
                                 {provider.isDefaultTranscription && (
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
+                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-link rounded border border-primary/20">
                                         Transcription
                                     </span>
                                 )}
                                 {provider.isDefaultEnhancement && (
-                                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded border border-purple-500/20">
+                                    <span className="text-xs px-2 py-0.5 bg-info/10 text-info rounded border border-info/20">
                                         Enhancement
                                     </span>
                                 )}
                             </div>
                             {provider.defaultModel && (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                     Model: {provider.defaultModel}
                                 </p>
                             )}
@@ -287,7 +287,7 @@ function ProvidersList({
                                 </p>
                             )}
                         </div>
-                        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-4">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-4 sm:justify-end">
                             {!provider.isDefaultTranscription && (
                                 <Button
                                     onClick={() => onSetDefault(provider.id)}

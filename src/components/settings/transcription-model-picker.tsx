@@ -197,7 +197,7 @@ export function TranscriptionModelPicker({
 
     return (
         <div className="space-y-2">
-            <Label htmlFor="defaultModel">
+            <Label htmlFor="defaultModel" className="text-[13px] font-medium">
                 {chatOnly ? "Default chat model" : "Default Model"}
             </Label>
             {hasOptions && !useCustom ? (
@@ -217,11 +217,18 @@ export function TranscriptionModelPicker({
                     </SelectTrigger>
                     <SelectContent>
                         {options.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
+                            <SelectItem
+                                key={m.id}
+                                value={m.id}
+                                className="rounded-md text-[13px] data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+                            >
                                 {m.name}
                             </SelectItem>
                         ))}
-                        <SelectItem value={CUSTOM_SENTINEL}>
+                        <SelectItem
+                            value={CUSTOM_SENTINEL}
+                            className="rounded-md text-[13px] data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary"
+                        >
                             Custom (type model name)…
                         </SelectItem>
                     </SelectContent>
@@ -244,7 +251,7 @@ export function TranscriptionModelPicker({
             {hasOptions && useCustom && (
                 <button
                     type="button"
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    className="text-xs text-link underline-offset-2 hover:underline"
                     onClick={() => {
                         setUseCustom(false);
                         onChange(options[0]?.id ?? "");

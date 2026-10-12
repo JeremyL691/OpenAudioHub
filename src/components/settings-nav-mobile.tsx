@@ -34,7 +34,7 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
                 }
             >
                 <SelectTrigger
-                    className="w-[180px]"
+                    className="h-10 w-[180px] rounded-md border-transparent bg-muted text-[13px] font-medium shadow-none sm:h-8 dark:bg-muted"
                     aria-label="Select settings section"
                 >
                     <SelectValue>
@@ -45,7 +45,7 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
                     {SETTINGS_NAV.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                             <div className="flex items-center gap-2">
-                                <item.icon className="size-4" />
+                                <item.icon className="size-4 text-muted-foreground" />
                                 <span>{item.name}</span>
                             </div>
                         </SelectItem>

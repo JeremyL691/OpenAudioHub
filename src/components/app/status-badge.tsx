@@ -156,7 +156,7 @@ const TONE_CLASSES: Record<StatusTone, string> = {
     info: "bg-info text-info-foreground",
     success: "bg-success text-success-foreground",
     warning: "bg-warning text-warning-foreground",
-    danger: "bg-destructive text-destructive-foreground",
+    danger: "bg-destructive/10 text-destructive",
 };
 
 /** The text a status shows. The same text is what a screen reader announces. */
@@ -177,7 +177,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
         <Badge
             data-status={status}
             className={cn(
-                "gap-1.5 border-transparent font-medium",
+                "inline-flex items-center gap-1 rounded-full border-transparent px-2 py-0.5 text-[11px] font-medium",
                 TONE_CLASSES[definition.tone],
                 className,
             )}

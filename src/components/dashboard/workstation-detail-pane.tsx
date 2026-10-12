@@ -73,7 +73,7 @@ export function WorkstationDetailPane({
     return (
         <div
             className={cn(
-                "space-y-6 lg:sticky lg:top-[4.5rem] lg:col-span-2 lg:block lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:pr-1",
+                "space-y-6 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:space-y-0",
                 hiddenOnMobile && "hidden",
             )}
         >
@@ -94,7 +94,7 @@ export function WorkstationDetailPane({
             </Button>
             {currentRecording ? (
                 <>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3">
                         <Button
                             asChild
                             variant="ghost"
@@ -111,43 +111,48 @@ export function WorkstationDetailPane({
                             </Link>
                         </Button>
                     </div>
-                    <RecordingPlayer
-                        recording={currentRecording}
-                        initialPlaybackSpeed={initialPlaybackSpeed}
-                        initialVolume={initialVolume}
-                        initialAutoPlayNext={initialAutoPlayNext}
-                        scrubberStyle={scrubberStyle}
-                        onRegisterSeek={registerSeekToMilliseconds}
-                        onPlaybackTimeChange={setPlaybackTimeMs}
-                        onRenamed={onRenamed}
-                        onEnded={() => {
-                            const currentIndex = visibleRecordings.findIndex(
-                                (r) => r.id === currentRecording.id,
-                            );
-                            if (
-                                currentIndex >= 0 &&
-                                currentIndex < visibleRecordings.length - 1
-                            ) {
-                                onSelectRecording(
-                                    visibleRecordings[currentIndex + 1],
-                                );
-                            }
-                        }}
-                    />
-                    <TranscriptionPanel
-                        recording={currentRecording}
-                        transcription={currentTranscription}
-                        isTranscribing={isCurrentTranscribing}
-                        onTranscribe={onTranscribe}
-                        onTranscribeComplete={onTranscribeComplete}
-                        onSeekTimestamp={(milliseconds) => {
-                            seekToMillisecondsRef.current(milliseconds);
-                        }}
-                        playbackTimeMs={playbackTimeMs}
-                    />
+                    <div className="lg:order-last lg:shrink-0 lg:border-t lg:border-border lg:bg-muted/40 lg:px-8">
+                        <RecordingPlayer
+                            recording={currentRecording}
+                            initialPlaybackSpeed={initialPlaybackSpeed}
+                            initialVolume={initialVolume}
+                            initialAutoPlayNext={initialAutoPlayNext}
+                            scrubberStyle={scrubberStyle}
+                            onRegisterSeek={registerSeekToMilliseconds}
+                            onPlaybackTimeChange={setPlaybackTimeMs}
+                            onRenamed={onRenamed}
+                            onEnded={() => {
+                                const currentIndex =
+                                    visibleRecordings.findIndex(
+                                        (r) => r.id === currentRecording.id,
+                                    );
+                                if (
+                                    currentIndex >= 0 &&
+                                    currentIndex < visibleRecordings.length - 1
+                                ) {
+                                    onSelectRecording(
+                                        visibleRecordings[currentIndex + 1],
+                                    );
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6 lg:pb-6">
+                        <TranscriptionPanel
+                            recording={currentRecording}
+                            transcription={currentTranscription}
+                            isTranscribing={isCurrentTranscribing}
+                            onTranscribe={onTranscribe}
+                            onTranscribeComplete={onTranscribeComplete}
+                            onSeekTimestamp={(milliseconds) => {
+                                seekToMillisecondsRef.current(milliseconds);
+                            }}
+                            playbackTimeMs={playbackTimeMs}
+                        />
+                    </div>
                 </>
             ) : (
-                <Card>
+                <Card className="border-0 bg-transparent py-0 shadow-none lg:flex-1 lg:justify-center">
                     <CardContent className="py-16 text-center">
                         <p className="text-muted-foreground">
                             Select a recording to view details and transcription

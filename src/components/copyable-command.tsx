@@ -56,16 +56,14 @@ export function CopyableCommand({
     }
 
     return (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-50 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900">
-                <div className="text-xs font-mono text-zinc-500">
-                    ~/openaudiohub
-                </div>
+        <div className="overflow-hidden rounded-lg bg-muted font-mono text-[12px]">
+            <div className="px-3 pt-2 text-[11px] text-muted-foreground">
+                ~/openaudiohub
             </div>
-            <div className="flex items-center gap-3 p-4 font-mono text-sm">
+            <div className="flex items-center gap-3 px-3 py-2">
                 <div className="flex-1 overflow-x-auto">
-                    <span className="text-zinc-500">$ </span>
-                    <span className="text-zinc-100 whitespace-nowrap">
+                    <span className="text-muted-foreground">$ </span>
+                    <span className="whitespace-nowrap text-foreground">
                         {command}
                     </span>
                 </div>
@@ -73,11 +71,11 @@ export function CopyableCommand({
                     type="button"
                     onClick={handleCopy}
                     aria-label={ariaLabel ?? "Copy command"}
-                    className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-colors"
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:h-8"
                 >
                     {copied ? (
                         <>
-                            <Check className="size-3.5 text-green-400" />
+                            <Check className="size-3.5 text-primary" />
                             <span>Copied</span>
                         </>
                     ) : (

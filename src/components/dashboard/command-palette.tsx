@@ -137,12 +137,15 @@ export function CommandPalette({
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
                 >
-                    <CommandInput placeholder="Search recordings, transcripts, or actions…" />
+                    <CommandInput
+                        className="h-12 text-[15px]"
+                        placeholder="Search recordings, transcripts, or actions…"
+                    />
 
                     <CommandList className="max-h-[60vh] overflow-y-auto p-2">
-                        <CommandEmpty>
+                        <CommandEmpty className="py-6 text-center text-[13px]">
                             No matches.
-                            <div className="mt-1 text-xs text-muted-foreground">
+                            <div className="mt-1 text-[11px] text-muted-foreground">
                                 Try searching by something you talked about.
                             </div>
                         </CommandEmpty>

@@ -66,11 +66,11 @@ function InlinePipelineStatus({
                 <div
                     data-testid="pipeline-status"
                     data-phase={job?.phase ?? ""}
-                    className="space-y-2 rounded-md border p-3"
+                    className="space-y-2 py-1"
                     aria-live="polite"
                 >
                     <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium">
+                        <p className="text-[13px] font-semibold">
                             {isTranscribing
                                 ? "Queueing transcription…"
                                 : pipelinePhaseLabel(job?.phase ?? "queued")}
@@ -100,11 +100,11 @@ function InlinePipelineStatus({
                 <div
                     data-testid="pipeline-status"
                     data-phase={job?.phase ?? ""}
-                    className="flex flex-col gap-3 rounded-md border border-destructive/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-md border border-destructive/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                     role="alert"
                 >
                     <div>
-                        <p className="text-sm font-medium">
+                        <p className="text-[13px] font-semibold">
                             Transcription failed
                         </p>
                         {job.error && (
@@ -128,7 +128,7 @@ function InlinePipelineStatus({
                 <p
                     data-testid="pipeline-status"
                     data-phase={job?.phase ?? ""}
-                    className="rounded-md border p-3 text-sm"
+                    className="py-1 text-[13px] text-muted-foreground"
                     aria-live="polite"
                 >
                     Transcript saved. The provider returned no validated
@@ -139,7 +139,7 @@ function InlinePipelineStatus({
                 <div
                     data-testid="pipeline-status"
                     data-phase={job?.phase ?? ""}
-                    className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between"
                     aria-live="polite"
                 >
                     <p className="text-sm">
@@ -173,10 +173,10 @@ function EmptyPipelineStatus({
             <div
                 data-testid="pipeline-status"
                 data-phase={job?.phase ?? ""}
-                className="w-full max-w-md space-y-3 rounded-md border p-4 text-left"
+                className="w-full max-w-md space-y-2 py-1 text-left"
             >
                 <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">
+                    <p className="text-[13px] font-semibold">
                         {pipelinePhaseLabel(job?.phase ?? "queued")}
                     </p>
                     <Button
@@ -202,7 +202,7 @@ function EmptyPipelineStatus({
             <div
                 data-testid="pipeline-status"
                 data-phase={job?.phase ?? ""}
-                className="flex flex-col gap-3 rounded-md border p-4 text-left sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 py-1 text-left sm:flex-row sm:items-center sm:justify-between"
                 aria-live="polite"
             >
                 <p className="text-sm">
@@ -230,7 +230,9 @@ function EmptyPipelineStatus({
                 role="alert"
             >
                 <FileText className="mx-auto size-10 text-muted-foreground" />
-                <p className="text-sm font-medium">Transcription failed</p>
+                <p className="text-[13px] font-semibold">
+                    Transcription failed
+                </p>
                 {job.error && (
                     <p className="text-sm text-muted-foreground">{job.error}</p>
                 )}

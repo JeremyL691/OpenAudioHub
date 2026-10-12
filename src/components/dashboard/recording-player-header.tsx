@@ -7,6 +7,7 @@ import { RecordingTitle } from "@/components/recordings/recording-title";
 import { CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDuration } from "@/lib/format-duration";
+import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
 interface Props {
@@ -57,15 +58,20 @@ export function RecordingPlayerHeader({
     ];
 
     return (
-        <CardHeader className="gap-1">
+        <CardHeader
+            className={cn(
+                "gap-1 lg:min-w-0 lg:shrink-0 lg:gap-0 lg:px-0 lg:py-0",
+                !hideIdentity && "2xl:w-64",
+            )}
+        >
             {!hideIdentity && (
                 <>
-                    <CardTitle className="min-w-0 text-lg">
+                    <CardTitle className="min-w-0 text-lg lg:text-sm lg:font-semibold">
                         <RecordingTitle
                             recordingId={recording.id}
                             filename={recording.filename}
                             onRenamed={onRenamed}
-                            className="text-lg"
+                            className="text-lg lg:text-sm"
                         />
                     </CardTitle>
                     <CardAction>
@@ -73,7 +79,7 @@ export function RecordingPlayerHeader({
                     </CardAction>
                 </>
             )}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground 2xl:flex-nowrap 2xl:overflow-hidden 2xl:whitespace-nowrap">
                 {!hideIdentity && (
                     <span>
                         Recorded{" "}

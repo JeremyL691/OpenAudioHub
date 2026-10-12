@@ -165,74 +165,83 @@ export function PlaybackSection() {
                 icon={Play}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-4">
                 {/* Speed + volume defaults grouped — the audio knobs that
                     apply at the moment a recording is selected. */}
                 <SettingsCard title="Audio defaults">
-                    <div className="space-y-2">
-                        <Label htmlFor="playback-speed">
-                            Default playback speed
-                        </Label>
-                        <Select
-                            value={defaultPlaybackSpeed.toString()}
-                            onValueChange={(value) => {
-                                const speed = parseFloat(value);
-                                setDefaultPlaybackSpeed(speed);
-                                handlePlaybackSettingChange({
-                                    defaultPlaybackSpeed: speed,
-                                });
-                            }}
-                            disabled={isSavingSettings}
-                        >
-                            <SelectTrigger
-                                id="playback-speed"
-                                className="w-full"
+                    <div className="divide-y divide-border">
+                        <div className="flex items-center justify-between gap-4 py-3">
+                            <Label
+                                htmlFor="playback-speed"
+                                className="text-[13px] font-medium"
                             >
-                                <SelectValue>
-                                    {playbackSpeedOptions.find(
-                                        (opt) =>
-                                            opt.value === defaultPlaybackSpeed,
-                                    )?.label || "1x"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {playbackSpeedOptions.map((option) => (
-                                    <SelectItem
-                                        key={option.value}
-                                        value={option.value.toString()}
-                                    >
-                                        {option.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="default-volume">
-                                Default volume
+                                Default playback speed
                             </Label>
-                            <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                                {defaultVolume}%
-                            </span>
+                            <Select
+                                value={defaultPlaybackSpeed.toString()}
+                                onValueChange={(value) => {
+                                    const speed = parseFloat(value);
+                                    setDefaultPlaybackSpeed(speed);
+                                    handlePlaybackSettingChange({
+                                        defaultPlaybackSpeed: speed,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
+                            >
+                                <SelectTrigger
+                                    id="playback-speed"
+                                    className="w-32 shrink-0"
+                                >
+                                    <SelectValue>
+                                        {playbackSpeedOptions.find(
+                                            (opt) =>
+                                                opt.value ===
+                                                defaultPlaybackSpeed,
+                                        )?.label || "1x"}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {playbackSpeedOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value.toString()}
+                                        >
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <Slider
-                            id="default-volume"
-                            aria-label="Default volume"
-                            value={[defaultVolume]}
-                            onValueChange={(value) => {
-                                const volume = value[0] ?? 75;
-                                setDefaultVolume(volume);
-                                handlePlaybackSettingChange(
-                                    { defaultVolume: volume },
-                                    500,
-                                );
-                            }}
-                            min={0}
-                            max={100}
-                            step={1}
-                        />
+
+                        <div className="space-y-2 py-3">
+                            <div className="flex items-center justify-between">
+                                <Label
+                                    htmlFor="default-volume"
+                                    className="text-[13px] font-medium"
+                                >
+                                    Default volume
+                                </Label>
+                                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                                    {defaultVolume}%
+                                </span>
+                            </div>
+                            <Slider
+                                id="default-volume"
+                                aria-label="Default volume"
+                                value={[defaultVolume]}
+                                onValueChange={(value) => {
+                                    const volume = value[0] ?? 75;
+                                    setDefaultVolume(volume);
+                                    handlePlaybackSettingChange(
+                                        { defaultVolume: volume },
+                                        500,
+                                    );
+                                }}
+                                min={0}
+                                max={100}
+                                step={1}
+                            />
+                        </div>
                     </div>
                 </SettingsCard>
 
@@ -256,14 +265,21 @@ export function PlaybackSection() {
 
                 {/* Visual appearance of the player itself. */}
                 <SettingsCard title="Appearance">
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="player-scrubber"
-                            className="flex items-center gap-2"
-                        >
-                            <AudioWaveform className="size-4 text-muted-foreground" />
-                            Scrubber style
-                        </Label>
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                            <Label
+                                htmlFor="player-scrubber"
+                                className="flex items-center gap-2 text-[13px] font-medium"
+                            >
+                                <AudioWaveform className="size-4 text-muted-foreground" />
+                                Scrubber style
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                                Waveform shows audio amplitude and decodes
+                                in-browser on first listen. Progress bar is the
+                                plain horizontal slider with no decoding cost.
+                            </p>
+                        </div>
                         <Select
                             value={playerScrubber}
                             onValueChange={(value) => {
@@ -277,7 +293,7 @@ export function PlaybackSection() {
                         >
                             <SelectTrigger
                                 id="player-scrubber"
-                                className="w-full"
+                                className="w-56 max-w-[55%] shrink-0"
                             >
                                 <SelectValue />
                             </SelectTrigger>
@@ -290,11 +306,6 @@ export function PlaybackSection() {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Waveform shows audio amplitude and decodes
-                            in-browser on first listen. Progress bar is the
-                            plain horizontal slider with no decoding cost.
-                        </p>
                     </div>
                 </SettingsCard>
 
@@ -312,14 +323,14 @@ export function PlaybackSection() {
                     }
                     description="Available when the player has focus."
                 >
-                    <ul className="space-y-1.5">
+                    <ul className="divide-y divide-border">
                         {shortcuts.map((s) => (
                             <li
                                 key={s.keys}
-                                className="flex items-center justify-between text-sm"
+                                className="flex items-center justify-between py-3 text-[13px]"
                             >
                                 <span>{s.description}</span>
-                                <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border bg-muted px-1.5 font-mono text-[11px] text-foreground">
+                                <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground">
                                     {s.keys}
                                 </kbd>
                             </li>

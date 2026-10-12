@@ -16,10 +16,12 @@ export function RecordingDetailsCard({ recording }: { recording: Recording }) {
     const [open, setOpen] = useState(true);
 
     return (
-        <Card>
-            <CardHeader>
+        <Card className="gap-3 border-0 bg-transparent py-0 shadow-none">
+            <CardHeader className="px-0">
                 <div className="flex items-center justify-between gap-2">
-                    <CardTitle>Details</CardTitle>
+                    <CardTitle className="text-[13px] font-semibold text-muted-foreground">
+                        Details
+                    </CardTitle>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -35,36 +37,28 @@ export function RecordingDetailsCard({ recording }: { recording: Recording }) {
                     </Button>
                 </div>
             </CardHeader>
-            <CardContent id={PANEL_ID} hidden={!open}>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <div className="mb-1 text-xs text-muted-foreground">
-                            Duration
-                        </div>
+            <CardContent id={PANEL_ID} hidden={!open} className="px-0">
+                <div className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-[13px]">
+                    <div className="contents">
+                        <div className="text-muted-foreground">Duration</div>
                         <div className="font-medium">
                             {formatDurationMs(recording.duration)}
                         </div>
                     </div>
-                    <div>
-                        <div className="mb-1 text-xs text-muted-foreground">
-                            File Size
-                        </div>
+                    <div className="contents">
+                        <div className="text-muted-foreground">File Size</div>
                         <div className="font-medium">
                             {formatBytes(recording.filesize)}
                         </div>
                     </div>
-                    <div>
-                        <div className="mb-1 text-xs text-muted-foreground">
-                            Device
-                        </div>
-                        <div className="truncate font-mono text-xs">
+                    <div className="contents">
+                        <div className="text-muted-foreground">Device</div>
+                        <div className="min-w-0 truncate font-mono text-xs">
                             {recording.deviceSn ?? "Upload"}
                         </div>
                     </div>
-                    <div>
-                        <div className="mb-1 text-xs text-muted-foreground">
-                            Date
-                        </div>
+                    <div className="contents">
+                        <div className="text-muted-foreground">Date</div>
                         <div className="font-medium">
                             <LocalTime
                                 value={recording.startTime}

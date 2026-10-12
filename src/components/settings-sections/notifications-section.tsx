@@ -221,8 +221,11 @@ export function NotificationsSection() {
                     />
 
                     {emailNotifications && (
-                        <div className="mt-3 space-y-2 border-t pt-3">
-                            <Label htmlFor="notification-email">
+                        <div className="mt-3 space-y-2 border-t border-border pt-3">
+                            <Label
+                                className="text-[13px] font-medium"
+                                htmlFor="notification-email"
+                            >
                                 Email address
                             </Label>
                             <Input
@@ -261,8 +264,8 @@ export function NotificationsSection() {
                                     <p
                                         className={`text-xs ${
                                             testEmailStatus.type === "success"
-                                                ? "text-green-600 dark:text-green-400"
-                                                : "text-red-600 dark:text-red-400"
+                                                ? "text-success"
+                                                : "text-destructive"
                                         }`}
                                     >
                                         {testEmailStatus.message}
@@ -293,8 +296,13 @@ export function NotificationsSection() {
                     />
 
                     {barkNotifications && (
-                        <div className="mt-3 space-y-2 border-t pt-3">
-                            <Label htmlFor="bark-push-url">Bark push URL</Label>
+                        <div className="mt-3 space-y-2 border-t border-border pt-3">
+                            <Label
+                                className="text-[13px] font-medium"
+                                htmlFor="bark-push-url"
+                            >
+                                Bark push URL
+                            </Label>
                             <Input
                                 id="bark-push-url"
                                 type="url"

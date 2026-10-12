@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { DesktopTitlebar } from "@/components/app-shell/desktop-titlebar";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
@@ -32,31 +33,34 @@ export default async function SuspendedPage() {
     if (!u?.suspendedAt) redirect("/recordings");
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-6">
-            <div className="max-w-md border rounded-xl p-6 bg-card shadow-sm">
-                <h1 className="text-lg font-semibold mb-2">
-                    Your account is suspended
-                </h1>
-                <p className="text-sm text-muted-foreground mb-4">
-                    Access to recordings, sync, and transcription is paused
-                    while we review your account.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                    Contact the administrator of this instance if you think this
-                    is a mistake.
-                </p>
-                <form
-                    action="/api/auth/sign-out"
-                    method="post"
-                    className="mt-6"
-                >
-                    <button
-                        type="submit"
-                        className="text-sm border rounded px-3 py-2 hover:bg-muted"
+        <div className="flex min-h-svh flex-col bg-background text-foreground">
+            <DesktopTitlebar />
+            <div className="flex flex-1 items-center justify-center p-6">
+                <div className="flex w-full max-w-md flex-col items-center text-center">
+                    <h1 className="mb-2 text-[22px] font-bold tracking-tight">
+                        Your account is suspended
+                    </h1>
+                    <p className="mb-3 text-[13px] text-muted-foreground">
+                        Access to recordings, sync, and transcription is paused
+                        while we review your account.
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">
+                        Contact the administrator of this instance if you think
+                        this is a mistake.
+                    </p>
+                    <form
+                        action="/api/auth/sign-out"
+                        method="post"
+                        className="mt-6"
                     >
-                        Sign out
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-[13px] font-medium hover:bg-accent sm:h-8"
+                        >
+                            Sign out
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     );

@@ -40,7 +40,7 @@ export async function UpdateBadge() {
             href={releaseUrlFor(latestTag)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider text-primary transition-colors hover:bg-primary/15"
+            className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider text-link transition-colors hover:bg-accent"
             aria-label={`Update available: ${latestTag}`}
             title={`Update available: ${latestTag} (running ${APP_VERSION})`}
         >

@@ -42,6 +42,8 @@ export function createAppWindow(options: AppWindowOptions): AppWindow {
         minHeight: 560,
         show: false,
         title: app.getName(),
+        titleBarStyle: "hiddenInset",
+        trafficLightPosition: { x: 18, y: 19 },
         webPreferences: {
             partition: APP_PARTITION,
             preload: join(__dirname, "preload.cjs"),

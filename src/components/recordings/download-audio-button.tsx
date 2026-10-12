@@ -13,7 +13,12 @@ export function DownloadAudioButton({ recordingId }: { recordingId: string }) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="icon-sm">
+                <Button
+                    asChild
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-10 sm:size-8"
+                >
                     <a
                         href={recordingAudioDownloadPath(recordingId)}
                         download

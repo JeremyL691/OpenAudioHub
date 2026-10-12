@@ -21,7 +21,6 @@ import {
     type StatusFilter,
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
-import { Card, CardContent } from "@/components/ui/card";
 import { dateGroupFallbackLabel, dateGroupLabel } from "@/lib/format-date";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
@@ -282,11 +281,11 @@ export function RecordingList({
     );
 
     const isCompact = density === "compact";
-    const rowPadding = isCompact ? "px-4 py-2" : "px-4 py-3";
+    const rowPadding = isCompact ? "px-2.5 py-1.5" : "px-2.5 py-2";
 
     return (
-        <Card hasNoPadding>
-            <CardContent className="p-0">
+        <div>
+            <div className="bg-background lg:sticky lg:top-0 lg:z-10">
                 <RecordingListToolbar
                     query={query}
                     onQueryChange={setQuery}
@@ -303,78 +302,72 @@ export function RecordingList({
                     density={density}
                     onDensityChange={setDensityPersisted}
                 />
+            </div>
 
-                {pendingUploads.length > 0 && (
-                    <div className="divide-y bg-muted/30">
-                        {pendingUploads.map((p) => (
-                            <PendingUploadRow
-                                key={p.id}
-                                upload={p}
-                                rowPadding={rowPadding}
-                            />
-                        ))}
+            {pendingUploads.length > 0 && (
+                <div className="flex flex-col gap-0.5 px-2">
+                    {pendingUploads.map((p) => (
+                        <PendingUploadRow
+                            key={p.id}
+                            upload={p}
+                            rowPadding={rowPadding}
+                        />
+                    ))}
+                </div>
+            )}
+
+            <div data-testid="recording-list">
+                {grouped.map((group, gi) => (
+                    <div key={group.label ?? `__ungrouped-${gi.toString()}`}>
+                        {group.label && (
+                            <div className="sticky top-0 z-10 bg-background/85 px-4 pt-3 pb-1 text-[11px] font-semibold leading-none text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:static">
+                                {group.label}
+                            </div>
+                        )}
+                        <div className="flex flex-col gap-0.5 px-2">
+                            {group.items.map((recording) => (
+                                <RecordingRow
+                                    key={recording.id}
+                                    recording={recording}
+                                    isSelected={
+                                        currentRecording?.id === recording.id
+                                    }
+                                    inFlight={inFlightActions.get(recording.id)}
+                                    snippet={transcriptSnippet(
+                                        transcriptions.get(recording.id)?.text,
+                                    )}
+                                    isCompact={isCompact}
+                                    rowPadding={rowPadding}
+                                    dateTimeFormat={dateTimeFormat}
+                                    onSelect={onSelect}
+                                    onDelete={onDelete}
+                                    onTranscribe={onTranscribe}
+                                    onTranscribeInBrowser={
+                                        onTranscribeInBrowser
+                                    }
+                                    onRename={onRename}
+                                    registerRef={registerRowRef}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+
+                {filtered.length === 0 && pendingUploads.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <Mic className="mb-2 size-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                            {query
+                                ? "No recordings match your search."
+                                : statusFilter !== "all"
+                                  ? "No recordings match this filter."
+                                  : "No recordings yet."}
+                        </p>
                     </div>
                 )}
 
-                <div data-testid="recording-list">
-                    {grouped.map((group, gi) => (
-                        <div
-                            key={group.label ?? `__ungrouped-${gi.toString()}`}
-                        >
-                            {group.label && (
-                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                                    {group.label}
-                                </div>
-                            )}
-                            <div className="divide-y">
-                                {group.items.map((recording) => (
-                                    <RecordingRow
-                                        key={recording.id}
-                                        recording={recording}
-                                        isSelected={
-                                            currentRecording?.id ===
-                                            recording.id
-                                        }
-                                        inFlight={inFlightActions.get(
-                                            recording.id,
-                                        )}
-                                        snippet={transcriptSnippet(
-                                            transcriptions.get(recording.id)
-                                                ?.text,
-                                        )}
-                                        isCompact={isCompact}
-                                        rowPadding={rowPadding}
-                                        dateTimeFormat={dateTimeFormat}
-                                        onSelect={onSelect}
-                                        onDelete={onDelete}
-                                        onTranscribe={onTranscribe}
-                                        onTranscribeInBrowser={
-                                            onTranscribeInBrowser
-                                        }
-                                        onRename={onRename}
-                                        registerRef={registerRowRef}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-
-                    {filtered.length === 0 && pendingUploads.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <Mic className="mb-2 size-8 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">
-                                {query
-                                    ? "No recordings match your search."
-                                    : statusFilter !== "all"
-                                      ? "No recordings match this filter."
-                                      : "No recordings yet."}
-                            </p>
-                        </div>
-                    )}
-
-                    <div ref={sentinelRef} className="h-4" aria-hidden="true" />
-                </div>
-            </CardContent>
-        </Card>
+                <div ref={sentinelRef} className="h-4" aria-hidden="true" />
+            </div>
+        </div>
     );
 }

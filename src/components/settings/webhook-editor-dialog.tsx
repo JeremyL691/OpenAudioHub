@@ -154,7 +154,7 @@ export function WebhookEditorDialog({
                         <DialogDescription>
                             This signing secret is shown once.
                         </DialogDescription>
-                        <div className="rounded-md border bg-muted p-3 font-mono text-sm break-all">
+                        <div className="rounded-md bg-muted p-3 font-mono text-sm break-all">
                             {createdSecret}
                         </div>
                         <div className="flex gap-2">
@@ -220,7 +220,7 @@ export function WebhookEditorDialog({
                                 {events.map((event) => (
                                     <label
                                         key={event}
-                                        className="flex items-center gap-2 rounded-md border p-2 text-sm"
+                                        className="flex items-center gap-2 rounded-md bg-muted/60 p-2.5 text-[13px]"
                                     >
                                         <input
                                             type="checkbox"
@@ -239,7 +239,7 @@ export function WebhookEditorDialog({
                                 ))}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3">
                             <Label htmlFor="webhook-enabled">Enabled</Label>
                             <Switch
                                 id="webhook-enabled"

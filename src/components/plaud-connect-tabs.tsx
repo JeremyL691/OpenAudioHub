@@ -93,11 +93,11 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
     ];
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             <div
                 role="tablist"
                 aria-label="Plaud connection method"
-                className="grid grid-cols-3 gap-1 p-1 rounded-md bg-muted/50 border"
+                className="grid grid-cols-3 gap-0.5 p-0.5 rounded-lg bg-muted"
             >
                 {tabs.map((t) => (
                     <button
@@ -106,9 +106,9 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
                         role="tab"
                         aria-selected={mode === t.key}
                         onClick={() => setMode(t.key)}
-                        className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                        className={`min-h-10 sm:min-h-8 px-3 py-1.5 text-[13px] rounded-md transition-colors ${
                             mode === t.key
-                                ? "bg-background shadow-sm font-medium"
+                                ? "bg-background dark:bg-accent shadow-sm font-semibold text-foreground"
                                 : "text-muted-foreground hover:text-foreground"
                         }`}
                     >
@@ -270,7 +270,7 @@ function DesktopConnectPane({
 
     return (
         <div className="space-y-3">
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Sign in with the Google, Apple, or email account you already use
                 in your browser.
             </p>
@@ -286,7 +286,7 @@ function DesktopConnectPane({
                 </Button>
             ) : (
                 <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-[13px] text-muted-foreground leading-relaxed">
                         Finish signing in in your browser. This window updates
                         by itself.
                     </p>
@@ -300,17 +300,20 @@ function DesktopConnectPane({
                 </div>
             )}
             {handoffError && (
-                <p role="alert" className="text-xs text-destructive">
+                <p
+                    role="alert"
+                    className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+                >
                     {handoffError}
                 </p>
             )}
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Needs the OpenAudioHub Connector extension in that browser.{" "}
                 <a
                     href={CONNECTOR_INSTALL_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                 >
                     Get it
                 </a>
@@ -327,12 +330,12 @@ function DesktopConnectPane({
                         : "Sign in in a window instead"}
                 </Button>
             )}
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Sign-in blocked or not working?{" "}
                 <button
                     type="button"
                     onClick={onUseToken}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                 >
                     Paste a token
                 </button>{" "}
@@ -340,7 +343,7 @@ function DesktopConnectPane({
                 <button
                     type="button"
                     onClick={onUseEmail}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                 >
                     email code
                 </button>{" "}
@@ -422,7 +425,7 @@ function ConnectorPane({
     if (!hasConnector) {
         return (
             <div className="space-y-3">
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                     Easiest path: install the{" "}
                     <span className="font-medium">Browser extension</span>{" "}
                     browser extension. Sign in to Plaud the way you normally do
@@ -438,13 +441,13 @@ function ConnectorPane({
                         Install the browser extension
                     </a>
                 </Button>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                     Already installed? Reload this page so OpenAudioHub can
                     detect it. Or use the{" "}
                     <button
                         type="button"
                         onClick={onUseEmail}
-                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                        className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                     >
                         email code
                     </button>{" "}
@@ -452,7 +455,7 @@ function ConnectorPane({
                     <button
                         type="button"
                         onClick={onUseToken}
-                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                        className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                     >
                         paste token
                     </button>{" "}
@@ -464,7 +467,7 @@ function ConnectorPane({
 
     return (
         <div className="space-y-3">
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Click below to sign in to Plaud in a new tab. Use Google, Apple,
                 or email/password as you normally would. The connector will
                 return you here automatically.
@@ -478,12 +481,12 @@ function ConnectorPane({
                     ? "Waiting for plaud.ai sign-in…"
                     : "Continue with Plaud"}
             </Button>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 Stuck?{" "}
                 <button
                     type="button"
                     onClick={onUseEmail}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                 >
                     Use email code
                 </button>{" "}
@@ -491,7 +494,7 @@ function ConnectorPane({
                 <button
                     type="button"
                     onClick={onUseToken}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                 >
                     paste token
                 </button>
@@ -612,7 +615,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                         // oxlint-disable-next-line jsx-a11y/no-autofocus -- intentional -- modal-entry input, focusing it is the whole UX point
                         autoFocus
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[13px] text-muted-foreground">
                         The email you use to sign in at plaud.ai. We'll send a
                         verification code via Plaud's servers.
                     </p>
@@ -628,7 +631,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                         : "Send Verification Code"}
                 </Button>
 
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
                     Signed up to Plaud with{" "}
                     <span className="font-medium">Google or Apple</span>? The
                     email-code flow may sign you into a different (empty) Plaud
@@ -636,7 +639,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                     <button
                         type="button"
                         onClick={onSwitchToToken}
-                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground transition-colors"
+                        className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                     >
                         Use the paste-token method instead.
                     </button>{" "}
@@ -644,7 +647,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                         href={ISSUE_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground transition-colors"
+                        className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                     >
                         #65&nbsp;→
                     </a>
@@ -671,7 +674,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                     autoFocus
                     autoComplete="one-time-code"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                     Code sent to <span className="font-mono">{email}</span>
                     {apiBase && <span> · Region: {regionLabel(apiBase)}</span>}
                 </p>
@@ -685,14 +688,14 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                 {isLoading ? "Verifying with plaud.ai…" : "Connect Account"}
             </Button>
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground/70">
+            <div className="flex items-center justify-between text-[13px] text-muted-foreground/70">
                 <button
                     type="button"
                     onClick={() => {
                         setStep("email");
                         setCode("");
                     }}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground transition-colors"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                 >
                     ← Different email
                 </button>
@@ -700,7 +703,7 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
                     type="button"
                     onClick={handleSendCode}
                     disabled={isLoading}
-                    className="underline decoration-dotted underline-offset-2 hover:text-muted-foreground transition-colors disabled:opacity-50"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors disabled:opacity-50"
                 >
                     Resend code
                 </button>
@@ -745,13 +748,13 @@ function ConsoleSnippet({
         }
     }, [snippet]);
     return (
-        <div className="rounded-md border border-input bg-muted/40 overflow-hidden">
-            <div className="flex items-center px-3 py-1.5 border-b border-input/60 bg-muted">
+        <div className="rounded-md bg-muted overflow-hidden">
+            <div className="flex items-center px-3 py-1.5">
                 <span className="text-[11px] font-mono text-muted-foreground">
                     {consoleHost} console
                 </span>
             </div>
-            <div className="flex items-center gap-2 p-2.5 font-mono text-xs">
+            <div className="flex items-center gap-2 p-2.5 font-mono text-[12px]">
                 <code className="flex-1 overflow-x-auto whitespace-nowrap text-foreground">
                     {snippet}
                 </code>
@@ -763,7 +766,7 @@ function ConsoleSnippet({
                 >
                     {copied ? (
                         <>
-                            <Check className="size-3 text-green-600" />
+                            <Check className="size-3 text-success" />
                             <span>Copied</span>
                         </>
                     ) : (
@@ -839,25 +842,25 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
     return (
         <div className="space-y-4">
             {!isChina && (
-                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5 space-y-1">
-                    <p className="text-xs font-medium text-foreground">
+                <div className="rounded-xl bg-primary/5 px-4 py-3 space-y-1">
+                    <p className="text-[13px] font-medium text-foreground">
                         Recommended: use the connector instead
                     </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-[13px] text-muted-foreground leading-relaxed">
                         The browser extension signs you in and captures the
                         right long-lived token automatically — no copying, and
                         it won't stop working after a day.{" "}
                         <button
                             type="button"
                             onClick={onUseConnector}
-                            className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                            className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                         >
                             Use the connector&nbsp;→
                         </button>
                     </p>
                 </div>
             )}
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
                 {isChina
                     ? `Grab your account token from a logged-in ${webHost} session.`
                     : `Prefer to paste manually? Grab your account token from a logged-in ${webHost} session.`}{" "}
@@ -865,7 +868,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                     href={ISSUE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                 >
                     Why? · #65&nbsp;→
                 </a>
@@ -880,7 +883,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                         setServerKey(e.target.value as PlaudServerKey)
                     }
                     disabled={isLoading}
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-[13px]"
                 >
                     {(Object.keys(PLAUD_SERVERS) as PlaudServerKey[]).map(
                         (key) => (
@@ -897,10 +900,10 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                         value={customApiBase}
                         onChange={(e) => setCustomApiBase(e.target.value)}
                         disabled={isLoading}
-                        className="font-mono text-xs"
+                        className="font-mono text-[12px]"
                     />
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                     Look at the host of any{" "}
                     <span className="font-mono">{apiHint}</span> request in your
                     devtools Network tab to find the region.
@@ -919,7 +922,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                     spellCheck={false}
                     autoCorrect="off"
                     autoCapitalize="off"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono break-all resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-[12px] font-mono break-all resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                 />
             </div>
 
@@ -932,10 +935,10 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
             </Button>
 
             <details className="group">
-                <summary className="text-xs text-muted-foreground/80 cursor-pointer hover:text-muted-foreground transition-colors select-none">
+                <summary className="text-[13px] text-muted-foreground/80 cursor-pointer hover:text-muted-foreground transition-colors select-none">
                     How do I get my token?
                 </summary>
-                <div className="mt-3 space-y-4 text-xs text-muted-foreground leading-relaxed">
+                <div className="mt-3 space-y-4 text-[13px] text-muted-foreground leading-relaxed">
                     {isChina ? (
                         <div className="space-y-1">
                             <p className="font-medium text-foreground">
@@ -957,7 +960,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                                 <button
                                     type="button"
                                     onClick={onUseConnector}
-                                    className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80 transition-colors"
                                 >
                                     Use the browser extension
                                 </button>{" "}
@@ -977,7 +980,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                                     href={webOrigin}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="underline decoration-dotted underline-offset-2"
+                                    className="text-link underline decoration-dotted underline-offset-2"
                                 >
                                     {webHost}
                                 </a>{" "}
@@ -997,7 +1000,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                             consoleHost={webHost}
                             ariaLabel="Copy the token-grab snippet"
                         />
-                        <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+                        <div className="rounded-xl bg-primary/5 px-4 py-3">
                             <p className="font-medium text-foreground">
                                 If that prints an error, open DevTools, go to
                                 Application, then Cookies, select {webOrigin},

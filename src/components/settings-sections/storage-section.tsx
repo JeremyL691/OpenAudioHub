@@ -213,7 +213,7 @@ export function StorageSection() {
                 // specific numbers (which would falsely read as
                 // "you have 0 recordings").
                 <div
-                    className="h-32 animate-pulse rounded-lg border bg-muted/40"
+                    className="h-32 animate-pulse rounded-xl bg-muted/60"
                     aria-hidden="true"
                 />
             ) : usage ? (
@@ -225,7 +225,7 @@ export function StorageSection() {
                     quotaBytes={usage.quotaBytes}
                 />
             ) : (
-                <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+                <div className="rounded-xl bg-muted/60 px-4 py-6 text-center text-xs text-muted-foreground">
                     Couldn't load storage usage. Refresh to try again.
                 </div>
             )}
@@ -243,14 +243,14 @@ export function StorageSection() {
                 </div>
             )}
 
-            <div className="rounded-lg border bg-card/40 px-4 py-3 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Backend</span>
-                    <span className="font-medium capitalize">
+            <div className="rounded-xl bg-muted/60 divide-y divide-border">
+                <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <span className="text-[13px]">Backend</span>
+                    <span className="text-[13px] text-muted-foreground tabular-nums capitalize">
                         {usage?.storageType ?? "local"}
                     </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="px-4 py-3 text-xs text-muted-foreground">
                     Storage backend is configured at the instance level via
                     environment variables.
                 </p>
@@ -336,6 +336,7 @@ export function StorageSection() {
                             }}
                             onBlur={flushPendingRetentionSave}
                             placeholder="30"
+                            className="h-10 sm:h-8"
                         />
                         <p className="text-xs text-muted-foreground">
                             Recordings older than this will be automatically

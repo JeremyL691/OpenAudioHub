@@ -11,8 +11,8 @@ export function TranscriptMeta({
     transcript: TranscriptOption;
 }) {
     return (
-        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
-            <span className="px-2 py-0.5 rounded bg-muted font-medium">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+            <span className="rounded bg-muted px-2 py-0.5 font-medium">
                 {transcriptSourceLabel(transcript.source)}
             </span>
             {transcript.language && (
@@ -21,13 +21,15 @@ export function TranscriptMeta({
                     <span>Language: {transcript.language}</span>
                 </div>
             )}
-            <div>
+            <div className="tabular-nums">
                 {transcript.text.trim()
                     ? transcript.text.trim().split(/\s+/).length
                     : 0}{" "}
                 words
             </div>
-            <div>{transcript.text.length} characters</div>
+            <div className="tabular-nums">
+                {transcript.text.length} characters
+            </div>
         </div>
     );
 }

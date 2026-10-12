@@ -12,7 +12,6 @@ import { TranscriptBody } from "@/components/recording/transcript/transcript-bod
 import { TranscriptMeta } from "@/components/recording/transcript/transcript-meta";
 import { TranscriptToolbar } from "@/components/recording/transcript/transcript-toolbar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { usePersistedToggle } from "@/hooks/use-persisted-toggle";
 import type { RecordingTranscript } from "@/hooks/use-recording-transcript";
@@ -111,101 +110,101 @@ export function TranscriptCard({
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-expanded={open}
-                            aria-controls={contentId}
-                            aria-label={
-                                open
-                                    ? "Collapse transcription"
-                                    : "Expand transcription"
-                            }
-                            onClick={toggleOpen}
-                        >
-                            <ChevronDown
-                                className={cn(
-                                    "size-4 transition-transform",
-                                    !open && "-rotate-90",
-                                )}
-                            />
-                        </Button>
-                        <CardTitle className="flex items-center gap-2">
-                            <FileText className="size-5" />
-                            Transcription
-                        </CardTitle>
+        <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-10 w-10 sm:h-7 sm:w-7"
+                        aria-expanded={open}
+                        aria-controls={contentId}
+                        aria-label={
+                            open
+                                ? "Collapse transcription"
+                                : "Expand transcription"
+                        }
+                        onClick={toggleOpen}
+                    >
+                        <ChevronDown
+                            className={cn(
+                                "size-4 transition-transform",
+                                !open && "-rotate-90",
+                            )}
+                        />
+                    </Button>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
+                        <FileText className="size-4" />
+                        Transcription
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {isDetail && activeTranscript?.text && hasTimeline && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Switch
-                                    checked={followPlayback}
-                                    onCheckedChange={setFollowPlayback}
-                                    aria-label="Follow playback"
-                                />
-                                <span>Follow playback</span>
-                            </div>
-                        )}
-                        {!isDetail && activeTranscript?.text && (
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    {isDetail && activeTranscript?.text && hasTimeline && (
+                        <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                            <Switch
+                                checked={followPlayback}
+                                onCheckedChange={setFollowPlayback}
+                                aria-label="Follow playback"
+                            />
+                            <span>Follow playback</span>
+                        </div>
+                    )}
+                    {!isDetail && activeTranscript?.text && (
+                        <Button
+                            onClick={expandThen(onTranscribe)}
+                            size="sm"
+                            variant="outline"
+                            className="h-10 sm:h-8"
+                            disabled={
+                                isTranscribing || Boolean(isPipelineActive)
+                            }
+                        >
+                            <RefreshCw className="size-4 mr-2" />
+                            Re-transcribe
+                        </Button>
+                    )}
+                    {!activeTranscript?.text && !isTranscribing && (
+                        <>
                             <Button
                                 onClick={expandThen(onTranscribe)}
                                 size="sm"
-                                variant="outline"
+                                className="h-10 sm:h-8"
                                 disabled={
                                     isTranscribing || Boolean(isPipelineActive)
                                 }
                             >
-                                <RefreshCw className="size-4 mr-2" />
-                                Re-transcribe
+                                <Sparkles className="size-4 mr-2" />
+                                Transcribe
                             </Button>
-                        )}
-                        {!activeTranscript?.text && !isTranscribing && (
-                            <>
-                                <Button
-                                    onClick={expandThen(onTranscribe)}
-                                    size="sm"
-                                    disabled={
-                                        isTranscribing ||
-                                        Boolean(isPipelineActive)
-                                    }
-                                >
-                                    <Sparkles className="size-4 mr-2" />
-                                    Transcribe
-                                </Button>
-                                <TranscribeInBrowserButton
-                                    recordingId={recording.id}
-                                    disabled={isTranscribing}
-                                    onComplete={
-                                        // Falling back to `onTranscribe` here
-                                        // would kick off a redundant SERVER
-                                        // transcription right after a
-                                        // successful browser one, possibly
-                                        // overwriting it. Callers that care
-                                        // about refreshing after a browser
-                                        // transcription must pass
-                                        // `onTranscribeComplete` explicitly.
-                                        onTranscribeComplete ?? (() => {})
-                                    }
-                                />
-                            </>
-                        )}
-                    </div>
+                            <TranscribeInBrowserButton
+                                recordingId={recording.id}
+                                disabled={isTranscribing}
+                                onComplete={
+                                    // Falling back to `onTranscribe` here
+                                    // would kick off a redundant SERVER
+                                    // transcription right after a
+                                    // successful browser one, possibly
+                                    // overwriting it. Callers that care
+                                    // about refreshing after a browser
+                                    // transcription must pass
+                                    // `onTranscribeComplete` explicitly.
+                                    onTranscribeComplete ?? (() => {})
+                                }
+                            />
+                        </>
+                    )}
                 </div>
-            </CardHeader>
-            <CardContent id={contentId} hidden={!open}>
+            </div>
+            <div id={contentId} hidden={!open} className="mt-4">
                 {isTranscribing && !activeTranscript?.text ? (
-                    <div className="flex flex-col items-center justify-center py-12">
+                    <div className="flex flex-col items-center justify-center py-10">
                         <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                         <p className="text-sm text-muted-foreground">
                             Transcribing audio…
                         </p>
                     </div>
                 ) : activeTranscript?.text ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {!isDetail && (
                             <PipelineStatus
                                 variant="inline"
@@ -244,7 +243,7 @@ export function TranscriptCard({
                         <TranscriptMeta transcript={activeTranscript} />
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
                         {isPipelineRunning ||
                         activeJob?.status === "paused" ||
                         activeJob?.status === "failed" ? (
@@ -268,7 +267,7 @@ export function TranscriptCard({
                         )}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }

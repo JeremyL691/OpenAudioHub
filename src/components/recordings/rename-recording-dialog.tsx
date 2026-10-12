@@ -89,12 +89,12 @@ export function RenameRecordingDialog({
                 if (!open && !saving) onClose();
             }}
         >
-            <DialogContent>
+            <DialogContent className="gap-4 sm:max-w-sm">
                 <DialogHeader>
                     <DialogTitle>Rename recording</DialogTitle>
                 </DialogHeader>
                 <form
-                    className="space-y-2"
+                    className="space-y-3"
                     onSubmit={(event) => {
                         event.preventDefault();
                         void save();
@@ -103,22 +103,28 @@ export function RenameRecordingDialog({
                     <Label htmlFor="rename-recording-input">Name</Label>
                     <Input
                         id="rename-recording-input"
+                        className="h-10 text-[13px] sm:h-8"
                         value={draft}
                         maxLength={MAX_RECORDING_TITLE_LENGTH}
                         disabled={saving}
                         autoFocus
                         onChange={(event) => setDraft(event.target.value)}
                     />
-                    <DialogFooter>
+                    <DialogFooter className="gap-2 sm:justify-end">
                         <Button
                             type="button"
                             variant="outline"
+                            className="h-10 px-4 sm:h-8"
                             onClick={onClose}
                             disabled={saving}
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={saving}>
+                        <Button
+                            type="submit"
+                            disabled={saving}
+                            className="h-10 px-4 sm:h-8"
+                        >
                             Save
                         </Button>
                     </DialogFooter>

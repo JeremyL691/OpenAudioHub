@@ -40,7 +40,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
     if (resetPasswordMode(token, error) === "invalid") {
         return (
             <div className="space-y-6">
-                <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                <div className="space-y-3 rounded-lg border border-border bg-muted/60 p-4 text-[13px] text-muted-foreground">
                     {error?.toUpperCase() === "INVALID_TOKEN" ? (
                         <p>
                             The reset link has expired or has already been used.
@@ -54,10 +54,10 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                     )}
                 </div>
 
-                <div className="text-center text-sm">
+                <div className="text-center text-[13px]">
                     <Link
                         href="/forgot-password"
-                        className="text-accent-cyan hover:underline"
+                        className="text-link hover:underline"
                     >
                         Request a new link
                     </Link>
@@ -146,11 +146,8 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                 </Button>
             </form>
 
-            <div className="text-center text-sm">
-                <Link
-                    href="/login"
-                    className="text-accent-cyan hover:underline"
-                >
+            <div className="text-center text-[13px]">
+                <Link href="/login" className="text-link hover:underline">
                     Back to sign in
                 </Link>
             </div>

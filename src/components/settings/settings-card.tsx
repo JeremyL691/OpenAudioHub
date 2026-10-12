@@ -6,30 +6,26 @@ import { cn } from "@/lib/utils";
 
 interface SettingsCardProps {
     /**
-     * Optional card title. When absent, the card renders as a plain
-     * surface; the children handle their own structure (useful when a
-     * subsystem only has a single setting and a title would feel like
-     * noise).
+     * Optional group label, shown above the group. When absent, the group
+     * renders without a label; the children handle their own structure
+     * (useful when a subsystem only has a single setting and a title would
+     * feel like noise).
      */
     title?: React.ReactNode;
-    /** Optional short description rendered under the title. */
+    /** Optional short description rendered under the label. */
     description?: React.ReactNode;
-    /** Optional icon shown next to the title at a restrained size. */
+    /** Optional icon shown next to the label at a restrained size. */
     icon?: LucideIcon;
-    /** Slot rendered in the top-right of the header (e.g. a Switch). */
+    /** Slot rendered at the right of the label row (e.g. a Switch). */
     action?: React.ReactNode;
     children: React.ReactNode;
     className?: string;
 }
 
 /**
- * Visual grouping primitive for settings sections.
- *
- * Each "subsystem" inside a section (Browser notifications, Email
- * notifications, Bark, …) wraps in a SettingsCard so related controls
- * read as one unit. The card itself is a subtle surface — border +
- * radius + padding — not a heavy raised card; settings should still
- * feel like a flat document, not a dashboard.
+ * Grouped-list primitive for settings sections, in the System Settings
+ * style: a small muted label sits above a rounded, tinted group that holds
+ * the rows. Rows (such as `ToggleRow`) provide their own vertical padding.
  */
 export function SettingsCard({
     title,
@@ -40,20 +36,15 @@ export function SettingsCard({
     className,
 }: SettingsCardProps) {
     return (
-        <div
-            className={cn(
-                "rounded-lg border bg-card/40 px-4 py-3.5",
-                className,
-            )}
-        >
+        <div className={cn("flex flex-col gap-1.5", className)}>
             {(title || description || action) && (
-                <div className="flex items-start justify-between gap-4 pb-3">
+                <div className="flex items-end justify-between gap-4 px-1">
                     <div className="min-w-0 flex-1">
                         {title && (
-                            <div className="flex items-center gap-2 text-sm font-medium">
+                            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
                                 {Icon && (
                                     <Icon
-                                        className="size-4 text-muted-foreground"
+                                        className="size-4"
                                         aria-hidden="true"
                                     />
                                 )}
@@ -61,7 +52,7 @@ export function SettingsCard({
                             </div>
                         )}
                         {description && (
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="mt-0.5 text-xs text-muted-foreground">
                                 {description}
                             </p>
                         )}
@@ -69,7 +60,7 @@ export function SettingsCard({
                     {action && <div className="shrink-0">{action}</div>}
                 </div>
             )}
-            <div className={cn(title || description ? "space-y-3" : "")}>
+            <div className="rounded-xl bg-muted/60 px-4 py-1 dark:bg-muted">
                 {children}
             </div>
         </div>

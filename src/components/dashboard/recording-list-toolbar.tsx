@@ -57,7 +57,7 @@ export function RecordingListToolbar({
     onDensityChange: (next: ListDensity) => void;
 }) {
     return (
-        <div className="flex flex-col gap-2 border-b p-3">
+        <div className="flex flex-col gap-2 border-b border-border px-3 pt-3 pb-2">
             <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -71,7 +71,7 @@ export function RecordingListToolbar({
                         }
                     }}
                     placeholder="Search recordings, transcripts..."
-                    className="h-9 pl-8 pr-8"
+                    className="h-10 rounded-md border-transparent bg-muted pl-8 pr-8 sm:h-8"
                     aria-label="Search recordings"
                     data-testid="recording-search"
                 />
@@ -98,10 +98,10 @@ export function RecordingListToolbar({
                             data-testid={`recording-filter-${option.value}`}
                             onClick={() => onStatusFilterChange(option.value)}
                             className={cn(
-                                "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                                "inline-flex h-10 items-center rounded-full px-3 text-xs font-medium transition-colors sm:h-6 sm:px-2.5",
                                 active
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "text-muted-foreground hover:text-foreground",
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-foreground hover:bg-accent",
                             )}
                         >
                             {option.label}
@@ -109,7 +109,7 @@ export function RecordingListToolbar({
                     );
                 })}
             </fieldset>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
                 <span>
                     {filteredCount}
                     {query || statusFilter !== "all" ? " matching" : ""} of{" "}
@@ -122,7 +122,7 @@ export function RecordingListToolbar({
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs"
+                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
                                 aria-label="Sort"
                                 data-testid="recording-sort"
                             >
@@ -161,7 +161,7 @@ export function RecordingListToolbar({
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs"
+                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
                                 aria-label="Density"
                             >
                                 <Rows3 className="size-3.5" />

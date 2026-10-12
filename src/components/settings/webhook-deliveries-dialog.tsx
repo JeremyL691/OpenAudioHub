@@ -17,6 +17,14 @@ interface Props {
     onClose: () => void;
 }
 
+function deliveryStatusClass(status: string): string {
+    if (status === "success" || status === "delivered") {
+        return "bg-success text-success-foreground";
+    }
+    if (status === "failed") return "bg-destructive/10 text-destructive";
+    return "bg-muted text-muted-foreground";
+}
+
 /**
  * Read-mostly deliveries inspector for a single webhook endpoint. Fetches
  * its own list whenever the `webhook` prop changes -- the parent doesn't
@@ -78,7 +86,13 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
         >
             <DialogContent className="max-w-3xl">
                 <DialogTitle>Webhook Deliveries</DialogTitle>
-                <div className="max-h-[420px] space-y-2 overflow-y-auto">
+                <div
+                    className={`max-h-[420px] overflow-y-auto ${
+                        deliveries.length === 0
+                            ? ""
+                            : "divide-y divide-border overflow-hidden rounded-xl bg-muted/60"
+                    }`}
+                >
                     {deliveries.length === 0 ? (
                         <p className="py-8 text-center text-sm text-muted-foreground">
                             No deliveries yet
@@ -87,24 +101,26 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                         deliveries.map((delivery) => (
                             <div
                                 key={delivery.id}
-                                className="grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[1fr_auto]"
+                                className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-start"
                             >
                                 <div className="space-y-1">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-medium">
+                                        <span className="text-[13px] font-medium">
                                             {delivery.event}
                                         </span>
-                                        <span className="rounded border px-2 py-0.5 text-xs">
+                                        <span
+                                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${deliveryStatusClass(delivery.status)}`}
+                                        >
                                             {delivery.status}
                                         </span>
                                         {delivery.lastResponseStatus && (
-                                            <span className="rounded border px-2 py-0.5 text-xs">
+                                            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-medium tabular-nums">
                                                 HTTP{" "}
                                                 {delivery.lastResponseStatus}
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground tabular-nums">
                                         Attempts: {delivery.attempts} · Last:{" "}
                                         {formatWebhookDate(
                                             delivery.lastAttemptAt,

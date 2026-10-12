@@ -21,7 +21,12 @@ export function KeyHint({ keys, label, className }: KeyHintProps) {
             {label ? <span>{label}</span> : null}
             <KbdGroup>
                 {keys.map((key) => (
-                    <Kbd key={key}>{key}</Kbd>
+                    <Kbd
+                        key={key}
+                        className="rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground"
+                    >
+                        {key}
+                    </Kbd>
                 ))}
             </KbdGroup>
         </span>

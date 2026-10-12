@@ -44,7 +44,15 @@ export function transcriptSnippet(
 }
 
 const PILL_CLASS =
-    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground";
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground group-data-[selected=true]:border-primary-foreground/30 group-data-[selected=true]:text-primary-foreground";
+
+const ITEM_CLASS = "group rounded-md py-1.5 text-[13px]";
+
+const GROUP_CLASS =
+    "[&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground";
+
+const KBD_CLASS =
+    "h-5 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-normal text-muted-foreground group-data-[selected=true]:border-primary-foreground/30 group-data-[selected=true]:bg-transparent group-data-[selected=true]:text-primary-foreground";
 
 export function Row({
     icon,
@@ -63,9 +71,11 @@ export function Row({
                 {icon}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm">{title}</span>
+                <span className="truncate text-[13px] leading-tight">
+                    {title}
+                </span>
                 {subtitle ? (
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-[11px] text-muted-foreground group-data-[selected=true]:text-primary-foreground">
                         {subtitle}
                     </span>
                 ) : null}
@@ -80,7 +90,7 @@ export function Row({
 }
 
 export function Kbd({ children }: { children: ReactNode }) {
-    return <UiKbd>{children}</UiKbd>;
+    return <UiKbd className={KBD_CLASS}>{children}</UiKbd>;
 }
 
 export function RecordingsGroup({
@@ -104,7 +114,7 @@ export function RecordingsGroup({
     const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
 
     return (
-        <CommandGroup heading="Recent">
+        <CommandGroup heading="Recent" className={GROUP_CLASS}>
             {recordings.map((r) => {
                 const snippet = transcriptSnippet(
                     transcriptions.get(r.id)?.text,
@@ -186,6 +196,7 @@ export function RecordingsGroup({
 
                 return (
                     <CommandItem
+                        className={ITEM_CLASS}
                         key={r.id}
                         value={searchValue}
                         onSelect={runAction(() => onSelectRecording(r))}
@@ -204,7 +215,7 @@ export function RecordingsGroup({
                 );
             })}
             {overflowCount > 0 && (
-                <div className="px-2 py-2 text-xs text-muted-foreground">
+                <div className="px-2 py-2 text-[11px] text-muted-foreground">
                     +{overflowCount} more · refine your search to narrow the
                     list
                 </div>
@@ -227,8 +238,8 @@ export function ActionsGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <CommandGroup heading="Actions">
-            <CommandItem onSelect={runAction(onSync)}>
+        <CommandGroup heading="Actions" className={GROUP_CLASS}>
+            <CommandItem className={ITEM_CLASS} onSelect={runAction(onSync)}>
                 <Row
                     icon={
                         <RefreshCw className="size-4 text-muted-foreground" />
@@ -236,20 +247,26 @@ export function ActionsGroup({
                     title="Sync device"
                 />
             </CommandItem>
-            <CommandItem onSelect={runAction(onUpload)}>
+            <CommandItem className={ITEM_CLASS} onSelect={runAction(onUpload)}>
                 <Row
                     icon={<Upload className="size-4 text-muted-foreground" />}
                     title="Upload audio"
                 />
             </CommandItem>
-            <CommandItem onSelect={runAction(onOpenSettings)}>
+            <CommandItem
+                className={ITEM_CLASS}
+                onSelect={runAction(onOpenSettings)}
+            >
                 <Row
                     icon={<Settings className="size-4 text-muted-foreground" />}
                     title="Open settings"
                     accessory={<Kbd>,</Kbd>}
                 />
             </CommandItem>
-            <CommandItem onSelect={runAction(onOpenShortcuts)}>
+            <CommandItem
+                className={ITEM_CLASS}
+                onSelect={runAction(onOpenShortcuts)}
+            >
                 <Row
                     icon={<Keyboard className="size-4 text-muted-foreground" />}
                     title="Keyboard shortcuts"
@@ -270,8 +287,11 @@ export function ThemeGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <CommandGroup heading="Theme">
-            <CommandItem onSelect={runAction(() => onSetTheme("light"))}>
+        <CommandGroup heading="Theme" className={GROUP_CLASS}>
+            <CommandItem
+                className={ITEM_CLASS}
+                onSelect={runAction(() => onSetTheme("light"))}
+            >
                 <Row
                     icon={<Sun className="size-4 text-muted-foreground" />}
                     title="Light"
@@ -282,7 +302,10 @@ export function ThemeGroup({
                     }
                 />
             </CommandItem>
-            <CommandItem onSelect={runAction(() => onSetTheme("dark"))}>
+            <CommandItem
+                className={ITEM_CLASS}
+                onSelect={runAction(() => onSetTheme("dark"))}
+            >
                 <Row
                     icon={<Moon className="size-4 text-muted-foreground" />}
                     title="Dark"
@@ -293,7 +316,10 @@ export function ThemeGroup({
                     }
                 />
             </CommandItem>
-            <CommandItem onSelect={runAction(() => onSetTheme("system"))}>
+            <CommandItem
+                className={ITEM_CLASS}
+                onSelect={runAction(() => onSetTheme("system"))}
+            >
                 <Row
                     icon={<Monitor className="size-4 text-muted-foreground" />}
                     title="Auto"
@@ -314,7 +340,7 @@ export function PaletteFooter({
     showTranscribeHint: boolean;
 }) {
     return (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-3 py-2 text-[11px] text-muted-foreground">
             <div className="flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-1">
                     <Kbd>↑</Kbd>

@@ -7,23 +7,23 @@ import { pipelinePhaseStatus } from "@/lib/recordings/transcript-status";
 /** Pipeline jobs that are still running, with their phase and progress. */
 export function ProcessingCard({ items }: { items: ProcessingItem[] }) {
     return (
-        <section
-            aria-labelledby="processing-heading"
-            className="rounded-xl border bg-card p-5"
-        >
-            <h2 id="processing-heading" className="text-sm font-semibold">
+        <section aria-labelledby="processing-heading">
+            <h2
+                id="processing-heading"
+                className="mb-2 text-[13px] font-semibold text-muted-foreground"
+            >
                 Processing
             </h2>
             {items.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                     Nothing is processing right now.
                 </p>
             ) : (
-                <ul className="mt-3 divide-y">
+                <ul className="space-y-2">
                     {items.map((item) => (
                         <li
                             key={item.id}
-                            className="flex items-center gap-3 py-3"
+                            className="flex items-center gap-3 rounded-xl bg-muted/60 px-4 py-3 dark:bg-muted"
                         >
                             <div className="min-w-0 flex-1 space-y-2">
                                 <Link
