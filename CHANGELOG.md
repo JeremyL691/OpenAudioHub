@@ -6,6 +6,21 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-11
+
+### Changed
+
+- A new interface with a native macOS look. The sidebar is a source list, the toolbar holds search, sync, and upload, and the logo blue is the single accent color. Recordings fill the window as a list and a detail pane, and on wide screens the player stays docked at the bottom while the transcript scrolls. The overview, settings, dialogs, and menus use grouped lists instead of cards. The Mac app draws its own title bar, so the window buttons sit in the toolbar. Features, shortcuts, and settings are unchanged.
+- Blue text uses a darker blue in light mode, and every color pair still meets WCAG AA contrast in both themes.
+
+### Added
+
+- The Mac app can connect a Plaud account. **Sign in with Plaud** opens Plaud's sign-in page in its own window, or hands the sign-in to your default browser, where the OpenAudioHub Connector extension passes the account back to the app. The handoff link works once and expires after 10 minutes.
+
+### Fixed
+
+- The legacy brand-name check now runs in CI. It was skipped because the runner had no ripgrep.
+
 ## [1.1.0] - 2026-10-09
 
 ### Added
