@@ -21,7 +21,7 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: '0.12.23'
+          version: '0.13.0'
           python-version: '3.12'
       - name: Check Python code
         working-directory: audio-pipeline

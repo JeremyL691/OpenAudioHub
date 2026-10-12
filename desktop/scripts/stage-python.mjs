@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { fetchPinned } from "./lib/download.mjs";
 import { PINS } from "./lib/pins.mjs";
 
-const UV_VERSION = "0.12.23"; // same uv as the Docker image (audio-pipeline/Dockerfile)
+const UV_VERSION = "0.13.0"; // same uv as the Docker image (audio-pipeline/Dockerfile)
 
 const here = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(here, "..");
