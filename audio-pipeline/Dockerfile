@@ -8,7 +8,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home pipeline
-RUN pip install --no-cache-dir uv==0.12.23
+RUN pip install --no-cache-dir uv==0.13.0
 
 WORKDIR /app
 COPY pyproject.toml README.md uv.lock ./

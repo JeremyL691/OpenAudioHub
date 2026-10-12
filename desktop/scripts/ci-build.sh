@@ -3,7 +3,7 @@
 # app (dist.mjs), verifies the .app in the output folder and the .app inside the mounted DMG (verify-bundle.mjs),
 # and writes the DMG's sha256 next to it.
 #
-# Requires the dependencies installed (`pnpm install --frozen-lockfile` at the root and in desktop/), uv 0.12.23,
+# Requires the dependencies installed (`pnpm install --frozen-lockfile` at the root and in desktop/), uv 0.13.0,
 # and Homebrew pkg-config for the ffmpeg build. Output: desktop/dist/OpenAudioHub-<version>-arm64.dmg and .sha256.
 set -euo pipefail
 
