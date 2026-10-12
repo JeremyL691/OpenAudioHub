@@ -53,20 +53,20 @@ export function SelfHostAuthChrome({
     children,
 }: AuthChromeProps) {
     return (
-        <div className="grid min-h-svh lg:grid-cols-2">
+        <div className="grid flex-1 lg:grid-cols-2">
             <BrandPanel />
             <div className="flex flex-col items-center justify-center gap-6 px-4 py-12 sm:px-8">
                 <Link href="/" aria-label="OpenAudioHub" className="lg:hidden">
                     <Logo className="text-xl text-foreground" />
                 </Link>
-                <div className="w-full max-w-md space-y-6">
-                    <Card className="space-y-6">
+                <div className="w-full max-w-sm space-y-6">
+                    <Card className="w-full gap-6 rounded-2xl border-border bg-background p-8 py-8 shadow-sm">
                         <div className="space-y-1.5">
-                            <h1 className="text-xl font-semibold tracking-tight">
+                            <h1 className="text-[22px] font-bold tracking-tight">
                                 {title}
                             </h1>
                             {subtitle ? (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-[13px] text-muted-foreground">
                                     {subtitle}
                                 </p>
                             ) : null}
@@ -84,7 +84,7 @@ function BrandPanel() {
     return (
         <aside
             aria-label="About OpenAudioHub"
-            className="hidden flex-col justify-between border-r bg-muted/40 p-10 lg:flex xl:p-14"
+            className="hidden flex-col justify-between border-r border-border bg-transparent p-10 lg:flex xl:p-14"
         >
             <Link href="/" aria-label="OpenAudioHub home" className="w-fit">
                 <Logo className="text-base text-foreground" />
@@ -94,7 +94,7 @@ function BrandPanel() {
                 <p className="text-2xl font-semibold leading-snug tracking-tight">
                     {BRAND.slogan}
                 </p>
-                <ul className="space-y-3 text-sm text-muted-foreground">
+                <ul className="space-y-3 text-[13px] text-muted-foreground">
                     {POINTS.map((point) => (
                         <li key={point} className="flex gap-3">
                             <Check
@@ -115,7 +115,7 @@ function BrandPanel() {
 
 function InstanceFooter() {
     return (
-        <div className="flex justify-center text-xs text-muted-foreground font-mono">
+        <div className="flex justify-center font-mono text-xs text-muted-foreground">
             <div className="flex items-center gap-4">
                 <Link
                     href="/docs"

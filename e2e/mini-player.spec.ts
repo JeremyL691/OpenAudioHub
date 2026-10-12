@@ -54,7 +54,11 @@ async function openFullPage(page: Page, title: string): Promise<void> {
     await expect(page.getByTestId("player")).toBeVisible();
 }
 
+// From lg up the full player is docked at the bottom of the detail area and never
+// leaves the screen, so the compact bar only appears below lg.
 test.describe("mini player", () => {
+    test.use({ viewport: { width: 768, height: 800 } });
+
     test.beforeEach(async ({ page }) => {
         await signIn(page);
         await openRecording(page, RECORDINGS.long);
@@ -124,15 +128,52 @@ test.describe("mini player", () => {
     });
 
     test("the full recording page gets the same bar", async ({ page }) => {
-        // The two-column page is shorter than a tall window, so use a shorter
-        // viewport for the player to be able to scroll out of view.
-        await page.setViewportSize({ width: 1280, height: 600 });
+        // Use a shorter viewport for the player to be able to scroll out of view.
+        await page.setViewportSize({ width: 768, height: 600 });
         await page.getByTestId("open-full-view").click();
         await expect(page.getByTestId("player")).toBeVisible();
         await waitForScrollableDocument(page);
 
         await scrollPlayer(page, 1500);
         await expect(page.getByTestId("mini-player")).toBeVisible();
+    });
+});
+
+test.describe("docked player", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page);
+        await openRecording(page, RECORDINGS.long);
+    });
+
+    test("stays on screen while the transcript scrolls", async ({ page }) => {
+        await expect(page.getByTestId("transcript-timeline")).toBeVisible();
+        await page.getByTestId("transcript-timeline").evaluate((list) => {
+            let node: HTMLElement | null = list.parentElement;
+            while (node) {
+                if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) {
+                    node.scrollBy({ top: 5000, behavior: "instant" });
+                }
+                node = node.parentElement;
+            }
+            window.scrollBy({ top: 5000, behavior: "instant" });
+        });
+
+        await expect(page.getByTestId("player")).toBeInViewport();
+        await expect(page.getByTestId("mini-player")).toHaveCount(0);
+        const player = await page.getByTestId("player").boundingBox();
+        const viewport = page.viewportSize();
+        if (!player || !viewport) {
+            throw new Error("player or viewport has no size");
+        }
+        expect(player.y + player.height).toBeGreaterThan(viewport.height - 120);
+    });
+
+    test("the full recording page docks the player too", async ({ page }) => {
+        await page.getByTestId("open-full-view").click();
+        await expect(page.getByTestId("player")).toBeVisible();
+        await page.mouse.wheel(0, 5000);
+        await expect(page.getByTestId("player")).toBeInViewport();
+        await expect(page.getByTestId("mini-player")).toHaveCount(0);
     });
 });
 
@@ -146,7 +187,7 @@ test.describe("mini player captures", () => {
             SHOT_SET ?? "",
         );
 
-    for (const width of [375, 1280] as const) {
+    for (const width of [375, 768] as const) {
         for (const scheme of ["light", "dark"] as const) {
             test(`compact bar at ${width}px in ${scheme} mode`, async ({
                 page,

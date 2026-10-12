@@ -153,6 +153,7 @@ export function ApiKeysSection() {
                 action={
                     <Button
                         size="sm"
+                        className="h-10 sm:h-8"
                         data-testid="api-key-create"
                         onClick={() => {
                             setCreatedKey(null);
@@ -170,11 +171,12 @@ export function ApiKeysSection() {
                     <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
                 </div>
             ) : apiKeys.length === 0 ? (
-                <div className="text-center py-12 border rounded-lg">
-                    <KeyRound className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No API keys</h3>
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <KeyRound className="size-12 text-muted-foreground" />
+                    <h3 className="text-[13px] font-semibold">No API keys</h3>
                     <Button
                         size="sm"
+                        className="h-10 sm:h-8"
                         data-testid="api-key-create"
                         onClick={() => setIsCreateOpen(true)}
                     >
@@ -183,27 +185,27 @@ export function ApiKeysSection() {
                     </Button>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
                     {apiKeys.map((apiKey) => (
                         <div
                             key={apiKey.id}
-                            className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                            className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <div className="min-w-0 space-y-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h3 className="font-medium">
+                                    <h3 className="text-[13px] font-medium">
                                         {apiKey.name}
                                     </h3>
-                                    <span className="rounded border px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                                    <span className="font-mono text-xs text-muted-foreground">
                                         {apiKey.keyPrefix}
                                     </span>
                                     {apiKey.revokedAt && (
-                                        <span className="rounded border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
+                                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
                                             Revoked
                                         </span>
                                     )}
                                 </div>
-                                <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+                                <div className="grid gap-1 text-xs text-muted-foreground tabular-nums sm:grid-cols-3">
                                     <span>
                                         Last used:{" "}
                                         {formatDate(apiKey.lastUsedAt)}
@@ -219,6 +221,7 @@ export function ApiKeysSection() {
                             <Button
                                 variant="outline"
                                 size="icon"
+                                className="self-end sm:self-center"
                                 onClick={() => handleRevoke(apiKey.id)}
                                 disabled={Boolean(apiKey.revokedAt)}
                                 aria-label={`Revoke ${apiKey.name}`}
@@ -238,7 +241,7 @@ export function ApiKeysSection() {
                             <DialogDescription>
                                 This key is shown once.
                             </DialogDescription>
-                            <div className="rounded-md border bg-muted p-3 font-mono text-sm break-all">
+                            <div className="rounded-md bg-muted p-3 font-mono text-sm break-all">
                                 {createdKey}
                             </div>
                             <div className="flex gap-2">

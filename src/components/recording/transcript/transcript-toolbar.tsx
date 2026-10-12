@@ -47,12 +47,13 @@ export function TranscriptToolbar({
     return (
         <div
             data-testid="transcript-toolbar"
-            className="flex flex-wrap items-center justify-end gap-2"
+            className="flex flex-wrap items-center justify-end gap-1"
         >
             <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-10 sm:h-7"
                 aria-label="Download transcript as TXT"
                 onClick={() => exportAs("txt")}
             >
@@ -63,6 +64,7 @@ export function TranscriptToolbar({
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-10 sm:h-7"
                 aria-label="Download transcript as JSON"
                 onClick={() => exportAs("json")}
             >
@@ -73,7 +75,7 @@ export function TranscriptToolbar({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-destructive hover:text-destructive"
+                className="h-10 text-destructive hover:text-destructive sm:h-7"
                 disabled={deleteDisabled}
                 onClick={onDelete}
             >

@@ -160,9 +160,12 @@ export function SyncSection() {
                     />
 
                     {autoSyncEnabled && (
-                        <div className="mt-3 space-y-3 border-t pt-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="sync-interval">
+                        <div className="mt-3 space-y-3 border-t border-border pt-3">
+                            <div className="flex items-center justify-between gap-4">
+                                <Label
+                                    htmlFor="sync-interval"
+                                    className="text-[13px]"
+                                >
                                     Sync interval
                                 </Label>
                                 <Select
@@ -178,7 +181,7 @@ export function SyncSection() {
                                 >
                                     <SelectTrigger
                                         id="sync-interval"
-                                        className="w-full"
+                                        className="h-10 sm:h-8 w-40"
                                     >
                                         <SelectValue>
                                             {getSyncIntervalLabel(syncInterval)}

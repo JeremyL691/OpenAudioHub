@@ -21,13 +21,13 @@ export function PendingUploadRow({
     rowPadding: string;
 }) {
     return (
-        <div className={cn("flex items-center gap-3", rowPadding)}>
-            <Loader2 className="size-4 animate-spin text-primary" />
+        <div className={cn("flex items-center gap-2.5 rounded-lg", rowPadding)}>
+            <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-muted-foreground">
+                <p className="truncate text-[13px] font-semibold text-muted-foreground">
                     {upload.filename}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs tabular-nums text-muted-foreground">
                     Uploading… {formatSize(upload.filesize)}
                 </p>
             </div>

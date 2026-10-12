@@ -167,9 +167,14 @@ export function DisplaySection() {
                 description="How dates, lists, and the overall UI present themselves."
                 icon={Monitor}
             />
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="date-time-format">Date/time format</Label>
+            <div className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-4 py-3">
+                    <Label
+                        className="text-[13px] font-medium"
+                        htmlFor="date-time-format"
+                    >
+                        Date/time format
+                    </Label>
                     <Select
                         value={dateTimeFormat}
                         onValueChange={(value) => {
@@ -180,7 +185,10 @@ export function DisplaySection() {
                         }}
                         disabled={isSavingSettings}
                     >
-                        <SelectTrigger id="date-time-format" className="w-full">
+                        <SelectTrigger
+                            id="date-time-format"
+                            className="w-44 max-w-full"
+                        >
                             <SelectValue>
                                 {dateTimeFormatOptions.find(
                                     (opt) => opt.value === dateTimeFormat,
@@ -205,8 +213,11 @@ export function DisplaySection() {
                     </Select>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="sort-order">
+                <div className="flex items-center justify-between gap-4 py-3">
+                    <Label
+                        className="text-[13px] font-medium"
+                        htmlFor="sort-order"
+                    >
                         Recording list sort order
                     </Label>
                     <Select
@@ -219,7 +230,10 @@ export function DisplaySection() {
                         }}
                         disabled={isSavingSettings}
                     >
-                        <SelectTrigger id="sort-order" className="w-full">
+                        <SelectTrigger
+                            id="sort-order"
+                            className="w-44 max-w-full"
+                        >
                             <SelectValue>
                                 {sortOrderOptions.find(
                                     (opt) =>
@@ -240,8 +254,13 @@ export function DisplaySection() {
                     </Select>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="items-per-page">Items per page</Label>
+                <div className="space-y-2 py-3">
+                    <Label
+                        className="text-[13px] font-medium"
+                        htmlFor="items-per-page"
+                    >
+                        Items per page
+                    </Label>
                     <Input
                         id="items-per-page"
                         type="number"
@@ -268,8 +287,10 @@ export function DisplaySection() {
                     </p>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="theme">Theme</Label>
+                <div className="flex items-center justify-between gap-4 py-3">
+                    <Label className="text-[13px] font-medium" htmlFor="theme">
+                        Theme
+                    </Label>
                     <Select
                         value={theme}
                         onValueChange={(value) => {
@@ -277,7 +298,7 @@ export function DisplaySection() {
                         }}
                         disabled={isSavingSettings}
                     >
-                        <SelectTrigger id="theme" className="w-full">
+                        <SelectTrigger id="theme" className="w-44 max-w-full">
                             <SelectValue>
                                 {themeOptions.find((opt) => opt.value === theme)
                                     ?.label || "System"}

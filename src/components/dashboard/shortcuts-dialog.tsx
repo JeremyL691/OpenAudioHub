@@ -55,31 +55,36 @@ const groups: { title: string; rows: ShortcutRow[] }[] = [
 export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
                     <DialogTitle>Keyboard shortcuts</DialogTitle>
                     <DialogDescription>
                         Power-user shortcuts available across the dashboard.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-5">
+                <div className="grid gap-5 sm:grid-cols-2">
                     {groups.map((group) => (
                         <div key={group.title}>
-                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            <h3 className="mb-1.5 text-[11px] font-semibold text-muted-foreground">
                                 {group.title}
                             </h3>
-                            <ul className="divide-y rounded-lg border">
+                            <ul className="divide-y divide-border rounded-lg border">
                                 {group.rows.map((row) => (
                                     <li
                                         key={row.description}
-                                        className="flex items-center justify-between px-3 py-2.5 text-sm"
+                                        className="flex items-center justify-between px-3 py-1.5 text-[13px]"
                                     >
                                         <span className="text-foreground">
                                             {row.description}
                                         </span>
                                         <span className="flex items-center gap-1">
                                             {row.keys.map((k) => (
-                                                <Kbd key={k}>{k}</Kbd>
+                                                <Kbd
+                                                    key={k}
+                                                    className="h-5 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-normal text-muted-foreground"
+                                                >
+                                                    {k}
+                                                </Kbd>
                                             ))}
                                         </span>
                                     </li>

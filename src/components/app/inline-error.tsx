@@ -24,11 +24,11 @@ export function InlineError({
         <div
             role="alert"
             className={cn(
-                "flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between",
+                "flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive sm:flex-row sm:items-center sm:justify-between",
                 className,
             )}
         >
-            <p className="flex items-start gap-2 text-destructive">
+            <p className="flex items-start gap-2">
                 <AlertCircle
                     aria-hidden="true"
                     className="mt-0.5 size-4 shrink-0"

@@ -180,10 +180,10 @@ export function RecordingWorkstation({
     }, [recording.id, refresh, push]);
 
     return (
-        <div className="bg-background">
-            <div className="container mx-auto max-w-7xl px-4 py-6">
+        <div className="bg-background lg:h-[calc(100svh-3.25rem)] lg:overflow-hidden">
+            <div className="container mx-auto max-w-7xl px-4 py-6 lg:flex lg:h-full lg:min-h-0 lg:max-w-none lg:flex-col lg:px-0 lg:py-0">
                 {/* Header */}
-                <div className="mb-6 flex items-start gap-4">
+                <div className="mb-6 flex items-start gap-4 lg:mb-0 lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3">
                     <Button
                         onClick={() => push("/recordings")}
                         variant="outline"
@@ -200,10 +200,10 @@ export function RecordingWorkstation({
                                 recordingId={recording.id}
                                 filename={filename}
                                 onRenamed={handleRenamed}
-                                className="text-2xl font-semibold sm:text-3xl"
+                                className="text-[22px] font-bold tracking-tight"
                             />
                         </h1>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
                             <LocalTime value={recording.startTime} />
                             <span aria-hidden="true">·</span>
                             <span>{formatDurationMs(recording.duration)}</span>
@@ -226,7 +226,7 @@ export function RecordingWorkstation({
                 </div>
 
                 {/* Player and the pipeline strip under it */}
-                <div className="space-y-4">
+                <div className="space-y-4 lg:order-last lg:shrink-0 lg:space-y-2 lg:border-t lg:border-border lg:bg-muted/40 lg:px-8">
                     <RecordingPlayer
                         recording={displayRecording}
                         initialPlaybackSpeed={initialPlaybackSpeed}
@@ -265,66 +265,72 @@ export function RecordingWorkstation({
                 </div>
 
                 {/* Sections: tabs below xl, two columns from xl */}
-                <Tabs
-                    defaultValue="transcript"
-                    className="mt-6 gap-4 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-6"
-                >
-                    <TabsList className="xl:hidden">
-                        <TabsTrigger value="transcript">Transcript</TabsTrigger>
-                        <TabsTrigger value="summary">Summary</TabsTrigger>
-                        <TabsTrigger value="details">Details</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent
-                        value="transcript"
-                        forceMount
-                        className={`${PANEL_CLASS} xl:col-start-1 xl:row-span-2 xl:row-start-1`}
+                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:pb-8">
+                    <Tabs
+                        defaultValue="transcript"
+                        className="mt-6 gap-4 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-6"
                     >
-                        <TranscriptCard
-                            variant="detail"
-                            recording={displayRecording}
-                            transcript={transcript}
-                            isTranscribing={isTranscribing}
-                            onTranscribe={handleTranscribe}
-                            onTranscribeComplete={refresh}
-                            playbackTimeMs={playbackTimeMs}
-                            onSeekTimestamp={seekTo}
-                        />
-                    </TabsContent>
+                        <TabsList className="xl:hidden">
+                            <TabsTrigger value="transcript">
+                                Transcript
+                            </TabsTrigger>
+                            <TabsTrigger value="summary">Summary</TabsTrigger>
+                            <TabsTrigger value="details">Details</TabsTrigger>
+                        </TabsList>
 
-                    <TabsContent
-                        value="summary"
-                        forceMount
-                        className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-1`}
-                    >
-                        {hasTranscript ? (
-                            <SummaryPanel
-                                summary={transcript.summary}
-                                title={recording.filename}
+                        <TabsContent
+                            value="transcript"
+                            forceMount
+                            className={`${PANEL_CLASS} xl:col-start-1 xl:row-span-2 xl:row-start-1`}
+                        >
+                            <TranscriptCard
+                                variant="detail"
+                                recording={displayRecording}
+                                transcript={transcript}
+                                isTranscribing={isTranscribing}
+                                onTranscribe={handleTranscribe}
+                                onTranscribeComplete={refresh}
+                                playbackTimeMs={playbackTimeMs}
+                                onSeekTimestamp={seekTo}
                             />
-                        ) : (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Summary</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-sm text-muted-foreground">
-                                        A summary is available once the
-                                        recording has a transcript.
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </TabsContent>
+                        </TabsContent>
 
-                    <TabsContent
-                        value="details"
-                        forceMount
-                        className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-2`}
-                    >
-                        <RecordingDetailsCard recording={displayRecording} />
-                    </TabsContent>
-                </Tabs>
+                        <TabsContent
+                            value="summary"
+                            forceMount
+                            className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-1`}
+                        >
+                            {hasTranscript ? (
+                                <SummaryPanel
+                                    summary={transcript.summary}
+                                    title={recording.filename}
+                                />
+                            ) : (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Summary</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <p className="text-sm text-muted-foreground">
+                                            A summary is available once the
+                                            recording has a transcript.
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent
+                            value="details"
+                            forceMount
+                            className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-2`}
+                        >
+                            <RecordingDetailsCard
+                                recording={displayRecording}
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </div>
             </div>
 
             <Dialog

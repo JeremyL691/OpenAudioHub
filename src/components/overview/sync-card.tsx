@@ -23,59 +23,79 @@ export function OverviewSyncCard({ plaud }: { plaud: PlaudStatus }) {
           : "Connected";
 
     return (
-        <section
-            aria-labelledby="sync-card-heading"
-            className="space-y-4 rounded-xl border bg-card p-5"
-        >
-            <div className="space-y-1">
-                <h2 id="sync-card-heading" className="text-sm font-semibold">
-                    Plaud sync
-                </h2>
-                <p className="text-sm">
-                    {status}
+        <section aria-labelledby="sync-card-heading">
+            <h2
+                id="sync-card-heading"
+                className="mb-2 text-[13px] font-semibold text-muted-foreground"
+            >
+                Plaud sync
+            </h2>
+            <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60 dark:bg-muted">
+                <p className="flex items-center gap-2.5 px-4 py-3 text-sm">
+                    <span
+                        aria-hidden="true"
+                        className={
+                            plaud.connected && !plaud.needsReconnect
+                                ? "size-2 shrink-0 rounded-full bg-success"
+                                : "size-2 shrink-0 rounded-full bg-border"
+                        }
+                    />
+                    <span className="min-w-0 truncate font-medium">
+                        {status}
+                    </span>
                     {plaud.email ? (
-                        <span className="text-muted-foreground">
-                            {" · "}
+                        <span className="ml-auto min-w-0 truncate text-muted-foreground">
+                            <span className="sr-only">{" · "}</span>
                             {plaud.email}
                         </span>
                     ) : null}
                 </p>
+
+                <dl className="divide-y divide-border">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3">
+                        <dt className="text-sm text-muted-foreground">
+                            Last sync
+                        </dt>
+                        <dd className="text-right text-sm tabular-nums">
+                            {relative(lastSyncTime)}
+                        </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 px-4 py-3">
+                        <dt className="text-sm text-muted-foreground">
+                            Next sync
+                        </dt>
+                        <dd className="text-right text-sm tabular-nums">
+                            {plaud.connected && nextSyncTime
+                                ? relative(nextSyncTime)
+                                : "Not scheduled"}
+                        </dd>
+                    </div>
+                </dl>
+
+                {plaud.connected ? (
+                    <Button
+                        data-testid="overview-sync-now"
+                        variant="ghost"
+                        className="h-11 w-full justify-start rounded-none bg-transparent px-4 hover:bg-accent"
+                        disabled={isAutoSyncing}
+                        onClick={() => {
+                            void manualSync();
+                        }}
+                    >
+                        {isAutoSyncing ? "Syncing…" : "Sync now"}
+                    </Button>
+                ) : (
+                    <Button
+                        asChild
+                        variant="ghost"
+                        className="h-11 w-full justify-start rounded-none bg-transparent px-4 hover:bg-accent"
+                    >
+                        <Link href="/settings/plaud-account">
+                            Connect Plaud
+                        </Link>
+                    </Button>
+                )}
             </div>
-
-            <dl className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-                <div className="space-y-0.5">
-                    <dt>Last sync</dt>
-                    <dd className="text-sm text-foreground">
-                        {relative(lastSyncTime)}
-                    </dd>
-                </div>
-                <div className="space-y-0.5">
-                    <dt>Next sync</dt>
-                    <dd className="text-sm text-foreground">
-                        {plaud.connected && nextSyncTime
-                            ? relative(nextSyncTime)
-                            : "Not scheduled"}
-                    </dd>
-                </div>
-            </dl>
-
-            {plaud.connected ? (
-                <Button
-                    data-testid="overview-sync-now"
-                    variant="outline"
-                    className="w-full"
-                    disabled={isAutoSyncing}
-                    onClick={() => {
-                        void manualSync();
-                    }}
-                >
-                    {isAutoSyncing ? "Syncing…" : "Sync now"}
-                </Button>
-            ) : (
-                <Button asChild variant="outline" className="w-full">
-                    <Link href="/settings/plaud-account">Connect Plaud</Link>
-                </Button>
-            )}
         </section>
     );
 }

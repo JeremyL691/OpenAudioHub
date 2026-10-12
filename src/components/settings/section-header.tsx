@@ -20,15 +20,14 @@ interface SectionHeaderProps {
 }
 
 /**
- * Standardized header for every settings section. Replaces the
+ * Standardized page header for every settings section. Replaces the
  * ad-hoc `<h2 className="text-lg font-semibold flex items-center gap-2">
  * <Icon className="w-5 h-5" /> Title</h2>` duplicated across 11 files.
  *
  * Visual tradeoffs:
- *   - Title is `text-base` (not text-lg) — the sidebar selection +
- *     dialog header already communicate "this is the section"; the
- *     pane header doesn't need to shout.
- *   - Icon shrinks to size-4 and goes muted-foreground — supportive,
+ *   - Title is a 22px bold heading, the page-level title of the pane,
+ *     as in the macOS System Settings panes.
+ *   - Icon shrinks to size-5 and goes muted-foreground — supportive,
  *     not competitive.
  *   - Optional one-line description below the title for sections
  *     where the name alone isn't self-explanatory.
@@ -48,10 +47,10 @@ export function SettingsSectionHeader({
             )}
         >
             <div className="min-w-0 flex-1">
-                <h2 className="flex items-center gap-2 text-base font-semibold">
+                <h2 className="flex items-center gap-2 text-[22px] font-bold tracking-tight">
                     {Icon && (
                         <Icon
-                            className="size-4 text-muted-foreground"
+                            className="size-5 text-muted-foreground"
                             aria-hidden="true"
                         />
                     )}

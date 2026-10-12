@@ -26,7 +26,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         return (
             <div
                 className={cn(
-                    "inline-flex size-9 rounded-full border border-border bg-background/60",
+                    "inline-flex size-10 rounded-md bg-muted sm:size-8",
                     className,
                 )}
                 aria-hidden="true"
@@ -44,7 +44,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             aria-label={nextLabel}
             title={nextLabel}
             className={cn(
-                "inline-flex size-9 items-center justify-center rounded-full border border-border bg-background/60 text-muted-foreground hover:text-foreground hover:bg-background hover:border-foreground/20 transition-colors",
+                "inline-flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:size-8",
                 className,
             )}
         >

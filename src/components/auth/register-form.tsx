@@ -128,14 +128,11 @@ export function RegisterForm() {
                 </Button>
             </form>
 
-            <div className="text-center text-sm">
+            <div className="text-center text-[13px]">
                 <span className="text-muted-foreground">
                     Already have an account?{" "}
                 </span>
-                <Link
-                    href="/login"
-                    className="text-accent-cyan hover:underline"
-                >
+                <Link href="/login" className="text-link hover:underline">
                     Sign in
                 </Link>
             </div>

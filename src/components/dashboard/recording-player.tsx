@@ -158,7 +158,11 @@ export function RecordingPlayer({
 
     return (
         <>
-            <Card data-testid="player" ref={cardRef}>
+            <Card
+                data-testid="player"
+                ref={cardRef}
+                className="rounded-none border-0 bg-transparent shadow-none lg:gap-2 lg:py-3 2xl:flex-row 2xl:items-center 2xl:gap-4"
+            >
                 <RecordingPlayerHeader
                     recording={recording}
                     duration={duration}
@@ -168,7 +172,7 @@ export function RecordingPlayer({
                     onRenamed={onRenamed}
                     hideIdentity={hideIdentity}
                 />
-                <CardContent>
+                <CardContent className="lg:px-0 2xl:flex 2xl:min-w-0 2xl:flex-1 2xl:items-center">
                     <RecordingPlayerControls
                         isPlaying={isPlaying}
                         onTogglePlay={togglePlayPause}

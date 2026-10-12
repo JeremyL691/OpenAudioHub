@@ -289,25 +289,28 @@ export function Workstation({
 
     return (
         <>
-            <div className="bg-background">
-                <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <h1 className="sr-only">Recordings</h1>
+            <div className="bg-background lg:flex lg:h-[calc(100svh-3.25rem)] lg:flex-col">
+                <h1 className="sr-only">Recordings</h1>
 
+                <div className="shrink-0 px-4 pt-4 pb-4 empty:hidden lg:px-4 lg:pt-3 lg:pb-3">
                     <PlaudReconnectBanner
                         show={showReconnect}
                         onReconnected={handleReconnected}
                     />
+                </div>
 
-                    {visibleRecordings.length === 0 &&
-                    pendingUploads.length === 0 ? (
+                {visibleRecordings.length === 0 &&
+                pendingUploads.length === 0 ? (
+                    <div className="px-4 py-8 lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
                         <WorkstationEmptyState
                             isSyncing={isAutoSyncing}
                             onSync={handleSync}
                             onUpload={triggerUpload}
                         />
-                    ) : (
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                            {/*
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-6 px-4 pt-4 pb-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0 lg:p-0">
+                        {/*
                               Mobile master/detail: on <lg, only one
                               pane renders at a time. `mobileView ===
                               "detail"` hides the list (via `hidden`)
@@ -317,72 +320,67 @@ export function Workstation({
                               The `lg:block` override brings the list
                               back on desktop where both panes coexist.
                             */}
-                            <div
-                                className={cn(
-                                    "lg:col-span-1 lg:block",
-                                    mobileView === "detail" && "hidden",
-                                )}
-                            >
-                                <RecordingList
-                                    ref={listRef}
-                                    recordings={visibleRecordings}
-                                    transcriptions={transcriptions}
-                                    currentRecording={currentRecording}
-                                    pendingUploads={pendingUploads}
-                                    inFlightActions={inFlightActions}
-                                    onSelect={(r) => {
-                                        setCurrentRecording(r);
-                                        // Tapping a row on mobile
-                                        // reveals the detail pane.
-                                        // Desktop ignores this state.
-                                        setMobileView("detail");
-                                    }}
-                                    onDelete={handleDelete}
-                                    onRename={(recording) =>
-                                        setRenameTarget(recording)
-                                    }
-                                    onTranscribeInBrowser={
-                                        handleTranscribeInBrowser
-                                    }
-                                    onTranscribe={(recording) => {
-                                        void transcribeById(recording.id);
-                                    }}
-                                    initialDateTimeFormat={
-                                        initialSettings.dateTimeFormat
-                                    }
-                                    initialSortOrder={
-                                        initialSettings.recordingListSortOrder
-                                    }
-                                    initialDensity={initialSettings.listDensity}
-                                    initialChunkSize={
-                                        initialSettings.itemsPerPage
-                                    }
-                                />
-                            </div>
-
-                            <WorkstationDetailPane
-                                currentRecording={selectedRecording}
-                                currentTranscription={currentTranscription}
-                                isCurrentTranscribing={isCurrentTranscribing}
-                                visibleRecordings={visibleRecordings}
-                                onTranscribe={handleTranscribe}
-                                onTranscribeComplete={refresh}
-                                onSelectRecording={setCurrentRecording}
-                                onRenamed={handleRenamed}
-                                onBackToList={() => setMobileView("list")}
-                                hiddenOnMobile={mobileView === "list"}
-                                initialPlaybackSpeed={
-                                    initialSettings.defaultPlaybackSpeed
+                        <div
+                            className={cn(
+                                "lg:block lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-border",
+                                mobileView === "detail" && "hidden",
+                            )}
+                        >
+                            <RecordingList
+                                ref={listRef}
+                                recordings={visibleRecordings}
+                                transcriptions={transcriptions}
+                                currentRecording={currentRecording}
+                                pendingUploads={pendingUploads}
+                                inFlightActions={inFlightActions}
+                                onSelect={(r) => {
+                                    setCurrentRecording(r);
+                                    // Tapping a row on mobile
+                                    // reveals the detail pane.
+                                    // Desktop ignores this state.
+                                    setMobileView("detail");
+                                }}
+                                onDelete={handleDelete}
+                                onRename={(recording) =>
+                                    setRenameTarget(recording)
                                 }
-                                initialVolume={initialSettings.defaultVolume}
-                                initialAutoPlayNext={
-                                    initialSettings.autoPlayNext
+                                onTranscribeInBrowser={
+                                    handleTranscribeInBrowser
                                 }
-                                scrubberStyle={initialSettings.playerScrubber}
+                                onTranscribe={(recording) => {
+                                    void transcribeById(recording.id);
+                                }}
+                                initialDateTimeFormat={
+                                    initialSettings.dateTimeFormat
+                                }
+                                initialSortOrder={
+                                    initialSettings.recordingListSortOrder
+                                }
+                                initialDensity={initialSettings.listDensity}
+                                initialChunkSize={initialSettings.itemsPerPage}
                             />
                         </div>
-                    )}
-                </div>
+
+                        <WorkstationDetailPane
+                            currentRecording={selectedRecording}
+                            currentTranscription={currentTranscription}
+                            isCurrentTranscribing={isCurrentTranscribing}
+                            visibleRecordings={visibleRecordings}
+                            onTranscribe={handleTranscribe}
+                            onTranscribeComplete={refresh}
+                            onSelectRecording={setCurrentRecording}
+                            onRenamed={handleRenamed}
+                            onBackToList={() => setMobileView("list")}
+                            hiddenOnMobile={mobileView === "list"}
+                            initialPlaybackSpeed={
+                                initialSettings.defaultPlaybackSpeed
+                            }
+                            initialVolume={initialSettings.defaultVolume}
+                            initialAutoPlayNext={initialSettings.autoPlayNext}
+                            scrubberStyle={initialSettings.playerScrubber}
+                        />
+                    </div>
+                )}
             </div>
 
             <CommandPalette

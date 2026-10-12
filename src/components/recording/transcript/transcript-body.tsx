@@ -77,10 +77,10 @@ export function TranscriptBody({
             ref={scrollRef}
             onWheel={onUserScroll}
             onTouchMove={onUserScroll}
-            className={`relative bg-muted rounded-lg p-4 overflow-y-auto ${HEIGHT_CLASS[variant]}`}
+            className={`relative overflow-y-auto px-1 ${HEIGHT_CLASS[variant]}`}
         >
             {timeline?.length ? (
-                <ol data-testid="transcript-timeline" className="space-y-1">
+                <ol data-testid="transcript-timeline" className="space-y-0.5">
                     {segments.map((segment, index) => {
                         const isActive = index === activeIndex;
                         return (
@@ -98,25 +98,23 @@ export function TranscriptBody({
                                     onClick={() => {
                                         onSeekTimestamp?.(segment.start_ms);
                                     }}
-                                    className={`relative w-full rounded px-2 py-1 text-left text-sm leading-relaxed hover:bg-background/70 disabled:cursor-default ${isActive ? "bg-background font-medium" : ""}`}
+                                    className={`relative flex w-full items-baseline gap-3 rounded-lg px-2 py-1.5 text-left text-[14px] leading-relaxed transition-colors hover:bg-accent/60 disabled:cursor-default disabled:hover:bg-transparent ${isActive ? "bg-transcript-active" : ""}`}
                                 >
-                                    {isActive && (
-                                        <span
-                                            aria-hidden="true"
-                                            className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand-gradient"
-                                        />
-                                    )}
-                                    <span className="mr-2 font-mono text-xs text-muted-foreground">
+                                    <span
+                                        className={`w-14 shrink-0 font-mono text-xs tabular-nums ${isActive ? "text-link" : "text-muted-foreground"}`}
+                                    >
                                         {formatTimestamp(segment.start_ms)}
                                     </span>
-                                    {segment.text}
+                                    <span className="min-w-0 flex-1">
+                                        {segment.text}
+                                    </span>
                                 </button>
                             </li>
                         );
                     })}
                 </ol>
             ) : (
-                <SpeakerTranscript text={text} className="text-sm" />
+                <SpeakerTranscript text={text} className="text-[14px]" />
             )}
         </div>
     );

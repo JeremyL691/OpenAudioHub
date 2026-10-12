@@ -5,7 +5,9 @@ import { AppDialogs } from "@/components/app-shell/app-dialogs";
 import { AppSidebar } from "@/components/app-shell/app-sidebar";
 import { MiniPlayerHost } from "@/components/app-shell/mini-player-slot";
 import { TopBar } from "@/components/app-shell/top-bar";
+import { useDesktopMode } from "@/components/desktop-mode-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 interface AppShellProps {
     userEmail: string | null;
@@ -25,10 +27,17 @@ export function AppShell({
     sidebarFooter,
     children,
 }: AppShellProps) {
+    const desktop = useDesktopMode();
     return (
         <SidebarProvider>
             <AppSidebar footer={sidebarFooter} />
-            <SidebarInset>
+            <SidebarInset
+                className={cn(
+                    "[--titlebar-inset:0px]",
+                    desktop &&
+                        "[--titlebar-inset:4.5rem] md:[--titlebar-inset:0px] md:peer-data-[state=collapsed]:[--titlebar-inset:4.5rem]",
+                )}
+            >
                 <TopBar userEmail={userEmail} initialTheme={initialTheme} />
                 <MiniPlayerHost>
                     <div className="flex flex-1 flex-col">{children}</div>

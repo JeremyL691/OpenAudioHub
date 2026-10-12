@@ -25,7 +25,10 @@ export function PromptSelect({
 }: PromptSelectProps) {
     return (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="w-[160px] h-8 text-xs" aria-label={label}>
+            <SelectTrigger
+                className="h-10 w-[160px] text-[13px] sm:h-8"
+                aria-label={label}
+            >
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>

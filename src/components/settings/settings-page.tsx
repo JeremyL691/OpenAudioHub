@@ -42,17 +42,17 @@ export function SettingsPage({ section, initialProviders }: SettingsPageProps) {
             <h1 className="sr-only">Settings</h1>
             <SettingsNavSidebar activeSection={section} />
             <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex h-14 shrink-0 items-center justify-end border-b px-4 lg:hidden">
+                <div className="flex h-13 shrink-0 items-center justify-end border-b border-border px-4 lg:hidden">
                     <SettingsNavMobile
                         activeSection={section}
                         onSectionChange={handleSectionChange}
                     />
                 </div>
-                <main className="flex-1 overflow-y-auto p-4 md:p-6">
+                <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
                     <div
                         key={section}
                         data-testid={`settings-section-${section}`}
-                        className="mx-auto flex max-w-3xl animate-in flex-col gap-4 fade-in-0 duration-200"
+                        className="mx-auto flex max-w-3xl animate-in flex-col gap-6 fade-in-0 duration-200"
                     >
                         <SettingsContent
                             activeSection={section}

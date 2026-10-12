@@ -316,7 +316,10 @@ export function SummarySection() {
             />
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="summary-preset">
+                    <Label
+                        htmlFor="summary-preset"
+                        className="text-[13px] font-medium"
+                    >
                         Default summary prompt
                     </Label>
                     <Select
@@ -364,7 +367,10 @@ export function SummarySection() {
                     </p>
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="ai-output-language">
+                    <Label
+                        htmlFor="ai-output-language"
+                        className="text-[13px] font-medium"
+                    >
                         AI output language
                     </Label>
                     <Select
@@ -395,12 +401,15 @@ export function SummarySection() {
                         the model match the transcript's language.
                     </p>
                 </div>
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center justify-between gap-4 border-t border-border py-3">
                     <div className="space-y-0.5 flex-1">
-                        <Label htmlFor="auto-summarize" className="text-base">
+                        <Label
+                            htmlFor="auto-summarize"
+                            className="text-[13px] font-medium"
+                        >
                             Auto-generate summary after transcription
                         </Label>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                             Triggers after any successful transcription —
                             manual, auto-sync, or re-transcribe. Enable
                             Auto-transcribe to also cover newly synced
@@ -417,7 +426,10 @@ export function SummarySection() {
                 </div>
                 {autoSummarize && (
                     <div className="space-y-2">
-                        <Label htmlFor="auto-summarize-preset">
+                        <Label
+                            htmlFor="auto-summarize-preset"
+                            className="text-[13px] font-medium"
+                        >
                             Preset for auto-summary
                         </Label>
                         <Select
@@ -476,7 +488,7 @@ export function SummarySection() {
             {/* Custom summary prompts */}
             <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
+                    <h3 className="text-[13px] font-semibold text-muted-foreground">
                         Custom Summary Prompts
                     </h3>
                     <Button
@@ -494,20 +506,17 @@ export function SummarySection() {
                         No custom prompts yet. Create one to get started.
                     </p>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="divide-y divide-border">
                         {customPrompts.map((prompt) => (
-                            <div
-                                key={prompt.id}
-                                className="p-4 border rounded-lg"
-                            >
-                                <div className="flex items-start justify-between mb-2">
+                            <div key={prompt.id} className="py-3">
+                                <div className="flex items-center justify-between gap-3">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-medium">
+                                            <h4 className="text-[13px] font-medium">
                                                 {prompt.name}
                                             </h4>
                                             {selectedPrompt === prompt.id && (
-                                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
+                                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-link">
                                                     Active
                                                 </span>
                                             )}
@@ -666,7 +675,7 @@ Transcription:
                                     !editingCustomPrompt.prompt.includes(
                                         "{transcription}",
                                     ) && (
-                                        <p className="text-xs text-amber-600 dark:text-amber-500">
+                                        <p className="rounded-md bg-warning px-2.5 py-1.5 text-xs text-warning-foreground">
                                             This prompt doesn&apos;t include{" "}
                                             <code className="px-1 py-0.5 bg-muted rounded">
                                                 {"{transcription}"}

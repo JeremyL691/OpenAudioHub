@@ -62,7 +62,7 @@ function OnboardingProgress({
 }) {
     const label = `Step ${currentIndex + 1} of ${labels.length}`;
     return (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{label}</span>
                 <span>{labels[currentIndex]}</span>
@@ -74,15 +74,13 @@ function OnboardingProgress({
                 aria-valuemax={labels.length}
                 aria-valuenow={currentIndex + 1}
                 aria-valuetext={label}
-                className="flex gap-1.5"
+                className="flex justify-center gap-1.5"
             >
                 {labels.map((stepLabel, index) => (
                     <span
                         key={stepLabel}
-                        className={`h-1.5 flex-1 rounded-full transition-colors ${
-                            index <= currentIndex
-                                ? "bg-brand-gradient"
-                                : "bg-muted"
+                        className={`size-1.5 rounded-full transition-colors ${
+                            index === currentIndex ? "bg-primary" : "bg-border"
                         }`}
                     />
                 ))}
@@ -166,7 +164,7 @@ export function OnboardingDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]"
+                className="max-w-2xl max-h-[90vh] gap-0 overflow-y-auto p-8 sm:max-w-[600px]"
                 data-testid="onboarding-dialog"
                 hideCloseButton={mandatory}
                 onEscapeKeyDown={(e) => {
@@ -180,7 +178,10 @@ export function OnboardingDialog({
                 }}
             >
                 <DialogHeader>
-                    <DialogTitle className="text-2xl" hidden>
+                    <DialogTitle
+                        className="text-[20px] font-bold tracking-tight"
+                        hidden
+                    >
                         Welcome to OpenAudioHub
                     </DialogTitle>
                 </DialogHeader>
@@ -215,6 +216,7 @@ export function OnboardingDialog({
                             {prevStep && (
                                 <Button
                                     variant="outline"
+                                    className="h-10 sm:h-8"
                                     onClick={() => setStep(prevStep)}
                                 >
                                     <ArrowLeft className="size-4 mr-2" />
@@ -227,19 +229,26 @@ export function OnboardingDialog({
                             {canSkip && nextStep && (
                                 <Button
                                     variant="ghost"
+                                    className="h-10 sm:h-8"
                                     onClick={() => setStep(nextStep)}
                                 >
                                     Skip
                                 </Button>
                             )}
                             {step === "complete" ? (
-                                <Button onClick={handleComplete}>
+                                <Button
+                                    className="h-10 sm:h-8"
+                                    onClick={handleComplete}
+                                >
                                     Get Started
                                     <ArrowRight className="size-4 ml-2" />
                                 </Button>
                             ) : (
                                 nextStep && (
-                                    <Button onClick={() => setStep(nextStep)}>
+                                    <Button
+                                        className="h-10 sm:h-8"
+                                        onClick={() => setStep(nextStep)}
+                                    >
                                         Next
                                         <ArrowRight className="size-4 ml-2" />
                                     </Button>

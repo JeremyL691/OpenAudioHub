@@ -39,7 +39,7 @@ export default async function AppLayout({
                         <Suspense fallback={null}>
                             <UpdateBadge />
                         </Suspense>
-                        <p className="font-mono leading-snug">
+                        <p className="font-mono text-[11px] leading-snug text-muted-foreground">
                             © {currentYear} {BRAND.copyrightHolder}
                             <br />
                             {BRAND.attribution}

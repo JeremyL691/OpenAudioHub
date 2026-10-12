@@ -77,6 +77,7 @@ export function RecordingActionsMenu({
                     size="icon"
                     aria-label="Recording actions"
                     title="Recording actions"
+                    className="size-10 shrink-0 text-muted-foreground shadow-none sm:size-8 hover:text-foreground"
                 >
                     <MoreHorizontal className="size-4" />
                 </Button>

@@ -107,7 +107,7 @@ export function RecordingTitle({
                     }
                 }}
                 className={cn(
-                    "w-full min-w-0 rounded-md bg-transparent px-1 -mx-1 font-semibold outline-none",
+                    "w-full min-w-0 rounded-md bg-transparent px-1 -mx-1 font-bold tracking-tight outline-none",
                     "focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                     "disabled:opacity-60",
                     className,

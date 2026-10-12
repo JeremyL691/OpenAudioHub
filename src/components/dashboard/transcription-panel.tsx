@@ -52,7 +52,7 @@ export function TranscriptionPanel({
     });
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <TranscriptCard
                 variant="preview"
                 recording={recording}
@@ -64,7 +64,6 @@ export function TranscriptionPanel({
                 onSeekTimestamp={onSeekTimestamp}
             />
 
-            {/* Summary Card -- only show when a transcript exists */}
             {transcript.activeTranscript?.text && (
                 <SummaryPanel
                     summary={transcript.summary}

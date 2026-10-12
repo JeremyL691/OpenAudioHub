@@ -25,22 +25,25 @@ export function SourceSwitcher({
     return (
         <div
             data-testid="source-switcher"
-            className="flex items-center gap-2 border-b pb-2"
+            className="inline-flex items-center gap-0.5 self-start rounded-lg bg-muted p-0.5"
         >
-            {transcripts.map((t) => (
-                <button
-                    key={t.source}
-                    type="button"
-                    onClick={() => onSelect(t.source)}
-                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                        t.source === activeSource
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-foreground hover:text-foreground"
-                    }`}
-                >
-                    {transcriptSourceLabel(t.source)}
-                </button>
-            ))}
+            {transcripts.map((t) => {
+                const active = t.source === activeSource;
+                return (
+                    <button
+                        key={t.source}
+                        type="button"
+                        onClick={() => onSelect(t.source)}
+                        className={`h-10 rounded-md px-3 text-[13px] transition-colors sm:h-7 ${
+                            active
+                                ? "bg-background font-semibold text-foreground shadow-sm dark:bg-accent"
+                                : "text-muted-foreground hover:text-foreground"
+                        }`}
+                    >
+                        {transcriptSourceLabel(t.source)}
+                    </button>
+                );
+            })}
         </div>
     );
 }

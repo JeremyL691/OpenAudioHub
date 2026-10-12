@@ -66,12 +66,7 @@ export function RecordingRow({
         <div
             data-testid="recording-row"
             data-id={recording.id}
-            className={cn(
-                "group/row relative",
-                isSelected
-                    ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
-                    : null,
-            )}
+            className="group/row relative"
         >
             <button
                 ref={(el) => {
@@ -80,17 +75,27 @@ export function RecordingRow({
                 type="button"
                 onClick={() => onSelect(recording)}
                 className={cn(
-                    "w-full text-left transition-colors hover:bg-accent/60",
+                    "w-full rounded-lg text-left transition-colors",
                     rowPadding,
+                    isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent",
                 )}
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <h3 className="min-w-0 truncate text-sm font-medium">
+                        <h3 className="min-w-0 truncate text-[13px] font-semibold">
                             {recording.filename}
                         </h3>
                         {inFlight ? (
-                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
+                            <span
+                                className={cn(
+                                    "ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                    isSelected
+                                        ? "bg-primary-foreground text-primary"
+                                        : "bg-info text-info-foreground",
+                                )}
+                            >
                                 <Loader2
                                     className="size-3 animate-spin"
                                     aria-hidden="true"
@@ -102,6 +107,11 @@ export function RecordingRow({
                         ) : (
                             <span className="ml-auto shrink-0">
                                 <StatusBadge
+                                    className={cn(
+                                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                        isSelected &&
+                                            "bg-primary-foreground text-primary",
+                                    )}
                                     status={transcriptStatus({
                                         hasTranscript: recording.hasTranscript,
                                         hasSummary: recording.hasSummary,
@@ -113,13 +123,20 @@ export function RecordingRow({
                     </div>
                     <div
                         className={cn(
-                            "flex min-w-0 items-center gap-2 text-xs text-muted-foreground",
+                            "flex min-w-0 items-center gap-2 text-xs tabular-nums",
+                            isSelected
+                                ? "text-primary-foreground"
+                                : "text-muted-foreground",
                             isCompact ? "mt-0.5" : "mt-1",
                         )}
                     >
                         <Badge
                             variant="outline"
-                            className="shrink-0 px-1.5 py-0 text-[10px] font-normal"
+                            className={cn(
+                                "shrink-0 px-1.5 py-0 text-[10px] font-normal",
+                                isSelected &&
+                                    "border-primary-foreground/30 text-primary-foreground",
+                            )}
                         >
                             {recordingSource(recording.deviceSn)}
                         </Badge>
@@ -144,6 +161,10 @@ export function RecordingRow({
                         <Button
                             variant="ghost"
                             size="icon-sm"
+                            className={cn(
+                                isSelected &&
+                                    "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground",
+                            )}
                             aria-label="Row actions"
                             onClick={(e) => e.stopPropagation()}
                         >

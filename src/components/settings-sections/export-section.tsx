@@ -261,9 +261,14 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 description="Take your data with you: recordings, transcripts, and summaries."
                 icon={Download}
             />
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="export-format">Default export format</Label>
+            <div className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-4 py-3">
+                    <Label
+                        className="text-[13px] font-medium"
+                        htmlFor="export-format"
+                    >
+                        Default export format
+                    </Label>
                     <Select
                         value={defaultExportFormat}
                         onValueChange={(value) => {
@@ -277,7 +282,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         <SelectTrigger
                             id="export-format"
                             data-testid="export-format"
-                            className="w-full"
+                            className="w-44 max-w-full"
                         >
                             <SelectValue>
                                 {exportFormatOptions.find(
@@ -303,17 +308,20 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     </Select>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 py-3">
                     <div className="space-y-0.5 flex-1">
                         <div className="flex items-center gap-2">
-                            <Label htmlFor="auto-export" className="text-base">
+                            <Label
+                                htmlFor="auto-export"
+                                className="text-[13px] font-medium"
+                            >
                                 Auto-export new recordings
                             </Label>
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 Coming soon
                             </span>
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                             Automatically export recordings when they are synced
                         </p>
                     </div>
@@ -331,12 +339,15 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 py-3">
                     <div className="flex items-center gap-2">
-                        <Label htmlFor="backup-frequency">
+                        <Label
+                            className="text-[13px] font-medium"
+                            htmlFor="backup-frequency"
+                        >
                             Backup frequency
                         </Label>
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                             Coming soon
                         </span>
                     </div>
@@ -353,7 +364,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     >
                         <SelectTrigger
                             id="backup-frequency"
-                            className="w-full opacity-60"
+                            className="w-44 max-w-full opacity-60"
                         >
                             <SelectValue>
                                 {backupFrequencyOptions.find(
@@ -380,9 +391,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 </div>
             </div>
 
-            <div className="pt-4 border-t space-y-3">
+            <div className="pt-4 space-y-3">
                 <div className="space-y-2">
-                    <Label className="text-base">Manual Actions</Label>
+                    <Label className="text-[13px] font-semibold text-muted-foreground">
+                        Manual Actions
+                    </Label>
                     <Button
                         onClick={async () => {
                             try {
@@ -401,7 +414,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             }
                         }}
                         variant="outline"
-                        className="w-full"
+                        className="h-10 w-full sm:h-8 sm:w-auto"
                     >
                         <RefreshCw className="size-4 mr-2" />
                         Re-run Onboarding
@@ -462,7 +475,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         an email when it's ready.
                     </p>
                     {backupJob && (
-                        <div className="rounded-md border p-3 text-sm space-y-1">
+                        <div className="rounded-lg bg-muted/60 p-3 text-[13px] space-y-1">
                             {backupJob.status === "completed" && (
                                 <div className="flex items-center justify-between gap-2">
                                     <span>

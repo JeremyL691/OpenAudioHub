@@ -14,7 +14,9 @@ export default async function LoginPage() {
                 title="Reconnecting…"
                 subtitle="Signing in to your local OpenAudioHub account."
             >
-                <p className="text-sm text-muted-foreground">Reconnecting…</p>
+                <p className="text-[13px] text-muted-foreground">
+                    Reconnecting…
+                </p>
             </SelfHostAuthChrome>
         );
     }

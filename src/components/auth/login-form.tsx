@@ -96,7 +96,7 @@ export function LoginForm({
                         {smtpConfigured ? (
                             <Link
                                 href="/forgot-password"
-                                className="text-xs text-muted-foreground hover:text-accent-cyan hover:underline"
+                                className="text-[13px] text-link hover:underline"
                             >
                                 Forgot password?
                             </Link>
@@ -120,13 +120,13 @@ export function LoginForm({
             </form>
 
             {registrationEnabled && (
-                <div className="text-center text-sm">
+                <div className="text-center text-[13px]">
                     <span className="text-muted-foreground">
                         Don't have an account?{" "}
                     </span>
                     <Link
                         href="/register"
-                        className="text-accent-cyan hover:underline"
+                        className="text-link hover:underline"
                     >
                         Register
                     </Link>

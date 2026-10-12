@@ -18,7 +18,11 @@ export interface SectionCardProps {
     className?: string;
 }
 
-/** A titled group of settings or content. Replaces the older settings card. */
+/**
+ * A titled group of settings or content, in the grouped-list style: a small
+ * muted label sits above a rounded, tinted group holding the children.
+ * Replaces the older settings card.
+ */
 export function SectionCard({
     title,
     description,
@@ -27,17 +31,26 @@ export function SectionCard({
     className,
 }: SectionCardProps) {
     return (
-        <Card className={cn("gap-4", className)}>
-            <CardHeader>
-                <CardTitle className="text-base font-semibold">
+        <Card
+            className={cn(
+                "gap-1.5 overflow-visible rounded-none border-0 bg-transparent py-0 shadow-none",
+                className,
+            )}
+        >
+            <CardHeader className="px-1">
+                <CardTitle className="text-[13px] font-semibold text-muted-foreground">
                     {title}
                 </CardTitle>
                 {description ? (
-                    <CardDescription>{description}</CardDescription>
+                    <CardDescription className="mt-0.5 text-xs">
+                        {description}
+                    </CardDescription>
                 ) : null}
                 {actions ? <CardAction>{actions}</CardAction> : null}
             </CardHeader>
-            <CardContent>{children}</CardContent>
+            <CardContent className="rounded-xl bg-muted/60 px-4 py-1 dark:bg-muted">
+                {children}
+            </CardContent>
         </Card>
     );
 }

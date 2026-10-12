@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { PromptSelect } from "@/components/recording/ai/prompt-select";
 import { RichMarkdown } from "@/components/recordings/rich-content";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePersistedToggle } from "@/hooks/use-persisted-toggle";
 import type { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import { AI_OUTPUT_LANGUAGES } from "@/lib/ai/summary-presets";
@@ -95,81 +94,84 @@ export function SummaryPanel({
     };
 
     return (
-        <Card data-testid="summary-panel">
-            <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-expanded={open}
-                            aria-controls={contentId}
-                            aria-label={
-                                open ? "Collapse summary" : "Expand summary"
-                            }
-                            onClick={toggleOpen}
-                        >
-                            <ChevronDown
-                                className={cn(
-                                    "size-4 transition-transform",
-                                    !open && "-rotate-90",
-                                )}
-                            />
-                        </Button>
-                        <CardTitle className="flex items-center gap-2">
-                            <ListChecks className="size-5" />
-                            Summary
-                        </CardTitle>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {!isSummarizing && (
-                            <>
-                                <PromptSelect
-                                    label="Summary language"
-                                    value={summaryLanguage}
-                                    options={LANGUAGE_OPTIONS}
-                                    onChange={setSummaryLanguage}
-                                />
-                                <PromptSelect
-                                    value={summaryPreset}
-                                    options={summaryPromptOptions}
-                                    onChange={setSummaryPreset}
-                                />
-                            </>
-                        )}
-                        <Button
-                            data-testid="summary-generate"
-                            onClick={() => {
-                                if (!open) toggleOpen();
-                                void handleSummarize();
-                            }}
-                            size="sm"
-                            variant={hasSummary ? "outline" : "default"}
-                            disabled={isSummarizing}
-                        >
-                            {isSummarizing ? (
-                                <>
-                                    <Loader2 className="size-4 mr-2 animate-spin" />
-                                    Generating…
-                                </>
-                            ) : hasSummary ? (
-                                <>
-                                    <RefreshCw className="size-4 mr-2" />
-                                    Re-generate
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles className="size-4 mr-2" />
-                                    Summarize
-                                </>
+        <section
+            data-testid="summary-panel"
+            className="border-t border-border pt-6"
+        >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-10 w-10 sm:h-7 sm:w-7"
+                        aria-expanded={open}
+                        aria-controls={contentId}
+                        aria-label={
+                            open ? "Collapse summary" : "Expand summary"
+                        }
+                        onClick={toggleOpen}
+                    >
+                        <ChevronDown
+                            className={cn(
+                                "size-4 transition-transform",
+                                !open && "-rotate-90",
                             )}
-                        </Button>
+                        />
+                    </Button>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
+                        <ListChecks className="size-4" />
+                        Summary
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent id={contentId} hidden={!open}>
+                <div className="flex flex-wrap items-center gap-2">
+                    {!isSummarizing && (
+                        <>
+                            <PromptSelect
+                                label="Summary language"
+                                value={summaryLanguage}
+                                options={LANGUAGE_OPTIONS}
+                                onChange={setSummaryLanguage}
+                            />
+                            <PromptSelect
+                                value={summaryPreset}
+                                options={summaryPromptOptions}
+                                onChange={setSummaryPreset}
+                            />
+                        </>
+                    )}
+                    <Button
+                        data-testid="summary-generate"
+                        onClick={() => {
+                            if (!open) toggleOpen();
+                            void handleSummarize();
+                        }}
+                        size="sm"
+                        className="h-10 sm:h-8"
+                        variant={hasSummary ? "outline" : "default"}
+                        disabled={isSummarizing}
+                    >
+                        {isSummarizing ? (
+                            <>
+                                <Loader2 className="size-4 mr-2 animate-spin" />
+                                Generating…
+                            </>
+                        ) : hasSummary ? (
+                            <>
+                                <RefreshCw className="size-4 mr-2" />
+                                Re-generate
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="size-4 mr-2" />
+                                Summarize
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </div>
+            <div id={contentId} hidden={!open} className="mt-4">
                 {isSummarizing ? (
-                    <div className="flex flex-col items-center justify-center py-8">
+                    <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="size-8 animate-spin text-primary mb-4" />
                         <p className="text-sm text-muted-foreground">
                             Generating summary…
@@ -177,19 +179,17 @@ export function SummaryPanel({
                     </div>
                 ) : summaryData?.summary ? (
                     <div className="space-y-4">
-                        {/* Summary text */}
                         <div
                             data-testid="summary-content"
-                            className="bg-muted rounded-lg p-4 text-sm"
+                            className="max-w-3xl text-[14px] leading-relaxed"
                         >
                             <RichMarkdown content={summaryData.summary} />
                         </div>
 
-                        {/* Key points */}
                         {summaryData.keyPoints &&
                             summaryData.keyPoints.length > 0 && (
                                 <div>
-                                    <h4 className="text-sm font-medium mb-2">
+                                    <h4 className="mb-2 text-[13px] font-semibold text-muted-foreground">
                                         Key Points
                                     </h4>
                                     <ul className="space-y-1">
@@ -209,11 +209,10 @@ export function SummaryPanel({
                                 </div>
                             )}
 
-                        {/* Action items */}
                         {summaryData.actionItems &&
                             summaryData.actionItems.length > 0 && (
                                 <div>
-                                    <h4 className="text-sm font-medium mb-2">
+                                    <h4 className="mb-2 text-[13px] font-semibold text-muted-foreground">
                                         Action Items
                                     </h4>
                                     <ul className="space-y-1">
@@ -233,26 +232,25 @@ export function SummaryPanel({
                                 </div>
                             )}
 
-                        {/* Meta, export, and delete */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                 {templateName && (
-                                    <span className="px-2 py-0.5 rounded bg-muted">
+                                    <span className="rounded bg-muted px-2 py-0.5">
                                         {templateName}
                                     </span>
                                 )}
                                 {languageName && (
-                                    <span className="px-2 py-0.5 rounded bg-muted">
+                                    <span className="rounded bg-muted px-2 py-0.5">
                                         {languageName}
                                     </span>
                                 )}
                                 {summaryData.provider && (
-                                    <span className="px-2 py-0.5 rounded bg-muted">
+                                    <span className="rounded bg-muted px-2 py-0.5">
                                         {summaryData.provider}
                                     </span>
                                 )}
                                 {summaryData.model && (
-                                    <span className="px-2 py-0.5 rounded bg-muted font-mono">
+                                    <span className="rounded bg-muted px-2 py-0.5 font-mono">
                                         {summaryData.model}
                                     </span>
                                 )}
@@ -297,7 +295,7 @@ export function SummaryPanel({
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="flex flex-col items-center justify-center py-6 text-center">
                         <ListChecks className="size-10 text-muted-foreground mb-3" />
                         <p className="text-sm text-muted-foreground">
                             No summary yet. Click &quot;Summarize&quot; to
@@ -305,7 +303,7 @@ export function SummaryPanel({
                         </p>
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </section>
     );
 }

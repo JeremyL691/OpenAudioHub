@@ -58,7 +58,7 @@ export function DevSection() {
     return (
         <div className="space-y-6">
             <div>
-                <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                <h3 className="text-[15px] font-semibold text-destructive">
                     Developer Tools
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -66,10 +66,12 @@ export function DevSection() {
                 </p>
             </div>
 
-            <section className="space-y-3 rounded-lg border p-4">
+            <section className="space-y-3 rounded-xl bg-muted/60 p-4">
                 <div className="flex items-center justify-between gap-2">
                     <div>
-                        <h4 className="font-medium">Plaud connection</h4>
+                        <h4 className="text-[13px] font-medium">
+                            Plaud connection
+                        </h4>
                         <p className="text-sm text-muted-foreground">
                             Probe the stored bearer token against the stored API
                             base and report counts.
@@ -100,9 +102,9 @@ export function DevSection() {
                             <>
                                 <div className="flex items-center gap-2">
                                     {plaudInfo.reachable ? (
-                                        <CheckCircle2 className="size-4 text-green-500" />
+                                        <CheckCircle2 className="size-4 text-success" />
                                     ) : (
-                                        <XCircle className="size-4 text-red-500" />
+                                        <XCircle className="size-4 text-destructive" />
                                     )}
                                     <span>
                                         {plaudInfo.reachable

@@ -171,7 +171,9 @@ export function EditProviderDialog({
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label>Provider</Label>
+                        <Label className="text-[13px] font-medium">
+                            Provider
+                        </Label>
                         <Select
                             value={providerName}
                             onValueChange={handleProviderChange}
@@ -194,7 +196,12 @@ export function EditProviderDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
+                        <Label
+                            htmlFor="apiKey"
+                            className="text-[13px] font-medium"
+                        >
+                            API Key
+                        </Label>
                         <Input
                             id="apiKey"
                             type="password"
@@ -218,7 +225,12 @@ export function EditProviderDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
+                        <Label
+                            htmlFor="baseUrl"
+                            className="text-[13px] font-medium"
+                        >
+                            Base URL (Optional)
+                        </Label>
                         <Input
                             id="baseUrl"
                             type="text"
@@ -239,7 +251,7 @@ export function EditProviderDialog({
                         disabled={isLoading}
                     />
 
-                    <Card className="space-y-2 text-sm bg-muted/50">
+                    <Card className="space-y-2 rounded-xl border-0 bg-muted/60 p-4 text-[13px] shadow-none">
                         {supportsTranscription(providerName) && (
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input

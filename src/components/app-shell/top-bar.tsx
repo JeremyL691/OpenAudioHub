@@ -65,10 +65,10 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
     return (
         <header
             data-testid="topbar"
-            className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-4"
+            className="app-drag sticky top-0 z-30 flex h-13 shrink-0 items-center gap-2 border-b border-border bg-background/80 pr-3 pl-[calc(var(--titlebar-inset)+0.75rem)] backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:pr-4"
         >
             <SidebarTrigger className="size-10 md:size-7" />
-            <p className="min-w-0 truncate text-sm font-semibold sm:text-base">
+            <p className="min-w-0 truncate text-[15px] font-semibold">
                 {titleFor(pathname)}
             </p>
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -79,13 +79,13 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                                 onClick={() => setPaletteOpen(true)}
                                 variant="outline"
                                 size="sm"
-                                className="hidden h-9 px-2.5 md:inline-flex lg:px-3"
+                                className="hidden h-8 justify-start border-transparent bg-muted px-2.5 text-muted-foreground md:inline-flex md:justify-center lg:w-56 lg:justify-start lg:px-3"
                                 aria-label="Open command palette"
                                 data-testid="command-trigger"
                             >
                                 <Command className="size-4 lg:mr-2" />
                                 <span className="hidden lg:inline">Search</span>
-                                <kbd className="ml-2 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
+                                <kbd className="ml-auto hidden rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
                                     ⌘K
                                 </kbd>
                             </Button>
@@ -103,7 +103,7 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                     onSync={() => {
                         void manualSync();
                     }}
-                    className="h-10 sm:h-9"
+                    className="h-10 sm:h-8"
                 />
                 <input
                     ref={uploadInputRef}
@@ -118,9 +118,9 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                             onClick={triggerUpload}
                             data-testid="upload-button"
                             disabled={isProcessing}
-                            variant="outline"
+                            variant="default"
                             size="sm"
-                            className="h-10 sm:h-9"
+                            className="h-10 rounded-md sm:h-8"
                             aria-label={
                                 isUploading ? "Uploading audio" : "Upload audio"
                             }

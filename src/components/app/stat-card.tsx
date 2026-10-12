@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export interface StatCardProps {
@@ -12,7 +11,7 @@ export interface StatCardProps {
     className?: string;
 }
 
-/** One figure with its label. The value uses tabular figures so numbers line up across cards. */
+/** One figure with its label. The value uses tabular figures so numbers line up across cells. */
 export function StatCard({
     label,
     value,
@@ -21,21 +20,26 @@ export function StatCard({
     className,
 }: StatCardProps) {
     return (
-        <Card className={cn("gap-2 py-4", className)}>
-            <CardContent className="space-y-1">
-                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{label}</span>
-                    {Icon ? (
-                        <Icon aria-hidden="true" className="size-4" />
-                    ) : null}
-                </div>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight">
-                    {value}
-                </p>
-                {hint ? (
-                    <p className="text-xs text-muted-foreground">{hint}</p>
+        <div className={cn("py-4", className)}>
+            <div className="flex items-center justify-between gap-2 text-[13px] text-muted-foreground">
+                <span>{label}</span>
+                {Icon ? (
+                    <Icon
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground/70"
+                    />
                 ) : null}
-            </CardContent>
-        </Card>
+            </div>
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-3xl font-bold tracking-tight tabular-nums">
+                    {value}
+                </span>
+                {hint ? (
+                    <span className="text-[13px] text-muted-foreground">
+                        {hint}
+                    </span>
+                ) : null}
+            </p>
+        </div>
     );
 }

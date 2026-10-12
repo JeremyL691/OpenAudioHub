@@ -39,7 +39,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
             nodes.push(
                 <code
                     key={k}
-                    className="rounded bg-black/20 px-1 py-0.5 font-mono text-[0.85em]"
+                    className="rounded bg-accent px-1 py-0.5 font-mono text-[0.85em]"
                 >
                     {m[6]}
                 </code>,
@@ -63,7 +63,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-accent-cyan underline underline-offset-2"
+                        className="text-link underline underline-offset-2"
                     >
                         {m[12]}
                     </a>
@@ -140,10 +140,10 @@ export function RichMarkdown({
                             type="checkbox"
                             checked={it.check}
                             readOnly
-                            className="mt-1.5 shrink-0 accent-accent-cyan"
+                            className="mt-1.5 shrink-0 accent-primary"
                         />
                     ) : ordered ? null : (
-                        <span className="mt-1.5 size-1.5 rounded-full bg-accent-cyan shrink-0" />
+                        <span className="mt-1.5 size-1.5 rounded-full bg-primary shrink-0" />
                     );
                 return (
                     <li
@@ -190,7 +190,7 @@ export function RichMarkdown({
             blocks.push(
                 <blockquote
                     key={key}
-                    className="my-2 border-l-2 border-accent-cyan/60 pl-3 italic text-muted-foreground"
+                    className="my-2 border-l-2 border-border pl-3 italic text-muted-foreground"
                 >
                     {renderInline(quote.join(" "), key)}
                 </blockquote>,
