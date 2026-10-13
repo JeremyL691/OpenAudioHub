@@ -6,6 +6,7 @@ import { WebhooksSection } from "./settings/webhooks-section";
 import { DevSection } from "./settings-sections/dev-section";
 import { DisplaySection } from "./settings-sections/display-section";
 import { ExportSection } from "./settings-sections/export-section";
+import { NamingSection } from "./settings-sections/naming-section";
 import { NotificationsSection } from "./settings-sections/notifications-section";
 import { PlaudAccountSection } from "./settings-sections/plaud-account-section";
 import { PlaybackSection } from "./settings-sections/playback-section";
@@ -52,6 +53,8 @@ export function SettingsContent({
             return <TranscriptionSection />;
         case "summary":
             return <SummarySection />;
+        case "naming":
+            return <NamingSection />;
         case "sync":
             return <SyncSection />;
         case "plaud-account":

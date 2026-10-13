@@ -1,6 +1,14 @@
 "use client";
 
-import { Bot, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import {
+    Bot,
+    Loader2,
+    Pencil,
+    PlugZap,
+    Plus,
+    Sparkles,
+    Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -54,6 +62,7 @@ export function ProvidersSection({
         null,
     );
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [testingId, setTestingId] = useState<string | null>(null);
     const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
 
     const refreshProviders = async () => {
@@ -70,6 +79,40 @@ export function ProvidersSection({
     const handleEdit = (provider: Provider) => {
         setEditingProvider(provider);
         setIsEditProviderOpen(true);
+    };
+
+    const handleTest = async (provider: Provider) => {
+        setTestingId(provider.id);
+        try {
+            const response = await fetch("/api/settings/ai/providers/test", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    provider: provider.provider,
+                    id: provider.id,
+                }),
+            });
+            const data = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                latencyMs?: number;
+                error?: string;
+            } | null;
+            if (data?.ok) {
+                toast.success(
+                    `${provider.provider}: connected · ${data.latencyMs} ms`,
+                );
+            } else {
+                toast.error(
+                    `${provider.provider}: ${data?.error || `test failed (HTTP ${response.status})`}`,
+                );
+            }
+        } catch (e) {
+            toast.error(
+                `${provider.provider}: ${e instanceof Error ? e.message : "test failed"}`,
+            );
+        } finally {
+            setTestingId(null);
+        }
     };
 
     const handleSetDefaultTranscription = (providerId: string) => {
@@ -180,8 +223,10 @@ export function ProvidersSection({
                     <ProvidersList
                         providers={providers}
                         deletingId={deletingId}
+                        testingId={testingId}
                         onAdd={() => setIsAddProviderOpen(true)}
                         onEdit={handleEdit}
+                        onTest={handleTest}
                         onDelete={handleDelete}
                         onSetDefault={handleSetDefaultTranscription}
                     />
@@ -225,15 +270,19 @@ export function ProvidersSection({
 function ProvidersList({
     providers,
     deletingId,
+    testingId,
     onAdd,
     onEdit,
+    onTest,
     onDelete,
     onSetDefault,
 }: {
     providers: Provider[];
     deletingId: string | null;
+    testingId: string | null;
     onAdd: () => void;
     onEdit: (provider: Provider) => void;
+    onTest: (provider: Provider) => void;
     onDelete: (id: string) => void;
     onSetDefault: (id: string) => void;
 }) {
@@ -298,6 +347,21 @@ function ProvidersList({
                                     Use for transcription
                                 </Button>
                             )}
+                            <Button
+                                onClick={() => onTest(provider)}
+                                aria-label="Test connection"
+                                data-testid="provider-row-test"
+                                variant="outline"
+                                size="icon"
+                                className="size-10 sm:size-9"
+                                disabled={testingId === provider.id}
+                            >
+                                {testingId === provider.id ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <PlugZap className="size-4" />
+                                )}
+                            </Button>
                             <Button
                                 onClick={() => onEdit(provider)}
                                 aria-label="Edit provider"

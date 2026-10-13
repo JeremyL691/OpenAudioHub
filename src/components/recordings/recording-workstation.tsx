@@ -61,8 +61,7 @@ interface RecordingWorkstationProps {
  * stay in the DOM, so the grid can show them all, and the classes hide the
  * inactive ones below xl.
  */
-const PANEL_CLASS =
-    "data-[state=inactive]:hidden xl:data-[state=inactive]:block";
+const PANEL_CLASS = "data-[state=inactive]:hidden";
 
 export function RecordingWorkstation({
     recording,
@@ -264,13 +263,10 @@ export function RecordingWorkstation({
                     )}
                 </div>
 
-                {/* Sections: tabs below xl, two columns from xl */}
+                {/* Sections: one tab at a time */}
                 <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:pb-8">
-                    <Tabs
-                        defaultValue="transcript"
-                        className="mt-6 gap-4 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start xl:gap-6"
-                    >
-                        <TabsList className="xl:hidden">
+                    <Tabs defaultValue="transcript" className="mt-6 gap-4">
+                        <TabsList>
                             <TabsTrigger value="transcript">
                                 Transcript
                             </TabsTrigger>
@@ -281,7 +277,7 @@ export function RecordingWorkstation({
                         <TabsContent
                             value="transcript"
                             forceMount
-                            className={`${PANEL_CLASS} xl:col-start-1 xl:row-span-2 xl:row-start-1`}
+                            className={PANEL_CLASS}
                         >
                             <TranscriptCard
                                 variant="detail"
@@ -298,7 +294,7 @@ export function RecordingWorkstation({
                         <TabsContent
                             value="summary"
                             forceMount
-                            className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-1`}
+                            className={PANEL_CLASS}
                         >
                             {hasTranscript ? (
                                 <SummaryPanel
@@ -323,7 +319,7 @@ export function RecordingWorkstation({
                         <TabsContent
                             value="details"
                             forceMount
-                            className={`${PANEL_CLASS} xl:col-start-2 xl:row-start-2`}
+                            className={PANEL_CLASS}
                         >
                             <RecordingDetailsCard
                                 recording={displayRecording}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Shield } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
@@ -57,6 +57,67 @@ export function EditProviderDialog({
     const [isDefaultTranscription, setIsDefaultTranscription] = useState(false);
     const [isDefaultEnhancement, setIsDefaultEnhancement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+    // A result is tied to the inputs it was run against; changing any of them hides it.
+    const [testRun, setTestRun] = useState<{
+        key: string;
+        result: { ok: true; latencyMs: number } | { ok: false; error: string };
+    } | null>(null);
+    const testKey = [providerName, defaultModel, apiKey, baseUrl].join(
+        "\u0000",
+    );
+    const visibleResult = testRun?.key === testKey ? testRun.result : null;
+
+    const handleTestConnection = async () => {
+        const key = testKey;
+        setIsTesting(true);
+        setTestRun(null);
+        try {
+            const response = await fetch("/api/settings/ai/providers/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: providerName,
+                    model: defaultModel,
+                    apiKey,
+                    baseUrl,
+                    id: provider?.id,
+                }),
+            });
+            const data = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                latencyMs?: number;
+                error?: string;
+            } | null;
+            if (data?.ok && typeof data.latencyMs === "number") {
+                setTestRun({
+                    key,
+                    result: { ok: true, latencyMs: data.latencyMs },
+                });
+            } else {
+                setTestRun({
+                    key,
+                    result: {
+                        ok: false,
+                        error:
+                            data?.error ||
+                            `Test failed (HTTP ${response.status})`,
+                    },
+                });
+            }
+        } catch (error) {
+            setTestRun({
+                key,
+                result: {
+                    ok: false,
+                    error:
+                        error instanceof Error ? error.message : "Test failed",
+                },
+            });
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     useEffect(() => {
         if (open && provider) {
@@ -250,6 +311,31 @@ export function EditProviderDialog({
                         onChange={setDefaultModel}
                         disabled={isLoading}
                     />
+
+                    <div className="space-y-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleTestConnection}
+                            disabled={isLoading || isTesting || !providerName}
+                            data-testid="provider-test-connection"
+                        >
+                            {isTesting && (
+                                <Loader2 className="size-4 mr-2 animate-spin" />
+                            )}
+                            Test connection
+                        </Button>
+                        {visibleResult && (
+                            <output
+                                className={`block text-[13px] ${visibleResult.ok ? "text-success" : "text-destructive"}`}
+                            >
+                                {visibleResult.ok
+                                    ? `Connected · ${visibleResult.latencyMs} ms`
+                                    : visibleResult.error}
+                            </output>
+                        )}
+                    </div>
 
                     <Card className="space-y-2 rounded-xl border-0 bg-muted/60 p-4 text-[13px] shadow-none">
                         {supportsTranscription(providerName) && (

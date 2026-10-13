@@ -23,6 +23,34 @@ test.describe("library", () => {
         await expect(list).toContainText(RECORDINGS.weekly);
     });
 
+    test("selected recordings download as one ZIP of MP3s", async ({
+        page,
+    }) => {
+        await page.getByTestId("recording-select-mode").click();
+        for (const title of [RECORDINGS.weekly, RECORDINGS.untranscribed]) {
+            const row = page
+                .getByTestId("recording-row")
+                .filter({ hasText: title });
+            await row.getByRole("button").first().click();
+            await expect(row.getByRole("button").first()).toHaveAttribute(
+                "aria-pressed",
+                "true",
+            );
+        }
+        await expect(page.getByText("2 selected")).toBeVisible();
+
+        const download = page.waitForEvent("download");
+        await page.getByTestId("recording-bulk-download").click();
+        const zip = await download;
+        expect(zip.suggestedFilename()).toMatch(
+            /^OpenAudioHub-\d{4}-\d{2}-\d{2}\.zip$/,
+        );
+        expect(await zip.failure()).toBeNull();
+
+        await page.getByTestId("recording-select-cancel").click();
+        await expect(page.getByTestId("recording-select-mode")).toBeVisible();
+    });
+
     test("each row shows its source and transcript state", async ({ page }) => {
         const row = page
             .getByTestId("recording-row")

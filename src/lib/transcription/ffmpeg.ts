@@ -90,6 +90,23 @@ export function transcodeToMp3(input: Buffer): Promise<Buffer> {
     return runFfmpeg(input, mp3Args());
 }
 
+/** MP3 for user downloads: keeps the source channels and sample rate. */
+export function transcodeToMp3ForDownload(input: Buffer): Promise<Buffer> {
+    return runFfmpeg(input, [
+        ...ffmpegInputArgs(),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "128k",
+        "-f",
+        "mp3",
+        "pipe:1",
+    ]);
+}
+
 /** Encode and yield mono 16 kHz MP3 segments from one ffmpeg pass. */
 export async function* transcodeToMp3Segments(
     input: Buffer,

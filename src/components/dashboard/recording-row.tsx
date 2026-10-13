@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    Check,
     Cpu,
     Download,
     Loader2,
@@ -46,6 +47,9 @@ export function RecordingRow({
     onTranscribeInBrowser,
     onRename,
     registerRef,
+    selectMode,
+    checked,
+    onToggleChecked,
 }: {
     recording: Recording;
     isSelected: boolean;
@@ -60,6 +64,9 @@ export function RecordingRow({
     onTranscribeInBrowser?: (recording: Recording) => void;
     onRename?: (recording: Recording) => void;
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
+    selectMode: boolean;
+    checked: boolean;
+    onToggleChecked: (recording: Recording) => void;
 }) {
     const confirm = useConfirm();
     return (
@@ -73,15 +80,37 @@ export function RecordingRow({
                     registerRef(recording.id, el);
                 }}
                 type="button"
-                onClick={() => onSelect(recording)}
+                aria-pressed={selectMode ? checked : undefined}
+                onClick={() =>
+                    selectMode
+                        ? onToggleChecked(recording)
+                        : onSelect(recording)
+                }
                 className={cn(
                     "w-full rounded-lg text-left transition-colors",
                     rowPadding,
+                    selectMode && "flex items-center gap-2",
                     isSelected
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent",
                 )}
             >
+                {selectMode && (
+                    // Visual only: the row button carries aria-pressed.
+                    <span
+                        aria-hidden="true"
+                        data-testid="recording-row-checkbox"
+                        data-checked={checked}
+                        className={cn(
+                            "flex size-4 shrink-0 items-center justify-center rounded border",
+                            checked
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-muted-foreground/50",
+                        )}
+                    >
+                        {checked && <Check className="size-3" />}
+                    </span>
+                )}
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <h3 className="min-w-0 truncate text-[13px] font-semibold">
@@ -155,98 +184,105 @@ export function RecordingRow({
                     </div>
                 </div>
             </button>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className={cn(
-                                isSelected &&
-                                    "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground",
-                            )}
-                            aria-label="Row actions"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <MoreHorizontal className="size-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => onSelect(recording)}>
-                            <Play />
-                            Open
-                        </DropdownMenuItem>
-                        {onRename ? (
-                            <DropdownMenuItem
-                                onSelect={() => onRename(recording)}
+            {!selectMode && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className={cn(
+                                    isSelected &&
+                                        "text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground",
+                                )}
+                                aria-label="Row actions"
+                                onClick={(e) => e.stopPropagation()}
                             >
-                                <Pencil />
-                                Rename
-                            </DropdownMenuItem>
-                        ) : null}
-                        {onTranscribe ? (
+                                <MoreHorizontal className="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                                onSelect={() => onTranscribe(recording)}
-                                disabled={inFlight === "transcribing"}
+                                onSelect={() => onSelect(recording)}
                             >
-                                <Sparkles />
-                                Transcribe
+                                <Play />
+                                Open
                             </DropdownMenuItem>
-                        ) : null}
-                        {onTranscribeInBrowser ? (
+                            {onRename ? (
+                                <DropdownMenuItem
+                                    onSelect={() => onRename(recording)}
+                                >
+                                    <Pencil />
+                                    Rename
+                                </DropdownMenuItem>
+                            ) : null}
+                            {onTranscribe ? (
+                                <DropdownMenuItem
+                                    onSelect={() => onTranscribe(recording)}
+                                    disabled={inFlight === "transcribing"}
+                                >
+                                    <Sparkles />
+                                    Transcribe
+                                </DropdownMenuItem>
+                            ) : null}
+                            {onTranscribeInBrowser ? (
+                                <DropdownMenuItem
+                                    onSelect={() =>
+                                        onTranscribeInBrowser(recording)
+                                    }
+                                    disabled={inFlight === "transcribing"}
+                                >
+                                    <Cpu />
+                                    Transcribe in browser
+                                </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem
-                                onSelect={() =>
-                                    onTranscribeInBrowser(recording)
-                                }
-                                disabled={inFlight === "transcribing"}
+                                onSelect={() => {
+                                    window.location.assign(
+                                        recordingAudioDownloadPath(
+                                            recording.id,
+                                        ),
+                                    );
+                                }}
                             >
-                                <Cpu />
-                                Transcribe in browser
+                                <Download />
+                                Download audio
                             </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem
-                            onSelect={() => {
-                                window.location.assign(
-                                    recordingAudioDownloadPath(recording.id),
-                                );
-                            }}
-                        >
-                            <Download />
-                            Download audio
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={(e) => {
-                                // Keep menu mounted so confirm dialog can take focus.
-                                e.preventDefault();
-                                void confirm({
-                                    title: "Delete this recording?",
-                                    description: (
-                                        <>
-                                            <span className="font-medium text-foreground">
-                                                {recording.filename}
-                                            </span>
-                                            <br />
-                                            The audio file and any transcript or
-                                            summary will be removed. If the file
-                                            is still on your Plaud device, the
-                                            next sync will re-download it.
-                                        </>
-                                    ),
-                                    confirmLabel: "Delete",
-                                    pendingLabel: "Deleting…",
-                                    destructive: true,
-                                    onConfirm: () => onDelete(recording),
-                                });
-                            }}
-                        >
-                            <Trash2 />
-                            Delete
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={(e) => {
+                                    // Keep menu mounted so confirm dialog can take focus.
+                                    e.preventDefault();
+                                    void confirm({
+                                        title: "Delete this recording?",
+                                        description: (
+                                            <>
+                                                <span className="font-medium text-foreground">
+                                                    {recording.filename}
+                                                </span>
+                                                <br />
+                                                The audio file and any
+                                                transcript or summary will be
+                                                removed. If the file is still on
+                                                your Plaud device, the next sync
+                                                will re-download it.
+                                            </>
+                                        ),
+                                        confirmLabel: "Delete",
+                                        pendingLabel: "Deleting…",
+                                        destructive: true,
+                                        onConfirm: () => onDelete(recording),
+                                    });
+                                }}
+                            >
+                                <Trash2 />
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
         </div>
     );
 }

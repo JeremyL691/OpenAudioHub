@@ -5,6 +5,7 @@ const SECTIONS = [
     ["providers", "Providers"],
     ["transcription", "Transcription"],
     ["summary", "Summary"],
+    ["naming", "Recording names"],
     ["plaud-account", "Plaud Account"],
     ["sync", "Sync"],
     ["playback", "Playback"],
