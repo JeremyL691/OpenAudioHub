@@ -36,6 +36,7 @@ const recording = {
     fileMd5: "abc",
     storageType: "local",
     storagePath: "user-1/rec.mp3",
+    autoExportPath: null,
     downloadedAt: now,
     plaudVersion: "1",
     timezone: null,
