@@ -24,6 +24,7 @@ import { parseCli } from "./cli.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { describeShortage, freeBytesAt, MIN_FREE_BYTES } from "./disk.js";
 import { exportSecrets } from "./export-keys.js";
+import { registerFolderPickerIpc } from "./folder-picker.js";
 import { runCliCommand } from "./import-command.js";
 import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
@@ -500,6 +501,10 @@ async function main(): Promise<void> {
         appOrigin,
         getParent: () => mainWindow ?? undefined,
         log,
+    });
+    registerFolderPickerIpc({
+        appOrigin,
+        getParent: () => mainWindow ?? undefined,
     });
 
     /**

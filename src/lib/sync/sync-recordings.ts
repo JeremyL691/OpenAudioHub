@@ -22,6 +22,7 @@ import {
     parseTranscript,
     selectContentItems,
 } from "@/lib/plaud/content";
+import { autoExportRecording } from "@/lib/recordings/auto-export";
 import { dateRecordingTitle } from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
@@ -763,6 +764,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 console.error("Failed to send Bark notification:", error);
                 result.errors.push("Bark notification failed");
             }
+        }
+
+        // Export only recordings created by this sync, after the batched
+        // downloads so MP3 conversion never slows them down.
+        for (const id of result.pendingTranscriptionIds) {
+            await autoExportRecording(userId, id);
         }
 
         // Import Plaud-native transcript/summary content (#204) before

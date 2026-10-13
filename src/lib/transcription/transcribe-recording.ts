@@ -325,6 +325,9 @@ async function transcribeRecordingInner(
         const numSpeakers = settings?.diarizationSpeakerCount ?? undefined;
         const autoGenerateTitle = settings?.autoGenerateTitle ?? true;
         const syncTitleToPlaud = settings?.syncTitleToPlaud ?? false;
+        const exportAiTitle =
+            (settings?.autoExport ?? false) &&
+            settings?.autoExportTitleMode === "ai";
         const autoSummarize = settings?.autoSummarize ?? false;
         const autoSummarizePreset = settings?.autoSummarizePreset ?? null;
         const pointer = settings?.defaultTranscriptionProviderId ?? null;
@@ -599,6 +602,7 @@ async function transcribeRecordingInner(
             text: transcriptionText,
             plaudFileId: recording.plaudFileId,
             autoGenerateTitle,
+            exportAiTitle,
             syncTitleToPlaud,
         });
 
