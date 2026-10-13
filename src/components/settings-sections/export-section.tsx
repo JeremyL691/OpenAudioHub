@@ -15,6 +15,41 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import type { RecordingTitleMode } from "@/lib/recordings/filename";
+
+// Desktop-only bridge published by the Electron preload (see desktop/).
+interface DesktopBridge {
+    version: 1;
+    pickFolder(): Promise<string | null>;
+}
+
+declare global {
+    interface Window {
+        __openaudiohubDesktop?: DesktopBridge;
+    }
+}
+
+const autoExportTitleOptions: {
+    value: RecordingTitleMode;
+    title: string;
+    description: string;
+}[] = [
+    {
+        value: "original",
+        title: "Original name",
+        description: "Keep the name from Plaud or the uploaded file.",
+    },
+    {
+        value: "date",
+        title: "Date",
+        description: "Name by recording date, e.g. 2026-10-12.",
+    },
+    {
+        value: "ai",
+        title: "AI title",
+        description: "Renamed to the AI title once transcription finishes.",
+    },
+];
 
 const exportFormatOptions = [
     { label: "JSON", value: "json", description: "Structured data format" },
@@ -69,6 +104,14 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         useSettings();
     const [defaultExportFormat, setDefaultExportFormat] = useState("json");
     const [autoExport, setAutoExport] = useState(false);
+    const [autoExportFolder, setAutoExportFolder] = useState<string | null>(
+        null,
+    );
+    const [autoExportTitleMode, setAutoExportTitleMode] =
+        useState<RecordingTitleMode>("original");
+    const [desktopBridge, setDesktopBridge] = useState<DesktopBridge | null>(
+        null,
+    );
     const [backupFrequency, setBackupFrequency] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isStartingBackup, setIsStartingBackup] = useState(false);
@@ -82,6 +125,10 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     const data = await response.json();
                     setDefaultExportFormat(data.defaultExportFormat ?? "json");
                     setAutoExport(data.autoExport ?? false);
+                    setAutoExportFolder(data.autoExportFolder ?? null);
+                    setAutoExportTitleMode(
+                        data.autoExportTitleMode ?? "original",
+                    );
                     setBackupFrequency(data.backupFrequency ?? null);
                 }
             } catch (error) {
@@ -150,9 +197,18 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         };
     }, [backupJob]);
 
+    // Detect the desktop bridge after mount so server and client first
+    // renders match (the bridge only exists in the Electron window).
+    useEffect(() => {
+        const bridge = window.__openaudiohubDesktop;
+        if (bridge?.version === 1) setDesktopBridge(bridge);
+    }, []);
+
     const handleExportBackupSettingChange = async (updates: {
         defaultExportFormat?: string;
         autoExport?: boolean;
+        autoExportFolder?: string | null;
+        autoExportTitleMode?: RecordingTitleMode;
         backupFrequency?: string | null;
     }) => {
         const previousValues: Record<string, unknown> = {};
@@ -163,6 +219,14 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         if (updates.autoExport !== undefined) {
             previousValues.autoExport = autoExport;
             setAutoExport(updates.autoExport);
+        }
+        if (updates.autoExportFolder !== undefined) {
+            previousValues.autoExportFolder = autoExportFolder;
+            setAutoExportFolder(updates.autoExportFolder);
+        }
+        if (updates.autoExportTitleMode !== undefined) {
+            previousValues.autoExportTitleMode = autoExportTitleMode;
+            setAutoExportTitleMode(updates.autoExportTitleMode);
         }
         if (updates.backupFrequency !== undefined) {
             previousValues.backupFrequency = backupFrequency;
@@ -188,6 +252,16 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 const prev = previousValues.autoExport;
                 if (typeof prev === "boolean") setAutoExport(prev);
             }
+            if (updates.autoExportFolder !== undefined) {
+                const prev = previousValues.autoExportFolder;
+                if (typeof prev === "string" || prev === null)
+                    setAutoExportFolder(prev);
+            }
+            if (updates.autoExportTitleMode !== undefined) {
+                const prev = previousValues.autoExportTitleMode;
+                if (prev === "original" || prev === "date" || prev === "ai")
+                    setAutoExportTitleMode(prev);
+            }
             if (updates.backupFrequency !== undefined) {
                 const prev = previousValues.backupFrequency;
                 if (typeof prev === "string" || prev === null)
@@ -195,6 +269,19 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
             }
             toast.error("Failed to save settings. Changes reverted.");
         }
+    };
+
+    const handleChooseFolder = async () => {
+        if (!desktopBridge) return;
+        let path: string | null;
+        try {
+            path = await desktopBridge.pickFolder();
+        } catch {
+            toast.error("Couldn't open the folder picker");
+            return;
+        }
+        // null means the user canceled the picker.
+        if (path) handleExportBackupSettingChange({ autoExportFolder: path });
     };
 
     const handleExport = async () => {
@@ -317,27 +404,121 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             >
                                 Auto-export new recordings
                             </Label>
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                                Coming soon
-                            </span>
+                            {!desktopBridge && (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                    Coming soon
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Automatically export recordings when they are synced
+                            {desktopBridge
+                                ? "Save each new recording as an MP3 in a folder on this Mac."
+                                : "Automatically export recordings when they are synced"}
                         </p>
                     </div>
                     <Switch
                         id="auto-export"
-                        className="opacity-60"
+                        className={desktopBridge ? undefined : "opacity-60"}
                         checked={autoExport}
                         onCheckedChange={(checked) => {
-                            setAutoExport(checked);
                             handleExportBackupSettingChange({
                                 autoExport: checked,
                             });
                         }}
-                        disabled={true}
+                        disabled={desktopBridge ? !autoExportFolder : true}
                     />
                 </div>
+
+                {desktopBridge && (
+                    <>
+                        <div className="flex items-center justify-between gap-4 py-3">
+                            <Label
+                                htmlFor="auto-export-folder"
+                                className="text-[13px] font-medium"
+                            >
+                                Export folder
+                            </Label>
+                            <div className="flex min-w-0 items-center gap-3">
+                                <span
+                                    id="auto-export-folder-path"
+                                    title={autoExportFolder ?? undefined}
+                                    className={`min-w-0 max-w-[16rem] truncate text-xs ${
+                                        autoExportFolder
+                                            ? ""
+                                            : "text-muted-foreground"
+                                    }`}
+                                >
+                                    {autoExportFolder ?? "No folder chosen"}
+                                </span>
+                                <Button
+                                    id="auto-export-folder"
+                                    data-testid="auto-export-folder"
+                                    aria-describedby="auto-export-folder-path"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleChooseFolder}
+                                >
+                                    Choose…
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 py-3">
+                            <span
+                                id="auto-export-file-name"
+                                className="block text-[13px] font-medium"
+                            >
+                                File name
+                            </span>
+                            <div
+                                role="radiogroup"
+                                aria-labelledby="auto-export-file-name"
+                                data-testid="auto-export-title-mode"
+                                className="divide-y divide-border rounded-xl bg-muted/60 px-4"
+                            >
+                                {autoExportTitleOptions.map((option) => {
+                                    const inputId = `auto-export-title-mode-${option.value}`;
+                                    return (
+                                        <Label
+                                            key={option.value}
+                                            htmlFor={inputId}
+                                            className="flex cursor-pointer items-start gap-3 py-3 font-normal"
+                                        >
+                                            <input
+                                                type="radio"
+                                                id={inputId}
+                                                name="auto-export-title-mode"
+                                                value={option.value}
+                                                data-testid={inputId}
+                                                checked={
+                                                    autoExportTitleMode ===
+                                                    option.value
+                                                }
+                                                onChange={() =>
+                                                    handleExportBackupSettingChange(
+                                                        {
+                                                            autoExportTitleMode:
+                                                                option.value,
+                                                        },
+                                                    )
+                                                }
+                                                className="mt-0.5 size-4 shrink-0 accent-primary"
+                                            />
+                                            <span className="min-w-0 flex-1 space-y-0.5">
+                                                <span className="block text-[13px] font-medium">
+                                                    {option.title}
+                                                </span>
+                                                <span className="block text-xs text-muted-foreground">
+                                                    {option.description}
+                                                </span>
+                                            </span>
+                                        </Label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 <div className="space-y-2 py-3">
                     <div className="flex items-center gap-2">

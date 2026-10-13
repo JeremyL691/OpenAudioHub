@@ -291,6 +291,8 @@ export const recordings = pgTable(
         // Storage info
         storageType: varchar("storage_type", { length: 10 }).notNull(), // 'local' or 's3'
         storagePath: text("storage_path").notNull(), // Local path or S3 key
+        // Encrypted path of the auto-exported MP3, so an AI title can rename it.
+        autoExportPath: text("auto_export_path"),
         downloadedAt: timestamp("downloaded_at"),
         // Version from Plaud API (for detecting updates)
         plaudVersion: varchar("plaud_version", { length: 50 }).notNull(),
@@ -608,6 +610,11 @@ export const userSettings = pgTable("user_settings", {
         .notNull()
         .default("json"), // 'json', 'txt', 'srt', 'vtt'
     autoExport: boolean("auto_export").notNull().default(false),
+    autoExportFolder: text("auto_export_folder"), // desktop only, absolute path
+    // Exported file name: 'original' | 'date' | 'ai'.
+    autoExportTitleMode: varchar("auto_export_title_mode", { length: 20 })
+        .notNull()
+        .default("original"),
     backupFrequency: varchar("backup_frequency", { length: 20 }), // nullable, 'daily', 'weekly', 'monthly', 'never'
     // Default providers (for quick selection)
     defaultProviders: jsonb("default_providers"), // { transcription: 'openai', enhancement: 'claude' }
