@@ -8,8 +8,10 @@ import {
 } from "@/lib/ai/summary-presets";
 import { requireApiSession } from "@/lib/auth-server";
 import { LEGACY_SOURCE } from "@/lib/brand/legacy";
+import { isDesktopMode } from "@/lib/desktop/mode";
 import { decryptJsonField, encryptJsonField } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { isWritableFolder } from "@/lib/recordings/auto-export-folder";
 import { normalizeSource, OWN_SOURCE } from "@/lib/transcription/source";
 
 // Enum allowlists. DB columns are `varchar`, not pg enums, so validation
@@ -26,6 +28,7 @@ const ENUM_FIELDS = {
     transcriptMode: ["plaud_only", "keep_both"],
     preferredTranscriptSource: ["plaud", OWN_SOURCE, LEGACY_SOURCE],
     recordingTitleMode: ["original", "date", "ai"],
+    autoExportTitleMode: ["original", "date", "ai"],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(
@@ -63,6 +66,8 @@ const DEFAULT_SETTINGS = {
     notificationEmail: null,
     defaultExportFormat: "json" as const,
     autoExport: false,
+    autoExportFolder: null,
+    autoExportTitleMode: "original" as const,
     backupFrequency: null,
     defaultProviders: null,
     onboardingCompleted: false,
@@ -106,6 +111,8 @@ const SETTINGS_FIELDS = [
     "notificationEmail",
     "defaultExportFormat",
     "autoExport",
+    "autoExportFolder",
+    "autoExportTitleMode",
     "backupFrequency",
     "defaultProviders",
     "onboardingCompleted",
@@ -262,6 +269,33 @@ export const PUT = apiHandler(async (request: Request) => {
             insertData[field] = value;
         } else if (!existing) {
             insertData[field] = DEFAULT_SETTINGS[field];
+        }
+    }
+
+    // Auto-export writes into a local folder, so it only exists in the desktop app.
+    if (
+        updateData.autoExportFolder != null &&
+        !(await isWritableFolder(updateData.autoExportFolder))
+    ) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "The export folder must be an existing folder the app can write to",
+            400,
+            { field: "autoExportFolder" },
+        );
+    }
+    if (updateData.autoExport === true) {
+        const folder =
+            updateData.autoExportFolder !== undefined
+                ? updateData.autoExportFolder
+                : existing?.autoExportFolder;
+        if (!isDesktopMode() || !folder) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                "Choose an export folder in the desktop app first",
+                400,
+                { field: "autoExport" },
+            );
         }
     }
 
