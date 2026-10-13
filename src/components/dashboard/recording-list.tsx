@@ -22,6 +22,7 @@ import {
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
 import { dateGroupFallbackLabel, dateGroupLabel } from "@/lib/format-date";
+import { recordingsZipDownloadPath } from "@/lib/recordings/filename";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
@@ -107,6 +108,8 @@ export function RecordingList({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
     const [hasHydrated, setHasHydrated] = useState(false);
+    const [selectMode, setSelectMode] = useState(false);
+    const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
     const searchRef = useRef<HTMLInputElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -123,6 +126,20 @@ export function RecordingList({
     const setDensityPersisted = useCallback((next: ListDensity) => {
         setDensity(next);
         persistSetting("listDensity", next);
+    }, []);
+
+    const handleSelectModeChange = useCallback((next: boolean) => {
+        setSelectMode(next);
+        if (!next) setCheckedIds(new Set());
+    }, []);
+
+    const toggleChecked = useCallback((recording: Recording) => {
+        setCheckedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(recording.id)) next.delete(recording.id);
+            else next.add(recording.id);
+            return next;
+        });
     }, []);
 
     const registerRowRef = useCallback(
@@ -283,6 +300,15 @@ export function RecordingList({
     const isCompact = density === "compact";
     const rowPadding = isCompact ? "px-2.5 py-1.5" : "px-2.5 py-2";
 
+    // Drop ids for recordings that have since been deleted.
+    const liveCheckedIds = useMemo(() => {
+        const existing = new Set(recordings.map((r) => r.id));
+        return [...checkedIds].filter((id) => existing.has(id));
+    }, [recordings, checkedIds]);
+    const downloadHref = liveCheckedIds.length
+        ? recordingsZipDownloadPath(liveCheckedIds)
+        : null;
+
     return (
         <div>
             <div className="bg-background lg:sticky lg:top-0 lg:z-10">
@@ -301,6 +327,13 @@ export function RecordingList({
                     onSortOrderChange={setSortOrderPersisted}
                     density={density}
                     onDensityChange={setDensityPersisted}
+                    selectMode={selectMode}
+                    selectedCount={liveCheckedIds.length}
+                    onSelectModeChange={handleSelectModeChange}
+                    onSelectAll={() =>
+                        setCheckedIds(new Set(filtered.map((r) => r.id)))
+                    }
+                    downloadHref={downloadHref}
                 />
             </div>
 
@@ -347,6 +380,9 @@ export function RecordingList({
                                     }
                                     onRename={onRename}
                                     registerRef={registerRowRef}
+                                    selectMode={selectMode}
+                                    checked={checkedIds.has(recording.id)}
+                                    onToggleChecked={toggleChecked}
                                 />
                             ))}
                         </div>

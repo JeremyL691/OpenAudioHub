@@ -25,6 +25,7 @@ const ENUM_FIELDS = {
     defaultExportFormat: ["json", "txt", "srt", "vtt"],
     transcriptMode: ["plaud_only", "keep_both"],
     preferredTranscriptSource: ["plaud", OWN_SOURCE, LEGACY_SOURCE],
+    recordingTitleMode: ["original", "date", "ai"],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(
@@ -66,6 +67,7 @@ const DEFAULT_SETTINGS = {
     defaultProviders: null,
     onboardingCompleted: false,
     autoGenerateTitle: true,
+    recordingTitleMode: "ai" as const,
     syncTitleToPlaud: false,
     aiOutputLanguage: null,
     importPlaudContent: false,
@@ -108,6 +110,7 @@ const SETTINGS_FIELDS = [
     "defaultProviders",
     "onboardingCompleted",
     "autoGenerateTitle",
+    "recordingTitleMode",
     "syncTitleToPlaud",
     "aiOutputLanguage",
     "importPlaudContent",
@@ -260,6 +263,13 @@ export const PUT = apiHandler(async (request: Request) => {
         } else if (!existing) {
             insertData[field] = DEFAULT_SETTINGS[field];
         }
+    }
+
+    // The pipeline still reads autoGenerateTitle; keep it derived from the mode.
+    if (updateData.recordingTitleMode !== undefined) {
+        const autoGenerateTitle = updateData.recordingTitleMode === "ai";
+        updateData.autoGenerateTitle = autoGenerateTitle;
+        insertData.autoGenerateTitle = autoGenerateTitle;
     }
 
     if (body.titleGenerationPrompt !== undefined) {

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough, type Readable } from "node:stream";
 
 export function runFfmpeg(
     input: Buffer,
@@ -88,6 +89,60 @@ export function ffmpegToOpus(
 /** Mono 16 kHz MP3 for chat-style providers that reject Ogg/Opus. */
 export function transcodeToMp3(input: Buffer): Promise<Buffer> {
     return runFfmpeg(input, mp3Args());
+}
+
+/**
+ * MP3 for user downloads, streamed: bytes flow out while ffmpeg is still
+ * encoding, so a long recording starts downloading at once. Keeps the source
+ * channels and sample rate. A failed encode errors the returned stream.
+ */
+export function streamMp3ForDownload(input: Readable): Readable {
+    const ff = spawn(
+        "ffmpeg",
+        [
+            ...ffmpegInputArgs(),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            "-f",
+            "mp3",
+            "pipe:1",
+        ],
+        { stdio: ["pipe", "pipe", "pipe"] },
+    );
+    // Ends only after ffmpeg exits cleanly, so a failed encode never looks
+    // like a complete file.
+    const out = new PassThrough();
+    const stderr: Buffer[] = [];
+    ff.stderr.on("data", (c: Buffer) => stderr.push(c));
+    const fail = (err: Error) => {
+        ff.kill("SIGKILL");
+        out.destroy(err);
+    };
+    ff.on("error", (err) =>
+        fail(new Error(`ffmpeg spawn failed: ${err.message}`)),
+    );
+    ff.on("close", (code) => {
+        if (code === 0) {
+            out.end();
+            return;
+        }
+        const message = Buffer.concat(stderr).toString("utf8").trim();
+        fail(new Error(`ffmpeg exited with code ${code}: ${message}`));
+    });
+    // A consumer that stops reading (download cancelled) ends ffmpeg too.
+    out.on("close", () => {
+        if (ff.exitCode === null) ff.kill("SIGKILL");
+    });
+    ff.stdout.pipe(out, { end: false });
+    input.on("error", fail);
+    ff.stdin.on("error", () => {});
+    input.pipe(ff.stdin);
+    return out;
 }
 
 /** Encode and yield mono 16 kHz MP3 segments from one ffmpeg pass. */

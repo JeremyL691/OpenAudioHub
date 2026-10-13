@@ -615,8 +615,13 @@ export const userSettings = pgTable("user_settings", {
     onboardingCompleted: boolean("onboarding_completed")
         .notNull()
         .default(false),
-    // Title generation
+    // Title generation. `autoGenerateTitle` is derived from
+    // `recordingTitleMode` on save ('ai' => true) and still read by the pipeline.
     autoGenerateTitle: boolean("auto_generate_title").notNull().default(true),
+    // How new recordings are named: 'original' | 'date' | 'ai'.
+    recordingTitleMode: varchar("recording_title_mode", { length: 20 })
+        .notNull()
+        .default("ai"),
     syncTitleToPlaud: boolean("sync_title_to_plaud").notNull().default(false),
     // Title generation prompt configuration
     titleGenerationPrompt: jsonb("title_generation_prompt"), // { preset: string, customPrompt?: string }

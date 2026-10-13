@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDown, FileText, RefreshCw, Sparkles } from "lucide-react";
+import { FileText, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
 import { TranscribeInBrowserButton } from "@/components/dashboard/transcribe-in-browser-button";
@@ -13,9 +13,7 @@ import { TranscriptMeta } from "@/components/recording/transcript/transcript-met
 import { TranscriptToolbar } from "@/components/recording/transcript/transcript-toolbar";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { usePersistedToggle } from "@/hooks/use-persisted-toggle";
 import type { RecordingTranscript } from "@/hooks/use-recording-transcript";
-import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
 interface TranscriptCardProps {
@@ -54,12 +52,6 @@ export function TranscriptCard({
     const router = useRouter();
     const confirm = useConfirm();
     const [followPlayback, setFollowPlayback] = useState(true);
-    const contentId = useId();
-    const [open, toggleOpen] = usePersistedToggle("oah.card.transcript.open");
-    const expandThen = (action: () => void) => () => {
-        if (!open) toggleOpen();
-        action();
-    };
     const {
         activeTranscript,
         transcriptList,
@@ -112,31 +104,9 @@ export function TranscriptCard({
     return (
         <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="h-10 w-10 sm:h-7 sm:w-7"
-                        aria-expanded={open}
-                        aria-controls={contentId}
-                        aria-label={
-                            open
-                                ? "Collapse transcription"
-                                : "Expand transcription"
-                        }
-                        onClick={toggleOpen}
-                    >
-                        <ChevronDown
-                            className={cn(
-                                "size-4 transition-transform",
-                                !open && "-rotate-90",
-                            )}
-                        />
-                    </Button>
-                    <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
-                        <FileText className="size-4" />
-                        Transcription
-                    </div>
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
+                    <FileText className="size-4" />
+                    Transcription
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {isDetail && activeTranscript?.text && hasTimeline && (
@@ -151,7 +121,7 @@ export function TranscriptCard({
                     )}
                     {!isDetail && activeTranscript?.text && (
                         <Button
-                            onClick={expandThen(onTranscribe)}
+                            onClick={() => onTranscribe()}
                             size="sm"
                             variant="outline"
                             className="h-10 sm:h-8"
@@ -166,7 +136,7 @@ export function TranscriptCard({
                     {!activeTranscript?.text && !isTranscribing && (
                         <>
                             <Button
-                                onClick={expandThen(onTranscribe)}
+                                onClick={() => onTranscribe()}
                                 size="sm"
                                 className="h-10 sm:h-8"
                                 disabled={
@@ -195,7 +165,7 @@ export function TranscriptCard({
                     )}
                 </div>
             </div>
-            <div id={contentId} hidden={!open} className="mt-4">
+            <div className="mt-4">
                 {isTranscribing && !activeTranscript?.text ? (
                     <div className="flex flex-col items-center justify-center py-10">
                         <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />

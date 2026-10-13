@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto";
 import * as path from "node:path";
+import { eq } from "drizzle-orm";
 import { parseBuffer } from "music-metadata";
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { recordings } from "@/db/schema";
+import { recordings, userSettings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { dateRecordingTitle } from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
 
@@ -119,8 +121,16 @@ export const POST = apiHandler(async (request: Request) => {
     const storage = await createUserStorageProvider(session.user.id);
     await storage.uploadFile(storageKey, buffer, contentType);
 
-    const basename = path.basename(file.name, ext);
     const now = new Date();
+    const [settings] = await db
+        .select({ recordingTitleMode: userSettings.recordingTitleMode })
+        .from(userSettings)
+        .where(eq(userSettings.userId, session.user.id))
+        .limit(1);
+    const basename =
+        settings?.recordingTitleMode === "date"
+            ? dateRecordingTitle(now)
+            : path.basename(file.name, ext);
     const endTime = new Date(now.getTime() + durationMs);
 
     try {

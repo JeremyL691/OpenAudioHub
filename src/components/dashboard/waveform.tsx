@@ -339,7 +339,9 @@ export function Waveform({
             aria-disabled={disabled || undefined}
             style={{ height }}
         >
-            <canvas ref={canvasRef} />
+            {/* max-w-full: the px width set in draw() must not hold the
+                container wider than its column once it shrinks. */}
+            <canvas ref={canvasRef} className="block max-w-full" />
             {tooltipVisible && (
                 <div
                     className="pointer-events-none absolute -top-7 z-10 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 font-mono text-[11px] text-background shadow-md"

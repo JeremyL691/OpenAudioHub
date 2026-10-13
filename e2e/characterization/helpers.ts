@@ -36,3 +36,8 @@ export async function openRecording(page: Page, title: string): Promise<void> {
         .click();
     await expect(page.getByTestId("player")).toContainText(title);
 }
+
+/** The preview shows one of Transcript | Summary at a time. */
+export async function showSummary(page: Page): Promise<void> {
+    await page.getByRole("tab", { name: "Summary" }).click();
+}

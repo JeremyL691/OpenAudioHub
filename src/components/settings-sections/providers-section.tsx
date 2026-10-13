@@ -1,6 +1,14 @@
 "use client";
 
-import { Bot, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import {
+    Bot,
+    Loader2,
+    Pencil,
+    PlugZap,
+    Plus,
+    Sparkles,
+    Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -11,6 +19,10 @@ import { PromptManager } from "@/components/settings-sections/prompt-manager";
 import { Button } from "@/components/ui/button";
 
 type AISubSection = "providers" | "prompts";
+
+type TestResult =
+    | { ok: true; latencyMs: number }
+    | { ok: false; error: string };
 
 interface Provider {
     id: string;
@@ -54,6 +66,10 @@ export function ProvidersSection({
         null,
     );
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [testingId, setTestingId] = useState<string | null>(null);
+    const [testResults, setTestResults] = useState<Record<string, TestResult>>(
+        {},
+    );
     const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
 
     const refreshProviders = async () => {
@@ -70,6 +86,49 @@ export function ProvidersSection({
     const handleEdit = (provider: Provider) => {
         setEditingProvider(provider);
         setIsEditProviderOpen(true);
+    };
+
+    const handleTest = async (provider: Provider) => {
+        setTestingId(provider.id);
+        setTestResults((prev) => {
+            const next = { ...prev };
+            delete next[provider.id];
+            return next;
+        });
+        try {
+            const response = await fetch("/api/settings/ai/providers/test", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    provider: provider.provider,
+                    id: provider.id,
+                }),
+            });
+            const data = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                latencyMs?: number;
+                error?: string;
+            } | null;
+            const result: TestResult = data?.ok
+                ? { ok: true, latencyMs: data.latencyMs ?? 0 }
+                : {
+                      ok: false,
+                      error:
+                          data?.error ||
+                          `test failed (HTTP ${response.status})`,
+                  };
+            setTestResults((prev) => ({ ...prev, [provider.id]: result }));
+        } catch (e) {
+            setTestResults((prev) => ({
+                ...prev,
+                [provider.id]: {
+                    ok: false,
+                    error: e instanceof Error ? e.message : "test failed",
+                },
+            }));
+        } finally {
+            setTestingId(null);
+        }
     };
 
     const handleSetDefaultTranscription = (providerId: string) => {
@@ -180,8 +239,11 @@ export function ProvidersSection({
                     <ProvidersList
                         providers={providers}
                         deletingId={deletingId}
+                        testingId={testingId}
+                        testResults={testResults}
                         onAdd={() => setIsAddProviderOpen(true)}
                         onEdit={handleEdit}
+                        onTest={handleTest}
                         onDelete={handleDelete}
                         onSetDefault={handleSetDefaultTranscription}
                     />
@@ -225,15 +287,21 @@ export function ProvidersSection({
 function ProvidersList({
     providers,
     deletingId,
+    testingId,
+    testResults,
     onAdd,
     onEdit,
+    onTest,
     onDelete,
     onSetDefault,
 }: {
     providers: Provider[];
     deletingId: string | null;
+    testingId: string | null;
+    testResults: Record<string, TestResult>;
     onAdd: () => void;
     onEdit: (provider: Provider) => void;
+    onTest: (provider: Provider) => void;
     onDelete: (id: string) => void;
     onSetDefault: (id: string) => void;
 }) {
@@ -255,6 +323,7 @@ function ProvidersList({
     return (
         <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
             {providers.map((provider) => {
+                const result = testResults[provider.id];
                 return (
                     <div
                         key={provider.id}
@@ -286,6 +355,20 @@ function ProvidersList({
                                     {provider.baseUrl}
                                 </p>
                             )}
+                            {result && (
+                                <output
+                                    data-testid="provider-row-test-result"
+                                    className={`mt-1 block text-xs break-words ${
+                                        result.ok
+                                            ? "text-success"
+                                            : "text-destructive"
+                                    }`}
+                                >
+                                    {result.ok
+                                        ? `Connected · ${result.latencyMs} ms`
+                                        : `Connection failed: ${result.error}`}
+                                </output>
+                            )}
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-4 sm:justify-end">
                             {!provider.isDefaultTranscription && (
@@ -298,6 +381,21 @@ function ProvidersList({
                                     Use for transcription
                                 </Button>
                             )}
+                            <Button
+                                onClick={() => onTest(provider)}
+                                aria-label="Test connection"
+                                data-testid="provider-row-test"
+                                variant="outline"
+                                size="icon"
+                                className="size-10 sm:size-9"
+                                disabled={testingId === provider.id}
+                            >
+                                {testingId === provider.id ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <PlugZap className="size-4" />
+                                )}
+                            </Button>
                             <Button
                                 onClick={() => onEdit(provider)}
                                 aria-label="Edit provider"
