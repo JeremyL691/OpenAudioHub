@@ -51,6 +51,19 @@ test.describe("library", () => {
         await expect(page.getByTestId("recording-select-mode")).toBeVisible();
     });
 
+    test("a single recording downloads as MP3", async ({ page }) => {
+        const row = page
+            .getByTestId("recording-row")
+            .filter({ hasText: RECORDINGS.weekly });
+        await row.hover();
+        await row.getByRole("button", { name: "Row actions" }).click();
+        const download = page.waitForEvent("download");
+        await page.getByRole("menuitem", { name: "Download audio" }).click();
+        const file = await download;
+        expect(file.suggestedFilename()).toBe(`${RECORDINGS.weekly}.mp3`);
+        expect(await file.failure()).toBeNull();
+    });
+
     test("each row shows its source and transcript state", async ({ page }) => {
         const row = page
             .getByTestId("recording-row")

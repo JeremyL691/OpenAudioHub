@@ -48,13 +48,8 @@ test.describe("transcript and summary", () => {
 
         await page.getByTestId("summary-generate").click();
 
-        const expand = page.getByRole("button", { name: "Expand summary" });
-        await expect(
-            expand.or(page.getByTestId("summary-content")),
-        ).toBeVisible({ timeout: 60_000 });
-        if (await expand.isVisible()) await expand.click();
-        await expect(page.getByTestId("summary-content")).toContainText(
-            "roadmap",
-        );
+        const content = page.getByTestId("summary-content");
+        await expect(content).toBeVisible({ timeout: 60_000 });
+        await expect(content).toContainText("roadmap");
     });
 });
