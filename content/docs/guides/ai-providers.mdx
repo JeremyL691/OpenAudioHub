@@ -9,6 +9,8 @@ OpenAudioHub works with several AI providers. Each provider has a base URL, an A
 
 Open **Settings → Providers** and choose **Add Provider**. Pick a preset, which fills in the base URL and suggests models. Paste your API key, choose a model, and save. Repeat for each provider you want to use.
 
+**Test connection**, in the provider dialog and on each saved provider, sends one small request with the chosen model: a short chat message, or one second of silence for a transcription model. The result shows in green with the response time, or in red with the provider's error. Each test is a real request, so the provider may bill it.
+
 ## Presets
 
 | Preset | Base URL | Notes |
@@ -60,6 +62,10 @@ Audio sent for transcription, and transcript text sent for summaries, reach the 
 ## Switching providers
 
 On any recording, the workstation panel lets you pick a transcription provider and a summary provider. Changes apply right away. If a transcription is poor, run it again with a different provider.
+
+## Recording names
+
+**Settings → Recording names** sets how new recordings are named: keep the original name from Plaud or the uploaded file, use the recording date (for example `2026-10-12`), or generate a title from the transcript with AI once transcription finishes. The choice applies to recordings that arrive after you change it. Existing recordings keep their names.
 
 ## Automatic summaries
 

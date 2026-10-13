@@ -57,7 +57,8 @@ async function openFullPage(page: Page, title: string): Promise<void> {
 // From lg up the full player is docked at the bottom of the detail area and never
 // leaves the screen, so the compact bar only appears below lg.
 test.describe("mini player", () => {
-    test.use({ viewport: { width: 768, height: 800 } });
+    // Short enough that the transcript tab alone scrolls the player away.
+    test.use({ viewport: { width: 768, height: 480 } });
 
     test.beforeEach(async ({ page }) => {
         await signIn(page);

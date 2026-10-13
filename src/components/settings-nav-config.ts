@@ -10,6 +10,7 @@ import {
     Monitor,
     Play,
     RefreshCw,
+    Tag,
     Webhook,
     Wrench,
 } from "lucide-react";
@@ -36,6 +37,7 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
             { name: "Providers", id: "providers", icon: Bot },
             { name: "Transcription", id: "transcription", icon: FileText },
             { name: "Summary", id: "summary", icon: ListChecks },
+            { name: "Recording names", id: "naming", icon: Tag },
         ],
     },
     {

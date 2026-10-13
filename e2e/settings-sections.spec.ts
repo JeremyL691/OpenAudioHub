@@ -13,6 +13,7 @@ const SECTIONS = [
     "providers",
     "transcription",
     "summary",
+    "naming",
     "plaud-account",
     "sync",
     "playback",
@@ -83,5 +84,36 @@ test.describe("settings sections", () => {
         await page.locator("#theme").click();
         await page.getByRole("option", { name: "System" }).click();
         await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
+    });
+
+    test("a saved provider passes the connection test", async ({ page }) => {
+        await page.goto("/settings/providers");
+        await page.getByTestId("provider-row-test").first().click();
+        const result = page.getByTestId("provider-row-test-result").first();
+        await expect(result).toHaveText(/^Connected · \d+ ms$/);
+        await expect(result).toHaveClass(/text-success/);
+    });
+
+    test("the recording name rule is saved", async ({ page }) => {
+        await page.goto("/settings/naming");
+        const saved = () =>
+            page.waitForResponse(
+                (r) =>
+                    r.url().endsWith("/api/settings/user") &&
+                    r.request().method() === "PUT",
+            );
+        const date = page.getByTestId("recording-title-mode-date");
+        let save = saved();
+        await date.check();
+        await save;
+        await page.reload();
+        await expect(date).toBeChecked();
+
+        // Restore the seeded default for other specs.
+        save = saved();
+        await page.getByTestId("recording-title-mode-ai").check();
+        await save;
+        await page.reload();
+        await expect(page.getByTestId("recording-title-mode-ai")).toBeChecked();
     });
 });

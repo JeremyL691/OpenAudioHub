@@ -3,6 +3,8 @@
 import { SummaryPanel } from "@/components/recording/ai/summary-panel";
 import { TranscriptCard } from "@/components/recording/transcript/transcript-card";
 import type { TranscriptOption } from "@/components/recording/transcript/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRecordingTranscript } from "@/hooks/use-recording-transcript";
 import type { Recording } from "@/types/recording";
 
@@ -29,7 +31,8 @@ interface TranscriptionPanelProps {
 }
 
 /**
- * The library preview's transcript card and summary card for one recording.
+ * The library preview's transcript and summary for one recording, one at a
+ * time behind a Transcript | Summary switch.
  * The state comes from useRecordingTranscript and the cards from
  * TranscriptCard (preview variant) and SummaryPanel.
  */
@@ -52,24 +55,43 @@ export function TranscriptionPanel({
     });
 
     return (
-        <div className="space-y-6">
-            <TranscriptCard
-                variant="preview"
-                recording={recording}
-                transcript={transcript}
-                isTranscribing={isTranscribing}
-                onTranscribe={onTranscribe}
-                onTranscribeComplete={onTranscribeComplete}
-                playbackTimeMs={playbackTimeMs}
-                onSeekTimestamp={onSeekTimestamp}
-            />
-
-            {transcript.activeTranscript?.text && (
-                <SummaryPanel
-                    summary={transcript.summary}
-                    title={recording.filename}
+        <Tabs defaultValue="transcript" className="gap-4">
+            <TabsList>
+                <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                <TabsTrigger value="summary">Summary</TabsTrigger>
+            </TabsList>
+            <TabsContent value="transcript">
+                <TranscriptCard
+                    variant="preview"
+                    recording={recording}
+                    transcript={transcript}
+                    isTranscribing={isTranscribing}
+                    onTranscribe={onTranscribe}
+                    onTranscribeComplete={onTranscribeComplete}
+                    playbackTimeMs={playbackTimeMs}
+                    onSeekTimestamp={onSeekTimestamp}
                 />
-            )}
-        </div>
+            </TabsContent>
+            <TabsContent value="summary">
+                {transcript.activeTranscript?.text ? (
+                    <SummaryPanel
+                        summary={transcript.summary}
+                        title={recording.filename}
+                    />
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                A summary is available once the recording has a
+                                transcript.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
+            </TabsContent>
+        </Tabs>
     );
 }

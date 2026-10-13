@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { recordings, transcriptions, userSettings, users } from "@/db/schema";
+import { recordings, transcriptions, users } from "@/db/schema";
 import {
     createMigratedTestDatabase,
     createTestDatabase,
@@ -55,7 +55,7 @@ describeWithDatabase("PostgreSQL migration chain", () => {
 
 const MIGRATIONS_DIR = "./src/db/migrations";
 const LAST_BEFORE_REBRAND = "0040_worried_lethal_legion";
-const LATEST_TAG = "0045_summary_template_and_language";
+const LATEST_TAG = "0046_recording_title_mode";
 
 /** Copies migrations up to and including `tag` into a temporary folder. */
 function migrationsUpTo(tag: string): string {
@@ -137,11 +137,10 @@ describeWithDatabase("rebrand source values migration", () => {
             insert into ai_enhancements (id, recording_id, user_id, summary, provider, model, source)
             values ('enh-rebrand', 'rec-rebrand', ${userId}, 'legacy summary', 'Custom', 'gpt', 'riffado')
         `;
-        await db.insert(userSettings).values({
-            userId,
-            preferredTranscriptSource: "riffado",
-            defaultTranscriptionProviderId: "riffado-included",
-        });
+        await database.sql`
+            insert into user_settings (id, user_id, preferred_transcript_source, default_transcription_provider_id, auto_generate_title)
+            values ('settings-rebrand', ${userId}, 'riffado', 'riffado-included', false)
+        `;
 
         await migrate(database.db, { migrationsFolder: MIGRATIONS_DIR });
 
@@ -155,9 +154,10 @@ describeWithDatabase("rebrand source values migration", () => {
             {
                 preferred_transcript_source: string;
                 default_transcription_provider_id: string | null;
+                recording_title_mode: string;
             }[]
         >`
-            select preferred_transcript_source, default_transcription_provider_id
+            select preferred_transcript_source, default_transcription_provider_id, recording_title_mode
             from user_settings where user_id = ${userId}
         `;
 
@@ -165,6 +165,8 @@ describeWithDatabase("rebrand source values migration", () => {
         expect(enhancement.source).toBe("openaudiohub");
         expect(settings.preferred_transcript_source).toBe("openaudiohub");
         expect(settings.default_transcription_provider_id).toBeNull();
+        // 0046: titles turned off map to keeping the original name.
+        expect(settings.recording_title_mode).toBe("original");
 
         // 0043: new rows default to the current source value.
         const defaults = await database.sql<

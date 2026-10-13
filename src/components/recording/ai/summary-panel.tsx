@@ -1,7 +1,6 @@
 "use client";
 
 import {
-    ChevronDown,
     Copy,
     Download,
     ListChecks,
@@ -10,12 +9,10 @@ import {
     Sparkles,
     Trash2,
 } from "lucide-react";
-import { useId } from "react";
 import { toast } from "sonner";
 import { PromptSelect } from "@/components/recording/ai/prompt-select";
 import { RichMarkdown } from "@/components/recordings/rich-content";
 import { Button } from "@/components/ui/button";
-import { usePersistedToggle } from "@/hooks/use-persisted-toggle";
 import type { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import { AI_OUTPUT_LANGUAGES } from "@/lib/ai/summary-presets";
 import { downloadText } from "@/lib/download-text";
@@ -23,7 +20,6 @@ import {
     buildSummaryExport,
     type SummaryExportFormat,
 } from "@/lib/summary/export";
-import { cn } from "@/lib/utils";
 
 type SummaryState = ReturnType<typeof useTranscriptionSummary>;
 
@@ -56,8 +52,6 @@ export function SummaryPanel({
         handleDeleteSummary,
     } = summary;
 
-    const contentId = useId();
-    const [open, toggleOpen] = usePersistedToggle("oah.card.summary.open");
     const hasSummary = Boolean(summaryData?.summary);
 
     const templateName = summaryData?.promptId
@@ -99,29 +93,9 @@ export function SummaryPanel({
             className="border-t border-border pt-6"
         >
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="h-10 w-10 sm:h-7 sm:w-7"
-                        aria-expanded={open}
-                        aria-controls={contentId}
-                        aria-label={
-                            open ? "Collapse summary" : "Expand summary"
-                        }
-                        onClick={toggleOpen}
-                    >
-                        <ChevronDown
-                            className={cn(
-                                "size-4 transition-transform",
-                                !open && "-rotate-90",
-                            )}
-                        />
-                    </Button>
-                    <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
-                        <ListChecks className="size-4" />
-                        Summary
-                    </div>
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
+                    <ListChecks className="size-4" />
+                    Summary
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {!isSummarizing && (
@@ -141,10 +115,7 @@ export function SummaryPanel({
                     )}
                     <Button
                         data-testid="summary-generate"
-                        onClick={() => {
-                            if (!open) toggleOpen();
-                            void handleSummarize();
-                        }}
+                        onClick={() => void handleSummarize()}
                         size="sm"
                         className="h-10 sm:h-8"
                         variant={hasSummary ? "outline" : "default"}
@@ -169,7 +140,7 @@ export function SummaryPanel({
                     </Button>
                 </div>
             </div>
-            <div id={contentId} hidden={!open} className="mt-4">
+            <div className="mt-4">
                 {isSummarizing ? (
                     <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="size-8 animate-spin text-primary mb-4" />

@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
@@ -5,6 +6,7 @@ import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { openAudioAsMp3 } from "@/lib/recordings/download-audio";
 import {
     buildDownloadFilename,
     contentDispositionAttachment,
@@ -41,29 +43,37 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     }
 
     const storage = await createUserStorageProvider(session.user.id);
+
+    // Downloads are always MP3, streamed so the save dialog opens at once
+    // instead of after the whole recording is encoded.
+    if (isAudioDownloadRequest(request)) {
+        const mp3 = await openAudioAsMp3(storage, recording.storagePath);
+        return new NextResponse(
+            Readable.toWeb(mp3) as ReadableStream<Uint8Array>,
+            {
+                headers: {
+                    "Content-Type": "audio/mpeg",
+                    "Content-Disposition": contentDispositionAttachment(
+                        buildDownloadFilename(
+                            decryptText(recording.filename),
+                            recording.storagePath,
+                            recording.id,
+                            "mp3",
+                        ),
+                    ),
+                    "Cache-Control": "private, no-store",
+                },
+            },
+        );
+    }
+
     const audioBuffer = await storage.downloadFile(recording.storagePath);
     const contentType = getAudioMimeType(recording.storagePath);
     const fileSize = audioBuffer.length;
-    const wantsDownload = isAudioDownloadRequest(request);
-
-    const downloadHeaders: Record<string, string> = wantsDownload
-        ? {
-              "Content-Disposition": contentDispositionAttachment(
-                  buildDownloadFilename(
-                      decryptText(recording.filename),
-                      recording.storagePath,
-                      recording.id,
-                  ),
-              ),
-              "Cache-Control": "private, no-store",
-          }
-        : {
-              "Cache-Control": "public, max-age=31536000, immutable",
-          };
-
-    // Attachment downloads always return the full file so the saved
-    // copy is complete. Range is still honored for in-app playback.
-    const rangeHeader = wantsDownload ? null : request.headers.get("range");
+    const cacheHeaders = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+    };
+    const rangeHeader = request.headers.get("range");
 
     if (rangeHeader) {
         const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
@@ -99,7 +109,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                     "Content-Length": chunkSize.toString(),
                     "Content-Range": `bytes ${start}-${end}/${fileSize}`,
                     "Accept-Ranges": "bytes",
-                    ...downloadHeaders,
+                    ...cacheHeaders,
                 },
             });
         }
@@ -110,7 +120,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
             "Content-Type": contentType,
             "Content-Length": fileSize.toString(),
             "Accept-Ranges": "bytes",
-            ...downloadHeaders,
+            ...cacheHeaders,
         },
     });
 });

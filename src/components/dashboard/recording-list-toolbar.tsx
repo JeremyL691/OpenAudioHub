@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowDownAZ, Rows3, Search, X } from "lucide-react";
+import {
+    ArrowDownAZ,
+    Download,
+    ListChecks,
+    Rows3,
+    Search,
+    X,
+} from "lucide-react";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +49,11 @@ export function RecordingListToolbar({
     onSortOrderChange,
     density,
     onDensityChange,
+    selectMode,
+    selectedCount,
+    onSelectModeChange,
+    onSelectAll,
+    downloadHref,
 }: {
     query: string;
     onQueryChange: (next: string) => void;
@@ -55,6 +67,11 @@ export function RecordingListToolbar({
     onSortOrderChange: (next: SortOrder) => void;
     density: ListDensity;
     onDensityChange: (next: ListDensity) => void;
+    selectMode: boolean;
+    selectedCount: number;
+    onSelectModeChange: (next: boolean) => void;
+    onSelectAll: () => void;
+    downloadHref: string | null;
 }) {
     return (
         <div className="flex flex-col gap-2 border-b border-border px-3 pt-3 pb-2">
@@ -109,14 +126,74 @@ export function RecordingListToolbar({
                     );
                 })}
             </fieldset>
-            <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
-                <span>
-                    {filteredCount}
-                    {query || statusFilter !== "all" ? " matching" : ""} of{" "}
-                    {totalCount} recording
-                    {totalCount !== 1 ? "s" : ""}
-                </span>
-                <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs tabular-nums text-muted-foreground">
+                {selectMode ? (
+                    <span>{selectedCount} selected</span>
+                ) : (
+                    <span>
+                        {filteredCount}
+                        {query || statusFilter !== "all" ? " matching" : ""} of{" "}
+                        {totalCount} recording
+                        {totalCount !== 1 ? "s" : ""}
+                    </span>
+                )}
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+                    {selectMode ? (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
+                                onClick={onSelectAll}
+                                data-testid="recording-select-all"
+                            >
+                                Select all
+                            </Button>
+                            {downloadHref ? (
+                                <Button
+                                    asChild
+                                    size="sm"
+                                    className="h-10 px-2 text-xs sm:h-6"
+                                    data-testid="recording-bulk-download"
+                                >
+                                    <a href={downloadHref} download>
+                                        <Download className="size-3.5" />
+                                        Download
+                                    </a>
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="sm"
+                                    disabled
+                                    className="h-10 px-2 text-xs sm:h-6"
+                                    data-testid="recording-bulk-download"
+                                >
+                                    <Download className="size-3.5" />
+                                    Download
+                                </Button>
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
+                                onClick={() => onSelectModeChange(false)}
+                                data-testid="recording-select-cancel"
+                            >
+                                Cancel
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
+                            onClick={() => onSelectModeChange(true)}
+                            data-testid="recording-select-mode"
+                        >
+                            <ListChecks className="size-3.5" />
+                            <span>Select</span>
+                        </Button>
+                    )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
