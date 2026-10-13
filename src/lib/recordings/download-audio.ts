@@ -1,16 +1,17 @@
+import type { Readable } from "node:stream";
 import type { StorageProvider } from "@/lib/storage/types";
-import { transcodeToMp3ForDownload } from "@/lib/transcription/ffmpeg";
+import { streamMp3ForDownload } from "@/lib/transcription/ffmpeg";
 import { audioExtension } from "./filename";
 
-/** The recording's audio as MP3 bytes; MP3 sources pass through untouched. */
-export async function loadAudioAsMp3(
+/** The recording's audio as an MP3 stream; MP3 sources pass through untouched. */
+export async function openAudioAsMp3(
     storage: StorageProvider,
     storagePath: string,
-): Promise<Buffer> {
-    const audio = await storage.downloadFile(storagePath);
+): Promise<Readable> {
+    const audio = await storage.downloadStream(storagePath);
     return audioExtension(storagePath) === "mp3"
         ? audio
-        : transcodeToMp3ForDownload(audio);
+        : streamMp3ForDownload(audio);
 }
 
 /** Name unique within one archive: "a.mp3", "a (2).mp3", ... */

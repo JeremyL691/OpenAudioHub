@@ -30,16 +30,28 @@ vi.mock("@/lib/encryption/fields", () => ({
     ),
 }));
 
-vi.mock("@/lib/transcription/ffmpeg", () => ({
-    transcodeToMp3ForDownload: vi.fn(async () => Buffer.from("mp3-bytes")),
-}));
+vi.mock("@/lib/transcription/ffmpeg", async () => {
+    const { Readable } = await import("node:stream");
+    return {
+        streamMp3ForDownload: vi.fn(() =>
+            Readable.from([Buffer.from("mp3-bytes")]),
+        ),
+    };
+});
 
-vi.mock("@/lib/storage/factory", () => ({
-    createUserStorageProvider: vi.fn().mockResolvedValue({
-        downloadFile: vi.fn().mockResolvedValue(Buffer.from("audio-bytes")),
-    }),
-}));
+vi.mock("@/lib/storage/factory", async () => {
+    const { Readable } = await import("node:stream");
+    return {
+        createUserStorageProvider: vi.fn().mockResolvedValue({
+            downloadFile: vi.fn().mockResolvedValue(Buffer.from("audio-bytes")),
+            downloadStream: vi.fn(async () =>
+                Readable.from([Buffer.from("audio-bytes")]),
+            ),
+        }),
+    };
+});
 
+import { Readable } from "node:stream";
 import { GET as getAudio } from "@/app/api/recordings/[id]/audio/route";
 import { db } from "@/db";
 import { requireApiSession } from "@/lib/auth-server";
@@ -98,6 +110,7 @@ describe("GET /api/recordings/[id]/audio?download=1", () => {
         });
         (createUserStorageProvider as Mock).mockResolvedValue({
             downloadFile: vi.fn().mockResolvedValue(audioBytes),
+            downloadStream: vi.fn(async () => Readable.from([audioBytes])),
         });
     });
 

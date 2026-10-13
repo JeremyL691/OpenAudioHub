@@ -20,6 +20,10 @@ import { Button } from "@/components/ui/button";
 
 type AISubSection = "providers" | "prompts";
 
+type TestResult =
+    | { ok: true; latencyMs: number }
+    | { ok: false; error: string };
+
 interface Provider {
     id: string;
     provider: string;
@@ -63,6 +67,9 @@ export function ProvidersSection({
     );
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [testingId, setTestingId] = useState<string | null>(null);
+    const [testResults, setTestResults] = useState<Record<string, TestResult>>(
+        {},
+    );
     const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
 
     const refreshProviders = async () => {
@@ -83,6 +90,11 @@ export function ProvidersSection({
 
     const handleTest = async (provider: Provider) => {
         setTestingId(provider.id);
+        setTestResults((prev) => {
+            const next = { ...prev };
+            delete next[provider.id];
+            return next;
+        });
         try {
             const response = await fetch("/api/settings/ai/providers/test", {
                 method: "POST",
@@ -97,19 +109,23 @@ export function ProvidersSection({
                 latencyMs?: number;
                 error?: string;
             } | null;
-            if (data?.ok) {
-                toast.success(
-                    `${provider.provider}: connected · ${data.latencyMs} ms`,
-                );
-            } else {
-                toast.error(
-                    `${provider.provider}: ${data?.error || `test failed (HTTP ${response.status})`}`,
-                );
-            }
+            const result: TestResult = data?.ok
+                ? { ok: true, latencyMs: data.latencyMs ?? 0 }
+                : {
+                      ok: false,
+                      error:
+                          data?.error ||
+                          `test failed (HTTP ${response.status})`,
+                  };
+            setTestResults((prev) => ({ ...prev, [provider.id]: result }));
         } catch (e) {
-            toast.error(
-                `${provider.provider}: ${e instanceof Error ? e.message : "test failed"}`,
-            );
+            setTestResults((prev) => ({
+                ...prev,
+                [provider.id]: {
+                    ok: false,
+                    error: e instanceof Error ? e.message : "test failed",
+                },
+            }));
         } finally {
             setTestingId(null);
         }
@@ -224,6 +240,7 @@ export function ProvidersSection({
                         providers={providers}
                         deletingId={deletingId}
                         testingId={testingId}
+                        testResults={testResults}
                         onAdd={() => setIsAddProviderOpen(true)}
                         onEdit={handleEdit}
                         onTest={handleTest}
@@ -271,6 +288,7 @@ function ProvidersList({
     providers,
     deletingId,
     testingId,
+    testResults,
     onAdd,
     onEdit,
     onTest,
@@ -280,6 +298,7 @@ function ProvidersList({
     providers: Provider[];
     deletingId: string | null;
     testingId: string | null;
+    testResults: Record<string, TestResult>;
     onAdd: () => void;
     onEdit: (provider: Provider) => void;
     onTest: (provider: Provider) => void;
@@ -304,6 +323,7 @@ function ProvidersList({
     return (
         <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
             {providers.map((provider) => {
+                const result = testResults[provider.id];
                 return (
                     <div
                         key={provider.id}
@@ -334,6 +354,20 @@ function ProvidersList({
                                 <p className="text-xs text-muted-foreground font-mono truncate">
                                     {provider.baseUrl}
                                 </p>
+                            )}
+                            {result && (
+                                <output
+                                    data-testid="provider-row-test-result"
+                                    className={`mt-1 block text-xs break-words ${
+                                        result.ok
+                                            ? "text-success"
+                                            : "text-destructive"
+                                    }`}
+                                >
+                                    {result.ok
+                                        ? `Connected · ${result.latencyMs} ms`
+                                        : `Connection failed: ${result.error}`}
+                                </output>
                             )}
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-4 sm:justify-end">

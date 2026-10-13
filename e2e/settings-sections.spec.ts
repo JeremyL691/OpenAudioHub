@@ -89,7 +89,9 @@ test.describe("settings sections", () => {
     test("a saved provider passes the connection test", async ({ page }) => {
         await page.goto("/settings/providers");
         await page.getByTestId("provider-row-test").first().click();
-        await expect(page.getByText(/connected · \d+ ms/)).toBeVisible();
+        const result = page.getByTestId("provider-row-test-result").first();
+        await expect(result).toHaveText(/^Connected · \d+ ms$/);
+        await expect(result).toHaveClass(/text-success/);
     });
 
     test("the recording name rule is saved", async ({ page }) => {
