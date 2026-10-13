@@ -21,6 +21,7 @@ test("transcript and summary cards collapse and keep their state after a reload"
     ).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByTestId("transcript-timeline")).toBeHidden();
 
+    await page.getByRole("tab", { name: "Summary" }).click();
     await page.getByRole("button", { name: "Collapse summary" }).click();
     await expect(
         page.getByRole("button", { name: "Expand summary" }),
@@ -31,10 +32,12 @@ test("transcript and summary cards collapse and keep their state after a reload"
         page.getByRole("button", { name: "Expand transcription" }),
     ).toBeVisible();
     await expect(page.getByTestId("transcript-timeline")).toBeHidden();
+    await page.getByRole("tab", { name: "Summary" }).click();
     await expect(
         page.getByRole("button", { name: "Expand summary" }),
     ).toBeVisible();
 
+    await page.getByRole("tab", { name: "Transcript" }).click();
     await page.getByRole("button", { name: "Expand transcription" }).click();
     await expect(page.getByTestId("transcript-timeline")).toBeVisible();
 });

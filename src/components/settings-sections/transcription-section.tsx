@@ -84,8 +84,6 @@ export function TranscriptionSection() {
     const [diarizationSpeakerCount, setDiarizationSpeakerCount] = useState<
         number | null
     >(null);
-    const [autoGenerateTitle, setAutoGenerateTitle] = useState(true);
-    const [syncTitleToPlaud, setSyncTitleToPlaud] = useState(false);
     const [importPlaudContent, setImportPlaudContent] = useState(false);
     const [transcriptMode, setTranscriptMode] = useState("plaud_only");
     const [preferredTranscriptSource, setPreferredTranscriptSource] =
@@ -109,8 +107,6 @@ export function TranscriptionSection() {
                     setDiarizationSpeakerCount(
                         data.diarizationSpeakerCount ?? null,
                     );
-                    setAutoGenerateTitle(data.autoGenerateTitle ?? true);
-                    setSyncTitleToPlaud(data.syncTitleToPlaud ?? false);
                     setImportPlaudContent(data.importPlaudContent ?? false);
                     setTranscriptMode(data.transcriptMode ?? "plaud_only");
                     setPreferredTranscriptSource(
@@ -200,8 +196,6 @@ export function TranscriptionSection() {
         transcriptionQuality?: string;
         speakerDiarization?: boolean;
         diarizationSpeakerCount?: number | null;
-        autoGenerateTitle?: boolean;
-        syncTitleToPlaud?: boolean;
     }) => {
         if (updates.defaultTranscriptionLanguage !== undefined) {
             const previous = defaultTranscriptionLanguage;
@@ -227,16 +221,6 @@ export function TranscriptionSection() {
             const previous = diarizationSpeakerCount;
             setDiarizationSpeakerCount(updates.diarizationSpeakerCount);
             pendingChangesRef.current.set("diarizationSpeakerCount", previous);
-        }
-        if (updates.autoGenerateTitle !== undefined) {
-            const previous = autoGenerateTitle;
-            setAutoGenerateTitle(updates.autoGenerateTitle);
-            pendingChangesRef.current.set("autoGenerateTitle", previous);
-        }
-        if (updates.syncTitleToPlaud !== undefined) {
-            const previous = syncTitleToPlaud;
-            setSyncTitleToPlaud(updates.syncTitleToPlaud);
-            pendingChangesRef.current.set("syncTitleToPlaud", previous);
         }
 
         setIsSaving(true);
@@ -264,12 +248,6 @@ export function TranscriptionSection() {
             }
             if (updates.diarizationSpeakerCount !== undefined) {
                 pendingChangesRef.current.delete("diarizationSpeakerCount");
-            }
-            if (updates.autoGenerateTitle !== undefined) {
-                pendingChangesRef.current.delete("autoGenerateTitle");
-            }
-            if (updates.syncTitleToPlaud !== undefined) {
-                pendingChangesRef.current.delete("syncTitleToPlaud");
             }
         } catch {
             if (updates.defaultTranscriptionLanguage !== undefined) {
@@ -313,22 +291,6 @@ export function TranscriptionSection() {
                 ) {
                     setDiarizationSpeakerCount(previous);
                     pendingChangesRef.current.delete("diarizationSpeakerCount");
-                }
-            }
-            if (updates.autoGenerateTitle !== undefined) {
-                const previous =
-                    pendingChangesRef.current.get("autoGenerateTitle");
-                if (previous !== undefined && typeof previous === "boolean") {
-                    setAutoGenerateTitle(previous);
-                    pendingChangesRef.current.delete("autoGenerateTitle");
-                }
-            }
-            if (updates.syncTitleToPlaud !== undefined) {
-                const previous =
-                    pendingChangesRef.current.get("syncTitleToPlaud");
-                if (previous !== undefined && typeof previous === "boolean") {
-                    setSyncTitleToPlaud(previous);
-                    pendingChangesRef.current.delete("syncTitleToPlaud");
                 }
             }
             toast.error("Failed to save settings. Changes reverted.");
@@ -669,62 +631,6 @@ export function TranscriptionSection() {
                             </SelectContent>
                         </Select>
                     </div>
-                </div>
-
-                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
-                    <div className="flex items-center justify-between gap-4 py-3">
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                            <Label
-                                htmlFor="auto-generate-title"
-                                className="text-[13px] font-medium"
-                            >
-                                Auto-generate titles
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                                Automatically generate descriptive titles from
-                                transcriptions using AI
-                            </p>
-                        </div>
-                        <Switch
-                            id="auto-generate-title"
-                            checked={autoGenerateTitle}
-                            onCheckedChange={(checked) => {
-                                setAutoGenerateTitle(checked);
-                                handleTranscriptionSettingChange({
-                                    autoGenerateTitle: checked,
-                                });
-                            }}
-                            disabled={isSavingSettings || isSaving}
-                        />
-                    </div>
-
-                    {autoGenerateTitle && (
-                        <div className="flex items-center justify-between gap-4 py-3 pl-4 border-l-2 border-primary/20">
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                                <Label
-                                    htmlFor="sync-title-plaud"
-                                    className="text-[13px] font-medium"
-                                >
-                                    Sync titles to Plaud
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Update the filename in your Plaud device
-                                    when titles are generated
-                                </p>
-                            </div>
-                            <Switch
-                                id="sync-title-plaud"
-                                checked={syncTitleToPlaud}
-                                onCheckedChange={(checked) => {
-                                    setSyncTitleToPlaud(checked);
-                                    handleTranscriptionSettingChange({
-                                        syncTitleToPlaud: checked,
-                                    });
-                                }}
-                                disabled={isSavingSettings || isSaving}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

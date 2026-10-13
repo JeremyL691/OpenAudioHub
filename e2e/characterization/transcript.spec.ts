@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openRecording, RECORDINGS, signIn } from "./helpers";
+import { openRecording, RECORDINGS, showSummary, signIn } from "./helpers";
 
 test.describe("transcript and summary", () => {
     test.beforeEach(async ({ page }) => {
@@ -44,6 +44,7 @@ test.describe("transcript and summary", () => {
         page,
     }) => {
         await openRecording(page, RECORDINGS.plaudDraft);
+        await showSummary(page);
 
         await page.getByTestId("summary-generate").click();
 

@@ -22,6 +22,7 @@ import {
     parseTranscript,
     selectContentItems,
 } from "@/lib/plaud/content";
+import { dateRecordingTitle } from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
     claimAutoTranscribeIds,
@@ -81,6 +82,8 @@ interface SyncContext {
     barkNotifications: boolean;
     notificationEmail: string | null;
     barkPushUrl: string | null;
+    /** 'date' renames newly inserted recordings to their start date. */
+    recordingTitleMode: string;
 }
 
 /** A freshly-synced recording that Plaud may hold transcript/summary content
@@ -420,9 +423,13 @@ async function processRecording(
             };
         }
 
+        const newFilename =
+            context.recordingTitleMode === "date"
+                ? dateRecordingTitle(recordingData.startTime)
+                : plaudRecording.filename;
         const [newRecording] = await db
             .insert(recordings)
-            .values(recordingData)
+            .values({ ...recordingData, filename: encryptText(newFilename) })
             .returning({ id: recordings.id });
 
         seenRecordingIds.add(newRecording.id);
@@ -432,7 +439,7 @@ async function processRecording(
         return {
             status: "new",
             recordingId: newRecording.id,
-            filename: plaudRecording.filename,
+            filename: newFilename,
             importCandidate: buildImportCandidate(
                 newRecording.id,
                 plaudRecording,
@@ -600,6 +607,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             notificationEmail:
                 settings?.notificationEmail || user?.email || null,
             barkPushUrl: settings?.barkPushUrl || null,
+            recordingTitleMode: settings?.recordingTitleMode ?? "ai",
         };
 
         const plaudClient = await createPlaudClient(

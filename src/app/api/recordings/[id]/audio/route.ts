@@ -5,6 +5,7 @@ import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { loadAudioAsMp3 } from "@/lib/recordings/download-audio";
 import {
     buildDownloadFilename,
     contentDispositionAttachment,
@@ -41,10 +42,15 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     }
 
     const storage = await createUserStorageProvider(session.user.id);
-    const audioBuffer = await storage.downloadFile(recording.storagePath);
-    const contentType = getAudioMimeType(recording.storagePath);
-    const fileSize = audioBuffer.length;
     const wantsDownload = isAudioDownloadRequest(request);
+    // Downloads are always MP3; in-app playback streams the stored file.
+    const audioBuffer = wantsDownload
+        ? await loadAudioAsMp3(storage, recording.storagePath)
+        : await storage.downloadFile(recording.storagePath);
+    const contentType = wantsDownload
+        ? "audio/mpeg"
+        : getAudioMimeType(recording.storagePath);
+    const fileSize = audioBuffer.length;
 
     const downloadHeaders: Record<string, string> = wantsDownload
         ? {
@@ -53,6 +59,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                       decryptText(recording.filename),
                       recording.storagePath,
                       recording.id,
+                      "mp3",
                   ),
               ),
               "Cache-Control": "private, no-store",

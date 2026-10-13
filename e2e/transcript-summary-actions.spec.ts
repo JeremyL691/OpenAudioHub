@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
-import { openRecording, RECORDINGS, signIn } from "./characterization/helpers";
+import {
+    openRecording,
+    RECORDINGS,
+    showSummary,
+    signIn,
+} from "./characterization/helpers";
 
 // Read-only checks for the docs link and the transcript and summary actions.
 // Deleting a transcript is covered by unit tests, because the seeded recordings
@@ -34,6 +39,7 @@ test("the transcript downloads as TXT and JSON", async ({ page }) => {
 test("the summary downloads as Markdown and TXT", async ({ page }) => {
     await signIn(page);
     await openRecording(page, RECORDINGS.weekly);
+    await showSummary(page);
     const panel = page.getByTestId("summary-panel");
     await expect(panel.getByTestId("summary-content")).toBeVisible();
 
@@ -59,6 +65,7 @@ test("the summary downloads as Markdown and TXT", async ({ page }) => {
 test("the summary offers a language and a template", async ({ page }) => {
     await signIn(page);
     await openRecording(page, RECORDINGS.weekly);
+    await showSummary(page);
     const panel = page.getByTestId("summary-panel");
     await expect(
         panel.getByRole("combobox", { name: "Summary language" }),

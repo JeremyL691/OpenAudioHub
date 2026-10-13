@@ -30,6 +30,10 @@ vi.mock("@/lib/encryption/fields", () => ({
     ),
 }));
 
+vi.mock("@/lib/transcription/ffmpeg", () => ({
+    transcodeToMp3ForDownload: vi.fn(async () => Buffer.from("mp3-bytes")),
+}));
+
 vi.mock("@/lib/storage/factory", () => ({
     createUserStorageProvider: vi.fn().mockResolvedValue({
         downloadFile: vi.fn().mockResolvedValue(Buffer.from("audio-bytes")),
@@ -118,7 +122,7 @@ describe("GET /api/recordings/[id]/audio?download=1", () => {
         expect(await response.text()).toBe("audio-bytes");
     });
 
-    it("uses the storage-path extension for non-mp3 originals", async () => {
+    it("converts non-mp3 originals to MP3 for download", async () => {
         selectRecording(recordingRow({ storagePath: "user-1/interview.m4a" }));
 
         const response = await getAudio(
@@ -129,10 +133,11 @@ describe("GET /api/recordings/[id]/audio?download=1", () => {
         );
 
         expect(response.status).toBe(200);
-        expect(response.headers.get("Content-Type")).toBe("audio/mp4");
+        expect(response.headers.get("Content-Type")).toBe("audio/mpeg");
         expect(response.headers.get("Content-Disposition")).toContain(
-            "Planning Call.m4a",
+            "Planning Call.mp3",
         );
+        expect(await response.text()).toBe("mp3-bytes");
     });
 
     it("does not set Content-Disposition for in-app playback", async () => {

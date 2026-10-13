@@ -19,45 +19,25 @@ test.describe("recording detail", () => {
         await signIn(page);
     });
 
-    test("puts the transcript beside the summary and details from xl up", async ({
-        page,
-    }) => {
-        await page.setViewportSize({ width: 1280, height: 800 });
-        await openFullPage(page, RECORDINGS.long);
+    for (const width of [900, 1280]) {
+        test(`uses tabs at ${width}px`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 800 });
+            await openFullPage(page, RECORDINGS.long);
 
-        await expect(page.getByRole("tablist")).toBeHidden();
-        const panels = page.locator('[role="tabpanel"]');
-        const transcript = await panels.nth(0).boundingBox();
-        const summary = await panels.nth(1).boundingBox();
-        const details = await panels.nth(2).boundingBox();
-        if (!transcript || !summary || !details) {
-            throw new Error("a section has no bounding box");
-        }
+            await expect(page.getByRole("tablist")).toBeVisible();
+            await expect(page.getByTestId("transcript-timeline")).toBeVisible();
+            await expect(page.getByTestId("summary-panel")).toBeHidden();
 
-        // Transcript in the left column; summary above details in the right one.
-        expect(summary.x).toBeGreaterThan(transcript.x + transcript.width - 1);
-        expect(Math.abs(summary.y - transcript.y)).toBeLessThanOrEqual(2);
-        expect(details.y).toBeGreaterThan(summary.y);
-        expect(Math.abs(details.x - summary.x)).toBeLessThanOrEqual(2);
-    });
+            await page.getByRole("tab", { name: "Summary" }).click();
+            await expect(page.getByTestId("summary-panel")).toBeVisible();
+            await expect(page.getByTestId("transcript-timeline")).toBeHidden();
 
-    test("uses tabs below xl", async ({ page }) => {
-        await page.setViewportSize({ width: 900, height: 800 });
-        await openFullPage(page, RECORDINGS.long);
-
-        await expect(page.getByRole("tablist")).toBeVisible();
-        await expect(page.getByTestId("transcript-timeline")).toBeVisible();
-        await expect(page.getByTestId("summary-panel")).toBeHidden();
-
-        await page.getByRole("tab", { name: "Summary" }).click();
-        await expect(page.getByTestId("summary-panel")).toBeVisible();
-        await expect(page.getByTestId("transcript-timeline")).toBeHidden();
-
-        await page.getByRole("tab", { name: "Details" }).click();
-        await expect(
-            page.getByRole("button", { name: "Collapse" }),
-        ).toBeVisible();
-    });
+            await page.getByRole("tab", { name: "Details" }).click();
+            await expect(
+                page.getByRole("button", { name: "Collapse" }),
+            ).toBeVisible();
+        });
+    }
 
     test("clicking a timeline segment seeks the player on the full page", async ({
         page,

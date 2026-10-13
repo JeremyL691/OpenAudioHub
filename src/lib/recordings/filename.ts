@@ -37,6 +37,21 @@ export function recordingAudioDownloadPath(recordingId: string): string {
     return `/api/recordings/${recordingId}/audio?download=1`;
 }
 
+/** One ZIP of MP3s for several recordings. */
+export function recordingsZipDownloadPath(
+    recordingIds: readonly string[],
+): string {
+    return `/api/recordings/download?ids=${recordingIds.join(",")}`;
+}
+
+/** `YYYY-MM-DD` in the server's local time zone, for date-named recordings. */
+export function dateRecordingTitle(startTime: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${startTime.getFullYear()}-${pad(startTime.getMonth() + 1)}-${pad(startTime.getDate())}`;
+}
+
+export type RecordingTitleMode = "original" | "date" | "ai";
+
 export function isAudioDownloadRequest(request: Request): boolean {
     const value = new URL(request.url).searchParams.get("download");
     if (value === null) return false;
@@ -58,15 +73,15 @@ export function sanitizeDownloadBasename(title: string): string {
 
 /**
  * Filesystem-safe download name from the recording title, with the
- * extension taken from `storagePath` (mp3/wav/m4a/…). Falls back to
+ * extension taken from `storagePath` (mp3/wav/m4a/…) unless `ext` is given. Falls back to
  * `fallbackId` when the title sanitizes to empty.
  */
 export function buildDownloadFilename(
     title: string,
     storagePath: string,
     fallbackId: string,
+    ext: string = audioExtension(storagePath),
 ): string {
-    const ext = audioExtension(storagePath);
     const extSuffix = `.${ext}`;
     let base =
         sanitizeDownloadBasename(title) ||
