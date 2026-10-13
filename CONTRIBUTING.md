@@ -12,7 +12,6 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 
 - **Search first.** Check [open issues](https://github.com/JeremyL691/OpenAudioHub/issues) and pull requests so you don't duplicate work in progress.
 - **Open an issue for anything non-trivial.** Agree on the approach before you write a large change.
-- **Read [AGENTS.md](AGENTS.md).** It describes the code conventions and the deploy-surface contracts this project keeps.
 - **Read [BRANCHING.md](BRANCHING.md).** Pull requests target `main`.
 
 ## Development setup
@@ -81,7 +80,7 @@ Do not edit `CHANGELOG.md` in a pull request. Maintainers write entries at relea
 
 ## Database migrations
 
-Edit `src/db/schema.ts` first, then run `pnpm db:generate`. Do not hand-write migration SQL, and do not edit files under `src/db/migrations/meta/`. Drizzle tracks the history in those snapshots, and hand-written changes corrupt it. See [AGENTS.md](AGENTS.md) for the details.
+Edit `src/db/schema.ts` first, then run `pnpm db:generate`. Do not hand-write migration SQL, and do not edit files under `src/db/migrations/meta/`. Drizzle tracks the history in those snapshots, and hand-written changes corrupt it.
 
 ## Integration tests
 
