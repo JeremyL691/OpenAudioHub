@@ -10,6 +10,7 @@ import { requireApiSession } from "@/lib/auth-server";
 import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { autoExportRecording } from "@/lib/recordings/auto-export";
 import { dateRecordingTitle } from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
@@ -133,25 +134,29 @@ export const POST = apiHandler(async (request: Request) => {
             : path.basename(file.name, ext);
     const endTime = new Date(now.getTime() + durationMs);
 
+    let inserted: { id: string } | undefined;
     try {
-        await db.insert(recordings).values({
-            userId: session.user.id,
-            deviceSn: "local",
-            plaudFileId: fileId,
-            // Filename can carry topic info ("Call w/ Acme legal");
-            // encrypt at rest. The response below returns plaintext.
-            filename: encryptText(basename),
-            duration: durationMs,
-            startTime: now,
-            endTime,
-            filesize: buffer.length,
-            fileMd5: md5,
-            storageType: env.DEFAULT_STORAGE_TYPE,
-            storagePath: storageKey,
-            downloadedAt: now,
-            plaudVersion: "1",
-            isTrash: false,
-        });
+        [inserted] = await db
+            .insert(recordings)
+            .values({
+                userId: session.user.id,
+                deviceSn: "local",
+                plaudFileId: fileId,
+                // Filename can carry topic info ("Call w/ Acme legal");
+                // encrypt at rest. The response below returns plaintext.
+                filename: encryptText(basename),
+                duration: durationMs,
+                startTime: now,
+                endTime,
+                filesize: buffer.length,
+                fileMd5: md5,
+                storageType: env.DEFAULT_STORAGE_TYPE,
+                storagePath: storageKey,
+                downloadedAt: now,
+                plaudVersion: "1",
+                isTrash: false,
+            })
+            .returning({ id: recordings.id });
     } catch (dbError) {
         // DB insert failed — clean up the already-uploaded storage file
         // to avoid orphaned objects with no corresponding DB record.
@@ -165,6 +170,8 @@ export const POST = apiHandler(async (request: Request) => {
         }
         throw dbError;
     }
+
+    if (inserted) await autoExportRecording(session.user.id, inserted.id);
 
     return NextResponse.json({ success: true, filename: basename });
 });
