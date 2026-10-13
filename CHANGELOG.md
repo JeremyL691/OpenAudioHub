@@ -6,6 +6,23 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-13
+
+### Added
+
+- **Test connection** for AI providers, in the provider dialogs and on each saved provider. It sends one small request with the chosen model and shows the result in green, or the provider's error in red.
+- **Settings → Recording names**: name new recordings by their original name, by date (`2026-10-12`), or by an AI title from the transcript. The AI title switch moved here from the Transcription settings; if it was off, the setting starts on the original name.
+- Select several recordings in the list and download them as one ZIP.
+
+### Changed
+
+- Audio downloads are MP3. The conversion streams, so the save dialog opens right away even for long recordings.
+- The transcript and the summary are tabs, one at a time, on the library pane and the full recording page. The collapse toggles on these cards are gone.
+
+### Fixed
+
+- The waveform no longer keeps the page wider than the window after a resize.
+
 ## [1.2.0] - 2026-10-11
 
 ### Changed
@@ -115,6 +132,7 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 - Login, registration and password-reset rate limits are inactive unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true` is set behind a trusted reverse proxy. The server logs a notice at startup.
 - The feature list once named translation of summaries. The imported code never had it, so it is not in this release.
 
-[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...HEAD
+[unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.1...v1.1.0
