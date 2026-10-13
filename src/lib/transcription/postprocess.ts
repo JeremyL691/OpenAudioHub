@@ -9,6 +9,7 @@ import {
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { encryptText } from "@/lib/encryption/fields";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
+import { renameAutoExport } from "@/lib/recordings/auto-export";
 
 export async function postProcessTranscription(input: {
     userId: string;
@@ -16,11 +17,17 @@ export async function postProcessTranscription(input: {
     text: string;
     plaudFileId?: string;
     autoGenerateTitle: boolean;
+    /** Auto-export is on with AI title mode: rename the exported copy only. */
+    exportAiTitle: boolean;
     syncTitleToPlaud: boolean;
     jobId?: string;
     generation?: number;
 }): Promise<void> {
-    if (!input.autoGenerateTitle || !input.text.trim()) return;
+    if (
+        (!input.autoGenerateTitle && !input.exportAiTitle) ||
+        !input.text.trim()
+    )
+        return;
     try {
         const generatedTitle = await generateTitleFromTranscription(
             input.userId,
@@ -42,6 +49,15 @@ export async function postProcessTranscription(input: {
                 .limit(1);
             if (latest?.generation !== input.generation) return;
         }
+
+        if (input.exportAiTitle) {
+            await renameAutoExport(
+                input.userId,
+                input.recordingId,
+                generatedTitle,
+            );
+        }
+        if (!input.autoGenerateTitle) return;
 
         const [updated] = await db
             .update(recordings)
@@ -104,6 +120,8 @@ export async function postProcessPipelineTranscription(input: {
             .select({
                 autoGenerateTitle: userSettings.autoGenerateTitle,
                 syncTitleToPlaud: userSettings.syncTitleToPlaud,
+                autoExport: userSettings.autoExport,
+                autoExportTitleMode: userSettings.autoExportTitleMode,
             })
             .from(userSettings)
             .where(eq(userSettings.userId, input.userId))
@@ -124,6 +142,9 @@ export async function postProcessPipelineTranscription(input: {
         ...input,
         plaudFileId: recording?.plaudFileId ?? undefined,
         autoGenerateTitle: settings?.autoGenerateTitle ?? true,
+        exportAiTitle:
+            (settings?.autoExport ?? false) &&
+            settings?.autoExportTitleMode === "ai",
         syncTitleToPlaud: settings?.syncTitleToPlaud ?? false,
     });
 }

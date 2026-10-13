@@ -330,6 +330,13 @@
       "when": 1791870848453,
       "tag": "0046_recording_title_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791920119844,
+      "tag": "0047_auto_export",
+      "breakpoints": true
     }
   ]
 }
