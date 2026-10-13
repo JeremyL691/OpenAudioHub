@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { recordings, transcriptions, users } from "@/db/schema";
+import { transcriptions, users } from "@/db/schema";
 import {
     createMigratedTestDatabase,
     createTestDatabase,
@@ -55,7 +55,7 @@ describeWithDatabase("PostgreSQL migration chain", () => {
 
 const MIGRATIONS_DIR = "./src/db/migrations";
 const LAST_BEFORE_REBRAND = "0040_worried_lethal_legion";
-const LATEST_TAG = "0046_recording_title_mode";
+const LATEST_TAG = "0047_auto_export";
 
 /** Copies migrations up to and including `tag` into a temporary folder. */
 function migrationsUpTo(tag: string): string {
@@ -109,21 +109,11 @@ describeWithDatabase("rebrand source values migration", () => {
             email: "rebrand@example.com",
             emailVerified: false,
         });
-        await db.insert(recordings).values({
-            id: "rec-rebrand",
-            userId,
-            deviceSn: "device-1",
-            plaudFileId: "plaud-1",
-            filename: "encrypted-name",
-            duration: 1000,
-            startTime: new Date("2026-01-01T00:00:00Z"),
-            endTime: new Date("2026-01-01T00:00:01Z"),
-            filesize: 1,
-            fileMd5: "d41d8cd98f00b204e9800998ecf8427e",
-            storageType: "local",
-            storagePath: "recordings/rec-rebrand.mp3",
-            plaudVersion: "1",
-        });
+        // Raw SQL: the schema now has columns this migration point does not.
+        await database.sql`
+            insert into recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version)
+            values ('rec-rebrand', ${userId}, 'device-1', 'plaud-1', 'encrypted-name', 1000, '2026-01-01T00:00:00Z', '2026-01-01T00:00:01Z', 1, 'd41d8cd98f00b204e9800998ecf8427e', 'local', 'recordings/rec-rebrand.mp3', '1')
+        `;
         await db.insert(transcriptions).values({
             recordingId: "rec-rebrand",
             userId,
@@ -132,7 +122,6 @@ describeWithDatabase("rebrand source values migration", () => {
             model: "whisper-1",
             source: "riffado",
         });
-        // Raw SQL: the schema now has columns this migration point does not.
         await database.sql`
             insert into ai_enhancements (id, recording_id, user_id, summary, provider, model, source)
             values ('enh-rebrand', 'rec-rebrand', ${userId}, 'legacy summary', 'Custom', 'gpt', 'riffado')
