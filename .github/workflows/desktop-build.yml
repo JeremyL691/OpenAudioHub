@@ -70,6 +70,10 @@ jobs:
 
       - name: Build, verify and package
         run: bash desktop/scripts/ci-build.sh
+        env:
+          # electron-builder skips signing on pull_request events unless this is set. The signature is ad hoc
+          # (identity "-"), so no certificate or secret is involved, and verify-bundle.mjs needs the app sealed.
+          CSC_FOR_PULL_REQUEST: 'true'
 
       - name: Record the DMG name
         id: artifact
