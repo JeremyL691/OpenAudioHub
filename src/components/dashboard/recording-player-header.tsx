@@ -1,12 +1,19 @@
 "use client";
 
-import { AudioWaveform, Loader2 } from "lucide-react";
+import { AudioWaveform, Download, Loader2 } from "lucide-react";
 import { LocalTimeRange } from "@/components/local-time";
-import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
 import { RecordingTitle } from "@/components/recordings/recording-title";
+import { Button } from "@/components/ui/button";
 import { CardAction, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDuration } from "@/lib/format-duration";
+import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -75,7 +82,41 @@ export function RecordingPlayerHeader({
                         />
                     </CardTitle>
                     <CardAction>
-                        <DownloadAudioButton recordingId={recording.id} />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="size-10 sm:size-8"
+                                    aria-label="Download audio"
+                                >
+                                    <Download className="size-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <a
+                                        href={recordingAudioDownloadPath(
+                                            recording.id,
+                                        )}
+                                        download
+                                        rel="nofollow noreferrer"
+                                    >
+                                        Download MP3
+                                    </a>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <a
+                                        href={`/api/recordings/download?ids=${recording.id}&format=original`}
+                                        download
+                                        rel="nofollow noreferrer"
+                                        data-testid="download-original"
+                                    >
+                                        Download original
+                                    </a>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </CardAction>
                 </>
             )}

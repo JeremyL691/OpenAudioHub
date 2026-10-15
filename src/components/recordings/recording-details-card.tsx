@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
+import { estimateMp3Bytes } from "@/lib/recordings/mp3-estimate";
 import type { Recording } from "@/types/recording";
 
 const PANEL_ID = "recording-details-panel";
@@ -48,7 +49,8 @@ export function RecordingDetailsCard({ recording }: { recording: Recording }) {
                     <div className="contents">
                         <div className="text-muted-foreground">File Size</div>
                         <div className="font-medium">
-                            {formatBytes(recording.filesize)}
+                            {formatBytes(recording.filesize)} original · MP3 ≈{" "}
+                            {formatBytes(estimateMp3Bytes(recording.duration))}
                         </div>
                     </div>
                     <div className="contents">

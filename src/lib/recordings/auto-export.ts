@@ -1,6 +1,6 @@
 import { constants, createWriteStream } from "node:fs";
 import { copyFile, link, rm, stat, unlink } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -9,6 +9,7 @@ import { isDesktopMode } from "@/lib/desktop/mode";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { openAudioAsMp3 } from "@/lib/recordings/download-audio";
 import {
+    audioExtension,
     buildDownloadFilename,
     dateRecordingTitle,
 } from "@/lib/recordings/filename";
@@ -33,9 +34,10 @@ async function linkUnique(
     name: string,
     source: string,
 ): Promise<string> {
-    const stem = name.slice(0, -".mp3".length);
+    const ext = extname(name);
+    const stem = ext ? name.slice(0, -ext.length) : name;
     for (let n = 1; n < 1000; n++) {
-        const target = join(dir, n === 1 ? name : `${stem} (${n}).mp3`);
+        const target = join(dir, n === 1 ? name : `${stem} (${n})${ext}`);
         try {
             await placeExclusive(source, target);
             return target;
@@ -59,6 +61,7 @@ export async function autoExportRecording(
                 autoExport: userSettings.autoExport,
                 folder: userSettings.autoExportFolder,
                 titleMode: userSettings.autoExportTitleMode,
+                format: userSettings.autoExportFormat,
             })
             .from(userSettings)
             .where(eq(userSettings.userId, userId))
@@ -88,19 +91,22 @@ export async function autoExportRecording(
             settings.titleMode === "date"
                 ? dateRecordingTitle(recording.startTime)
                 : decryptText(recording.filename);
+        const original = settings.format === "original";
         const name = buildDownloadFilename(
             title,
             recording.storagePath,
             recordingId,
-            "mp3",
+            original ? audioExtension(recording.storagePath) : "mp3",
         );
 
-        // Written under a temp name first so a half-written MP3 never shows up as a finished file.
+        // Written under a temp name first so a half-written file never shows up as a finished file.
         const temp = join(settings.folder, `.${recordingId}.part`);
         try {
             const storage = await createUserStorageProvider(userId);
             await pipeline(
-                await openAudioAsMp3(storage, recording.storagePath),
+                original
+                    ? await storage.downloadStream(recording.storagePath)
+                    : await openAudioAsMp3(storage, recording.storagePath),
                 createWriteStream(temp),
             );
             const finalPath = await linkUnique(settings.folder, name, temp);
@@ -157,11 +163,12 @@ export async function renameAutoExport(
         if (!recording?.autoExportPath) return;
 
         const oldPath = decryptText(recording.autoExportPath);
+        // Keep the extension the export was written with (.mp3, or the stored original's).
         const name = buildDownloadFilename(
             title,
             recording.storagePath,
             recordingId,
-            "mp3",
+            extname(oldPath).slice(1) || "mp3",
         );
         // Compare case-insensitively: on macOS a case-only rename would link onto the file itself.
         if (basename(oldPath).toLowerCase() === name.toLowerCase()) return;
