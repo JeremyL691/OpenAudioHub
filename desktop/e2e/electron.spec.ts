@@ -154,6 +154,48 @@ test("the desktop app has no log-out entry", async () => {
     }
 });
 
+/** Adds desktop preferences to the config.json written by usePorts. */
+function setPreferences(dataDir: string, prefs: Record<string, unknown>): void {
+    const file = join(dataDir, "config.json");
+    const config = JSON.parse(readFileSync(file, "utf8"));
+    writeFileSync(file, JSON.stringify({ ...config, ...prefs }), { mode: 0o600 });
+}
+
+test("closing the window keeps the app and its services running", async () => {
+    const dataDir = makeDataDir("close-background");
+    const ports = usePorts(dataDir);
+    // The user's setup when the bug was found: no menu-bar item, close keeps running.
+    setPreferences(dataDir, { showTray: false });
+    const app = await launch(dataDir);
+    try {
+        await dashboard(app);
+        await app.evaluate(({ BrowserWindow }) => {
+            for (const win of BrowserWindow.getAllWindows()) win.close();
+        });
+        await new Promise((r) => setTimeout(r, 3000));
+        expect(
+            await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
+        ).toBe(0);
+        const health = await fetch(`http://127.0.0.1:${ports.app}/api/health`);
+        expect(health.status).toBe(200);
+    } finally {
+        await app.close();
+    }
+});
+
+test("with closeAction quit, closing the window quits the app", async () => {
+    const dataDir = makeDataDir("close-quit");
+    usePorts(dataDir);
+    setPreferences(dataDir, { closeAction: "quit" });
+    const app = await launch(dataDir);
+    await dashboard(app);
+    const closed = new Promise<void>((resolve) => app.once("close", () => resolve()));
+    await app.evaluate(({ BrowserWindow }) => {
+        for (const win of BrowserWindow.getAllWindows()) win.close();
+    });
+    await closed;
+});
+
 test("/login sends the desktop app to the dashboard", async () => {
     const dataDir = makeDataDir("login-intercept");
     usePorts(dataDir);

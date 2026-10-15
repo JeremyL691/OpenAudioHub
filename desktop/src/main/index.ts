@@ -489,6 +489,11 @@ async function main(): Promise<void> {
         });
     });
 
+    // Without a listener Electron quits once the last window closes, on macOS too, which would end the services
+    // when the user closes the window (or when the hidden Plaud refresh window closes). Closing the window quits
+    // only for closeAction "quit", in the window's closed handler.
+    app.on("window-all-closed", () => undefined);
+
     await supervisor.start();
     // The data now works with this version. The next start compares against it (T13.6).
     config = { ...config, lastVersion: currentVersion };
