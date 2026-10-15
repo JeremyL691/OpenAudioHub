@@ -772,3 +772,33 @@ describe("useTranscriptionSummary (#283)", () => {
         expect(toast.success).toHaveBeenCalledWith("Summary generated");
     });
 });
+
+describe("summary still running on the server", () => {
+    it("shows a run started elsewhere and applies its result when it finishes", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        try {
+            const hook = renderSummary("rec-a", "text-a");
+            await flush();
+            takePending("GET", "rec-a").resolve(
+                jsonResponse({ summary: null, generating: true }),
+            );
+            await flush();
+            expect(hook.result.current.isSummarizing).toBe(true);
+            expect(pending).toHaveLength(0);
+
+            await act(async () => {
+                vi.advanceTimersByTime(3000);
+            });
+            await flush();
+            takePending("GET", "rec-a").resolve(
+                jsonResponse({ ...summaryBody("done"), generating: false }),
+            );
+            await flush();
+
+            expect(hook.result.current.isSummarizing).toBe(false);
+            expect(hook.result.current.summaryData?.summary).toBe("done");
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

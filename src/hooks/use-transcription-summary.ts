@@ -42,6 +42,8 @@ export interface SummaryData {
      * to the default prompt instead. Only present on POST responses.
      */
     promptFallback?: boolean;
+    /** True on GET while a manual summary is still being generated on the server. */
+    generating?: boolean;
 }
 
 interface UseTranscriptionSummaryOptions {
@@ -68,6 +70,8 @@ interface UseTranscriptionSummaryOptions {
  * dashboard's shadcn `Card`/`Button` look and the recording page's
  * `Card`/`Button` look stay distinct on purpose.
  */
+const SUMMARY_POLL_MS = 3000;
+
 export function useTranscriptionSummary({
     recordingId,
     transcriptionSource,
@@ -155,6 +159,9 @@ export function useTranscriptionSummary({
         new Map<string, string | null | undefined>(),
     );
     const getAbortRef = useRef<AbortController | null>(null);
+    // Recordings shown as summarizing because the server reported a run this
+    // view did not start; cleared when a later GET says it finished.
+    const waitingIdsRef = useRef(new Set<string>());
     if (recordingId !== recordingIdRef.current) {
         recordingIdRef.current = recordingId;
         setSummaryData(null);
@@ -196,6 +203,7 @@ export function useTranscriptionSummary({
         const generation = ++fetchGenerationRef.current;
         const controller = new AbortController();
         getAbortRef.current = controller;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
         fetch(`/api/recordings/${requestedId}/summary`, {
             signal: controller.signal,
         })
@@ -216,9 +224,33 @@ export function useTranscriptionSummary({
                 } else {
                     setSummaryData(null);
                 }
+                // A summary started before this page opened (or by a page
+                // that was left) is still running on the server: show it as
+                // in progress and look again until it finishes.
+                const wasWaiting = waitingIdsRef.current.has(requestedId);
+                if (data.generating) {
+                    waitingIdsRef.current.add(requestedId);
+                    summarizingIdsRef.current = addSummarizingId(
+                        summarizingIdsRef.current,
+                        requestedId,
+                    );
+                    setSummarizingIds(summarizingIdsRef.current);
+                    pollTimer = setTimeout(
+                        () => setSummaryFetchKey((k) => k + 1),
+                        SUMMARY_POLL_MS,
+                    );
+                } else if (wasWaiting) {
+                    waitingIdsRef.current.delete(requestedId);
+                    summarizingIdsRef.current = removeSummarizingId(
+                        summarizingIdsRef.current,
+                        requestedId,
+                    );
+                    setSummarizingIds(summarizingIdsRef.current);
+                }
             })
             .catch(() => {});
         return () => {
+            if (pollTimer) clearTimeout(pollTimer);
             controller.abort();
             if (getAbortRef.current === controller) {
                 getAbortRef.current = null;
