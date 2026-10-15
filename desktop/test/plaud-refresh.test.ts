@@ -194,6 +194,29 @@ describe("startPlaudTokenRefresher", () => {
         stop();
     });
 
+    it("saves the refreshed token against a custom Plaud server", async () => {
+        const h = harness(
+            conn({
+                tokenExpiresAt: new Date(NOW + HOUR).toISOString(),
+                server: "custom",
+                apiBase: "https://api-custom.plaud.ai",
+            }),
+        );
+        const stop = startPlaudTokenRefresher({
+            fetchApp: h.fetchApp,
+            refresh: h.refresh,
+            log: h.log,
+        });
+        await vi.advanceTimersByTimeAsync(60_000);
+        const post = h.fetchApp.mock.calls.find(
+            ([path]) => path === "/api/plaud/auth/connect-token",
+        );
+        expect(JSON.parse(post?.[1].body ?? "{}").apiBase).toBe(
+            "https://api-custom.plaud.ai",
+        );
+        stop();
+    });
+
     it("does nothing when not connected", async () => {
         const h = harness({ connected: false });
         const stop = startPlaudTokenRefresher({

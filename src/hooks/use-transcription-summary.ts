@@ -207,7 +207,10 @@ export function useTranscriptionSummary({
         fetch(`/api/recordings/${requestedId}/summary`, {
             signal: controller.signal,
         })
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) throw new Error(`summary GET ${res.status}`);
+                return res.json();
+            })
             .then((data) => {
                 if (
                     !shouldApplyFetchedSummary(
@@ -248,7 +251,19 @@ export function useTranscriptionSummary({
                     setSummarizingIds(summarizingIdsRef.current);
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                // A failed check while waiting on a server-side run tries
+                // again, so a transient error does not leave the spinner up.
+                if (
+                    !controller.signal.aborted &&
+                    waitingIdsRef.current.has(requestedId)
+                ) {
+                    pollTimer = setTimeout(
+                        () => setSummaryFetchKey((k) => k + 1),
+                        SUMMARY_POLL_MS,
+                    );
+                }
+            });
         return () => {
             if (pollTimer) clearTimeout(pollTimer);
             controller.abort();
