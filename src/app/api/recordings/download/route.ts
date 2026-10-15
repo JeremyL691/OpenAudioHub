@@ -94,7 +94,8 @@ export const GET = apiHandler(async (request: Request) => {
             format === "mp3" ? "mp3" : audioExtension(row.storagePath),
         );
 
-    if (format === "original" && rows.length === 1) {
+    // Keyed on the request, not the rows found: several ids always get a ZIP.
+    if (format === "original" && ids.length === 1) {
         const [row] = rows;
         if (!(await storage.exists(row.storagePath))) {
             throw new AppError(

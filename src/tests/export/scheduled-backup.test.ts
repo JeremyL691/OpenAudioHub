@@ -14,6 +14,7 @@ import {
     copyArchiveToBackupFolder,
     formatBackupDate,
     isBackupDue,
+    isBackupFileName,
     pickBackupFileName,
     pruneBackupFolder,
     resolveBackupFolder,
@@ -117,6 +118,19 @@ describe("isBackupDue", () => {
 });
 
 describe("backup file naming", () => {
+    it("treats only generated names as backups", () => {
+        expect(isBackupFileName("OpenAudioHub-backup-2026-10-15.zip")).toBe(
+            true,
+        );
+        expect(isBackupFileName("OpenAudioHub-backup-2026-10-15-3.zip")).toBe(
+            true,
+        );
+        expect(isBackupFileName("OpenAudioHub-backup-notes.zip")).toBe(false);
+        expect(
+            isBackupFileName("OpenAudioHub-backup-2026-10-15 copy.zip"),
+        ).toBe(false);
+    });
+
     it("formats the local calendar date", () => {
         expect(formatBackupDate(new Date(2026, 0, 5, 23, 30))).toBe(
             "2026-01-05",

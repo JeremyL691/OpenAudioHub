@@ -12,6 +12,8 @@ export interface PlaudConnectionStatus {
     /** ISO time the stored token expires, or null when it cannot be read. */
     tokenExpiresAt?: string | null;
     server?: string;
+    /** Only present for a custom Plaud server; the refreshed token is saved against it. */
+    apiBase?: string;
 }
 
 export interface AppResponse {
@@ -72,6 +74,8 @@ function parseConnection(body: unknown): PlaudConnectionStatus | null {
                 ? record.tokenExpiresAt
                 : null,
         server: typeof record.server === "string" ? record.server : undefined,
+        apiBase:
+            typeof record.apiBase === "string" ? record.apiBase : undefined,
     };
 }
 
@@ -115,7 +119,8 @@ async function checkOnce(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             accessToken: payload.accessToken,
-            apiBase: payload.apiBase,
+            // A custom server keeps its saved address; the sign-in page only knows the built-in ones.
+            apiBase: connection.apiBase ?? payload.apiBase,
             source: "connector",
         }),
     });
