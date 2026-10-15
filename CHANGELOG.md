@@ -6,6 +6,27 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-15
+
+### Added
+
+- **Scheduled backups** (Mac app): Settings → Export & Backup → Backup frequency now runs daily, weekly or monthly. Each backup is a full archive saved to a folder you choose (default `Documents/OpenAudioHub Backups`); the newest five are kept.
+- **Original audio downloads**: download a recording as the original file, and set auto-export to save the original instead of an MP3. The recording details show both the stored size and the estimated MP3 size.
+- **Settings → Desktop** (Mac app): choose whether closing the window keeps the app running or quits it, and whether the menu-bar icon is shown.
+
+### Changed
+
+- The top-bar sync button is gone. Sync status is a ring around the account avatar: green when synced, red when the sync failed or Plaud needs reconnecting. Hover for the time and status; **Sync now** is in the account menu.
+- Summary templates were rewritten: they scale with the recording, group long recordings by topic, and handle spoken transcripts better. Very long transcripts are summarized part by part, so 10-hour recordings fit the model.
+- The Notifications settings section is hidden for now.
+
+### Fixed
+
+- Closing the Mac app's window now keeps the app and its background sync running, as intended; before, it quit the app.
+- A summary in progress keeps running when you leave the recording; coming back shows it as in progress, and the result appears when it is ready.
+- Summaries with reasoning models (such as DeepSeek) no longer fail when the model spends its whole output budget thinking: the request is retried once with low reasoning effort.
+- The Mac app no longer asks you to reconnect Plaud every day. Plaud tokens last 24 hours, and the app now renews the token in the background from your saved Plaud sign-in.
+
 ## [1.4.0] - 2026-10-13
 
 ### Added

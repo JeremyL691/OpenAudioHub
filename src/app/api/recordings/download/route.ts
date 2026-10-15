@@ -12,26 +12,32 @@ import {
     uniqueArchiveName,
 } from "@/lib/recordings/download-audio";
 import {
+    audioExtension,
     buildDownloadFilename,
     contentDispositionAttachment,
     dateRecordingTitle,
 } from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import type { StorageProvider } from "@/lib/storage/types";
+import { getAudioMimeType } from "@/lib/utils";
 
 const MAX_IDS = 100;
 const RECORDING_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
- * GET /api/recordings/download?ids=a,b,c
+ * GET /api/recordings/download?ids=a,b,c&format=mp3|original
  *
- * Streams one ZIP holding each selected recording as MP3. A recording whose
- * audio file is missing is skipped and listed in `errors.txt`.
+ * Default `format=mp3` streams one ZIP holding each selected recording as MP3.
+ * `format=original` sends the stored file untouched: one recording as a plain
+ * file, several as a ZIP. A recording whose audio file is missing is skipped
+ * and listed in `errors.txt` (ZIP) or answered with 404 (single file).
  */
 export const GET = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
+    const searchParams = new URL(request.url).searchParams;
     const ids = [
         ...new Set(
-            (new URL(request.url).searchParams.get("ids") ?? "")
+            (searchParams.get("ids") ?? "")
                 .split(",")
                 .map((id) => id.trim())
                 .filter(Boolean),
@@ -45,6 +51,14 @@ export const GET = apiHandler(async (request: Request) => {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
             `ids must be 1 to ${MAX_IDS} recording ids`,
+            400,
+        );
+    }
+    const format = searchParams.get("format") ?? "mp3";
+    if (format !== "mp3" && format !== "original") {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "format must be mp3 or original",
             400,
         );
     }
@@ -72,29 +86,53 @@ export const GET = apiHandler(async (request: Request) => {
     }
 
     const storage = await createUserStorageProvider(session.user.id);
+    const fileName = (row: (typeof rows)[number]) =>
+        buildDownloadFilename(
+            decryptText(row.filename),
+            row.storagePath,
+            row.id,
+            format === "mp3" ? "mp3" : audioExtension(row.storagePath),
+        );
+
+    if (format === "original" && rows.length === 1) {
+        const [row] = rows;
+        if (!(await storage.exists(row.storagePath))) {
+            throw new AppError(
+                ErrorCode.RECORDING_NOT_FOUND,
+                "Audio file is missing",
+                404,
+            );
+        }
+        const audio = await storage.downloadStream(row.storagePath);
+        return new Response(
+            Readable.toWeb(audio) as ReadableStream<Uint8Array>,
+            {
+                headers: {
+                    "Content-Type": getAudioMimeType(row.storagePath),
+                    "Content-Disposition": contentDispositionAttachment(
+                        fileName(row),
+                    ),
+                    "Cache-Control": "private, no-store",
+                },
+            },
+        );
+    }
+
     const archive = new ZipArchive({ zlib: { level: 0 } });
     const used = new Set<string>();
 
-    // One recording at a time: each MP3 streams into the zip while it encodes.
+    // One recording at a time: each file streams into the zip while it encodes.
     void (async () => {
         const missing: string[] = [];
         for (const row of rows) {
-            const name = uniqueArchiveName(
-                buildDownloadFilename(
-                    decryptText(row.filename),
-                    row.storagePath,
-                    row.id,
-                    "mp3",
-                ),
-                used,
-            );
+            const name = uniqueArchiveName(fileName(row), used);
             if (!(await storage.exists(row.storagePath))) {
                 missing.push(`${name}: audio file is missing`);
                 continue;
             }
-            const mp3 = await openAudioAsMp3(storage, row.storagePath);
-            archive.append(mp3, { name, store: true });
-            await finished(mp3);
+            const file = await openDownload(storage, row.storagePath, format);
+            archive.append(file, { name, store: true });
+            await finished(file);
         }
         if (missing.length > 0) {
             archive.append(`${missing.join("\n")}\n`, { name: "errors.txt" });
@@ -116,3 +154,14 @@ export const GET = apiHandler(async (request: Request) => {
         },
     });
 });
+
+/** The file as the user receives it: the stored original, or an MP3 made from it. */
+function openDownload(
+    storage: StorageProvider,
+    storagePath: string,
+    format: "mp3" | "original",
+) {
+    return format === "original"
+        ? storage.downloadStream(storagePath)
+        : openAudioAsMp3(storage, storagePath);
+}

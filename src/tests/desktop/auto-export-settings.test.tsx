@@ -147,3 +147,64 @@ describe("export section auto-export settings", () => {
         );
     });
 });
+
+describe("export section backup settings", () => {
+    it("shows the schedule as available and the default folder in the desktop app", async () => {
+        window.__openaudiohubDesktop = {
+            version: 1,
+            pickFolder: vi.fn(async () => null),
+        };
+        installFetch();
+        render(<ExportSection />);
+
+        await screen.findByTestId("backup-folder");
+        expect(
+            screen.getByText("Documents/OpenAudioHub Backups (default)"),
+        ).toBeTruthy();
+        expect(screen.getByText("No backup yet")).toBeTruthy();
+        const frequency = document.getElementById(
+            "backup-frequency",
+        ) as HTMLButtonElement;
+        expect(frequency.disabled).toBe(false);
+        expect(
+            screen.queryByText(
+                "Scheduled backups are available in the desktop app.",
+            ),
+        ).toBeNull();
+    });
+
+    it("saves a chosen backup folder", async () => {
+        window.__openaudiohubDesktop = {
+            version: 1,
+            pickFolder: vi.fn(async () => "/Volumes/Ext/Backups"),
+        };
+        const fetchMock = installFetch();
+        render(<ExportSection />);
+
+        fireEvent.click(await screen.findByTestId("backup-folder"));
+
+        await waitFor(() =>
+            expect(putBodies(fetchMock)).toEqual([
+                { backupFolder: "/Volumes/Ext/Backups" },
+            ]),
+        );
+        expect(screen.getByText("/Volumes/Ext/Backups")).toBeTruthy();
+    });
+
+    it("keeps the schedule disabled outside the desktop app", async () => {
+        installFetch();
+        render(<ExportSection />);
+
+        await screen.findByText("Backup frequency");
+        const frequency = document.getElementById(
+            "backup-frequency",
+        ) as HTMLButtonElement;
+        expect(frequency.disabled).toBe(true);
+        expect(
+            screen.getByText(
+                "Scheduled backups are available in the desktop app.",
+            ),
+        ).toBeTruthy();
+        expect(screen.queryByTestId("backup-folder")).toBeNull();
+    });
+});

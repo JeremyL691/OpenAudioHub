@@ -23,10 +23,11 @@ async function expectNoSeriousViolations(
     page: Page,
     { modal = false }: { modal?: boolean } = {},
 ) {
-    // The sync and summary buttons are busy at times. Audit the settled page.
-    const sync = page.getByTestId("sync-button");
-    if ((await sync.count()) > 0) {
-        await settle(sync);
+    // The summary button is busy at times. Audit the settled page. Sync status
+    // lives on the account avatar ring, which is always enabled.
+    const avatar = page.getByTestId("user-menu");
+    if ((await avatar.count()) > 0) {
+        await settle(avatar);
     }
     const summary = page.getByTestId("summary-generate");
     if ((await summary.count()) > 0) {
@@ -94,11 +95,6 @@ for (const scheme of ["light", "dark"] as const) {
 
         test("settings: providers", async ({ page }) => {
             await page.goto("/settings/providers");
-            await expectNoSeriousViolations(page);
-        });
-
-        test("settings: notifications", async ({ page }) => {
-            await page.goto("/settings/notifications");
             await expectNoSeriousViolations(page);
         });
 

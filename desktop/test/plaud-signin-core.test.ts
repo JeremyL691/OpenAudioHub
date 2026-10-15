@@ -292,3 +292,17 @@ describe("isSigninNavigationAllowed", () => {
         expect(isSigninNavigationAllowed("not a url")).toBe(false);
     });
 });
+
+describe("isTokenFresherThan", () => {
+    it("accepts only a token that expires after both now and the minimum expiry", async () => {
+        const { isTokenFresherThan } = await import(
+            "../src/main/plaud-signin-core.js"
+        );
+        const token = makeJwt({ exp: 2_000_000_000 });
+        const expMs = 2_000_000_000 * 1000;
+        expect(isTokenFresherThan(token, expMs - 10_000, expMs - 1)).toBe(true);
+        expect(isTokenFresherThan(token, expMs - 10_000, expMs)).toBe(false);
+        expect(isTokenFresherThan(token, expMs + 1, 0)).toBe(false);
+        expect(isTokenFresherThan(makeJwt({ sub: "x" }), 0, 0)).toBe(false);
+    });
+});

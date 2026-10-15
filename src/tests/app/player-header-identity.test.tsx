@@ -10,9 +10,6 @@ vi.mock("@/components/recordings/recording-title", () => ({
         <span>{filename}</span>
     ),
 }));
-vi.mock("@/components/recordings/download-audio-button", () => ({
-    DownloadAudioButton: () => <button type="button">Download</button>,
-}));
 
 const recording: Recording = {
     id: "rec-1",
@@ -37,7 +34,9 @@ describe("RecordingPlayerHeader", () => {
             />,
         );
         expect(screen.getByText("Weekly team sync")).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Download" })).toBeTruthy();
+        expect(
+            screen.getByRole("button", { name: "Download audio" }),
+        ).toBeTruthy();
         expect(screen.getByText("4.40 KB")).toBeTruthy();
     });
 

@@ -53,6 +53,7 @@ import {
     renameAutoExport,
 } from "@/lib/recordings/auto-export";
 import { openAudioAsMp3 } from "@/lib/recordings/download-audio";
+import { createUserStorageProvider } from "@/lib/storage/factory";
 
 let dir: string;
 let settingsRows: Record<string, unknown>[];
@@ -144,6 +145,28 @@ describe("auto-export", () => {
             expect(await listDir()).toEqual(["Planning Call.mp3"]);
             expect(updates).toEqual([
                 { autoExportPath: join(dir, "Planning Call.mp3") },
+            ]);
+        });
+
+        it("writes the stored original with its own extension in original format", async () => {
+            const downloadStream = vi.fn(async () =>
+                Readable.from([Buffer.from("ogg")]),
+            );
+            (createUserStorageProvider as Mock).mockResolvedValueOnce({
+                downloadStream,
+            });
+            fakeDb(
+                baseSettings({ format: "original" }),
+                baseRecording({ storagePath: "user-1/rec.ogg" }),
+            );
+
+            await autoExportRecording("user-1", "rec-1");
+
+            expect(downloadStream).toHaveBeenCalledWith("user-1/rec.ogg");
+            expect(openAudioAsMp3).not.toHaveBeenCalled();
+            expect(await listDir()).toEqual(["Planning Call.ogg"]);
+            expect(updates).toEqual([
+                { autoExportPath: join(dir, "Planning Call.ogg") },
             ]);
         });
 
@@ -269,6 +292,22 @@ describe("auto-export", () => {
             expect(updates).toEqual([
                 { autoExportPath: join(dir, "Standup.mp3") },
             ]);
+        });
+
+        it("keeps the original extension when renaming an original export", async () => {
+            const oldPath = join(dir, "2026-05-06.ogg");
+            await writeFile(oldPath, "ogg");
+            fakeDb(
+                baseSettings({ titleMode: "ai", format: "original" }),
+                baseRecording({
+                    storagePath: "user-1/rec.ogg",
+                    autoExportPath: oldPath,
+                }),
+            );
+
+            await renameAutoExport("user-1", "rec-1", "Standup");
+
+            expect(await listDir()).toEqual(["Standup.ogg"]);
         });
 
         it("does nothing in date mode", async () => {

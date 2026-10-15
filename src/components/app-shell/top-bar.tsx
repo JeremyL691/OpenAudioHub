@@ -4,12 +4,10 @@ import { Command, Upload } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
     useDialogs,
-    useSyncStatus,
     useTranscribeStatus,
     useUploadStatus,
 } from "@/components/app-shell/providers";
 import { UserMenu } from "@/components/dashboard/user-menu";
-import { SyncButton } from "@/components/sync-button";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -39,19 +37,12 @@ interface TopBarProps {
 
 /**
  * Global actions for the signed-in app: sidebar toggle, page title, search,
- * sync, upload, and the account menu. Touch targets are 40px below `sm`.
+ * upload, and the account menu (which shows sync status). Touch targets are 40px below `sm`.
  */
 export function TopBar({ userEmail, initialTheme }: TopBarProps) {
     const pathname = usePathname();
     const { push } = useRouter();
     const { paletteAvailable, setPaletteOpen, setShortcutsOpen } = useDialogs();
-    const {
-        isAutoSyncing,
-        lastSyncTime,
-        nextSyncTime,
-        lastSyncResult,
-        manualSync,
-    } = useSyncStatus();
     const { isUploading, uploadInputRef, handleUpload, triggerUpload } =
         useUploadStatus();
     const { inFlightActions } = useTranscribeStatus();
@@ -95,16 +86,6 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                         </TooltipContent>
                     </Tooltip>
                 )}
-                <SyncButton
-                    lastSyncTime={lastSyncTime}
-                    nextSyncTime={nextSyncTime}
-                    isAutoSyncing={isAutoSyncing}
-                    lastSyncResult={lastSyncResult}
-                    onSync={() => {
-                        void manualSync();
-                    }}
-                    className="h-10 sm:h-8"
-                />
                 <input
                     ref={uploadInputRef}
                     type="file"

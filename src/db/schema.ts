@@ -611,11 +611,21 @@ export const userSettings = pgTable("user_settings", {
         .default("json"), // 'json', 'txt', 'srt', 'vtt'
     autoExport: boolean("auto_export").notNull().default(false),
     autoExportFolder: text("auto_export_folder"), // desktop only, absolute path
+    // Container for auto-exported audio: 'mp3' (transcoded) | 'original' (.ogg as stored).
+    autoExportFormat: varchar("auto_export_format", { length: 20 })
+        .notNull()
+        .default("mp3"),
     // Exported file name: 'original' | 'date' | 'ai'.
     autoExportTitleMode: varchar("auto_export_title_mode", { length: 20 })
         .notNull()
         .default("original"),
     backupFrequency: varchar("backup_frequency", { length: 20 }), // nullable, 'daily', 'weekly', 'monthly', 'never'
+    // Desktop only, absolute path. Null means the default Documents folder.
+    backupFolder: text("backup_folder"),
+    // Set when a scheduled backup is copied into backupFolder. Kept on the
+    // settings row (not derived from export_jobs) because expired job rows
+    // are deleted by the cleanup pass.
+    lastBackupAt: timestamp("last_backup_at"),
     // Default providers (for quick selection)
     defaultProviders: jsonb("default_providers"), // { transcription: 'openai', enhancement: 'claude' }
     // Onboarding
@@ -775,6 +785,8 @@ export const exportJobs = pgTable(
             .references(() => users.id, { onDelete: "cascade" }),
         status: exportJobStatusEnum("status").notNull().default("pending"),
         storageKey: text("storage_key"),
+        // 'manual' (user-requested) | 'scheduled' (desktop backup schedule).
+        kind: varchar("kind", { length: 20 }).notNull().default("manual"),
         // bigint, not integer: a full-library archive (audio for every
         // recording, uncompressed) can exceed 2^31-1 bytes (~2GB).
         fileSize: bigint("file_size", { mode: "number" }),

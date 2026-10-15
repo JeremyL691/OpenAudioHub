@@ -18,7 +18,6 @@ const SECTIONS = [
     "sync",
     "playback",
     "display",
-    "notifications",
     "storage",
     "export",
     "api-keys",
