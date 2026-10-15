@@ -1,24 +1,9 @@
 OpenAudioHub
 Copyright (C) 2026 Jeremy Liu
-Portions Copyright (C) Riffado contributors (https://github.com/riffado/riffado)
+Portions Copyright (C) Riffado contributors
 
 OpenAudioHub is licensed under the GNU Affero General Public License,
 version 3. The full license text is in the LICENSE file.
-
-
-Origin
-------
-
-OpenAudioHub is based on Riffado v0.6.4 (commit 712e74f), an AGPL-3.0
-project created by Perier and maintained by the Riffado community. The
-long-audio pipeline in this repository was developed in a fork of Riffado
-based on upstream commit b518379. The upstream copyright notices and
-license terms continue to apply to the code that came from Riffado. Its full
-history is available in the upstream repository.
-
-Some identifiers, such as the `op_` API key prefix, come from an earlier
-project name, OpenPlaud. OpenAudioHub still accepts them, so existing keys
-and integrations keep working.
 
 
 Browser connector
@@ -26,8 +11,8 @@ Browser connector
 
 The Plaud connector browser extension can sign in to Plaud and send the
 resulting token to an OpenAudioHub instance. It is a separate project,
-maintained at https://github.com/riffado/connector under AGPL-3.0. This
-repository does not include its code.
+maintained at https://github.com/JeremyL691/openaudiohub-connector under
+AGPL-3.0. This repository does not include its code.
 
 
 Bundled and loaded third-party components
@@ -61,4 +46,4 @@ Trademarks
 
 Plaud is a trademark of its owner. OpenAudioHub is independent of Plaud Inc.
 and is not endorsed by Plaud. Device and service names are used only to
-describe interoperability. "Riffado" is the name of the upstream project.
+describe interoperability.

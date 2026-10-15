@@ -39,7 +39,7 @@ Original recordings stay in the configured storage. The `audio-pipeline-data` vo
 
 Back up Core's database, its encryption key, the recording storage, and the pipeline volume before an upgrade. A Postgres dump and a storage snapshot form the operations-recovery set. The user's full-data ZIP is a portable export, not a server restore package. The encryption key is required to recover encrypted content, and it must be stored apart from the database backup. See the [operations backup, restore, and verification runbook](audio-pipeline-operations.md). Do not use volume-deleting Compose commands as an ordinary restart.
 
-Upgrade the pipeline before Core when a release changes the pipeline's job fields. OpenAudioHub 1.0.0 renames the legacy job field to `core_job_id`. A new pipeline still accepts requests from an older Core, but an older pipeline cannot serve a new Core. The [migration guide](MIGRATION_FROM_RIFFADO.md) gives the full order.
+Upgrade the pipeline before Core when a release changes the pipeline's job fields. OpenAudioHub 1.0.0 renames the legacy job field to `core_job_id`. A new pipeline still accepts requests from an older Core, but an older pipeline cannot serve a new Core.
 
 ## Processing contract
 

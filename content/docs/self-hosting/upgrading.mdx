@@ -47,8 +47,6 @@ docker compose pull && docker compose up -d
 
 Migrations are additive by default, so an older image can usually run against a newer schema. A release that drops data says so in its changelog, and you should read those notes before you roll back across it.
 
-Migration `0041_rebrand_source_values` rewrites stored transcript source values. If you roll back to a build from before that migration, run the SQL in the [migration guide](https://github.com/JeremyL691/OpenAudioHub/blob/main/docs/MIGRATION_FROM_RIFFADO.md#rollback) first.
-
 ## What to back up before an upgrade
 
 Back up these before any major upgrade:

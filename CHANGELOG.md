@@ -2,8 +2,6 @@
 
 Changes to OpenAudioHub are recorded here. Maintainers write entries at release time.
 
-Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are in the upstream changelog at https://github.com/riffado/riffado/blob/main/CHANGELOG.md.
-
 ## [Unreleased]
 
 ## [1.5.1] - 2026-10-15
@@ -93,7 +91,7 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [1.0.0]
 
-First OpenAudioHub release. It is built from the base commit named above, and it includes the long-audio pipeline. Hosted-only code is removed, and the project is renamed. To move an existing installation, follow [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md).
+First OpenAudioHub release. It includes the long-audio pipeline, and hosted-only code is removed.
 
 ### Breaking Changes
 
@@ -110,7 +108,6 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 
 ### Added
 
-- Migration guide at [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md).
 - API keys use the `oah_` prefix. Existing `op_` keys keep working.
 - Third-party notices in [NOTICE](NOTICE).
 - Summary templates for meetings (minutes with an owner, task, due date, and status for each action item), interviews and research, phone and client calls, lectures, brainstorms, and voice memos.
@@ -122,7 +119,7 @@ First OpenAudioHub release. It is built from the base commit named above, and it
 
 ### Changed
 
-- Product names, UI copy, email text, and the footer read OpenAudioHub. The footer reads “Licensed under AGPL-3.0” and links to NOTICE, which credits the upstream project.
+- Product names, UI copy, email text, and the footer read OpenAudioHub. The footer reads “Licensed under AGPL-3.0” and links to NOTICE.
 - Browser storage keys are now `openaudiohub:*`. Values under the previous key names are copied on first read, and the old keys are then removed.
 - The browser connector global is `window.__openaudiohubConnector`. The previous global is still read.
 - Download filenames are `openaudiohub-export-*.zip`. The Bark group is `openaudiohub-recordings`. Temporary directories use the `oah-` prefix.
