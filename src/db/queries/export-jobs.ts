@@ -1,13 +1,16 @@
-import { and, desc, eq, isNotNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { exportJobs } from "@/db/schema";
+import { exportJobs, userSettings } from "@/db/schema";
 
 export type ExportJobStatus = "pending" | "processing" | "completed" | "failed";
+/** 'manual' = requested from the UI; 'scheduled' = queued by the desktop backup schedule. */
+export type ExportJobKind = "manual" | "scheduled";
 
 export interface ExportJobRow {
     id: string;
     userId: string;
     status: ExportJobStatus;
+    kind: ExportJobKind;
     storageKey: string | null;
     fileSize: number | null;
     recordingCount: number | null;
@@ -87,6 +90,88 @@ export async function getRecentCompletedExportJobForUser(
     return (row as ExportJobRow) ?? null;
 }
 
+/** Users with a backup schedule (desktop backups are scheduled per user). */
+export async function selectBackupSchedules(): Promise<
+    { userId: string; backupFrequency: string; lastBackupAt: Date | null }[]
+> {
+    const rows = await db
+        .select({
+            userId: userSettings.userId,
+            backupFrequency: userSettings.backupFrequency,
+            lastBackupAt: userSettings.lastBackupAt,
+        })
+        .from(userSettings)
+        .where(
+            inArray(userSettings.backupFrequency, [
+                "daily",
+                "weekly",
+                "monthly",
+            ]),
+        );
+    return rows.filter(
+        (
+            r,
+        ): r is {
+            userId: string;
+            backupFrequency: string;
+            lastBackupAt: Date | null;
+        } => r.backupFrequency !== null,
+    );
+}
+
+/** Records that a scheduled backup was copied into the backup folder. */
+export async function markScheduledBackupCopied(
+    userId: string,
+    at: Date,
+): Promise<void> {
+    await db
+        .update(userSettings)
+        .set({ lastBackupAt: at })
+        .where(eq(userSettings.userId, userId));
+}
+
+/** The user's configured backup folder (absolute path), or null for the default. */
+export async function getBackupFolderForUser(
+    userId: string,
+): Promise<string | null> {
+    const [row] = await db
+        .select({ backupFolder: userSettings.backupFolder })
+        .from(userSettings)
+        .where(eq(userSettings.userId, userId))
+        .limit(1);
+    return row?.backupFolder ?? null;
+}
+
+/** Newest scheduled job for the user in any status, or null if none was ever queued. */
+export async function getLatestScheduledExportJob(
+    userId: string,
+): Promise<ExportJobRow | null> {
+    const [row] = await db
+        .select()
+        .from(exportJobs)
+        .where(
+            and(
+                eq(exportJobs.userId, userId),
+                eq(exportJobs.kind, "scheduled"),
+            ),
+        )
+        .orderBy(desc(exportJobs.createdAt))
+        .limit(1);
+    return (row as ExportJobRow) ?? null;
+}
+
+/** When the user's most recent scheduled backup was copied to the backup folder, or null. */
+export async function getLastScheduledBackupAt(
+    userId: string,
+): Promise<Date | null> {
+    const [row] = await db
+        .select({ lastBackupAt: userSettings.lastBackupAt })
+        .from(userSettings)
+        .where(eq(userSettings.userId, userId))
+        .limit(1);
+    return row?.lastBackupAt ?? null;
+}
+
 /**
  * Inserts a new pending job. The real "one active job per user" guard is
  * the partial unique index `export_jobs_user_active_unique` (userId
@@ -97,11 +182,18 @@ export async function getRecentCompletedExportJobForUser(
  * existing active job instead of throwing, so callers (POST
  * /api/backup) get the same "here's your job" response either way.
  */
-export async function createExportJob(userId: string): Promise<ExportJobRow> {
+export async function createExportJob(
+    userId: string,
+    options: { kind?: ExportJobKind } = {},
+): Promise<ExportJobRow> {
     try {
         const [row] = await db
             .insert(exportJobs)
-            .values({ userId, status: "pending" })
+            .values({
+                userId,
+                status: "pending",
+                kind: options.kind ?? "manual",
+            })
             .returning();
         return row as ExportJobRow;
     } catch (error) {
@@ -159,12 +251,16 @@ export async function getExportJobForUser(
  */
 export async function claimPendingExportJobs(
     limit: number,
-): Promise<{ id: string; userId: string; claimToken: string }[]> {
-    const result = await db.execute<{
+): Promise<
+    { id: string; userId: string; claimToken: string; kind: ExportJobKind }[]
+> {
+    type ClaimedRow = {
         id: string;
         user_id: string;
         claim_token: string;
-    }>(sql`
+        kind: ExportJobKind;
+    };
+    const result = await db.execute<ClaimedRow>(sql`
         update ${exportJobs}
         set status = 'processing', started_at = now(), claim_token = gen_random_uuid()::text
         where id in (
@@ -174,19 +270,16 @@ export async function claimPendingExportJobs(
             limit ${limit}
             for update skip locked
         )
-        returning id, user_id, claim_token
+        returning id, user_id, claim_token, kind
     `);
     const rows = Array.isArray(result)
         ? result
-        : ((
-              result as {
-                  rows: { id: string; user_id: string; claim_token: string }[];
-              }
-          ).rows ?? []);
+        : ((result as { rows: ClaimedRow[] }).rows ?? []);
     return rows.map((r) => ({
         id: r.id,
         userId: r.user_id,
         claimToken: r.claim_token,
+        kind: r.kind,
     }));
 }
 

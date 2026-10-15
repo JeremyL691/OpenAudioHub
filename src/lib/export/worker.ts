@@ -1,21 +1,35 @@
+import { homedir } from "node:os";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
     claimPendingExportJobs,
     clearStaleStorageKey,
     completeExportJob,
+    createExportJob,
     deleteExportJobRow,
     EXPORT_MAX_ATTEMPTS,
+    type ExportJobKind,
+    getActiveExportJobForUser,
+    getBackupFolderForUser,
+    getLatestScheduledExportJob,
+    markScheduledBackupCopied,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
+    selectBackupSchedules,
     selectExpiredExportJobs,
     selectStaleStorageKeys,
 } from "@/db/queries/export-jobs";
 import { users } from "@/db/schema";
+import { isDesktopMode } from "@/lib/desktop/mode";
 import { env } from "@/lib/env";
 import { sendExportReadyEmail } from "@/lib/notifications/email";
 import { createStorageProvider } from "@/lib/storage/factory";
 import { buildAndUploadExportArchive } from "./build-archive";
+import {
+    copyArchiveToBackupFolder,
+    isBackupDue,
+    resolveBackupFolder,
+} from "./scheduled-backup";
 
 const TICK_MS = 30 * 1000;
 // Archive builds are CPU/memory/IO heavier than a sync tick -- cap how
@@ -110,6 +124,7 @@ async function processJob(job: {
     id: string;
     userId: string;
     claimToken: string;
+    kind: ExportJobKind;
 }): Promise<void> {
     const storage = createStorageProvider();
     // Keyed per claim attempt (not just per job) -- a job that's
@@ -159,6 +174,21 @@ async function processJob(job: {
             return;
         }
 
+        if (job.kind === "scheduled") {
+            // Copy failures are logged only: the archive is complete and
+            // downloadable either way, so the job must not be failed here.
+            await copyScheduledBackup(job.userId, storage, storageKey).catch(
+                (error) => {
+                    console.error(
+                        `[export-worker] scheduled backup copy failed for job ${job.id}:`,
+                        error,
+                    );
+                },
+            );
+            // No "your export is ready" email for recurring backups.
+            return;
+        }
+
         await notifyExportReady(job.userId, job.id).catch((error) => {
             console.error(
                 `[export-worker] notify failed for job ${job.id}:`,
@@ -201,6 +231,59 @@ async function processJob(job: {
         // key (see above), so this never collides with a subsequent
         // attempt's object.
         await storage.deleteFile(storageKey).catch(() => {});
+    }
+}
+
+async function copyScheduledBackup(
+    userId: string,
+    storage: ReturnType<typeof createStorageProvider>,
+    storageKey: string,
+): Promise<void> {
+    const folder = resolveBackupFolder(
+        await getBackupFolderForUser(userId),
+        homedir(),
+    );
+    const savedPath = await copyArchiveToBackupFolder({
+        folder,
+        now: new Date(),
+        openArchive: () => storage.downloadStream(storageKey),
+    });
+    await markScheduledBackupCopied(userId, new Date());
+    console.log(`[export-worker] scheduled backup saved to ${savedPath}`);
+}
+
+/**
+ * Queues a scheduled backup for each desktop user whose interval has
+ * elapsed. Skips users with an active job so a backup never stacks on a
+ * manual export that is still building.
+ */
+async function scheduleDueBackups(): Promise<void> {
+    if (!isDesktopMode()) return;
+    const schedules = await selectBackupSchedules();
+    const now = new Date();
+    for (const schedule of schedules) {
+        try {
+            if (await getActiveExportJobForUser(schedule.userId)) continue;
+            const latest = await getLatestScheduledExportJob(schedule.userId);
+            if (
+                !isBackupDue(
+                    schedule.backupFrequency,
+                    {
+                        lastBackupAt: schedule.lastBackupAt,
+                        lastJobCreatedAt: latest?.createdAt ?? null,
+                    },
+                    now,
+                )
+            ) {
+                continue;
+            }
+            await createExportJob(schedule.userId, { kind: "scheduled" });
+        } catch (error) {
+            console.error(
+                `[export-worker] scheduling backup failed for user ${schedule.userId}:`,
+                error,
+            );
+        }
     }
 }
 
@@ -288,6 +371,10 @@ export async function tick(): Promise<void> {
         if (reclaimed > 0) {
             console.log(`[export-worker] reclaimed ${reclaimed} stale job(s)`);
         }
+
+        await scheduleDueBackups().catch((error) => {
+            console.error("[export-worker] backup scheduling failed:", error);
+        });
 
         const jobs = await claimPendingExportJobs(MAX_JOBS_PER_TICK);
         for (const job of jobs) {

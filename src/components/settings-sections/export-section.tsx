@@ -16,18 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 import type { RecordingTitleMode } from "@/lib/recordings/filename";
-
-// Desktop-only bridge published by the Electron preload (see desktop/).
-interface DesktopBridge {
-    version: 1;
-    pickFolder(): Promise<string | null>;
-}
-
-declare global {
-    interface Window {
-        __openaudiohubDesktop?: DesktopBridge;
-    }
-}
+import type { DesktopBridge } from "@/types/desktop-bridge";
 
 const autoExportTitleOptions: {
     value: RecordingTitleMode;
@@ -58,6 +47,23 @@ const exportFormatOptions = [
     { label: "VTT", value: "vtt", description: "WebVTT subtitle format" },
 ];
 
+const autoExportFormatOptions: {
+    label: string;
+    value: AutoExportFormat;
+    description: string;
+}[] = [
+    {
+        label: "MP3",
+        value: "mp3",
+        description: "Converted to MP3 for easy playback.",
+    },
+    {
+        label: "Original file (.ogg)",
+        value: "original",
+        description: "Saved exactly as recorded, no conversion.",
+    },
+];
+
 const backupFrequencyOptions = [
     { label: "Never", value: "never" },
     { label: "Daily", value: "daily" },
@@ -80,8 +86,26 @@ interface ExportJobStatus {
     errorMessage: string | null;
 }
 
+type AutoExportFormat = "mp3" | "original";
+
 const ACTIVE_STATUSES = new Set(["pending", "processing"]);
 const POLL_INTERVAL_MS = 4000;
+
+function formatRelativeTime(iso: string, now: number): string {
+    const diffSec = Math.round((new Date(iso).getTime() - now) / 1000);
+    const units: [Intl.RelativeTimeFormatUnit, number][] = [
+        ["day", 86400],
+        ["hour", 3600],
+        ["minute", 60],
+    ];
+    const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+    for (const [unit, seconds] of units) {
+        if (Math.abs(diffSec) >= seconds) {
+            return rtf.format(Math.round(diffSec / seconds), unit);
+        }
+    }
+    return rtf.format(0, "minute");
+}
 
 function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -107,12 +131,18 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
     const [autoExportFolder, setAutoExportFolder] = useState<string | null>(
         null,
     );
+    const [autoExportFormat, setAutoExportFormat] =
+        useState<AutoExportFormat>("mp3");
     const [autoExportTitleMode, setAutoExportTitleMode] =
         useState<RecordingTitleMode>("original");
     const [desktopBridge, setDesktopBridge] = useState<DesktopBridge | null>(
         null,
     );
     const [backupFrequency, setBackupFrequency] = useState<string | null>(null);
+    const [backupFolder, setBackupFolder] = useState<string | null>(null);
+    const [lastScheduledBackupAt, setLastScheduledBackupAt] = useState<
+        string | null
+    >(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isStartingBackup, setIsStartingBackup] = useState(false);
     const [backupJob, setBackupJob] = useState<ExportJobStatus | null>(null);
@@ -126,10 +156,15 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     setDefaultExportFormat(data.defaultExportFormat ?? "json");
                     setAutoExport(data.autoExport ?? false);
                     setAutoExportFolder(data.autoExportFolder ?? null);
+                    setAutoExportFormat(data.autoExportFormat ?? "mp3");
                     setAutoExportTitleMode(
                         data.autoExportTitleMode ?? "original",
                     );
                     setBackupFrequency(data.backupFrequency ?? null);
+                    setBackupFolder(data.backupFolder ?? null);
+                    setLastScheduledBackupAt(
+                        data.lastScheduledBackupAt ?? null,
+                    );
                 }
             } catch (error) {
                 console.error("Failed to fetch settings:", error);
@@ -208,8 +243,10 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         defaultExportFormat?: string;
         autoExport?: boolean;
         autoExportFolder?: string | null;
+        autoExportFormat?: AutoExportFormat;
         autoExportTitleMode?: RecordingTitleMode;
         backupFrequency?: string | null;
+        backupFolder?: string | null;
     }) => {
         const previousValues: Record<string, unknown> = {};
         if (updates.defaultExportFormat !== undefined) {
@@ -224,6 +261,10 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
             previousValues.autoExportFolder = autoExportFolder;
             setAutoExportFolder(updates.autoExportFolder);
         }
+        if (updates.autoExportFormat !== undefined) {
+            previousValues.autoExportFormat = autoExportFormat;
+            setAutoExportFormat(updates.autoExportFormat);
+        }
         if (updates.autoExportTitleMode !== undefined) {
             previousValues.autoExportTitleMode = autoExportTitleMode;
             setAutoExportTitleMode(updates.autoExportTitleMode);
@@ -231,6 +272,10 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         if (updates.backupFrequency !== undefined) {
             previousValues.backupFrequency = backupFrequency;
             setBackupFrequency(updates.backupFrequency);
+        }
+        if (updates.backupFolder !== undefined) {
+            previousValues.backupFolder = backupFolder;
+            setBackupFolder(updates.backupFolder);
         }
 
         try {
@@ -257,6 +302,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 if (typeof prev === "string" || prev === null)
                     setAutoExportFolder(prev);
             }
+            if (updates.autoExportFormat !== undefined) {
+                const prev = previousValues.autoExportFormat;
+                if (prev === "mp3" || prev === "original")
+                    setAutoExportFormat(prev);
+            }
             if (updates.autoExportTitleMode !== undefined) {
                 const prev = previousValues.autoExportTitleMode;
                 if (prev === "original" || prev === "date" || prev === "ai")
@@ -266,6 +316,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 const prev = previousValues.backupFrequency;
                 if (typeof prev === "string" || prev === null)
                     setBackupFrequency(prev);
+            }
+            if (updates.backupFolder !== undefined) {
+                const prev = previousValues.backupFolder;
+                if (typeof prev === "string" || prev === null)
+                    setBackupFolder(prev);
             }
             toast.error("Failed to save settings. Changes reverted.");
         }
@@ -282,6 +337,18 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         }
         // null means the user canceled the picker.
         if (path) handleExportBackupSettingChange({ autoExportFolder: path });
+    };
+
+    const handleChooseBackupFolder = async () => {
+        if (!desktopBridge) return;
+        let path: string | null;
+        try {
+            path = await desktopBridge.pickFolder();
+        } catch {
+            toast.error("Couldn't open the folder picker");
+            return;
+        }
+        if (path) handleExportBackupSettingChange({ backupFolder: path });
     };
 
     const handleExport = async () => {
@@ -412,7 +479,9 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         </div>
                         <p className="text-xs text-muted-foreground">
                             {desktopBridge
-                                ? "Save each new recording as an MP3 in a folder on this Mac."
+                                ? autoExportFormat === "original"
+                                    ? "Save each new recording as its original file in a folder on this Mac."
+                                    : "Save each new recording as an MP3 in a folder on this Mac."
                                 : "Automatically export recordings when they are synced"}
                         </p>
                     </div>
@@ -461,6 +530,58 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                     Choose…
                                 </Button>
                             </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4 py-3">
+                            <div className="space-y-0.5 flex-1">
+                                <Label
+                                    className="text-[13px] font-medium"
+                                    htmlFor="auto-export-format"
+                                >
+                                    Auto-export format
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    {
+                                        autoExportFormatOptions.find(
+                                            (opt) =>
+                                                opt.value === autoExportFormat,
+                                        )?.description
+                                    }
+                                </p>
+                            </div>
+                            <Select
+                                value={autoExportFormat}
+                                onValueChange={(value) => {
+                                    handleExportBackupSettingChange({
+                                        autoExportFormat:
+                                            value as AutoExportFormat,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
+                            >
+                                <SelectTrigger
+                                    id="auto-export-format"
+                                    data-testid="auto-export-format"
+                                    className="w-44 max-w-full"
+                                >
+                                    <SelectValue>
+                                        {autoExportFormatOptions.find(
+                                            (opt) =>
+                                                opt.value === autoExportFormat,
+                                        )?.label || "MP3"}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {autoExportFormatOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-2 py-3">
@@ -528,9 +649,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         >
                             Backup frequency
                         </Label>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            Coming soon
-                        </span>
+                        {!desktopBridge && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                Coming soon
+                            </span>
+                        )}
                     </div>
                     <Select
                         value={backupFrequency || "never"}
@@ -541,11 +664,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 backupFrequency: frequency,
                             });
                         }}
-                        disabled={true}
+                        disabled={!desktopBridge}
                     >
                         <SelectTrigger
                             id="backup-frequency"
-                            className="w-44 max-w-full opacity-60"
+                            className={`w-44 max-w-full ${desktopBridge ? "" : "opacity-60"}`}
                         >
                             <SelectValue>
                                 {backupFrequencyOptions.find(
@@ -567,9 +690,54 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                        How often to automatically create backups
+                        {desktopBridge
+                            ? "How often to automatically create backups"
+                            : "Scheduled backups are available in the desktop app."}
                     </p>
+                    {desktopBridge && (
+                        <p
+                            className="text-xs text-muted-foreground"
+                            data-testid="last-backup"
+                        >
+                            {lastScheduledBackupAt
+                                ? `Last backup: ${formatRelativeTime(lastScheduledBackupAt, Date.now())}`
+                                : "No backup yet"}
+                        </p>
+                    )}
                 </div>
+
+                {desktopBridge && (
+                    <div className="flex items-center justify-between gap-4 py-3">
+                        <Label
+                            htmlFor="backup-folder"
+                            className="text-[13px] font-medium"
+                        >
+                            Backup folder
+                        </Label>
+                        <div className="flex min-w-0 items-center gap-3">
+                            <span
+                                id="backup-folder-path"
+                                title={backupFolder ?? undefined}
+                                className={`min-w-0 max-w-[16rem] truncate text-xs ${
+                                    backupFolder ? "" : "text-muted-foreground"
+                                }`}
+                            >
+                                {backupFolder ??
+                                    "Documents/OpenAudioHub Backups (default)"}
+                            </span>
+                            <Button
+                                id="backup-folder"
+                                data-testid="backup-folder"
+                                aria-describedby="backup-folder-path"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleChooseBackupFolder}
+                            >
+                                Choose…
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="pt-4 space-y-3">
