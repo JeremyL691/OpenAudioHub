@@ -1,8 +1,9 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
+import { promisify } from "node:util";
 import { DOWNLOAD_MP3_KBPS } from "@/lib/recordings/mp3-estimate";
 
 export function runFfmpeg(
@@ -87,13 +88,54 @@ export function ffmpegToOpus(
     ]);
 }
 
-/** Concatenate audio files in order into one mono 32 kbps Ogg/Opus file. Inputs may differ in codec, sample rate and channels. */
+/**
+ * Concatenate audio files in order into one Ogg/Opus file. Inputs may differ
+ * in codec, sample rate and channels; those are re-encoded to mono 32 kbps.
+ * Opus inputs that already match (every Plaud recording) are joined without
+ * re-encoding, which takes seconds instead of minutes for long recordings.
+ */
 export async function concatToOpus(
     inputPaths: readonly string[],
     outPath: string,
 ): Promise<void> {
     if (inputPaths.length < 2) {
         throw new Error("concatToOpus needs at least 2 inputs");
+    }
+    const formats = await Promise.all(inputPaths.map(audioStreamFormat));
+    if (
+        formats[0].startsWith("opus,") &&
+        formats.every((f) => f === formats[0])
+    ) {
+        // Written next to the output, which lives in the caller's temp dir.
+        const listPath = join(dirname(outPath), "concat-list.txt");
+        await writeFile(
+            listPath,
+            inputPaths
+                .map((path) => `file '${path.replaceAll("'", "'\\''")}'\n`)
+                .join(""),
+        );
+        await runFfmpeg(Buffer.alloc(0), [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            listPath,
+            "-map",
+            "0:a:0",
+            "-map_metadata",
+            "-1",
+            "-c",
+            "copy",
+            "-f",
+            "ogg",
+            "-y",
+            outPath,
+        ]);
+        return;
     }
     const inputArgs = inputPaths.flatMap((path) => ["-i", path]);
     const chains = inputPaths.map(
@@ -124,6 +166,22 @@ export async function concatToOpus(
         "-y",
         outPath,
     ]);
+}
+
+/** "codec,sample_rate,channels" of the first audio stream. */
+async function audioStreamFormat(path: string): Promise<string> {
+    const { stdout } = await promisify(execFile)("ffprobe", [
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=codec_name,sample_rate,channels",
+        "-of",
+        "csv=p=0",
+        path,
+    ]);
+    return stdout.trim();
 }
 
 /** Mono 16 kHz MP3 for chat-style providers that reject Ogg/Opus. */
