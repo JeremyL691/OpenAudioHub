@@ -55,6 +55,7 @@ function mockLookups(
     transcriptRows: Record<string, unknown>[] = [
         { text: "raw transcript", source: "openaudiohub" },
     ],
+    durationMs = 60_000,
 ) {
     (db.select as Mock)
         // recording
@@ -63,7 +64,9 @@ function mockLookups(
                 where: vi.fn().mockReturnValue({
                     limit: vi
                         .fn()
-                        .mockResolvedValue([{ id: recordingId, userId }]),
+                        .mockResolvedValue([
+                            { id: recordingId, userId, duration: durationMs },
+                        ]),
                 }),
             }),
         })
@@ -270,5 +273,53 @@ describe("generateSummaryForRecording -- model output", () => {
         const result = await generateSummaryForRecording(userId, recordingId);
         expect(result.summary).toBe("Partial summary");
         expect(upsertEnhancement).toHaveBeenCalledOnce();
+    });
+});
+
+describe("generateSummaryForRecording -- long transcripts", () => {
+    it("writes notes per part, then runs the template over the notes", async () => {
+        const line = `Speaker 1: ${"word ".repeat(1_000)}`;
+        const transcript = Array.from({ length: 100 }, () => line).join("\n");
+        mockLookups(
+            [
+                {
+                    id: "creds-oai",
+                    provider: "OpenAI",
+                    apiKey: "enc",
+                    baseUrl: null,
+                    defaultModel: "gpt-4o-mini",
+                    isDefaultEnhancement: true,
+                    createdAt: new Date("2026-01-01"),
+                },
+            ],
+            [{ text: transcript, source: "openaudiohub" }],
+            11 * 3600_000,
+        );
+        chatCompletionsCreate.mockImplementation(
+            async (payload: {
+                messages: { role: string; content: string }[];
+            }) => {
+                const user = payload.messages[1].content;
+                const reply = user.startsWith("This is part")
+                    ? `notes for ${user.slice(13, 25)}`
+                    : "Final summary";
+                return { choices: [{ message: { content: reply } }] };
+            },
+        );
+
+        const result = await generateSummaryForRecording(userId, recordingId);
+
+        // Seven 5k-character lines fit in a 40k part: 15 parts, then the template pass.
+        expect(chatCompletionsCreate).toHaveBeenCalledTimes(16);
+        expect(result.summary).toBe("Final summary");
+        const final = chatCompletionsCreate.mock.calls.at(-1)?.[0] as {
+            messages: { role: string; content: string }[];
+        };
+        expect(final.messages[0].content).toContain(
+            "notes on consecutive parts",
+        );
+        expect(final.messages[1].content).toContain("### Part 15 (about");
+        expect(final.messages[1].content).toContain("11:00:00");
+        expect(final.messages[1].content).not.toContain("word word");
     });
 });

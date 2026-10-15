@@ -39,20 +39,20 @@ export const SUMMARY_PRESETS: Record<SummaryPreset, SummaryPromptConfig> = {
         id: "general",
         name: "General Summary",
         description:
-            "Overview, key points, details, and follow-ups for any recording",
+            "Overview, key points, topics, and follow-ups for any recording",
         prompt: `Summarize this recording as Markdown with these sections, in this order:
 
 ## Overview
 Two to four sentences on what the recording is about and why it matters.
 
 ## Key Points
-Five to ten bullet points, most important first. Each one is a complete sentence.
+Three to ten bullet points, most important first, more for a longer recording. Each one is a complete sentence that carries its concrete facts.
 
-## Details
-Facts, figures, names, dates, and quotes that someone would need to act on or remember. Use bullets.
+## Topics
+One ### subheading per topic, in the order discussed. Under each, bullets with the facts, figures, names, dates, and conclusions someone would need to act on or remember. A short recording on a single subject gets one topic.
 
 ## Follow-ups
-Open questions and next steps, one bullet each.
+Open questions and next steps, one bullet each, with the person responsible when it is stated.
 
 If a section has nothing to report, write "None mentioned." under its heading.
 
@@ -75,10 +75,10 @@ Transcription:
 A short paragraph on what was discussed and where the discussion ended.
 
 ## Discussion Points
-Bullets grouped by topic, with the main arguments and any disagreement.
+One ### subheading per topic, in the order discussed, with bullets for the main arguments, the numbers cited, and any disagreement and how it was left.
 
 ## Decisions
-Bullets. Each one states the decision and who made or agreed to it.
+Bullets. Each one states the decision, who made or agreed to it, and the reason given, if any.
 
 ## Action Items
 A Markdown table with the columns Owner | Task | Due date | Status. Write "Unassigned" when no owner is named, "Not set" when no date is given, and "Open" as the status unless the meeting says otherwise.
@@ -174,7 +174,7 @@ One bullet per example or problem, with the key steps or the result.
 Mistakes or misconceptions the lecturer warned about.
 
 ## Review Questions
-Five questions that test the main ideas. Do not include the answers.
+Three to ten questions that test the main ideas, more for a longer lecture. Do not include the answers.
 
 ## Assignments and Dates
 Homework, readings, and deadlines mentioned.
@@ -195,7 +195,7 @@ Transcription:
 One or two sentences on the problem or question the group explored.
 
 ## Ideas by Theme
-Group the ideas into themes. Under each theme, one bullet per idea: a short phrase, then a few words of context.
+Group the ideas into themes. Under each theme, one bullet per idea: a short phrase, then a few words of context and who proposed it when that is clear.
 
 ## Trade-offs
 For the strongest one to three ideas, one bullet each for the advantages and the drawbacks that were stated.
@@ -219,7 +219,7 @@ Transcription:
         prompt: `Turn this voice memo or podcast into Markdown notes with these sections, in this order:
 
 ## Main Points
-The main ideas in order, one bullet each.
+The main ideas in order, one bullet each. For a long recording, group them under ### subheadings by topic.
 
 ## Ideas and Insights
 Original thoughts, reflections, or observations worth keeping.
@@ -246,7 +246,7 @@ Transcription:
 
 Start with one sentence that summarizes the recording.
 
-Then give five to fifteen bullet points, most important first. Each bullet is one complete sentence that carries its concrete facts.
+Then give bullet points, most important first: five for a short recording, up to fifteen for a long one. Each bullet is one complete sentence that carries its concrete facts: who, what, how much, and when.
 
 Transcription:
 {transcription}`,
@@ -257,7 +257,7 @@ Transcription:
         description: "Owner, task, due date, and status for every action item",
         prompt: `Extract every action item from this transcription as a Markdown table with the columns Owner | Task | Due date | Status.
 
-Write "Unassigned" when no owner is named, "Not set" when no date is given, and "Open" as the status unless the speaker says otherwise. Keep the tasks in the order they came up.
+Write "Unassigned" when no owner is named, "Not set" when no date is given, and "Open" as the status unless the speaker says otherwise. Count only tasks someone committed to or was asked to do, not ideas or wishes. Write each task as a verb phrase with enough context to act on without the recording. Keep the tasks in the order they came up.
 
 After the table, add one sentence on what the recording was about. If there are no action items, write "No action items mentioned." in place of the table.
 
