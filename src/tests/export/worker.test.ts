@@ -1,3 +1,7 @@
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -18,14 +22,24 @@ const {
         reclaimStaleProcessingExportJobs: vi.fn(),
         selectStaleStorageKeys: vi.fn(),
         clearStaleStorageKey: vi.fn(),
+        selectBackupSchedules: vi.fn(),
+        getActiveExportJobForUser: vi.fn(),
+        getLatestScheduledExportJob: vi.fn(),
+        createExportJob: vi.fn(),
+        getBackupFolderForUser: vi.fn(),
+        markScheduledBackupCopied: vi.fn(),
         EXPORT_MAX_ATTEMPTS: 3,
     },
     buildArchiveMock: { buildAndUploadExportArchive: vi.fn() },
     emailMock: { sendExportReadyEmail: vi.fn() },
     storageMock: {
         deleteFile: vi.fn(),
+        downloadStream: vi.fn(),
     },
-    envMock: { APP_URL: "https://app.example.com" },
+    envMock: {
+        APP_URL: "https://app.example.com",
+        OAH_DESKTOP: false as boolean,
+    },
 }));
 
 vi.mock("@/db", () => ({ db: dbMock }));
@@ -70,6 +84,12 @@ describe("export worker tick", () => {
         });
         emailMock.sendExportReadyEmail.mockResolvedValue(true);
         storageMock.deleteFile.mockResolvedValue(undefined);
+        queriesMock.selectBackupSchedules.mockResolvedValue([]);
+        queriesMock.getActiveExportJobForUser.mockResolvedValue(null);
+        queriesMock.getLatestScheduledExportJob.mockResolvedValue(null);
+        queriesMock.createExportJob.mockResolvedValue({ id: "new-job" });
+        queriesMock.getBackupFolderForUser.mockResolvedValue(null);
+        envMock.OAH_DESKTOP = false;
         stubEmailLookup("user@example.com");
     });
 
@@ -378,6 +398,12 @@ describe("export worker stall guard", () => {
             attempts: 1,
         });
         storageMock.deleteFile.mockResolvedValue(undefined);
+        queriesMock.selectBackupSchedules.mockResolvedValue([]);
+        queriesMock.getActiveExportJobForUser.mockResolvedValue(null);
+        queriesMock.getLatestScheduledExportJob.mockResolvedValue(null);
+        queriesMock.createExportJob.mockResolvedValue({ id: "new-job" });
+        queriesMock.getBackupFolderForUser.mockResolvedValue(null);
+        envMock.OAH_DESKTOP = false;
         stubEmailLookup("user@example.com");
     });
 
@@ -449,5 +475,150 @@ describe("export worker stall guard", () => {
             expect.objectContaining({ jobId: "job-healthy" }),
         );
         expect(queriesMock.recordExportJobFailure).not.toHaveBeenCalled();
+        expect(queriesMock.markScheduledBackupCopied).not.toHaveBeenCalled();
+    });
+});
+
+describe("scheduled desktop backups", () => {
+    let tmp: string;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        tmp = await mkdtemp(path.join(tmpdir(), "oah-worker-backup-"));
+        queriesMock.reclaimStaleProcessingExportJobs.mockResolvedValue(0);
+        queriesMock.claimPendingExportJobs.mockResolvedValue([]);
+        queriesMock.selectExpiredExportJobs.mockResolvedValue([]);
+        queriesMock.selectStaleStorageKeys.mockResolvedValue([]);
+        queriesMock.completeExportJob.mockResolvedValue(true);
+        queriesMock.recordExportJobFailure.mockResolvedValue({
+            status: "pending",
+            attempts: 1,
+        });
+        emailMock.sendExportReadyEmail.mockResolvedValue(true);
+        storageMock.deleteFile.mockResolvedValue(undefined);
+        queriesMock.selectBackupSchedules.mockResolvedValue([]);
+        queriesMock.getActiveExportJobForUser.mockResolvedValue(null);
+        queriesMock.getLatestScheduledExportJob.mockResolvedValue(null);
+        queriesMock.createExportJob.mockResolvedValue({ id: "new-job" });
+        queriesMock.getBackupFolderForUser.mockResolvedValue(null);
+        envMock.OAH_DESKTOP = false;
+        stubEmailLookup("user@example.com");
+    });
+
+    afterEach(async () => {
+        await rm(tmp, { recursive: true, force: true });
+    });
+
+    it("queues a scheduled job for a due desktop user", async () => {
+        envMock.OAH_DESKTOP = true;
+        queriesMock.selectBackupSchedules.mockResolvedValue([
+            { userId: "user-1", backupFrequency: "daily" },
+        ]);
+
+        await tick();
+
+        expect(queriesMock.createExportJob).toHaveBeenCalledWith("user-1", {
+            kind: "scheduled",
+        });
+    });
+
+    it("does not schedule anything outside desktop mode", async () => {
+        queriesMock.selectBackupSchedules.mockResolvedValue([
+            { userId: "user-1", backupFrequency: "daily" },
+        ]);
+
+        await tick();
+
+        expect(queriesMock.selectBackupSchedules).not.toHaveBeenCalled();
+        expect(queriesMock.createExportJob).not.toHaveBeenCalled();
+    });
+
+    it("skips a user who already has an active job", async () => {
+        envMock.OAH_DESKTOP = true;
+        queriesMock.selectBackupSchedules.mockResolvedValue([
+            { userId: "user-1", backupFrequency: "daily" },
+        ]);
+        queriesMock.getActiveExportJobForUser.mockResolvedValue({ id: "busy" });
+
+        await tick();
+
+        expect(queriesMock.createExportJob).not.toHaveBeenCalled();
+    });
+
+    it("copies a completed scheduled archive to the backup folder without emailing", async () => {
+        queriesMock.claimPendingExportJobs.mockResolvedValue([
+            {
+                id: "job-s",
+                userId: "user-1",
+                claimToken: "tok",
+                kind: "scheduled",
+            },
+        ]);
+        buildArchiveMock.buildAndUploadExportArchive.mockResolvedValue({
+            recordingCount: 2,
+            fileSize: 4,
+            missingAudioCount: 0,
+        });
+        storageMock.downloadStream.mockResolvedValue(
+            Readable.from([Buffer.from("zipd")]),
+        );
+        queriesMock.getBackupFolderForUser.mockResolvedValue(tmp);
+        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+        await tick();
+        logSpy.mockRestore();
+
+        expect(storageMock.downloadStream).toHaveBeenCalledWith(
+            "exports/user-1/job-s-tok.zip",
+        );
+        const files = await readdir(tmp);
+        expect(files).toHaveLength(1);
+        expect(files[0]).toMatch(
+            /^OpenAudioHub-backup-\d{4}-\d{2}-\d{2}\.zip$/,
+        );
+        expect(await readFile(path.join(tmp, files[0]), "utf8")).toBe("zipd");
+        expect(queriesMock.completeExportJob).toHaveBeenCalled();
+        expect(queriesMock.markScheduledBackupCopied).toHaveBeenCalledWith(
+            "user-1",
+            expect.any(Date),
+        );
+        expect(emailMock.sendExportReadyEmail).not.toHaveBeenCalled();
+    });
+
+    it("keeps the completed job when the backup copy fails", async () => {
+        queriesMock.claimPendingExportJobs.mockResolvedValue([
+            {
+                id: "job-s2",
+                userId: "user-1",
+                claimToken: "tok2",
+                kind: "scheduled",
+            },
+        ]);
+        buildArchiveMock.buildAndUploadExportArchive.mockResolvedValue({
+            recordingCount: 1,
+            fileSize: 4,
+            missingAudioCount: 0,
+        });
+        storageMock.downloadStream.mockResolvedValue(
+            Readable.from([Buffer.from("zipd")]),
+        );
+        // A regular file where the folder should be makes mkdir fail.
+        const blocker = path.join(tmp, "not-a-folder");
+        await writeFile(blocker, "x");
+        queriesMock.getBackupFolderForUser.mockResolvedValue(
+            path.join(blocker, "Backups"),
+        );
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
+
+        await tick();
+        errorSpy.mockRestore();
+
+        expect(queriesMock.completeExportJob).toHaveBeenCalledWith(
+            expect.objectContaining({ jobId: "job-s2", claimToken: "tok2" }),
+        );
+        expect(queriesMock.recordExportJobFailure).not.toHaveBeenCalled();
+        expect(queriesMock.markScheduledBackupCopied).not.toHaveBeenCalled();
     });
 });

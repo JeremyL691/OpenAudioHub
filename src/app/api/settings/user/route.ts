@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
+import { getLastScheduledBackupAt } from "@/db/queries/export-jobs";
 import { userSettings, users } from "@/db/schema";
 import {
     isValidSummaryPromptConfig,
@@ -29,6 +30,7 @@ const ENUM_FIELDS = {
     preferredTranscriptSource: ["plaud", OWN_SOURCE, LEGACY_SOURCE],
     recordingTitleMode: ["original", "date", "ai"],
     autoExportTitleMode: ["original", "date", "ai"],
+    autoExportFormat: ["mp3", "original"],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(
@@ -67,8 +69,10 @@ const DEFAULT_SETTINGS = {
     defaultExportFormat: "json" as const,
     autoExport: false,
     autoExportFolder: null,
+    autoExportFormat: "mp3" as const,
     autoExportTitleMode: "original" as const,
     backupFrequency: null,
+    backupFolder: null,
     defaultProviders: null,
     onboardingCompleted: false,
     autoGenerateTitle: true,
@@ -112,8 +116,10 @@ const SETTINGS_FIELDS = [
     "defaultExportFormat",
     "autoExport",
     "autoExportFolder",
+    "autoExportFormat",
     "autoExportTitleMode",
     "backupFrequency",
+    "backupFolder",
     "defaultProviders",
     "onboardingCompleted",
     "autoGenerateTitle",
@@ -158,6 +164,10 @@ export const GET = apiHandler(async (request: Request) => {
         .limit(1);
     const marketingEmailConsent = userRow?.marketingEmailConsent ?? false;
 
+    const lastScheduledBackupAt = await getLastScheduledBackupAt(
+        session.user.id,
+    );
+
     if (!settings) {
         return NextResponse.json({
             ...DEFAULT_SETTINGS,
@@ -166,6 +176,7 @@ export const GET = apiHandler(async (request: Request) => {
             barkPushUrlSet: false,
             userEmail,
             marketingEmailConsent,
+            lastScheduledBackupAt,
         });
     }
 
@@ -182,6 +193,7 @@ export const GET = apiHandler(async (request: Request) => {
         ...settingsData,
         userEmail,
         marketingEmailConsent,
+        lastScheduledBackupAt,
     });
 });
 
@@ -282,6 +294,18 @@ export const PUT = apiHandler(async (request: Request) => {
             "The export folder must be an existing folder the app can write to",
             400,
             { field: "autoExportFolder" },
+        );
+    }
+    // The backup folder is local-disk only, so it must be a folder the app can write to.
+    if (
+        updateData.backupFolder != null &&
+        !(await isWritableFolder(updateData.backupFolder))
+    ) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "The backup folder must be an existing folder the app can write to",
+            400,
+            { field: "backupFolder" },
         );
     }
     if (updateData.autoExport === true) {
