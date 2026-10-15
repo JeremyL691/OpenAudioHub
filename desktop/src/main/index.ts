@@ -537,9 +537,10 @@ async function main(): Promise<void> {
     registerDesktopPrefsIpc({
         appOrigin,
         getConfig: () => config,
+        // Written first: a failed write throws before the running app takes the new preference.
         saveConfig: (next) => {
-            config = next;
             saveConfig(paths.config, next);
+            config = next;
         },
         applyTray: (show) => applyTray(show),
     });

@@ -802,3 +802,39 @@ describe("summary still running on the server", () => {
         }
     });
 });
+
+describe("summary still running on the server, with a failed check", () => {
+    it("keeps checking after a failed GET while waiting", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        try {
+            const hook = renderSummary("rec-a", "text-a");
+            await flush();
+            takePending("GET", "rec-a").resolve(
+                jsonResponse({ summary: null, generating: true }),
+            );
+            await flush();
+            await act(async () => {
+                vi.advanceTimersByTime(3000);
+            });
+            await flush();
+            takePending("GET", "rec-a").resolve(
+                jsonResponse({ error: "boom" }, 500),
+            );
+            await flush();
+            expect(hook.result.current.isSummarizing).toBe(true);
+
+            await act(async () => {
+                vi.advanceTimersByTime(3000);
+            });
+            await flush();
+            takePending("GET", "rec-a").resolve(
+                jsonResponse({ ...summaryBody("done"), generating: false }),
+            );
+            await flush();
+            expect(hook.result.current.isSummarizing).toBe(false);
+            expect(hook.result.current.summaryData?.summary).toBe("done");
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

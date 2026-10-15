@@ -42,10 +42,13 @@ export function formatBackupDate(date: Date): string {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Only names pickBackupFileName makes, so pruning never touches a user's own
+// file that merely shares the prefix (e.g. OpenAudioHub-backup-notes.zip).
+const BACKUP_FILE_NAME =
+    /^OpenAudioHub-backup-\d{4}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
+
 export function isBackupFileName(name: string): boolean {
-    return (
-        name.startsWith(BACKUP_FILE_PREFIX) && name.endsWith(BACKUP_FILE_SUFFIX)
-    );
+    return BACKUP_FILE_NAME.test(name);
 }
 
 /** `OpenAudioHub-backup-YYYY-MM-DD.zip`, with `-2`, `-3`... appended when the name is taken. */
