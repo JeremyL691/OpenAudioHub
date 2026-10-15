@@ -87,6 +87,45 @@ export function ffmpegToOpus(
     ]);
 }
 
+/** Concatenate audio files in order into one mono 32 kbps Ogg/Opus file. Inputs may differ in codec, sample rate and channels. */
+export async function concatToOpus(
+    inputPaths: readonly string[],
+    outPath: string,
+): Promise<void> {
+    if (inputPaths.length < 2) {
+        throw new Error("concatToOpus needs at least 2 inputs");
+    }
+    const inputArgs = inputPaths.flatMap((path) => ["-i", path]);
+    const chains = inputPaths.map(
+        (_, i) =>
+            `[${i}:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=mono[a${i}];`,
+    );
+    const labels = inputPaths.map((_, i) => `[a${i}]`).join("");
+    const filter = `${chains.join("")}${labels}concat=n=${inputPaths.length}:v=0:a=1[out]`;
+    await runFfmpeg(Buffer.alloc(0), [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        ...inputArgs,
+        "-filter_complex",
+        filter,
+        "-map",
+        "[out]",
+        "-map_metadata",
+        "-1",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "32k",
+        "-application",
+        "voip",
+        "-f",
+        "ogg",
+        "-y",
+        outPath,
+    ]);
+}
+
 /** Mono 16 kHz MP3 for chat-style providers that reject Ogg/Opus. */
 export function transcodeToMp3(input: Buffer): Promise<Buffer> {
     return runFfmpeg(input, mp3Args());

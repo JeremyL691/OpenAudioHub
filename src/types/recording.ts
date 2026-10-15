@@ -3,11 +3,22 @@ import type { recordings } from "@/db/schema";
 
 export type RecordingQueryResult = Pick<
     InferSelectModel<typeof recordings>,
-    "id" | "filename" | "duration" | "startTime" | "filesize" | "deviceSn"
+    | "id"
+    | "filename"
+    | "duration"
+    | "startTime"
+    | "createdAt"
+    | "filesize"
+    | "deviceSn"
 >;
 
-export type Recording = Omit<RecordingQueryResult, "startTime"> & {
+export type Recording = Omit<
+    RecordingQueryResult,
+    "startTime" | "createdAt"
+> & {
     startTime: string;
+    /** Import time (ISO). Used to order merged recordings by import order. */
+    createdAt: string;
     /**
      * Status flags surfaced into list rows so the user can scan which
      * recordings have already been processed. Both default to `false`
@@ -42,6 +53,7 @@ export function serializeRecording(
     return {
         ...recording,
         startTime: recording.startTime.toISOString(),
+        createdAt: recording.createdAt.toISOString(),
         hasTranscript: flags?.hasTranscript ?? false,
         hasSummary: flags?.hasSummary ?? false,
         pipelinePhase: flags?.pipelinePhase ?? null,

@@ -137,6 +137,7 @@ export async function getRecentRecordings(userId: string, limit = 8) {
             filename: recordings.filename,
             duration: recordings.duration,
             startTime: recordings.startTime,
+            createdAt: recordings.createdAt,
             filesize: recordings.filesize,
             deviceSn: recordings.deviceSn,
         })

@@ -16,6 +16,7 @@ const recording: Recording = {
     filename: "Weekly team sync",
     duration: 61_000,
     startTime: "2026-10-07T07:09:20.000Z",
+    createdAt: "2026-10-07T07:09:20.000Z",
     filesize: 4506,
     deviceSn: "PLAUD-1",
 };
