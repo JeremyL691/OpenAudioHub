@@ -3,6 +3,7 @@ import { SettingsPage } from "@/components/settings/settings-page";
 import { isSettingsSection } from "@/components/settings-nav-config";
 import { listUserProviders } from "@/lib/ai/list-providers";
 import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
+import { isDesktopMode } from "@/lib/desktop/mode";
 
 interface SettingsSectionPageProps {
     params: Promise<{ section: string }>;
@@ -16,6 +17,7 @@ export default async function SettingsSectionPage({
 
     const { section } = await params;
     if (!isSettingsSection(section)) notFound();
+    if (section === "desktop" && !isDesktopMode()) notFound();
 
     const providers = await listUserProviders(session.user.id);
 

@@ -7,6 +7,7 @@ import { DEMO_SUMMARIES, isDemoRecordingId } from "@/lib/demo/fixtures";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
+import { isSummaryRunning, runSummaryOnce } from "@/lib/summary/in-flight";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -29,12 +30,14 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
             ? body.source.slice(0, 20)
             : null;
 
-    const result = await generateSummaryForRecording(session.user.id, id, {
-        presetId,
-        language,
-        source,
-        trigger: "manual",
-    });
+    const result = await runSummaryOnce(session.user.id, id, () =>
+        generateSummaryForRecording(session.user.id, id, {
+            presetId,
+            language,
+            source,
+            trigger: "manual",
+        }),
+    );
 
     return NextResponse.json(result);
 });
@@ -95,8 +98,12 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         )
         .limit(1);
 
+    // True while a manual summary started earlier is still being generated,
+    // so a page opened meanwhile can show the run and wait for it.
+    const generating = isSummaryRunning(session.user.id, id);
+
     if (!enhancement) {
-        return NextResponse.json({ summary: null });
+        return NextResponse.json({ summary: null, generating });
     }
 
     // Decrypt content fields before returning to the client. Legacy
@@ -110,6 +117,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         promptId: enhancement.promptId,
         language: enhancement.language,
         createdAt: enhancement.createdAt,
+        generating,
     });
 });
 

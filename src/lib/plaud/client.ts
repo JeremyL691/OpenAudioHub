@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { AppError, ErrorCode } from "@/lib/errors";
 import type {
@@ -19,6 +20,8 @@ export interface PlaudUpdateFilenameResponse {
 }
 
 export const DEFAULT_PLAUD_API_BASE = PLAUD_SERVERS[DEFAULT_SERVER_KEY].apiBase;
+/** Fingerprints of user tokens already warned about. The mint fails on every sync, so the warning prints once per token. */
+const warnedWorkspaceMintTokens = new Set<string>();
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
 
@@ -96,10 +99,17 @@ export class PlaudClient {
             this.workspaceToken = workspaceToken;
             this.resolvedWorkspaceId = workspaceId;
         } catch (err) {
-            console.warn(
-                "[plaud] workspace token mint failed, falling back to user token:",
-                err instanceof Error ? err.message : err,
-            );
+            const fingerprint = createHash("sha256")
+                .update(this.userToken)
+                .digest("hex")
+                .slice(0, 12);
+            if (!warnedWorkspaceMintTokens.has(fingerprint)) {
+                warnedWorkspaceMintTokens.add(fingerprint);
+                console.warn(
+                    "[plaud] workspace token mint failed, falling back to user token:",
+                    err instanceof Error ? err.message : err,
+                );
+            }
             this.workspaceFallbackToUt = true;
         }
     }

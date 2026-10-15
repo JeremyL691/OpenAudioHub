@@ -14,6 +14,7 @@ export type SettingsSection =
     | "plaud-account"
     | "playback"
     | "display"
+    | "desktop"
     | "notifications"
     | "export"
     | "billing"

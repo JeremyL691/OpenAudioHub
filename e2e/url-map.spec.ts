@@ -45,8 +45,8 @@ test.describe("url map", () => {
     test("/settings#<section> from email links opens that section", async ({
         page,
     }) => {
-        await page.goto("/settings#notifications");
-        await expect(page).toHaveURL(/\/settings\/notifications$/);
+        await page.goto("/settings#export");
+        await expect(page).toHaveURL(/\/settings\/export$/);
     });
 
     test("an unknown settings section is a 404", async ({ page }) => {

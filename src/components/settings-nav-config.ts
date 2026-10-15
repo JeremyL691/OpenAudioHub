@@ -1,5 +1,5 @@
 import {
-    Bell,
+    AppWindow,
     Bot,
     Download,
     FileText,
@@ -52,7 +52,9 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         items: [
             { name: "Playback", id: "playback", icon: Play },
             { name: "Display", id: "display", icon: Monitor },
-            { name: "Notifications", id: "notifications", icon: Bell },
+            { name: "Desktop", id: "desktop", icon: AppWindow },
+            // Hidden until notifications are planned; the section code is kept.
+            // { name: "Notifications", id: "notifications", icon: Bell },
         ],
     },
     {
@@ -93,6 +95,21 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 export const SETTINGS_NAV: NavItem[] = SETTINGS_NAV_GROUPS.flatMap(
     (g) => g.items,
 );
+
+/**
+ * Nav groups and items the viewer can see. The Desktop section only exists in
+ * the macOS desktop shell.
+ */
+export function visibleSettingsNavGroups(desktop: boolean) {
+    return SETTINGS_NAV_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => desktop || item.id !== "desktop"),
+    }));
+}
+
+export function visibleSettingsNav(desktop: boolean): NavItem[] {
+    return visibleSettingsNavGroups(desktop).flatMap((group) => group.items);
+}
 
 export const SETTINGS_STORAGE_KEY = "settings-last-section";
 

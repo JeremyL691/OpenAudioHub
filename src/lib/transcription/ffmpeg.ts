@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
+import { DOWNLOAD_MP3_KBPS } from "@/lib/recordings/mp3-estimate";
 
 export function runFfmpeg(
     input: Buffer,
@@ -107,7 +108,7 @@ export function streamMp3ForDownload(input: Readable): Readable {
             "-c:a",
             "libmp3lame",
             "-b:a",
-            "128k",
+            `${DOWNLOAD_MP3_KBPS}k`,
             "-f",
             "mp3",
             "pipe:1",

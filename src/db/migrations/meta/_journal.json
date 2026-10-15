@@ -337,6 +337,13 @@
       "when": 1791920119844,
       "tag": "0047_auto_export",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792024550694,
+      "tag": "0048_scheduled_backup",
+      "breakpoints": true
     }
   ]
 }

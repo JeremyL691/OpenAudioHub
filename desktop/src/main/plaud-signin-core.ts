@@ -118,6 +118,16 @@ export function isTokenExpired(token: string, nowMs: number): boolean {
     return exp !== null && exp * 1000 <= nowMs;
 }
 
+/** true when the token's exp is later than both nowMs and minExpiryMs. A silent refresh uses minExpiryMs so the old token is never re-posted. */
+export function isTokenFresherThan(
+    token: string,
+    nowMs: number,
+    minExpiryMs: number,
+): boolean {
+    const exp = jwtExpiry(token);
+    return exp !== null && exp * 1000 > Math.max(nowMs, minExpiryMs);
+}
+
 /** hostname matches api(-region).plaud.ai or .cn (case-insensitive). */
 export function isPlaudApiHost(hostname: string): boolean {
     return PLAUD_API_HOST.test(hostname);

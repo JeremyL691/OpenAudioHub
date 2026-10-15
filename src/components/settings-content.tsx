@@ -3,6 +3,7 @@
 import type { SettingsSection } from "@/types/settings";
 import { ApiKeysSection } from "./settings/api-keys-section";
 import { WebhooksSection } from "./settings/webhooks-section";
+import { DesktopSection } from "./settings-sections/desktop-section";
 import { DevSection } from "./settings-sections/dev-section";
 import { DisplaySection } from "./settings-sections/display-section";
 import { ExportSection } from "./settings-sections/export-section";
@@ -63,6 +64,8 @@ export function SettingsContent({
             return <PlaybackSection />;
         case "display":
             return <DisplaySection />;
+        case "desktop":
+            return <DesktopSection />;
         case "notifications":
             return <NotificationsSection />;
         case "export":
