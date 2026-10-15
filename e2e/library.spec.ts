@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { RECORDINGS, signIn } from "./characterization/helpers";
 
@@ -143,5 +144,74 @@ test.describe("library", () => {
 
         await rename(RECORDINGS.untranscribed, renamed);
         await rename(renamed, RECORDINGS.untranscribed);
+    });
+
+    test("selected recordings merge into one in a chosen order", async ({
+        page,
+    }) => {
+        const audio = readFileSync("src/tests/fixtures/sample.mp3");
+        const titles: string[] = [];
+        for (const name of ["Merge part A", "Merge part B"]) {
+            const res = await page.request.post("/api/recordings/upload", {
+                multipart: {
+                    file: {
+                        name: `${name}.mp3`,
+                        mimeType: "audio/mpeg",
+                        buffer: audio,
+                    },
+                },
+            });
+            expect(res.ok()).toBe(true);
+            titles.push((await res.json()).filename);
+        }
+        await page.reload();
+
+        await page.getByTestId("recording-select-mode").click();
+        for (const title of titles) {
+            await page
+                .getByTestId("recording-row")
+                .filter({ hasText: title })
+                .getByRole("button")
+                .first()
+                .click();
+        }
+        await page.getByTestId("recording-bulk-merge").click();
+
+        const items = page.getByTestId("merge-item");
+        await expect(items).toHaveCount(2);
+        await page.getByTestId("merge-order-import").click();
+        await expect(page.getByTestId("merge-order-import")).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+        await expect(items.first()).toContainText(titles[0]);
+        await expect(page.getByTestId("merge-title")).toHaveValue(
+            `${titles[0]} (merged)`,
+        );
+        await items.first().getByTestId("merge-move-down").click();
+        await expect(items.first()).toContainText(titles[1]);
+        await expect(page.getByText("Custom order")).toBeVisible();
+
+        const merged = "E2E merged recording";
+        await page.getByTestId("merge-title").fill(merged);
+        await page.getByTestId("merge-delete-originals").check();
+        await page.getByTestId("merge-confirm").click();
+
+        const list = page.getByTestId("recording-list");
+        const row = page
+            .getByTestId("recording-row")
+            .filter({ hasText: merged });
+        await expect(row).toBeVisible();
+        for (const title of titles) await expect(list).not.toContainText(title);
+
+        const id = await row.getAttribute("data-id");
+        const detail = await page.request.get(`/api/recordings/${id}`);
+        const { recording } = await detail.json();
+        // Two one-second clips.
+        expect(recording.duration).toBeGreaterThan(1900);
+        expect(recording.duration).toBeLessThan(2100);
+        expect((await page.request.delete(`/api/recordings/${id}`)).ok()).toBe(
+            true,
+        );
     });
 });

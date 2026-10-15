@@ -3,6 +3,7 @@
 import {
     ArrowDownAZ,
     Download,
+    GitMerge,
     ListChecks,
     Rows3,
     Search,
@@ -54,6 +55,7 @@ export function RecordingListToolbar({
     onSelectModeChange,
     onSelectAll,
     downloadHref,
+    onMerge,
 }: {
     query: string;
     onQueryChange: (next: string) => void;
@@ -72,6 +74,7 @@ export function RecordingListToolbar({
     onSelectModeChange: (next: boolean) => void;
     onSelectAll: () => void;
     downloadHref: string | null;
+    onMerge: () => void;
 }) {
     return (
         <div className="flex flex-col gap-2 border-b border-border px-3 pt-3 pb-2">
@@ -172,6 +175,16 @@ export function RecordingListToolbar({
                                     Download
                                 </Button>
                             )}
+                            <Button
+                                size="sm"
+                                disabled={selectedCount < 2}
+                                onClick={onMerge}
+                                className="h-10 px-2 text-xs sm:h-6"
+                                data-testid="recording-bulk-merge"
+                            >
+                                <GitMerge className="size-3.5" />
+                                Merge
+                            </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
