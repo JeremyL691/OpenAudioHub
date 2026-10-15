@@ -1,6 +1,7 @@
 "use client";
 
-import { SETTINGS_NAV } from "@/components/settings-nav-config";
+import { useDesktopMode } from "@/components/desktop-mode-provider";
+import { visibleSettingsNav } from "@/components/settings-nav-config";
 import {
     Select,
     SelectContent,
@@ -21,9 +22,9 @@ interface Props {
  * still have a way to switch sections without a separate route.
  */
 export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
-    const activeNavItem = SETTINGS_NAV.find(
-        (item) => item.id === activeSection,
-    );
+    const desktop = useDesktopMode();
+    const settingsNav = visibleSettingsNav(desktop);
+    const activeNavItem = settingsNav.find((item) => item.id === activeSection);
 
     return (
         <div className="md:hidden">
@@ -42,7 +43,7 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
                     </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                    {SETTINGS_NAV.map((item) => (
+                    {settingsNav.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                             <div className="flex items-center gap-2">
                                 <item.icon className="size-4 text-muted-foreground" />

@@ -22,13 +22,21 @@ import { writeFileAtomic } from "./atomic-file.js";
 import { backupDatabase } from "./backup.js";
 import { parseCli } from "./cli.js";
 import { loadConfig, saveConfig } from "./config.js";
+import {
+    registerDesktopPrefsIpc,
+    resolvePreferences,
+} from "./desktop-prefs.js";
 import { describeShortage, freeBytesAt, MIN_FREE_BYTES } from "./disk.js";
 import { exportSecrets } from "./export-keys.js";
 import { registerFolderPickerIpc } from "./folder-picker.js";
 import { runCliCommand } from "./import-command.js";
 import { buildTrayTemplate } from "./menu.js";
 import { resolvePaths } from "./paths.js";
-import { registerPlaudConnectorIpc } from "./plaud-signin.js";
+import { type FetchApp, startPlaudTokenRefresher } from "./plaud-refresh.js";
+import {
+    refreshPlaudTokenSilently,
+    registerPlaudConnectorIpc,
+} from "./plaud-signin.js";
 import { choosePorts } from "./ports.js";
 import {
     ensureDatabase,
@@ -463,11 +471,13 @@ async function main(): Promise<void> {
     // later point, including after a start-up failure, stops what was started.
     // A quit that arrives while the services stop waits for the same stop; only the final quit goes through.
     let quitState: "running" | "stopping" | "stopped" = "running";
+    let stopPlaudRefresh: (() => void) | null = null;
     app.on("before-quit", (event) => {
         if (quitState === "stopped") return;
         event.preventDefault();
         if (quitState === "stopping") return;
         quitState = "stopping";
+        stopPlaudRefresh?.();
         tray?.destroy();
         log("quitting: stopping services");
         void supervisor.stop().finally(() => {
@@ -495,6 +505,19 @@ async function main(): Promise<void> {
         }>;
     const reauthenticate = () =>
         exchangeSession({ appOrigin, launchSecret, fetch: partitionFetch });
+    // The refresher's calls to the app: the app's session, renewed once when the app answers 401.
+    const fetchApp: FetchApp = async (path, init) => {
+        const send = () =>
+            session
+                .fromPartition(APP_PARTITION)
+                .fetch(new URL(path, appOrigin).toString(), init);
+        let response = await send();
+        if (response.status === 401) {
+            await reauthenticate();
+            response = await send();
+        }
+        return response;
+    };
 
     let mainWindow: BrowserWindow | null = null;
     registerPlaudConnectorIpc({
@@ -506,10 +529,55 @@ async function main(): Promise<void> {
         appOrigin,
         getParent: () => mainWindow ?? undefined,
     });
+    registerDesktopPrefsIpc({
+        appOrigin,
+        getConfig: () => config,
+        saveConfig: (next) => {
+            config = next;
+            saveConfig(paths.config, next);
+        },
+        applyTray: (show) => applyTray(show),
+    });
+    // Keeps the 24-hour Plaud token fresh without the window open. Stopped in before-quit.
+    stopPlaudRefresh = startPlaudTokenRefresher({
+        fetchApp,
+        refresh: (currentExpiryMs, connection) =>
+            refreshPlaudTokenSilently({
+                // China accounts sign in on web.plaud.cn; the default origin would never be logged in for them.
+                webOrigin:
+                    connection.server === "cn"
+                        ? "https://web.plaud.cn"
+                        : undefined,
+                minExpiryMs: currentExpiryMs,
+                log,
+            }),
+        log,
+    });
+
+    /**
+     * With no window open, the Dock icon is hidden only while the menu-bar item can bring the app back. Without
+     * that item the Dock icon is the way back, so it stays visible (showTray false, closeAction background).
+     */
+    function syncDockWithoutWindow(): void {
+        if (mainWindow) return;
+        if (resolvePreferences(config).showTray) app.dock?.hide();
+        else app.dock?.show();
+    }
+
+    /** Creates or removes the menu-bar item at runtime (showTray). Removing it does not need a restart. */
+    function applyTray(show: boolean): void {
+        if (show) tray ??= buildTray();
+        else {
+            tray?.destroy();
+            tray = null;
+        }
+        syncDockWithoutWindow();
+    }
 
     /**
      * Opens the window, or brings the open one forward. Closing the window destroys it, which releases the
-     * renderer, and the Dock icon follows the window (D-305). The app keeps running in the menu bar.
+     * renderer. The Dock icon follows the window (D-305), unless no menu-bar item is shown (see syncDockWithoutWindow).
+     * With closeAction "quit", closing the window quits the app through the ordered before-quit stop.
      */
     async function openWindow(): Promise<void> {
         if (mainWindow) {
@@ -522,14 +590,24 @@ async function main(): Promise<void> {
         mainWindow = win;
         app.dock?.show();
         win.on("closed", () => {
-            if (mainWindow === win) mainWindow = null;
-            app.dock?.hide();
+            const closedByUser = mainWindow === win;
+            if (closedByUser) mainWindow = null;
+            if (
+                closedByUser &&
+                resolvePreferences(config).closeAction === "quit"
+            ) {
+                app.quit();
+                return;
+            }
+            syncDockWithoutWindow();
         });
         try {
             await appWindow.load();
             log("window loaded /dashboard");
         } catch (error) {
             // A hidden window that never loaded would be shown blank by the next open; start over instead.
+            // Cleared first, so the closed handler does not read this destroy as the user closing the window.
+            if (mainWindow === win) mainWindow = null;
             if (!win.isDestroyed()) win.destroy();
             throw error;
         }
@@ -601,50 +679,58 @@ async function main(): Promise<void> {
         });
     }
 
-    tray = createTray(
-        join(bundleRoot, "tray"),
-        buildTrayTemplate(
-            {
-                openWindow: () => void openWindow().catch(showOpenError),
-                openDataFolder: () => void shell.openPath(paths.userData),
-                openLogsFolder: () => void shell.openPath(paths.logs),
-                editConfiguration: () => {
-                    try {
-                        if (!existsSync(paths.userEnv))
-                            writeFileAtomic(paths.userEnv, ENV_TEMPLATE, 0o600);
-                    } catch (error) {
-                        log(
-                            `could not create the settings file: ${errorText(error)}`,
-                        );
-                    }
-                    void shell.openPath(paths.userEnv);
+    const buildTray = (): Tray =>
+        createTray(
+            join(bundleRoot, "tray"),
+            buildTrayTemplate(
+                {
+                    openWindow: () => void openWindow().catch(showOpenError),
+                    openDataFolder: () => void shell.openPath(paths.userData),
+                    openLogsFolder: () => void shell.openPath(paths.logs),
+                    editConfiguration: () => {
+                        try {
+                            if (!existsSync(paths.userEnv))
+                                writeFileAtomic(
+                                    paths.userEnv,
+                                    ENV_TEMPLATE,
+                                    0o600,
+                                );
+                        } catch (error) {
+                            log(
+                                `could not create the settings file: ${errorText(error)}`,
+                            );
+                        }
+                        void shell.openPath(paths.userEnv);
+                    },
+                    exportKeys: () =>
+                        void exportKeysInteractively().catch(showExportError),
+                    importFromDocker: () =>
+                        void importFromDockerInteractively().catch(
+                            showImportError,
+                        ),
+                    setLaunchAtLogin: (enabled) => {
+                        if (!app.isPackaged) return;
+                        app.setLoginItemSettings({ openAtLogin: enabled });
+                        config = { ...config, launchAtLogin: enabled };
+                        saveConfig(paths.config, config);
+                        log(`launch at login set to ${enabled}`);
+                    },
+                    quit: () => app.quit(),
                 },
-                exportKeys: () =>
-                    void exportKeysInteractively().catch(showExportError),
-                importFromDocker: () =>
-                    void importFromDockerInteractively().catch(showImportError),
-                setLaunchAtLogin: (enabled) => {
-                    if (!app.isPackaged) return;
-                    app.setLoginItemSettings({ openAtLogin: enabled });
-                    config = { ...config, launchAtLogin: enabled };
-                    saveConfig(paths.config, config);
-                    log(`launch at login set to ${enabled}`);
+                {
+                    launchAtLogin: config.launchAtLogin === true,
+                    launchAtLoginAvailable: app.isPackaged,
                 },
-                quit: () => app.quit(),
-            },
-            {
-                launchAtLogin: config.launchAtLogin === true,
-                launchAtLoginAvailable: app.isPackaged,
-            },
-        ),
-    );
+            ),
+        );
 
+    applyTray(resolvePreferences(config).showTray);
     openWindowNow = () => void openWindow().catch(showOpenError);
-    // Started at login: the menu-bar item only, as D-305 asks, unless the app was opened again meanwhile.
-    // A normal launch opens the window.
+    // Started at login: no window, as D-305 asks, unless the app was opened again meanwhile. The Dock icon is
+    // kept when no menu-bar item is shown, so the app can still be reached. A normal launch opens the window.
     if (app.getLoginItemSettings().wasOpenedAtLogin && !windowRequested) {
-        log("started at login: menu bar only");
-        app.dock?.hide();
+        log("started at login: no window opened");
+        syncDockWithoutWindow();
     } else {
         // The services are up; a window that does not load is reported, not a reason to quit (B-013).
         await openWindow().catch(showOpenError);

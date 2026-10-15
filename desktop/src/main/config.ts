@@ -9,6 +9,9 @@ export interface DesktopPorts {
     postgres: number;
 }
 
+/** What closing the main window does: keep the app running (default) or quit it. */
+export type CloseAction = "background" | "quit";
+
 export interface DesktopConfig {
     schemaVersion: number;
     ports: DesktopPorts;
@@ -16,6 +19,10 @@ export interface DesktopConfig {
     boundUserId?: string;
     /** Start at login (D-305). Off until the cutover turns it on. */
     launchAtLogin?: boolean;
+    /** Unset means "background" (see preferences in desktop-prefs.ts). Readers apply the default. */
+    closeAction?: CloseAction;
+    /** Unset means true. When false, no menu-bar item exists. */
+    showTray?: boolean;
     /** The app version that last started successfully on this data (T13.6: backups and downgrade refusal). */
     lastVersion?: string;
 }
@@ -97,6 +104,15 @@ function parseConfig(raw: unknown): DesktopConfig | null {
     }
     if (typeof candidate.launchAtLogin === "boolean") {
         config.launchAtLogin = candidate.launchAtLogin;
+    }
+    if (
+        candidate.closeAction === "background" ||
+        candidate.closeAction === "quit"
+    ) {
+        config.closeAction = candidate.closeAction;
+    }
+    if (typeof candidate.showTray === "boolean") {
+        config.showTray = candidate.showTray;
     }
     if (
         typeof candidate.lastVersion === "string" &&

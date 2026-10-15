@@ -10,7 +10,6 @@ const SECTIONS = [
     ["sync", "Sync"],
     ["playback", "Playback"],
     ["display", "Display"],
-    ["notifications", "Notifications"],
     ["storage", "Storage"],
     ["export", "Export/Backup"],
     ["api-keys", "API Keys"],
