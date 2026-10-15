@@ -1,7 +1,23 @@
 "use client";
 
-import { Keyboard, LogOut, Monitor, Moon, Settings, Sun } from "lucide-react";
+import {
+    Keyboard,
+    LogOut,
+    Monitor,
+    Moon,
+    RefreshCw,
+    Settings,
+    Sun,
+    Unplug,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useSyncStatus } from "@/components/app-shell/providers";
+import {
+    SyncRing,
+    type SyncRingState,
+    syncRingLabel,
+    syncRingState,
+} from "@/components/app-shell/sync-ring";
 import { useDesktopMode } from "@/components/desktop-mode-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +30,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { type Theme, useTheme } from "@/hooks/use-theme";
 import { signOut } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
     initialTheme: "light" | "dark" | "system";
@@ -31,6 +53,13 @@ function Kbd({ children }: { children: React.ReactNode }) {
         </kbd>
     );
 }
+
+const SYNC_ARIA_SUFFIX: Record<SyncRingState, string> = {
+    ok: ", synced",
+    failed: ", sync failed",
+    syncing: ", syncing",
+    idle: ", not synced yet",
+};
 
 function emailInitial(email: string | null): string {
     if (!email) return "?";
@@ -48,6 +77,20 @@ export function UserMenu({
     const { push, refresh } = useRouter();
     const { theme, setTheme } = useTheme(initialTheme);
     const isDesktop = useDesktopMode();
+    const {
+        isAutoSyncing,
+        lastSyncTime,
+        nextSyncTime,
+        lastSyncResult,
+        manualSync,
+    } = useSyncStatus();
+    const syncInput = {
+        isAutoSyncing,
+        lastSyncTime,
+        nextSyncTime,
+        lastSyncResult,
+    };
+    const syncState = syncRingState(syncInput);
 
     const themeOptions = [
         { value: "light" as const, label: "Light", icon: Sun },
@@ -57,17 +100,27 @@ export function UserMenu({
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Account menu"
-                    data-testid="user-menu"
-                    className="size-10 rounded-full bg-muted font-semibold text-foreground hover:bg-accent sm:size-8"
-                >
-                    {emailInitial(userEmail)}
-                </Button>
-            </DropdownMenuTrigger>
+            <SyncRing state={syncState}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                aria-label={`Account menu${SYNC_ARIA_SUFFIX[syncState]}`}
+                                data-testid="user-menu"
+                                data-sync-state={syncState}
+                                className="size-10 rounded-full bg-muted font-semibold text-foreground hover:bg-accent sm:size-8"
+                            >
+                                {emailInitial(userEmail)}
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                        {syncRingLabel(syncInput)}
+                    </TooltipContent>
+                </Tooltip>
+            </SyncRing>
             <DropdownMenuContent align="end" className="w-72 p-0">
                 <div className="flex items-center gap-3 border-b p-3">
                     <div
@@ -89,6 +142,27 @@ export function UserMenu({
                 </div>
 
                 <div className="p-1">
+                    <DropdownMenuItem
+                        disabled={isAutoSyncing}
+                        onSelect={() => {
+                            void manualSync();
+                        }}
+                    >
+                        <RefreshCw
+                            className={cn(
+                                isAutoSyncing && "motion-safe:animate-spin",
+                            )}
+                        />
+                        <span className="flex-1">Sync now</span>
+                    </DropdownMenuItem>
+                    {lastSyncResult?.needsReconnect === true && (
+                        <DropdownMenuItem
+                            onSelect={() => push("/settings/plaud-account")}
+                        >
+                            <Unplug />
+                            <span className="flex-1">Reconnect Plaud</span>
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onSelect={onOpenSettings}>
                         <Settings />
                         <span className="flex-1">Settings</span>

@@ -10,11 +10,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { DesktopModeProvider } from "@/components/desktop-mode-provider";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("next/navigation", () => ({
     useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@/lib/auth-client", () => ({ signOut: vi.fn() }));
+vi.mock("@/components/app-shell/providers", () => ({
+    useSyncStatus: () => ({
+        isAutoSyncing: false,
+        lastSyncTime: null,
+        nextSyncTime: null,
+        lastSyncResult: null,
+        manualSync: vi.fn(),
+    }),
+}));
 vi.mock("@/hooks/use-theme", () => ({
     useTheme: () => ({ theme: "system", setTheme: vi.fn() }),
 }));
@@ -29,14 +39,16 @@ const EMAIL = "owner@example.test";
 
 function renderMenu(isDesktop: boolean) {
     render(
-        <DesktopModeProvider value={isDesktop}>
-            <UserMenu
-                initialTheme="system"
-                userEmail={EMAIL}
-                onOpenSettings={vi.fn()}
-                onOpenShortcuts={vi.fn()}
-            />
-        </DesktopModeProvider>,
+        <TooltipProvider>
+            <DesktopModeProvider value={isDesktop}>
+                <UserMenu
+                    initialTheme="system"
+                    userEmail={EMAIL}
+                    onOpenSettings={vi.fn()}
+                    onOpenShortcuts={vi.fn()}
+                />
+            </DesktopModeProvider>
+        </TooltipProvider>,
     );
     fireEvent.keyDown(screen.getByTestId("user-menu"), { key: "Enter" });
 }
