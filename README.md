@@ -110,10 +110,6 @@ Set variables in `.env`. The complete reference is in the app at `/docs/self-hos
 
 Keep `ENCRYPTION_KEY` in a safe place, separate from the database backup. Encrypted content cannot be recovered without it. Changing `POSTGRES_PASSWORD` in `.env` does not change a database that already exists. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers rotation and production setup.
 
-## Upgrading an existing installation
-
-If you run an earlier installation, read [docs/MIGRATION_FROM_RIFFADO.md](docs/MIGRATION_FROM_RIFFADO.md) before you change anything. It lists the renamed webhook headers, the Compose project and database names, the renamed environment variables, and the required upgrade order for the audio pipeline.
-
 ## Documentation
 
 - In the app at `/docs`. The source is in [content/docs](content/docs). It covers installation, configuration, AI providers, notifications, automation, backup, and the public API.
@@ -154,7 +150,5 @@ uv run --frozen --group dev pytest
 OpenAudioHub is licensed under the [GNU Affero General Public License v3.0](LICENSE). If you run a modified version as a network service, you must make its source available to the people who use it. [NOTICE](NOTICE) lists the third-party components and their licenses.
 
 ## Attribution
-
-OpenAudioHub is based on Riffado v0.6.4 (commit `712e74f`), an AGPL-3.0 project created by Perier and maintained by the Riffado community. The long-audio pipeline was developed in a fork of Riffado. OpenAudioHub is maintained independently of the Riffado project.
 
 OpenAudioHub is independent of Plaud Inc. and is not endorsed by Plaud. Device and service names are used only to describe interoperability.
