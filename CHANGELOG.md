@@ -6,6 +6,12 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-15
+
+### Added
+
+- **Merge recordings**: in the library, choose Select, pick two or more recordings and press Merge. Order them by recording time or import order, or move items up and down, then merge them into one new recording. When every part is transcribed, the transcripts are joined with their timestamps shifted. The originals are kept unless you tick "Delete original recordings after merging".
+
 ## [1.5.0] - 2026-10-15
 
 ### Added
