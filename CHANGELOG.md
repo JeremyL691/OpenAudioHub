@@ -22,6 +22,9 @@ Based on Riffado v0.6.4 (`712e74f`). Release notes from before this project are 
 
 ### Fixed
 
+- Closing the Mac app's window now keeps the app and its background sync running, as intended; before, it quit the app.
+- A summary in progress keeps running when you leave the recording; coming back shows it as in progress, and the result appears when it is ready.
+- Summaries with reasoning models (such as DeepSeek) no longer fail when the model spends its whole output budget thinking: the request is retried once with low reasoning effort.
 - The Mac app no longer asks you to reconnect Plaud every day. Plaud tokens last 24 hours, and the app now renews the token in the background from your saved Plaud sign-in.
 
 ## [1.4.0] - 2026-10-13
