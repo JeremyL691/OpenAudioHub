@@ -234,8 +234,8 @@ describe("generateSummaryForRecording -- model output", () => {
         expect(payload.max_tokens).toBe(16384);
     });
 
-    it("rejects an empty reply cut off at the limit without saving", async () => {
-        chatCompletionsCreate.mockResolvedValueOnce({
+    it("rejects an empty reply cut off at the limit, after the retry, without saving", async () => {
+        chatCompletionsCreate.mockResolvedValue({
             choices: [{ finish_reason: "length", message: { content: "" } }],
         });
         mockLookups(openAiCredentials);
@@ -321,5 +321,59 @@ describe("generateSummaryForRecording -- long transcripts", () => {
         expect(final.messages[1].content).toContain("### Part 15 (about");
         expect(final.messages[1].content).toContain("11:00:00");
         expect(final.messages[1].content).not.toContain("word word");
+    });
+});
+
+describe("generateSummaryForRecording -- reasoning models", () => {
+    const credentials = [
+        {
+            id: "creds-go",
+            provider: "OpenAI",
+            apiKey: "enc",
+            baseUrl: null,
+            defaultModel: "deepseek-v4.1-flash",
+            isDefaultEnhancement: true,
+            createdAt: new Date("2026-01-01"),
+        },
+    ];
+    const reasonedOut = {
+        choices: [{ finish_reason: "length", message: { content: "" } }],
+    };
+
+    it("retries with low reasoning effort when the budget went to reasoning", async () => {
+        mockLookups(credentials);
+        chatCompletionsCreate
+            .mockResolvedValueOnce(reasonedOut)
+            .mockResolvedValueOnce({
+                choices: [
+                    {
+                        finish_reason: "stop",
+                        message: { content: "## Overview" },
+                    },
+                ],
+            });
+
+        const result = await generateSummaryForRecording(userId, recordingId);
+
+        expect(result.summary).toBe("## Overview");
+        expect(chatCompletionsCreate).toHaveBeenCalledTimes(2);
+        expect(chatCompletionsCreate.mock.calls[0][0]).not.toHaveProperty(
+            "reasoning_effort",
+        );
+        expect(chatCompletionsCreate.mock.calls[1][0]).toMatchObject({
+            reasoning_effort: "low",
+        });
+    });
+
+    it("keeps the output-budget error when the provider rejects the retry", async () => {
+        mockLookups(credentials);
+        chatCompletionsCreate
+            .mockResolvedValueOnce(reasonedOut)
+            .mockRejectedValueOnce(new Error("Unrecognized request argument"));
+
+        await expect(
+            generateSummaryForRecording(userId, recordingId),
+        ).rejects.toMatchObject({ code: ErrorCode.UPSTREAM_BAD_RESPONSE });
+        expect(chatCompletionsCreate).toHaveBeenCalledTimes(2);
     });
 });
