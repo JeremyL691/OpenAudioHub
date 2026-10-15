@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseFile } from "music-metadata";
@@ -56,6 +56,19 @@ describe("concatToOpus", () => {
         const durationMs = (meta.format.duration ?? 0) * 1000;
         expect(Math.abs(durationMs - 2000)).toBeLessThanOrEqual(100);
         expect(meta.format.numberOfChannels).toBe(1);
+    });
+
+    it("joins matching Opus inputs without re-encoding", async () => {
+        // A quote in the name exercises the concat list escaping.
+        const quoted = path.join(dir, "it's.ogg");
+        await copyFile(opusPath, quoted);
+        const outPath = path.join(dir, "copied.ogg");
+        await concatToOpus([opusPath, quoted], outPath);
+
+        const meta = await parseFile(outPath, { duration: true });
+        const durationMs = (meta.format.duration ?? 0) * 1000;
+        expect(Math.abs(durationMs - 2000)).toBeLessThanOrEqual(100);
+        expect(meta.format.codec).toBe("Opus");
     });
 
     it("rejects fewer than 2 inputs", async () => {

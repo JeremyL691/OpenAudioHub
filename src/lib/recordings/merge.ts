@@ -1,11 +1,12 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { parseFile } from "music-metadata";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
 import { recordings, transcriptions } from "@/db/schema";
@@ -161,12 +162,23 @@ export async function mergeRecordings(
     }
 }
 
+// ffprobe, not music-metadata: Plaud's Ogg files carry an extra data stream
+// that leaves music-metadata without a duration.
 async function probeDurationMs(filePath: string): Promise<number> {
     try {
-        const { format } = await parseFile(filePath, { duration: true });
-        return Math.round((format.duration ?? 0) * 1000);
+        const { stdout } = await promisify(execFile)("ffprobe", [
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+            filePath,
+        ]);
+        const seconds = Number.parseFloat(stdout);
+        return Number.isFinite(seconds) ? Math.round(seconds * 1000) : 0;
     } catch (err) {
-        console.error("Audio metadata parse failed:", err);
+        console.error("ffprobe failed:", err);
         return 0;
     }
 }
