@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type SyncRingState = "ok" | "failed" | "syncing" | "idle";
@@ -94,24 +93,19 @@ const RING_CLASS: Record<SyncRingState, string> = {
     idle: "border-muted-foreground/40",
 };
 
-/** Solid ring drawn just outside the avatar; the children are the avatar trigger. */
-export function SyncRing({
-    state,
-    children,
-}: {
-    state: SyncRingState;
-    children: ReactNode;
-}) {
+/**
+ * Solid ring drawn just outside the avatar. Render it inside the avatar button:
+ * `-webkit-app-region` is inherited, so as a sibling over the button it would
+ * take the title bar's drag region and swallow the button's clicks on macOS.
+ */
+export function SyncRing({ state }: { state: SyncRingState }) {
     return (
-        <span className="relative inline-flex rounded-full">
-            {children}
-            <span
-                aria-hidden="true"
-                className={cn(
-                    "pointer-events-none absolute -inset-[3px] rounded-full border-2",
-                    RING_CLASS[state],
-                )}
-            />
-        </span>
+        <span
+            aria-hidden="true"
+            className={cn(
+                "pointer-events-none absolute -inset-[3px] rounded-full border-2",
+                RING_CLASS[state],
+            )}
+        />
     );
 }

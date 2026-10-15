@@ -100,27 +100,26 @@ export function UserMenu({
 
     return (
         <DropdownMenu>
-            <SyncRing state={syncState}>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                aria-label={`Account menu${SYNC_ARIA_SUFFIX[syncState]}`}
-                                data-testid="user-menu"
-                                data-sync-state={syncState}
-                                className="size-10 rounded-full bg-muted font-semibold text-foreground hover:bg-accent sm:size-8"
-                            >
-                                {emailInitial(userEmail)}
-                            </Button>
-                        </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                        {syncRingLabel(syncInput)}
-                    </TooltipContent>
-                </Tooltip>
-            </SyncRing>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label={`Account menu${SYNC_ARIA_SUFFIX[syncState]}`}
+                            data-testid="user-menu"
+                            data-sync-state={syncState}
+                            className="relative size-10 rounded-full bg-muted font-semibold text-foreground hover:bg-accent sm:size-8"
+                        >
+                            {emailInitial(userEmail)}
+                            <SyncRing state={syncState} />
+                        </Button>
+                    </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    {syncRingLabel(syncInput)}
+                </TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end" className="w-72 p-0">
                 <div className="flex items-center gap-3 border-b p-3">
                     <div
