@@ -74,6 +74,14 @@ describe("GET /api/recordings/download format", () => {
         expect(openAudioAsMp3).not.toHaveBeenCalled();
     });
 
+    it("sends a zip for several requested ids even when only one is found", async () => {
+        const response = await GET(
+            request("ids=rec-1,rec-gone&format=original"),
+        );
+        expect(response.headers.get("Content-Type")).toBe("application/zip");
+        await response.arrayBuffer();
+    });
+
     it("defaults to a zip of MP3s", async () => {
         const response = await GET(request("ids=rec-1"));
         expect(response.headers.get("Content-Type")).toBe("application/zip");

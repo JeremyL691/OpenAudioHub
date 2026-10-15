@@ -11,6 +11,7 @@ import {
     Unplug,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useSyncStatus } from "@/components/app-shell/providers";
 import {
     SyncRing,
@@ -84,13 +85,31 @@ export function UserMenu({
         lastSyncResult,
         manualSync,
     } = useSyncStatus();
+    // Until this page has synced, the stored connection state says whether
+    // Plaud already rejected the token (a sync on another page, or before a reload).
+    const [storedNeedsReconnect, setStoredNeedsReconnect] = useState(false);
+    useEffect(() => {
+        const controller = new AbortController();
+        fetch("/api/plaud/connection", { signal: controller.signal })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) =>
+                setStoredNeedsReconnect(data?.needsReconnect === true),
+            )
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
     const syncInput = {
         isAutoSyncing,
         lastSyncTime,
         nextSyncTime,
-        lastSyncResult,
+        lastSyncResult:
+            lastSyncResult ??
+            (storedNeedsReconnect
+                ? { success: false, needsReconnect: true }
+                : null),
     };
     const syncState = syncRingState(syncInput);
+    const needsReconnect = syncInput.lastSyncResult?.needsReconnect;
 
     const themeOptions = [
         { value: "light" as const, label: "Light", icon: Sun },
@@ -154,7 +173,7 @@ export function UserMenu({
                         />
                         <span className="flex-1">Sync now</span>
                     </DropdownMenuItem>
-                    {lastSyncResult?.needsReconnect === true && (
+                    {needsReconnect === true && (
                         <DropdownMenuItem
                             onSelect={() => push("/settings/plaud-account")}
                         >

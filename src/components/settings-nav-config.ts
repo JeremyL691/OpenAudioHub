@@ -1,5 +1,6 @@
 import {
     AppWindow,
+    Bell,
     Bot,
     Download,
     FileText,
@@ -53,8 +54,7 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
             { name: "Playback", id: "playback", icon: Play },
             { name: "Display", id: "display", icon: Monitor },
             { name: "Desktop", id: "desktop", icon: AppWindow },
-            // Hidden until notifications are planned; the section code is kept.
-            // { name: "Notifications", id: "notifications", icon: Bell },
+            { name: "Notifications", id: "notifications", icon: Bell },
         ],
     },
     {
@@ -96,6 +96,12 @@ export const SETTINGS_NAV: NavItem[] = SETTINGS_NAV_GROUPS.flatMap(
     (g) => g.items,
 );
 
+// Hidden until notifications are planned. The route stays, because sent
+// emails link to /settings/notifications.
+const HIDDEN_SECTIONS: ReadonlySet<SettingsSection> = new Set([
+    "notifications",
+]);
+
 /**
  * Nav groups and items the viewer can see. The Desktop section only exists in
  * the macOS desktop shell.
@@ -103,7 +109,11 @@ export const SETTINGS_NAV: NavItem[] = SETTINGS_NAV_GROUPS.flatMap(
 export function visibleSettingsNavGroups(desktop: boolean) {
     return SETTINGS_NAV_GROUPS.map((group) => ({
         ...group,
-        items: group.items.filter((item) => desktop || item.id !== "desktop"),
+        items: group.items.filter(
+            (item) =>
+                !HIDDEN_SECTIONS.has(item.id) &&
+                (desktop || item.id !== "desktop"),
+        ),
     }));
 }
 
