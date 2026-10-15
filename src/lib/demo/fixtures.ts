@@ -243,6 +243,7 @@ export function buildDemoRecordings(now: Date): Recording[] {
         duration: seed.duration * 1000,
         filesize: seed.filesize,
         startTime: isoMinutesAgo(now, seed.minutesAgo),
+        createdAt: isoMinutesAgo(now, seed.minutesAgo),
         deviceSn: seed.deviceSn,
         hasTranscript: !!seed.transcript,
         hasSummary: !!seed.summary,
