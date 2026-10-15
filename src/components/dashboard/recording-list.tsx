@@ -21,6 +21,7 @@ import {
     type StatusFilter,
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
+import { MergeRecordingsDialog } from "@/components/recordings/merge-recordings-dialog";
 import { dateGroupFallbackLabel, dateGroupLabel } from "@/lib/format-date";
 import { recordingsZipDownloadPath } from "@/lib/recordings/filename";
 import type { DateTimeFormat } from "@/types/common";
@@ -110,6 +111,7 @@ export function RecordingList({
     const [hasHydrated, setHasHydrated] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+    const [mergeOpen, setMergeOpen] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -308,6 +310,10 @@ export function RecordingList({
     const downloadHref = liveCheckedIds.length
         ? recordingsZipDownloadPath(liveCheckedIds)
         : null;
+    const selectedRecordings = useMemo(() => {
+        const selected = new Set(liveCheckedIds);
+        return recordings.filter((r) => selected.has(r.id));
+    }, [recordings, liveCheckedIds]);
 
     return (
         <div>
@@ -334,6 +340,7 @@ export function RecordingList({
                         setCheckedIds(new Set(filtered.map((r) => r.id)))
                     }
                     downloadHref={downloadHref}
+                    onMerge={() => setMergeOpen(true)}
                 />
             </div>
 
@@ -404,6 +411,13 @@ export function RecordingList({
 
                 <div ref={sentinelRef} className="h-4" aria-hidden="true" />
             </div>
+
+            <MergeRecordingsDialog
+                recordings={selectedRecordings}
+                open={mergeOpen}
+                onClose={() => setMergeOpen(false)}
+                onMerged={() => handleSelectModeChange(false)}
+            />
         </div>
     );
 }

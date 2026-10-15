@@ -100,6 +100,7 @@ export default async function RecordingDetailPage({
                 ...recording,
                 filename: decryptText(recording.filename),
                 startTime: recording.startTime.toISOString(),
+                createdAt: recording.createdAt.toISOString(),
                 waveformPeaks,
             }}
             initialPlaybackSpeed={settingsRow?.defaultPlaybackSpeed ?? 1.0}

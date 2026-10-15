@@ -40,6 +40,7 @@ export default async function RecordingsPage({
                 filename: recordings.filename,
                 duration: recordings.duration,
                 startTime: recordings.startTime,
+                createdAt: recordings.createdAt,
                 filesize: recordings.filesize,
                 deviceSn: recordings.deviceSn,
                 waveformPeaks: recordings.waveformPeaks,
