@@ -17,23 +17,42 @@ OpenAudioHub is self-hosted software. This project does not operate a hosted ser
 
 ## Features
 
+- **A library built for listening back.** A Dashboard shows what came in this week, what still needs a transcript and what is processing. The sidebar groups recordings into collections (Starred, Last 7 days, From Plaud, Uploaded), and search covers titles and transcript text. Click any transcript line to jump the player there.
 - **Plaud sync.** A background worker and open browser tabs pull new recordings from your Plaud account. Sync is idempotent, so an interrupted run resumes without creating duplicates. Plaud Note, Note Pro, and NotePin are supported.
 - **Transcription with the providers you choose.** OpenAI, Groq, OpenRouter, Together AI, Google Gemini, ElevenLabs Scribe with speaker labels, SiliconFlow (China), LM Studio, Ollama, and any other OpenAI-compatible endpoint. OpenCode Go can write summaries and titles. Browser transcription runs Whisper on your device and needs no API key.
 - **Summaries.** Markdown templates for meeting minutes, interviews, calls, lectures, brainstorms, and voice memos, plus your own prompts. Choose the output language for each run (Chinese, English, Japanese, Korean, or the transcript's own), copy the result, or download it as Markdown or TXT. Summaries can also be generated automatically after transcription.
 - **Long-audio pipeline (optional).** Speech is detected locally with Silero VAD, long silences are skipped, and the audio is processed in chunks. Jobs keep checkpoints, support retry and cancellation, and resume after a restart. Transcript segments link back to the original audio.
 - **Your storage.** Audio can live on the local filesystem or in any S3-compatible bucket, including AWS S3, Cloudflare R2, MinIO, and Backblaze B2.
-- **Notifications.** Bark for iOS push, browser notifications, and email over SMTP.
+- **Notifications.** Bark for iOS push, browser notifications, and email over SMTP. The settings page is hidden from the navigation for now; open `/settings/notifications` to configure it.
 - **Automation.** Read-only personal API keys for `/api/v1`, and webhook deliveries signed with HMAC-SHA256.
-- **Export.** A full-data ZIP with audio, transcripts, summaries, and a manifest. Transcripts can also be exported as JSON, TXT, SRT, or VTT.
+- **Export and backup.** A full-data ZIP with audio, transcripts, summaries, and a manifest. Transcripts can also be exported as JSON, TXT, SRT, or VTT. The Mac app can also run scheduled backups and save each new recording to a folder as it arrives.
+- **Merge recordings.** Join two or more recordings into one. When every part has a transcript, the transcripts are joined on one timeline.
 - **Encryption at rest.** Transcripts, summaries, titles, prompts, provider keys, and Plaud tokens are encrypted with AES-256-GCM under a key you hold.
 
 ## Screenshots
 
-The overview, the recording library, and a recording with its transcript and summary, at a 1280 px width in light mode.
+The app follows your system's light or dark appearance. Shown at a 1440 px width.
 
-| Overview | Library | Recording |
-| --- | --- | --- |
-| ![Overview](docs/screenshots/overview-1280-light.png) | ![Library](docs/screenshots/library-1280-light.png) | ![Recording detail](docs/screenshots/recording-detail-1280-light.png) |
+| Dashboard | Library |
+| --- | --- |
+| ![Dashboard](docs/screenshots/dashboard-1440-light.png) | ![Library](docs/screenshots/library-1440-light.png) |
+
+| Recording | Settings |
+| --- | --- |
+| ![A recording with its transcript and summary](docs/screenshots/recording-1440-light.png) | ![Settings](docs/screenshots/settings-1440-light.png) |
+
+<details>
+<summary>Dark appearance</summary>
+
+| Dashboard | Library |
+| --- | --- |
+| ![Dashboard, dark](docs/screenshots/dashboard-1440-dark.png) | ![Library, dark](docs/screenshots/library-1440-dark.png) |
+
+| Recording | Settings |
+| --- | --- |
+| ![Recording, dark](docs/screenshots/recording-1440-dark.png) | ![Settings, dark](docs/screenshots/settings-1440-dark.png) |
+
+</details>
 
 ## Architecture
 
