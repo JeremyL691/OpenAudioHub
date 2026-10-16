@@ -143,7 +143,8 @@ function deliveryStatusClass(status: string): string {
     if (status === "success" || status === "delivered") {
         return "bg-success text-success-foreground";
     }
-    if (status === "failed") return "bg-destructive text-destructive-foreground";
+    if (status === "failed")
+        return "bg-destructive text-destructive-foreground";
     return "bg-muted text-muted-foreground";
 }
 
