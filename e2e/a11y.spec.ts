@@ -70,7 +70,7 @@ for (const scheme of ["light", "dark"] as const) {
         test("overview", async ({ page }) => {
             await page.goto("/dashboard");
             await expect(
-                page.getByRole("region", { name: "Totals" }),
+                page.getByRole("region", { name: "At a glance" }),
             ).toBeVisible();
             await expectNoSeriousViolations(page);
         });

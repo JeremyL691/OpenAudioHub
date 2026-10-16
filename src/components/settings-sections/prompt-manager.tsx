@@ -229,13 +229,13 @@ export function PromptManager() {
             {/* Preset prompts (read-only) */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-[13px] font-semibold text-muted-foreground">
+                    <h3 className="text-[13px] font-semibold">
                         Preset Prompts
                     </h3>
                 </div>
                 <div className="divide-y divide-border">
                     {Object.values(PROMPT_PRESETS).map((preset) => (
-                        <div key={preset.id} className="py-3">
+                        <div key={preset.id} className="py-2.5">
                             <div className="flex items-center justify-between gap-3">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
@@ -253,7 +253,7 @@ export function PromptManager() {
                                     </p>
                                 </div>
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={() =>
                                         setViewingPromptId(preset.id)
@@ -270,7 +270,7 @@ export function PromptManager() {
             {/* Custom prompts */}
             <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-[13px] font-semibold text-muted-foreground">
+                    <h3 className="text-[13px] font-semibold">
                         Custom Prompts
                     </h3>
                     <Button
@@ -290,7 +290,7 @@ export function PromptManager() {
                 ) : (
                     <div className="divide-y divide-border">
                         {customPrompts.map((prompt) => (
-                            <div key={prompt.id} className="py-3">
+                            <div key={prompt.id} className="py-2.5">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -306,7 +306,7 @@ export function PromptManager() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 setViewingPromptId(prompt.id)
@@ -315,7 +315,7 @@ export function PromptManager() {
                                             View
                                         </Button>
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 setEditingCustomPrompt({
@@ -328,7 +328,7 @@ export function PromptManager() {
                                             <Pencil className="size-4" />
                                         </Button>
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 handleDeleteCustomPrompt(
@@ -446,7 +446,7 @@ Generate the title now:`}
                             </div>
                             <div className="flex justify-end gap-2">
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     onClick={() => setEditingCustomPrompt(null)}
                                 >
                                     Cancel

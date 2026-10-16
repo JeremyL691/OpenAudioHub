@@ -38,7 +38,7 @@ export function SectionCard({
             )}
         >
             <CardHeader className="px-1">
-                <CardTitle className="text-[13px] font-semibold text-muted-foreground">
+                <CardTitle className="text-[13px] font-semibold">
                     {title}
                 </CardTitle>
                 {description ? (
@@ -48,8 +48,8 @@ export function SectionCard({
                 ) : null}
                 {actions ? <CardAction>{actions}</CardAction> : null}
             </CardHeader>
-            <CardContent className="rounded-xl bg-muted/60 px-4 py-1 dark:bg-muted">
-                {children}
+            <CardContent className="rounded-xl bg-muted px-4">
+                <div className="divide-y divide-border">{children}</div>
             </CardContent>
         </Card>
     );

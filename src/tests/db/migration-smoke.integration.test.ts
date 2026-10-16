@@ -55,7 +55,7 @@ describeWithDatabase("PostgreSQL migration chain", () => {
 
 const MIGRATIONS_DIR = "./src/db/migrations";
 const LAST_BEFORE_REBRAND = "0040_worried_lethal_legion";
-const LATEST_TAG = "0048_scheduled_backup";
+const LATEST_TAG = "0049_starred";
 
 /** Copies migrations up to and including `tag` into a temporary folder. */
 function migrationsUpTo(tag: string): string {

@@ -53,16 +53,16 @@ export function SelfHostAuthChrome({
     children,
 }: AuthChromeProps) {
     return (
-        <div className="grid flex-1 lg:grid-cols-2">
+        <div className="grid flex-1 bg-muted lg:grid-cols-2">
             <BrandPanel />
             <div className="flex flex-col items-center justify-center gap-6 px-4 py-12 sm:px-8">
                 <Link href="/" aria-label="OpenAudioHub" className="lg:hidden">
                     <Logo className="text-xl text-foreground" />
                 </Link>
                 <div className="w-full max-w-sm space-y-6">
-                    <Card className="w-full gap-6 rounded-2xl border-border bg-background p-8 py-8 shadow-sm">
+                    <Card className="w-full gap-6 rounded-2xl border-0 bg-card p-8 py-8 shadow-card">
                         <div className="space-y-1.5">
-                            <h1 className="text-[22px] font-bold tracking-tight">
+                            <h1 className="text-[28px] font-bold tracking-tight">
                                 {title}
                             </h1>
                             {subtitle ? (

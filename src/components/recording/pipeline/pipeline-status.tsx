@@ -79,7 +79,7 @@ function InlinePipelineStatus({
                             <Button
                                 data-testid="pipeline-cancel"
                                 size="sm"
-                                variant="outline"
+                                variant="secondary"
                                 disabled={busy}
                                 onClick={onCancel}
                             >
@@ -91,7 +91,7 @@ function InlinePipelineStatus({
                         <ProgressBar
                             value={progressValue(job)}
                             label="Audio preprocessing progress"
-                            className="h-2"
+                            className="h-1.5 bg-secondary"
                         />
                     )}
                 </div>
@@ -100,7 +100,7 @@ function InlinePipelineStatus({
                 <div
                     data-testid="pipeline-status"
                     data-phase={job?.phase ?? ""}
-                    className="flex flex-col gap-2 rounded-md border border-destructive/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 rounded-lg bg-destructive/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                     role="alert"
                 >
                     <div>
@@ -115,7 +115,7 @@ function InlinePipelineStatus({
                     </div>
                     <Button
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         disabled={busy}
                         data-testid="pipeline-retry"
                         onClick={onRetry}
@@ -148,7 +148,7 @@ function InlinePipelineStatus({
                     </p>
                     <Button
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         disabled={busy}
                         data-testid="pipeline-cancel"
                         onClick={onCancel}
@@ -181,7 +181,7 @@ function EmptyPipelineStatus({
                     </p>
                     <Button
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         disabled={busy}
                         data-testid="pipeline-cancel"
                         onClick={onCancel}
@@ -192,7 +192,7 @@ function EmptyPipelineStatus({
                 <ProgressBar
                     value={progressValue(job)}
                     label="Audio preprocessing progress"
-                    className="h-2"
+                    className="h-1.5 bg-secondary"
                 />
             </div>
         );
@@ -211,7 +211,7 @@ function EmptyPipelineStatus({
                 </p>
                 <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy}
                     data-testid="pipeline-cancel"
                     onClick={onCancel}
@@ -238,7 +238,7 @@ function EmptyPipelineStatus({
                 )}
                 <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy}
                     data-testid="pipeline-retry"
                     onClick={onRetry}

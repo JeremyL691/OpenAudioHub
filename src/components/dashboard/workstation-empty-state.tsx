@@ -20,8 +20,10 @@ export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
             data-testid="empty-state"
             className="flex flex-col items-center justify-center text-center"
         >
-            <Mic className="mb-4 size-14 text-muted-foreground" />
-            <h3 className="mb-1 text-[15px] font-semibold">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                <Mic className="size-7" />
+            </div>
+            <h3 className="mb-1 text-[17px] font-semibold">
                 No recordings yet
             </h3>
             <p className="mb-6 max-w-md text-[13px] text-muted-foreground">
@@ -36,7 +38,7 @@ export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
                 >
                     {isSyncing ? (
                         <>
-                            <RefreshCw className="mr-2 size-4 animate-spin" />
+                            <RefreshCw className="mr-2 size-4 motion-safe:animate-spin" />
                             Syncing…
                         </>
                     ) : (
@@ -47,7 +49,7 @@ export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
                     )}
                 </Button>
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={onUpload}
                     className="h-10 sm:h-8"
                 >

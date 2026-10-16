@@ -160,7 +160,7 @@ export function WebhookEditorDialog({
                         <div className="flex gap-2">
                             <Button
                                 type="button"
-                                variant="outline"
+                                variant="secondary"
                                 className="flex-1"
                                 onClick={copySecret}
                             >
@@ -239,7 +239,7 @@ export function WebhookEditorDialog({
                                 ))}
                             </div>
                         </div>
-                        <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3">
+                        <div className="flex items-center justify-between rounded-xl bg-muted p-3">
                             <Label htmlFor="webhook-enabled">Enabled</Label>
                             <Switch
                                 id="webhook-enabled"
@@ -256,7 +256,7 @@ export function WebhookEditorDialog({
                         <div className="flex justify-end gap-2">
                             <Button
                                 type="button"
-                                variant="outline"
+                                variant="secondary"
                                 onClick={() => onOpenChange(false)}
                                 disabled={isSaving}
                             >

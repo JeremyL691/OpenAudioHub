@@ -3,8 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import { useDialogs, useSyncStatus } from "@/components/app-shell/providers";
+import { SettingsTileContext } from "@/components/settings/section-header";
 import { type Provider, SettingsContent } from "@/components/settings-content";
-import { SETTINGS_STORAGE_KEY } from "@/components/settings-nav-config";
+import {
+    SETTINGS_NAV,
+    SETTINGS_STORAGE_KEY,
+} from "@/components/settings-nav-config";
 import { SettingsNavMobile } from "@/components/settings-nav-mobile";
 import { SettingsNavSidebar } from "@/components/settings-nav-sidebar";
 import type { SettingsSection } from "@/types/settings";
@@ -32,6 +36,8 @@ export function SettingsPage({ section, initialProviders }: SettingsPageProps) {
         }
     }, [section]);
 
+    const tile = SETTINGS_NAV.find((item) => item.id === section)?.tile;
+
     const handleSectionChange = useCallback(
         (next: SettingsSection) => push(`/settings/${next}`),
         [push],
@@ -49,21 +55,27 @@ export function SettingsPage({ section, initialProviders }: SettingsPageProps) {
                     />
                 </div>
                 <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
-                    <div
-                        key={section}
-                        data-testid={`settings-section-${section}`}
-                        className="mx-auto flex max-w-3xl animate-in flex-col gap-6 fade-in-0 duration-200"
+                    <SettingsTileContext.Provider
+                        value={tile ?? "bg-tile-gray"}
                     >
-                        <SettingsContent
-                            activeSection={section}
-                            initialProviders={initialProviders}
-                            onReRunOnboarding={() => setOnboardingOpen(true)}
-                            onPlaudReconnected={() => {
-                                refresh();
-                                void manualSync();
-                            }}
-                        />
-                    </div>
+                        <div
+                            key={section}
+                            data-testid={`settings-section-${section}`}
+                            className="mx-auto flex max-w-3xl animate-in flex-col space-y-7 fade-in-0 duration-200"
+                        >
+                            <SettingsContent
+                                activeSection={section}
+                                initialProviders={initialProviders}
+                                onReRunOnboarding={() =>
+                                    setOnboardingOpen(true)
+                                }
+                                onPlaudReconnected={() => {
+                                    refresh();
+                                    void manualSync();
+                                }}
+                            />
+                        </div>
+                    </SettingsTileContext.Provider>
                 </main>
             </div>
         </div>

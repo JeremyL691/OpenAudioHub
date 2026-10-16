@@ -1,6 +1,6 @@
 "use client";
 
-import { Command, Upload } from "lucide-react";
+import { Command, Search, Upload } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
     useDialogs,
@@ -17,9 +17,9 @@ import {
 } from "@/components/ui/tooltip";
 
 const TITLES: [prefix: string, title: string][] = [
-    ["/recordings", "Recordings"],
-    ["/dashboard", "Overview"],
-    ["/dev/demo-dashboard", "Recordings"],
+    ["/recordings", "Library"],
+    ["/dashboard", "Dashboard"],
+    ["/dev/demo-dashboard", "Library"],
     ["/settings", "Settings"],
 ];
 
@@ -63,7 +63,7 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                 {titleFor(pathname)}
             </p>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-                {paletteAvailable && (
+                {paletteAvailable ? (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
@@ -85,6 +85,30 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                             Search recordings, transcripts, and actions
                         </TooltipContent>
                     </Tooltip>
+                ) : (
+                    <>
+                        {/* biome-ignore lint/a11y/useSemanticElements: role="search" makes the GET form a search landmark */}
+                        <form
+                            action="/recordings"
+                            role="search"
+                            className="hidden lg:block"
+                        >
+                            <div className="relative">
+                                <Search
+                                    aria-hidden
+                                    className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                                />
+                                <input
+                                    name="q"
+                                    type="search"
+                                    placeholder="Search"
+                                    aria-label="Search recordings"
+                                    data-testid="toolbar-search"
+                                    className="h-8 w-56 rounded-lg bg-secondary px-3 pl-8 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                            </div>
+                        </form>
+                    </>
                 )}
                 <input
                     ref={uploadInputRef}
@@ -108,7 +132,7 @@ export function TopBar({ userEmail, initialTheme }: TopBarProps) {
                         >
                             <Upload className="size-4 sm:mr-2" />
                             <span className="hidden sm:inline">
-                                {isUploading ? "Uploading…" : "Upload Audio"}
+                                {isUploading ? "Uploading…" : "Upload"}
                             </span>
                         </Button>
                     </TooltipTrigger>

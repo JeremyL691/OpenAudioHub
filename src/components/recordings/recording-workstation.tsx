@@ -1,8 +1,16 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    type ComponentProps,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { LocalTime } from "@/components/local-time";
@@ -13,9 +21,7 @@ import type { TranscriptOption } from "@/components/recording/transcript/types";
 import { RecordingActionsMenu } from "@/components/recordings/recording-actions-menu";
 import { RecordingDetailsCard } from "@/components/recordings/recording-details-card";
 import { RecordingTitle } from "@/components/recordings/recording-title";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -25,10 +31,16 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRecordingTranscript } from "@/hooks/use-recording-transcript";
-import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
+import { setRecordingStarred } from "@/lib/recordings/star";
 import { recordingSource } from "@/lib/recordings/transcript-status";
+import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -55,13 +67,122 @@ interface RecordingWorkstationProps {
     scrubberStyle?: "waveform" | "slider";
 }
 
-/**
- * Below xl the three sections are tabs. From xl the transcript runs down the
- * left and the summary and details stack on the right. The forceMount panels
- * stay in the DOM, so the grid can show them all, and the classes hide the
- * inactive ones below xl.
- */
+type SummaryData = ComponentProps<typeof SummaryPanel>["summary"];
+
+/** Below 1440 px the sections are tabs. From 1440 px the transcript runs beside a right column. */
+const WIDE_QUERY = "(min-width: 90rem)";
 const PANEL_CLASS = "data-[state=inactive]:hidden";
+
+function subscribeWide(onChange: () => void) {
+    if (typeof window.matchMedia !== "function") return () => {};
+    const query = window.matchMedia(WIDE_QUERY);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+}
+
+function getIsWide() {
+    return (
+        typeof window.matchMedia === "function" &&
+        window.matchMedia(WIDE_QUERY).matches
+    );
+}
+
+/** One layout renders at a time, so the panels mount once. */
+function useIsWide() {
+    return useSyncExternalStore(subscribeWide, getIsWide, () => false);
+}
+
+/** Stars or unstars a recording. The icon changes at once and reverts if the server refuses. */
+export function RecordingStarButton({
+    recordingId,
+    starred: starredProp,
+}: {
+    recordingId: string;
+    starred: boolean;
+}) {
+    const { refresh } = useRouter();
+    const [starred, setStarred] = useState(starredProp);
+
+    useEffect(() => {
+        setStarred(starredProp);
+    }, [starredProp]);
+
+    const handleToggle = useCallback(async () => {
+        const next = !starred;
+        setStarred(next);
+        try {
+            await setRecordingStarred(recordingId, next);
+            refresh();
+        } catch {
+            setStarred(!next);
+            toast.error("Could not update the star");
+        }
+    }, [recordingId, refresh, starred]);
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-10 shrink-0 sm:size-8"
+                    data-testid="recording-star"
+                    aria-pressed={starred}
+                    aria-label={starred ? "Unstar" : "Star"}
+                    onClick={handleToggle}
+                >
+                    <Star
+                        className={cn(
+                            "size-4",
+                            starred && "fill-current text-primary",
+                        )}
+                        aria-hidden="true"
+                    />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+                {starred ? "Unstar" : "Star"}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
+
+/** The date, duration and source line under a recording's title. */
+export function RecordingMeta({ recording }: { recording: Recording }) {
+    return (
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <LocalTime value={recording.startTime} />
+            <span aria-hidden="true">·</span>
+            <span>{formatDurationMs(recording.duration)}</span>
+            <span aria-hidden="true">·</span>
+            <span>{recordingSource(recording.deviceSn)}</span>
+        </p>
+    );
+}
+
+/** The summary once the recording has a transcript, otherwise a short note. */
+export function RecordingSummary({
+    hasTranscript,
+    summary,
+    title,
+}: {
+    hasTranscript: boolean;
+    summary: SummaryData;
+    title: string;
+}) {
+    if (hasTranscript) {
+        return <SummaryPanel summary={summary} title={title} />;
+    }
+    return (
+        <div className="rounded-2xl bg-card p-5 shadow-card">
+            <h2 className="text-[17px] font-semibold">Summary</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+                A summary is available once the recording has a transcript.
+            </p>
+        </div>
+    );
+}
 
 export function RecordingWorkstation({
     recording,
@@ -73,6 +194,7 @@ export function RecordingWorkstation({
     scrubberStyle,
 }: RecordingWorkstationProps) {
     const { push, refresh } = useRouter();
+    const isWide = useIsWide();
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -178,15 +300,36 @@ export function RecordingWorkstation({
         }
     }, [recording.id, refresh, push]);
 
+    const transcriptPanel = (
+        <TranscriptCard
+            variant="detail"
+            recording={displayRecording}
+            transcript={transcript}
+            isTranscribing={isTranscribing}
+            onTranscribe={handleTranscribe}
+            onTranscribeComplete={refresh}
+            playbackTimeMs={playbackTimeMs}
+            onSeekTimestamp={seekTo}
+        />
+    );
+    const summaryPanel = (
+        <RecordingSummary
+            hasTranscript={hasTranscript}
+            summary={transcript.summary}
+            title={recording.filename}
+        />
+    );
+
     return (
         <div className="bg-background lg:h-[calc(100svh-3.25rem)] lg:overflow-hidden">
-            <div className="container mx-auto max-w-7xl px-4 py-6 lg:flex lg:h-full lg:min-h-0 lg:max-w-none lg:flex-col lg:px-0 lg:py-0">
+            <div className="container mx-auto max-w-7xl space-y-6 px-4 py-6 lg:flex lg:h-full lg:min-h-0 lg:max-w-none lg:flex-col lg:space-y-0 lg:px-0 lg:py-0">
                 {/* Header */}
-                <div className="mb-6 flex items-start gap-4 lg:mb-0 lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3">
+                <div className="flex items-start gap-3 lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3">
                     <Button
                         onClick={() => push("/recordings")}
-                        variant="outline"
+                        variant="ghost"
                         size="icon"
+                        className="size-10 shrink-0 sm:size-8"
                         aria-label="Back to recordings"
                     >
                         <ArrowLeft className="size-4" />
@@ -202,19 +345,15 @@ export function RecordingWorkstation({
                                 className="text-[22px] font-bold tracking-tight"
                             />
                         </h1>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
-                            <LocalTime value={recording.startTime} />
-                            <span aria-hidden="true">·</span>
-                            <span>{formatDurationMs(recording.duration)}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{formatBytes(recording.filesize)}</span>
-                            <Badge variant="outline">
-                                {recordingSource(recording.deviceSn)}
-                            </Badge>
-                        </p>
+                        <RecordingMeta recording={recording} />
                     </div>
+                    <RecordingStarButton
+                        recordingId={recording.id}
+                        starred={recording.starred ?? false}
+                    />
                     <RecordingActionsMenu
                         recordingId={recording.id}
+                        starred={recording.starred ?? false}
                         title={filename}
                         transcript={transcript.activeTranscript ?? null}
                         timeline={transcript.timeline}
@@ -224,8 +363,8 @@ export function RecordingWorkstation({
                     />
                 </div>
 
-                {/* Player and the pipeline strip under it */}
-                <div className="space-y-4 lg:order-last lg:shrink-0 lg:space-y-2 lg:border-t lg:border-border lg:bg-muted/40 lg:px-8">
+                {/* Player card, with the pipeline strip under it. On lg+ it is docked at the bottom as a bar. */}
+                <div className="space-y-4 rounded-2xl bg-card p-5 shadow-card lg:order-last lg:shrink-0 lg:space-y-2 lg:rounded-none lg:border-t lg:border-border lg:bg-background/85 lg:px-8 lg:py-3 lg:shadow-none lg:backdrop-blur">
                     <RecordingPlayer
                         recording={displayRecording}
                         initialPlaybackSpeed={initialPlaybackSpeed}
@@ -263,69 +402,61 @@ export function RecordingWorkstation({
                     )}
                 </div>
 
-                {/* Sections: one tab at a time */}
-                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:pb-8">
-                    <Tabs defaultValue="transcript" className="mt-6 gap-4">
-                        <TabsList>
-                            <TabsTrigger value="transcript">
-                                Transcript
-                            </TabsTrigger>
-                            <TabsTrigger value="summary">Summary</TabsTrigger>
-                            <TabsTrigger value="details">Details</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent
-                            value="transcript"
-                            forceMount
-                            className={PANEL_CLASS}
-                        >
-                            <TranscriptCard
-                                variant="detail"
-                                recording={displayRecording}
-                                transcript={transcript}
-                                isTranscribing={isTranscribing}
-                                onTranscribe={handleTranscribe}
-                                onTranscribeComplete={refresh}
-                                playbackTimeMs={playbackTimeMs}
-                                onSeekTimestamp={seekTo}
-                            />
-                        </TabsContent>
-
-                        <TabsContent
-                            value="summary"
-                            forceMount
-                            className={PANEL_CLASS}
-                        >
-                            {hasTranscript ? (
-                                <SummaryPanel
-                                    summary={transcript.summary}
-                                    title={recording.filename}
+                {/* Sections: they scroll on their own on lg+, under the docked player */}
+                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:pt-4 lg:pb-8">
+                    {isWide ? (
+                        <div className="flex items-start gap-6">
+                            <div className="min-w-0 flex-1">
+                                {transcriptPanel}
+                            </div>
+                            <div className="w-[340px] shrink-0 space-y-4">
+                                {summaryPanel}
+                                <RecordingDetailsCard
+                                    recording={displayRecording}
                                 />
-                            ) : (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Summary</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-sm text-muted-foreground">
-                                            A summary is available once the
-                                            recording has a transcript.
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </TabsContent>
+                            </div>
+                        </div>
+                    ) : (
+                        <Tabs defaultValue="transcript" className="gap-4">
+                            <TabsList className="w-full">
+                                <TabsTrigger value="transcript">
+                                    Transcript
+                                </TabsTrigger>
+                                <TabsTrigger value="summary">
+                                    Summary
+                                </TabsTrigger>
+                                <TabsTrigger value="details">
+                                    Details
+                                </TabsTrigger>
+                            </TabsList>
 
-                        <TabsContent
-                            value="details"
-                            forceMount
-                            className={PANEL_CLASS}
-                        >
-                            <RecordingDetailsCard
-                                recording={displayRecording}
-                            />
-                        </TabsContent>
-                    </Tabs>
+                            <TabsContent
+                                value="transcript"
+                                forceMount
+                                className={PANEL_CLASS}
+                            >
+                                {transcriptPanel}
+                            </TabsContent>
+
+                            <TabsContent
+                                value="summary"
+                                forceMount
+                                className={PANEL_CLASS}
+                            >
+                                {summaryPanel}
+                            </TabsContent>
+
+                            <TabsContent
+                                value="details"
+                                forceMount
+                                className={PANEL_CLASS}
+                            >
+                                <RecordingDetailsCard
+                                    recording={displayRecording}
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    )}
                 </div>
             </div>
 

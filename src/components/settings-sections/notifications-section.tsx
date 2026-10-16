@@ -247,7 +247,7 @@ export function NotificationsSection() {
                             <div className="flex items-center gap-2 pt-1">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={handleSendTestEmail}
                                     disabled={

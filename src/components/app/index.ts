@@ -1,6 +1,11 @@
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { InlineError, type InlineErrorProps } from "./inline-error";
 export { KeyHint, type KeyHintProps } from "./key-hint";
+export {
+    downsamplePeaks,
+    MiniWaveform,
+    type MiniWaveformProps,
+} from "./mini-waveform";
 export { PageHeader, type PageHeaderProps } from "./page-header";
 export { SectionCard, type SectionCardProps } from "./section-card";
 export { StatCard, type StatCardProps } from "./stat-card";

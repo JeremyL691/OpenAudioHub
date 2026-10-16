@@ -224,7 +224,7 @@ export function MergeRecordingsDialog({
                                 key={recording.id}
                                 data-testid="merge-item"
                                 data-id={recording.id}
-                                className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5"
+                                className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5"
                             >
                                 <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
                                     {index + 1}
@@ -311,7 +311,7 @@ export function MergeRecordingsDialog({
                 <DialogFooter className="gap-2 sm:justify-end">
                     <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         className="h-10 px-4 sm:h-8"
                         onClick={onClose}
                         disabled={saving}

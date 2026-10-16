@@ -21,7 +21,7 @@ test.describe("phone layout", () => {
     test("the overview fits", async ({ page }) => {
         await page.goto("/dashboard");
         await expect(
-            page.getByRole("region", { name: "Totals" }),
+            page.getByRole("region", { name: "At a glance" }),
         ).toBeVisible();
         await page.waitForLoadState("networkidle");
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

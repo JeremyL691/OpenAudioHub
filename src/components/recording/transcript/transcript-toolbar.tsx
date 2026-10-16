@@ -51,7 +51,7 @@ export function TranscriptToolbar({
         >
             <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 className="h-10 sm:h-7"
                 aria-label="Download transcript as TXT"
@@ -62,7 +62,7 @@ export function TranscriptToolbar({
             </Button>
             <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 className="h-10 sm:h-7"
                 aria-label="Download transcript as JSON"

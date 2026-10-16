@@ -1,6 +1,13 @@
 "use client";
 
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
+import {
+    Pause,
+    Play,
+    SkipBack,
+    SkipForward,
+    Volume2,
+    VolumeX,
+} from "lucide-react";
 import { Waveform } from "@/components/dashboard/waveform";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -22,10 +29,13 @@ interface Props {
     waveformPeaks: number[] | null;
 }
 
+const SKIP_SECONDS = 15;
+
 /**
- * Controls row for the recording player: play/pause, time label,
- * scrubber (waveform when peaks are decoded, slider otherwise), speed
- * cycle button, and volume slider with a mute toggle.
+ * Controls for the recording player: a full-width scrubber (waveform when
+ * peaks are decoded, slider otherwise) above a transport row. The row holds
+ * the time on the left, skip-back / play / skip-forward centred, and mute,
+ * volume and speed on the right.
  *
  * Pure presentation -- all state lives in usePlaybackEngine, and the
  * parent wires this component's callbacks to that hook's handlers.
@@ -58,52 +68,16 @@ export function RecordingPlayerControls({
             <Volume2 className="size-4" />
         );
 
-    // Phones lay the controls out in three rows: the waveform on top, then
-    // play, time and speed, then volume. Every control fits at 320 px, so the
-    // waveform is never squeezed to zero width. From sm up it is one row.
+    const skipBy = (seconds: number) => {
+        if (seekDisabled) return;
+        onSeekRatio(
+            Math.max(0, Math.min(1, (currentTime + seconds) / duration)),
+        );
+    };
+
     return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-4 lg:flex-nowrap 2xl:min-w-0 2xl:flex-1">
-            <Button
-                onClick={onTogglePlay}
-                data-testid="player-play"
-                size="lg"
-                aria-label={isPlaying ? "Pause" : "Play"}
-                className="order-2 size-10 shrink-0 rounded-full bg-primary px-0 text-primary-foreground sm:order-none"
-            >
-                {isPlaying ? (
-                    <Pause className="size-5" />
-                ) : (
-                    <Play className="size-5" />
-                )}
-            </Button>
-
-            {/*
-              Fixed-width time label, monospace + tabular-nums so digit
-              width is stable, and `formatTimeLike` pads currentTime to
-              match duration's segment structure so the whole
-              `M:SS / H:MM:SS` line never resizes mid-playback. Sits
-              next to play so the eye can pair them without scanning.
-            */}
-            <span
-                data-testid="player-time"
-                className="order-2 min-w-0 flex-1 font-mono text-xs tabular-nums text-muted-foreground sm:order-none sm:flex-none lg:flex-none lg:whitespace-nowrap"
-                aria-live="off"
-            >
-                <span className="text-foreground">
-                    {formatTimeLike(currentTime, duration)}
-                </span>
-                <span className="mx-1 opacity-40">/</span>
-                <span>{formatTimeLike(duration, duration)}</span>
-            </span>
-
-            {/*
-              Waveform takes whatever's left, with min-w-0 so flex
-              doesn't expand the parent when bars are dense.
-            */}
-            <div
-                className="order-1 min-w-0 basis-full sm:order-none sm:flex-1 lg:basis-auto"
-                data-testid="player-scrubber"
-            >
+        <div className="flex flex-col gap-3">
+            <div className="min-w-0" data-testid="player-scrubber">
                 {scrubberStyle === "waveform" && waveformPeaks ? (
                     <Waveform
                         peaks={waveformPeaks}
@@ -111,7 +85,7 @@ export function RecordingPlayerControls({
                         durationSeconds={duration}
                         onSeek={onSeekRatio}
                         disabled={seekDisabled}
-                        height={56}
+                        height={64}
                     />
                 ) : (
                     <Slider
@@ -131,35 +105,92 @@ export function RecordingPlayerControls({
                 )}
             </div>
 
-            <Button
-                onClick={onCycleSpeed}
-                data-testid="player-speed"
-                variant="outline"
-                size="sm"
-                className="order-2 h-10 w-12 shrink-0 px-0 font-mono text-xs tabular-nums sm:order-none sm:h-8"
-                title="Click to cycle playback speed"
-                aria-label={`Playback speed ${speedLabel}. Click to change.`}
-            >
-                {speedLabel}
-            </Button>
-
-            <div className="order-3 flex basis-full items-center gap-2 sm:order-none sm:shrink-0 sm:basis-auto">
-                <button
-                    type="button"
-                    onClick={onToggleMute}
-                    className="-m-3 p-3 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={volume === 0 ? "Unmute" : "Mute"}
-                    title={volume === 0 ? "Unmute" : "Mute"}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                {/*
+                  Fixed-width digits (tabular-nums) and `formatTimeLike` pad
+                  currentTime to duration's segment structure, so the
+                  `M:SS / H:MM:SS` line never resizes mid-playback.
+                */}
+                <span
+                    data-testid="player-time"
+                    className="justify-self-start text-xs tabular-nums text-muted-foreground lg:whitespace-nowrap"
+                    aria-live="off"
                 >
-                    {speakerIcon}
-                </button>
-                <Slider
-                    value={[volume]}
-                    onValueChange={(value) => onVolumeChange(value[0] ?? 75)}
-                    max={100}
-                    className="flex-1 py-3 sm:w-20 sm:flex-none sm:py-0"
-                    aria-label="Volume"
-                />
+                    <span className="text-foreground">
+                        {formatTimeLike(currentTime, duration)}
+                    </span>
+                    <span className="mx-1 opacity-40">/</span>
+                    <span>{formatTimeLike(duration, duration)}</span>
+                </span>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => skipBy(-SKIP_SECONDS)}
+                        disabled={seekDisabled}
+                        className="size-10 rounded-full text-muted-foreground sm:size-8"
+                        aria-label={`Skip back ${SKIP_SECONDS} seconds`}
+                    >
+                        <SkipBack className="size-4" />
+                    </Button>
+                    <Button
+                        onClick={onTogglePlay}
+                        data-testid="player-play"
+                        size="icon"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                        className="size-11 rounded-full bg-primary text-primary-foreground sm:size-11"
+                    >
+                        {isPlaying ? (
+                            <Pause className="size-5" />
+                        ) : (
+                            <Play className="size-5" />
+                        )}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => skipBy(SKIP_SECONDS)}
+                        disabled={seekDisabled}
+                        className="size-10 rounded-full text-muted-foreground sm:size-8"
+                        aria-label={`Skip forward ${SKIP_SECONDS} seconds`}
+                    >
+                        <SkipForward className="size-4" />
+                    </Button>
+                </div>
+
+                <div className="flex items-center justify-self-end gap-1 sm:gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onToggleMute}
+                        className="size-10 rounded-full text-muted-foreground sm:size-8"
+                        aria-label={volume === 0 ? "Unmute" : "Mute"}
+                        title={volume === 0 ? "Unmute" : "Mute"}
+                    >
+                        {speakerIcon}
+                    </Button>
+                    <Slider
+                        value={[volume]}
+                        onValueChange={(value) =>
+                            onVolumeChange(value[0] ?? 75)
+                        }
+                        max={100}
+                        className="hidden w-20 sm:flex"
+                        aria-label="Volume"
+                    />
+                    <Button
+                        onClick={onCycleSpeed}
+                        data-testid="player-speed"
+                        variant="secondary"
+                        size="sm"
+                        className="w-12 px-0 tabular-nums"
+                        title="Click to cycle playback speed"
+                        aria-label={`Playback speed ${speedLabel}. Click to change.`}
+                    >
+                        {speedLabel}
+                    </Button>
+                </div>
             </div>
         </div>
     );

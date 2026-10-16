@@ -116,7 +116,7 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
                     </a>
                 </Button>
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => window.location.reload()}
                     className="w-full"
                 >
@@ -144,7 +144,7 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
                 {error && (
                     <p
                         role="alert"
-                        className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+                        className="rounded-xl bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
                     >
                         {error}
                     </p>
@@ -158,8 +158,8 @@ export function PlaudBrowserHandoff({ code }: { code: string | null }) {
             <div className="flex justify-center">
                 <Logo className="text-xl text-foreground" />
             </div>
-            <Card className="space-y-4 rounded-xl border-0 bg-muted/60 p-6 shadow-none dark:bg-muted">
-                <h1 className="text-xl font-semibold tracking-tight">
+            <Card className="space-y-4 rounded-2xl border-0 bg-card p-6 shadow-card">
+                <h1 className="text-[28px] font-bold tracking-tight">
                     Connect Plaud to OpenAudioHub
                 </h1>
                 {body}

@@ -321,13 +321,13 @@ function ProvidersList({
         );
     }
     return (
-        <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
+        <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
             {providers.map((provider) => {
                 const result = testResults[provider.id];
                 return (
                     <div
                         key={provider.id}
-                        className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-3 px-4 py-2.5 min-h-11 transition-colors hover:bg-accent sm:flex-row sm:items-center sm:justify-between"
                     >
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -335,12 +335,12 @@ function ProvidersList({
                                     {provider.provider}
                                 </h3>
                                 {provider.isDefaultTranscription && (
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-link rounded border border-primary/20">
+                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-link rounded">
                                         Transcription
                                     </span>
                                 )}
                                 {provider.isDefaultEnhancement && (
-                                    <span className="text-xs px-2 py-0.5 bg-info/10 text-info rounded border border-info/20">
+                                    <span className="text-xs px-2 py-0.5 bg-info text-info-foreground rounded-full">
                                         Enhancement
                                     </span>
                                 )}
@@ -374,7 +374,7 @@ function ProvidersList({
                             {!provider.isDefaultTranscription && (
                                 <Button
                                     onClick={() => onSetDefault(provider.id)}
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     className="h-10 sm:h-8"
                                 >
@@ -385,7 +385,7 @@ function ProvidersList({
                                 onClick={() => onTest(provider)}
                                 aria-label="Test connection"
                                 data-testid="provider-row-test"
-                                variant="outline"
+                                variant="secondary"
                                 size="icon"
                                 className="size-10 sm:size-9"
                                 disabled={testingId === provider.id}
@@ -399,7 +399,7 @@ function ProvidersList({
                             <Button
                                 onClick={() => onEdit(provider)}
                                 aria-label="Edit provider"
-                                variant="outline"
+                                variant="secondary"
                                 size="icon"
                                 className="size-10 sm:size-9"
                             >
@@ -408,7 +408,7 @@ function ProvidersList({
                             <Button
                                 onClick={() => onDelete(provider.id)}
                                 aria-label="Delete provider"
-                                variant="outline"
+                                variant="secondary"
                                 size="icon"
                                 className="size-10 sm:size-9"
                                 disabled={deletingId === provider.id}

@@ -69,7 +69,7 @@ export function ForgotPasswordForm({
     return (
         <div className="space-y-6">
             {!smtpConfigured ? (
-                <div className="space-y-3 rounded-lg border border-border bg-muted/60 p-4 text-[13px]">
+                <div className="space-y-3 rounded-xl bg-muted p-4 text-[13px]">
                     <p className="font-medium">
                         Password reset is unavailable on this instance.
                     </p>
@@ -86,7 +86,7 @@ export function ForgotPasswordForm({
                     </p>
                 </div>
             ) : submitted ? (
-                <div className="space-y-3 rounded-lg border border-border bg-muted/60 p-4 text-[13px]">
+                <div className="space-y-3 rounded-xl bg-muted p-4 text-[13px]">
                     <p className="font-medium">Check your email.</p>
                     <p className="text-muted-foreground">
                         If an account exists for{" "}

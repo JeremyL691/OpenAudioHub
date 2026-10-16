@@ -315,7 +315,7 @@ export function EditProviderDialog({
                     <div className="space-y-2">
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             onClick={handleTestConnection}
                             disabled={isLoading || isTesting || !providerName}
@@ -337,7 +337,7 @@ export function EditProviderDialog({
                         )}
                     </div>
 
-                    <Card className="space-y-2 rounded-xl border-0 bg-muted/60 p-4 text-[13px] shadow-none">
+                    <Card className="space-y-2 rounded-xl border-0 bg-muted p-4 text-[13px] shadow-none">
                         {supportsTranscription(providerName) && (
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input

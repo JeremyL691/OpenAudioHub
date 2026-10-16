@@ -26,7 +26,7 @@ export function LargestRecordings({ items }: LargestRecordingsProps) {
     if (items.length === 0) return null;
 
     return (
-        <div className="rounded-lg border bg-card">
+        <div className="rounded-xl bg-muted divide-y divide-border overflow-hidden">
             <div className="px-4 pt-3 pb-2">
                 <div className="text-sm font-medium">Largest recordings</div>
                 <div className="text-xs text-muted-foreground">

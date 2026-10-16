@@ -26,7 +26,7 @@ export function OverviewActions({
         <div className="flex flex-wrap items-center justify-center gap-2">
             <Button
                 data-testid="overview-upload"
-                variant="outline"
+                variant="secondary"
                 disabled={isUploading}
                 onClick={triggerUpload}
             >
@@ -35,7 +35,7 @@ export function OverviewActions({
             {includeSync ? (
                 <Button
                     data-testid="overview-sync"
-                    variant="outline"
+                    variant="secondary"
                     disabled={isAutoSyncing}
                     onClick={() => {
                         void manualSync();
@@ -45,10 +45,8 @@ export function OverviewActions({
                 </Button>
             ) : null}
             {hasProvider ? null : (
-                <Button asChild variant="outline">
-                    <Link href="/settings/providers">
-                        Add a transcription provider
-                    </Link>
+                <Button asChild variant="secondary">
+                    <Link href="/settings/providers">Add an AI provider</Link>
                 </Button>
             )}
         </div>

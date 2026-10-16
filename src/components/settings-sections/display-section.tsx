@@ -168,7 +168,7 @@ export function DisplaySection() {
                 icon={Monitor}
             />
             <div className="divide-y divide-border">
-                <div className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                     <Label
                         className="text-[13px] font-medium"
                         htmlFor="date-time-format"
@@ -213,7 +213,7 @@ export function DisplaySection() {
                     </Select>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                     <Label
                         className="text-[13px] font-medium"
                         htmlFor="sort-order"
@@ -287,7 +287,7 @@ export function DisplaySection() {
                     </p>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                     <Label className="text-[13px] font-medium" htmlFor="theme">
                         Theme
                     </Label>

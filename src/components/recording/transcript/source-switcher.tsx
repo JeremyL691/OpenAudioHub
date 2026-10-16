@@ -25,7 +25,7 @@ export function SourceSwitcher({
     return (
         <div
             data-testid="source-switcher"
-            className="inline-flex items-center gap-0.5 self-start rounded-lg bg-muted p-0.5"
+            className="inline-flex items-center gap-0.5 self-start rounded-lg bg-secondary p-0.5"
         >
             {transcripts.map((t) => {
                 const active = t.source === activeSource;
@@ -36,7 +36,7 @@ export function SourceSwitcher({
                         onClick={() => onSelect(t.source)}
                         className={`h-10 rounded-md px-3 text-[13px] transition-colors sm:h-7 ${
                             active
-                                ? "bg-background font-semibold text-foreground shadow-sm dark:bg-accent"
+                                ? "bg-background font-medium text-foreground shadow-sm dark:bg-accent"
                                 : "text-muted-foreground hover:text-foreground"
                         }`}
                     >

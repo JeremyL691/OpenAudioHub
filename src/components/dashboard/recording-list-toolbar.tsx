@@ -20,6 +20,11 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type SortOrder = "newest" | "oldest" | "name";
@@ -34,8 +39,11 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
     { value: "all", label: "All" },
     { value: "transcribed", label: "Transcribed" },
     { value: "processing", label: "Processing" },
-    { value: "untranscribed", label: "Not transcribed" },
+    { value: "untranscribed", label: "Untranscribed" },
 ];
+
+const ICON_BUTTON =
+    "size-10 text-muted-foreground hover:text-foreground sm:size-7";
 
 export function RecordingListToolbar({
     query,
@@ -91,7 +99,7 @@ export function RecordingListToolbar({
                         }
                     }}
                     placeholder="Search recordings, transcripts..."
-                    className="h-10 rounded-md border-transparent bg-muted pl-8 pr-8 sm:h-8"
+                    className="h-10 rounded-lg border-transparent bg-secondary pl-8 pr-8 shadow-none sm:h-8"
                     aria-label="Search recordings"
                     data-testid="recording-search"
                 />
@@ -106,7 +114,7 @@ export function RecordingListToolbar({
                     </button>
                 )}
             </div>
-            <fieldset className="m-0 flex flex-wrap gap-1.5 border-0 p-0">
+            <fieldset className="m-0 flex w-full gap-0 rounded-lg bg-secondary p-0.5 border-0">
                 <legend className="sr-only">Filter recordings</legend>
                 {STATUS_FILTERS.map((option) => {
                     const active = statusFilter === option.value;
@@ -118,10 +126,10 @@ export function RecordingListToolbar({
                             data-testid={`recording-filter-${option.value}`}
                             onClick={() => onStatusFilterChange(option.value)}
                             className={cn(
-                                "inline-flex h-10 items-center rounded-full px-3 text-xs font-medium transition-colors sm:h-6 sm:px-2.5",
+                                "inline-flex h-10 min-w-0 flex-1 items-center justify-center truncate rounded-md px-1.5 text-xs transition-colors sm:h-7 sm:px-2",
                                 active
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-foreground hover:bg-accent",
+                                    ? "bg-background font-medium text-foreground shadow-sm dark:bg-accent"
+                                    : "text-muted-foreground hover:text-foreground",
                             )}
                         >
                             {option.label}
@@ -196,36 +204,39 @@ export function RecordingListToolbar({
                             </Button>
                         </>
                     ) : (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
-                            onClick={() => onSelectModeChange(true)}
-                            data-testid="recording-select-mode"
-                        >
-                            <ListChecks className="size-3.5" />
-                            <span>Select</span>
-                        </Button>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={ICON_BUTTON}
+                                    onClick={() => onSelectModeChange(true)}
+                                    data-testid="recording-select-mode"
+                                >
+                                    <ListChecks className="size-4 sm:size-3.5" />
+                                    <span className="sr-only">Select</span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Select</TooltipContent>
+                        </Tooltip>
                     )}
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
-                                aria-label="Sort"
-                                data-testid="recording-sort"
-                            >
-                                <ArrowDownAZ className="size-3.5" />
-                                <span>
-                                    {sortOrder === "newest"
-                                        ? "Newest"
-                                        : sortOrder === "oldest"
-                                          ? "Oldest"
-                                          : "Name"}
-                                </span>
-                            </Button>
-                        </DropdownMenuTrigger>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={ICON_BUTTON}
+                                        aria-label="Sort"
+                                        data-testid="recording-sort"
+                                    >
+                                        <ArrowDownAZ className="size-4 sm:size-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>Sort</TooltipContent>
+                        </Tooltip>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                             <DropdownMenuRadioGroup
@@ -247,21 +258,21 @@ export function RecordingListToolbar({
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-10 px-2 text-xs text-muted-foreground hover:text-foreground sm:h-6"
-                                aria-label="Density"
-                            >
-                                <Rows3 className="size-3.5" />
-                                <span>
-                                    {density === "compact"
-                                        ? "Compact"
-                                        : "Comfortable"}
-                                </span>
-                            </Button>
-                        </DropdownMenuTrigger>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={ICON_BUTTON}
+                                        aria-label="Density"
+                                    >
+                                        <Rows3 className="size-4 sm:size-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>Density</TooltipContent>
+                        </Tooltip>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Density</DropdownMenuLabel>
                             <DropdownMenuRadioGroup

@@ -21,7 +21,7 @@ function deliveryStatusClass(status: string): string {
     if (status === "success" || status === "delivered") {
         return "bg-success text-success-foreground";
     }
-    if (status === "failed") return "bg-destructive/10 text-destructive";
+    if (status === "failed") return "bg-destructive text-destructive-foreground";
     return "bg-muted text-muted-foreground";
 }
 
@@ -90,7 +90,7 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                     className={`max-h-[420px] overflow-y-auto ${
                         deliveries.length === 0
                             ? ""
-                            : "divide-y divide-border overflow-hidden rounded-xl bg-muted/60"
+                            : "divide-y divide-border overflow-hidden rounded-xl bg-muted"
                     }`}
                 >
                     {deliveries.length === 0 ? (
@@ -133,7 +133,7 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                                     )}
                                 </div>
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     disabled={delivery.status === "processing"}
                                     onClick={() => redeliver(delivery.id)}

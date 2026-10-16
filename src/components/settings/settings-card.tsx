@@ -24,8 +24,8 @@ interface SettingsCardProps {
 
 /**
  * Grouped-list primitive for settings sections, in the System Settings
- * style: a small muted label sits above a rounded, tinted group that holds
- * the rows. Rows (such as `ToggleRow`) provide their own vertical padding.
+ * style: a bold label sits above a rounded, tinted group that holds the rows.
+ * Rows (such as `ToggleRow`) provide their own vertical padding.
  */
 export function SettingsCard({
     title,
@@ -38,13 +38,13 @@ export function SettingsCard({
     return (
         <div className={cn("flex flex-col gap-1.5", className)}>
             {(title || description || action) && (
-                <div className="flex items-end justify-between gap-4 px-1">
+                <div className="flex items-end justify-between gap-4">
                     <div className="min-w-0 flex-1">
                         {title && (
-                            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-[13px] font-semibold">
                                 {Icon && (
                                     <Icon
-                                        className="size-4"
+                                        className="size-4 text-muted-foreground"
                                         aria-hidden="true"
                                     />
                                 )}
@@ -60,7 +60,7 @@ export function SettingsCard({
                     {action && <div className="shrink-0">{action}</div>}
                 </div>
             )}
-            <div className="rounded-xl bg-muted/60 px-4 py-1 dark:bg-muted">
+            <div className="divide-y divide-border rounded-xl bg-muted px-4">
                 {children}
             </div>
         </div>

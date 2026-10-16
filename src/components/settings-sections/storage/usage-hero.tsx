@@ -63,7 +63,7 @@ export function UsageHero({
     }
 
     return (
-        <div className="rounded-lg border bg-card p-5">
+        <div className="rounded-2xl bg-card p-5 shadow-card">
             <div className="flex items-center gap-5">
                 {capacity ? (
                     <CapacityRing

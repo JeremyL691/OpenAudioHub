@@ -156,7 +156,7 @@ const TONE_CLASSES: Record<StatusTone, string> = {
     info: "bg-info text-info-foreground",
     success: "bg-success text-success-foreground",
     warning: "bg-warning text-warning-foreground",
-    danger: "bg-destructive/10 text-destructive",
+    danger: "bg-destructive text-destructive-foreground",
 };
 
 /** The text a status shows. The same text is what a screen reader announces. */

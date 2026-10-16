@@ -20,7 +20,7 @@ export function StatCard({
     className,
 }: StatCardProps) {
     return (
-        <div className={cn("py-4", className)}>
+        <div className={cn("rounded-2xl bg-card p-4 shadow-card", className)}>
             <div className="flex items-center justify-between gap-2 text-[13px] text-muted-foreground">
                 <span>{label}</span>
                 {Icon ? (
@@ -31,7 +31,7 @@ export function StatCard({
                 ) : null}
             </div>
             <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                <span className="text-3xl font-bold tracking-tight tabular-nums">
+                <span className="text-[28px] font-semibold tracking-tight tabular-nums">
                     {value}
                 </span>
                 {hint ? (

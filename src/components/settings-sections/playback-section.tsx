@@ -170,7 +170,7 @@ export function PlaybackSection() {
                     apply at the moment a recording is selected. */}
                 <SettingsCard title="Audio defaults">
                     <div className="divide-y divide-border">
-                        <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                             <Label
                                 htmlFor="playback-speed"
                                 className="text-[13px] font-medium"
@@ -265,7 +265,7 @@ export function PlaybackSection() {
 
                 {/* Visual appearance of the player itself. */}
                 <SettingsCard title="Appearance">
-                    <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="player-scrubber"

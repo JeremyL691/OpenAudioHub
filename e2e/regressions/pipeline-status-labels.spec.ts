@@ -50,14 +50,14 @@ test.describe("pipeline outcomes (F25)", () => {
         await expect(status).toContainText("needs more disk space");
     });
 
-    test("the overview's Processing card labels a recording paused for disk space", async ({
+    test("the dashboard's Processing tile shows a status label, not the raw phase", async ({
         page,
     }) => {
         await page.goto("/dashboard");
-        const processing = page.getByRole("region", { name: "Processing" });
-        await expect(
-            processing.getByRole("link", { name: RECORDINGS.pausedDisk }),
-        ).toBeVisible();
-        await expect(processing).toContainText("Paused for disk space");
+        const processing = page
+            .getByRole("region", { name: "At a glance" })
+            .getByRole("link", { name: /Processing/ });
+        await expect(processing).toBeVisible();
+        await expect(processing).not.toContainText("paused_disk");
     });
 });

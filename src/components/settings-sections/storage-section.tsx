@@ -213,7 +213,7 @@ export function StorageSection() {
                 // specific numbers (which would falsely read as
                 // "you have 0 recordings").
                 <div
-                    className="h-32 animate-pulse rounded-xl bg-muted/60"
+                    className="h-32 animate-pulse rounded-xl bg-muted"
                     aria-hidden="true"
                 />
             ) : usage ? (
@@ -225,7 +225,7 @@ export function StorageSection() {
                     quotaBytes={usage.quotaBytes}
                 />
             ) : (
-                <div className="rounded-xl bg-muted/60 px-4 py-6 text-center text-xs text-muted-foreground">
+                <div className="rounded-xl bg-muted px-4 py-6 text-center text-xs text-muted-foreground">
                     Couldn't load storage usage. Refresh to try again.
                 </div>
             )}
@@ -243,7 +243,7 @@ export function StorageSection() {
                 </div>
             )}
 
-            <div className="rounded-xl bg-muted/60 divide-y divide-border">
+            <div className="rounded-xl bg-muted divide-y divide-border">
                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <span className="text-[13px]">Backend</span>
                     <span className="text-[13px] text-muted-foreground tabular-nums capitalize">

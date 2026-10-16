@@ -51,9 +51,9 @@ export function PlaudReconnectBanner({
 
     return (
         <>
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-xl bg-warning/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5 size-5 shrink-0 text-foreground" />
+                    <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
                     <div className="space-y-0.5">
                         <p className="text-sm font-medium text-foreground">
                             Your Plaud connection needs to be reconnected

@@ -104,10 +104,7 @@ export function TranscriptCard({
     return (
         <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
-                    <FileText className="size-4" />
-                    Transcription
-                </div>
+                <h2 className="text-[17px] font-semibold">Transcript</h2>
                 <div className="flex flex-wrap items-center gap-2">
                     {isDetail && activeTranscript?.text && hasTimeline && (
                         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -123,7 +120,7 @@ export function TranscriptCard({
                         <Button
                             onClick={() => onTranscribe()}
                             size="sm"
-                            variant="outline"
+                            variant="secondary"
                             className="h-10 sm:h-8"
                             disabled={
                                 isTranscribing || Boolean(isPipelineActive)

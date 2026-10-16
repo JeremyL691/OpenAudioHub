@@ -17,10 +17,23 @@ import {
 } from "lucide-react";
 import type { SettingsSection } from "@/types/settings";
 
+export type SettingsTile =
+    | "bg-tile-blue"
+    | "bg-tile-green"
+    | "bg-tile-orange"
+    | "bg-tile-gray"
+    | "bg-tile-purple"
+    | "bg-tile-indigo"
+    | "bg-tile-pink"
+    | "bg-tile-teal";
+
 export type NavItem = {
     name: string;
     id: SettingsSection;
     icon: typeof Bot;
+    tile: SettingsTile;
+    description: string;
+    keywords: string[];
 };
 
 /**
@@ -35,40 +48,141 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     {
         label: "AI",
         items: [
-            { name: "Providers", id: "providers", icon: Bot },
-            { name: "Transcription", id: "transcription", icon: FileText },
-            { name: "Summary", id: "summary", icon: ListChecks },
-            { name: "Recording names", id: "naming", icon: Tag },
+            {
+                name: "Providers",
+                id: "providers",
+                icon: Bot,
+                tile: "bg-tile-indigo",
+                description:
+                    "Connect the AI services that transcribe and summarize.",
+                keywords: ["ai", "openai", "model", "api", "llm", "provider"],
+            },
+            {
+                name: "Transcription",
+                id: "transcription",
+                icon: FileText,
+                tile: "bg-tile-blue",
+                description: "Choose how audio is converted to text.",
+                keywords: ["speech", "speech to text", "whisper", "language"],
+            },
+            {
+                name: "Summary",
+                id: "summary",
+                icon: ListChecks,
+                tile: "bg-tile-purple",
+                description: "Set the prompts and provider used for summaries.",
+                keywords: ["summarize", "prompt", "notes", "overview"],
+            },
+            {
+                name: "Recording names",
+                id: "naming",
+                icon: Tag,
+                tile: "bg-tile-pink",
+                description: "Choose how new recordings are named.",
+                keywords: ["title", "rename", "filename", "date"],
+            },
         ],
     },
     {
-        label: "Plaud",
+        label: "Plaud & Sync",
         items: [
-            { name: "Plaud Account", id: "plaud-account", icon: Mic },
-            { name: "Sync", id: "sync", icon: RefreshCw },
+            {
+                name: "Plaud Account",
+                id: "plaud-account",
+                icon: Mic,
+                tile: "bg-tile-orange",
+                description:
+                    "Manage the Plaud connection used to pull recordings.",
+                keywords: ["plaud", "account", "login", "sign in", "connect"],
+            },
+            {
+                name: "Sync",
+                id: "sync",
+                icon: RefreshCw,
+                tile: "bg-tile-green",
+                description: "Control when new recordings are pulled in.",
+                keywords: ["auto", "pull", "refresh", "schedule", "plaud"],
+            },
         ],
     },
     {
-        label: "Personalize",
+        label: "Playback & Display",
         items: [
-            { name: "Playback", id: "playback", icon: Play },
-            { name: "Display", id: "display", icon: Monitor },
-            { name: "Desktop", id: "desktop", icon: AppWindow },
-            { name: "Notifications", id: "notifications", icon: Bell },
+            {
+                name: "Playback",
+                id: "playback",
+                icon: Play,
+                tile: "bg-tile-orange",
+                description: "Defaults for the player when a recording loads.",
+                keywords: ["audio", "speed", "skip", "autoplay", "player"],
+            },
+            {
+                name: "Display",
+                id: "display",
+                icon: Monitor,
+                tile: "bg-tile-blue",
+                description: "Date formats, lists and overall appearance.",
+                keywords: ["theme", "dark", "light", "appearance", "date"],
+            },
+            {
+                name: "Desktop",
+                id: "desktop",
+                icon: AppWindow,
+                tile: "bg-tile-gray",
+                description: "Window and menu bar behavior in the desktop app.",
+                keywords: ["window", "menu bar", "tray", "launch", "app"],
+            },
+            {
+                name: "Notifications",
+                id: "notifications",
+                icon: Bell,
+                tile: "bg-tile-pink",
+                description: "Alerts for new recordings and sync events.",
+                keywords: ["alerts", "email", "push", "notify"],
+            },
         ],
     },
     {
         label: "Data",
         items: [
-            { name: "Storage", id: "storage", icon: HardDrive },
-            { name: "Export/Backup", id: "export", icon: Download },
+            {
+                name: "Storage",
+                id: "storage",
+                icon: HardDrive,
+                tile: "bg-tile-gray",
+                description:
+                    "Where audio files are kept and how much they use.",
+                keywords: ["disk", "space", "files", "audio", "usage"],
+            },
+            {
+                name: "Export/Backup",
+                id: "export",
+                icon: Download,
+                tile: "bg-tile-teal",
+                description: "Export recordings, transcripts and summaries.",
+                keywords: ["backup", "download", "zip", "transcripts", "data"],
+            },
         ],
     },
     {
         label: "Integrations",
         items: [
-            { name: "API Keys", id: "api-keys", icon: KeyRound },
-            { name: "Webhooks", id: "webhooks", icon: Webhook },
+            {
+                name: "API Keys",
+                id: "api-keys",
+                icon: KeyRound,
+                tile: "bg-tile-gray",
+                description: "Personal access tokens for the public API.",
+                keywords: ["token", "access", "developer", "key", "public api"],
+            },
+            {
+                name: "Webhooks",
+                id: "webhooks",
+                icon: Webhook,
+                tile: "bg-tile-purple",
+                description: "Send HTTP events when recordings change.",
+                keywords: ["http", "events", "callback", "url", "integration"],
+            },
         ],
     },
     ...(process.env.NODE_ENV !== "production"
@@ -80,6 +194,10 @@ export const SETTINGS_NAV_GROUPS: { label: string; items: NavItem[] }[] = [
                           name: "Developer Tools",
                           id: "dev" as SettingsSection,
                           icon: Wrench,
+                          tile: "bg-tile-gray" as SettingsTile,
+                          description:
+                              "Diagnostics and developer-only controls.",
+                          keywords: ["debug", "developer", "logs", "advanced"],
                       },
                   ],
               },

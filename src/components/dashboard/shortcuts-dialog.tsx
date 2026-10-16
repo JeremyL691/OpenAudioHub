@@ -65,10 +65,10 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
                 <div className="grid gap-5 sm:grid-cols-2">
                     {groups.map((group) => (
                         <div key={group.title}>
-                            <h3 className="mb-1.5 text-[11px] font-semibold text-muted-foreground">
+                            <h3 className="mb-1.5 text-[13px] font-semibold text-foreground">
                                 {group.title}
                             </h3>
-                            <ul className="divide-y divide-border rounded-lg border">
+                            <ul className="divide-y divide-border rounded-xl bg-muted">
                                 {group.rows.map((row) => (
                                     <li
                                         key={row.description}

@@ -42,7 +42,7 @@ const TARGETS: Target[] = [
         open: async (page) => {
             await page.goto("/dashboard");
             await expect(
-                page.getByRole("region", { name: "Totals" }),
+                page.getByRole("region", { name: "At a glance" }),
             ).toBeVisible();
         },
     },

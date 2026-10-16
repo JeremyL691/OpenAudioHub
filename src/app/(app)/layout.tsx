@@ -4,14 +4,16 @@ import { AppShell } from "@/components/app-shell/app-shell";
 import { AppShellProviders } from "@/components/app-shell/providers";
 import { UpdateBadge } from "@/components/update-badge";
 import { db } from "@/db";
+import { getCollectionCounts } from "@/db/queries/collections";
 import { userSettings } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-server";
 import { BRAND } from "@/lib/brand";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
 
 /**
- * Shell for every signed-in page. Loads the session and saved settings on a
- * full load. `template.tsx` refreshes the settings on each navigation.
+ * Shell for every signed-in page. Loads the session, saved settings and
+ * collection counts on a full load. `template.tsx` refreshes the settings on
+ * each navigation.
  */
 export default async function AppLayout({
     children,
@@ -19,11 +21,14 @@ export default async function AppLayout({
     children: React.ReactNode;
 }) {
     const session = await requireAuth();
-    const [settingsRow] = await db
-        .select()
-        .from(userSettings)
-        .where(eq(userSettings.userId, session.user.id))
-        .limit(1);
+    const [[settingsRow], counts] = await Promise.all([
+        db
+            .select()
+            .from(userSettings)
+            .where(eq(userSettings.userId, session.user.id))
+            .limit(1),
+        getCollectionCounts(session.user.id),
+    ]);
     const initialSettings = initialSettingsFromRow(settingsRow);
     const currentYear = new Date().getFullYear();
 
@@ -32,6 +37,7 @@ export default async function AppLayout({
             <AppShell
                 userEmail={session.user.email ?? null}
                 initialTheme={initialSettings.theme}
+                counts={counts}
                 sidebarFooter={
                     <>
                         {/* Update notice. Suspended with a null fallback so a

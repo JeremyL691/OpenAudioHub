@@ -107,7 +107,7 @@ export function RecordingTitle({
                     }
                 }}
                 className={cn(
-                    "w-full min-w-0 rounded-md bg-transparent px-1 -mx-1 font-bold tracking-tight outline-none",
+                    "w-full min-w-0 rounded-lg bg-transparent px-1 -mx-1 font-bold tracking-tight outline-none",
                     "focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                     "disabled:opacity-60",
                     className,
@@ -123,8 +123,8 @@ export function RecordingTitle({
             title="Rename"
             aria-label={`Rename ${filename}`}
             className={cn(
-                "group/title inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left",
-                "hover:bg-accent/60 focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
+                "group/title inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg text-left",
+                "hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
                 "px-1 -mx-1 py-0.5",
             )}
         >

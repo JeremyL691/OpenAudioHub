@@ -315,8 +315,8 @@ export function TranscriptionSection() {
                 icon={FileText}
             />
             <div className="space-y-4">
-                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
-                    <div className="flex items-center justify-between gap-4 py-3">
+                <div className="divide-y divide-border rounded-xl bg-muted px-4">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="auto-transcribe"
@@ -337,7 +337,7 @@ export function TranscriptionSection() {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="import-plaud-content"
@@ -447,8 +447,8 @@ export function TranscriptionSection() {
                     )}
                 </div>
 
-                <div className="divide-y divide-border rounded-xl bg-muted/60 px-4">
-                    <div className="flex items-center justify-between gap-4 py-3">
+                <div className="divide-y divide-border rounded-xl bg-muted px-4">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="transcription-language"
@@ -497,7 +497,7 @@ export function TranscriptionSection() {
                         </Select>
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="speaker-diarization"
@@ -581,7 +581,7 @@ export function TranscriptionSection() {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="transcription-quality"
