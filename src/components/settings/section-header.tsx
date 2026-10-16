@@ -2,17 +2,20 @@
 
 import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
+import { createContext, useContext } from "react";
+import type { SettingsTile } from "@/components/settings-nav-config";
 import { cn } from "@/lib/utils";
+
+/**
+ * Tile colour of the section being shown. The settings page provides it from
+ * the nav item, so each pane's icon matches its sidebar tile.
+ */
+export const SettingsTileContext = createContext<SettingsTile>("bg-tile-gray");
 
 interface SectionHeaderProps {
     title: React.ReactNode;
     description?: React.ReactNode;
-    /**
-     * Icon shown small + muted next to the title. The sidebar already
-     * carries the section's primary icon at full size; repeating it
-     * loud in the pane is redundant. Use this only when it adds info,
-     * or pass `null` to skip.
-     */
+    /** Icon shown on the section's 40px tile. Pass `null` to skip the tile. */
     icon?: LucideIcon | null;
     /** Slot rendered in the top-right (e.g. an "Add" button). */
     action?: React.ReactNode;
@@ -20,17 +23,9 @@ interface SectionHeaderProps {
 }
 
 /**
- * Standardized page header for every settings section. Replaces the
- * ad-hoc `<h2 className="text-lg font-semibold flex items-center gap-2">
- * <Icon className="w-5 h-5" /> Title</h2>` duplicated across 11 files.
- *
- * Visual tradeoffs:
- *   - Title is a 22px bold heading, the page-level title of the pane,
- *     as in the macOS System Settings panes.
- *   - Icon shrinks to size-5 and goes muted-foreground — supportive,
- *     not competitive.
- *   - Optional one-line description below the title for sections
- *     where the name alone isn't self-explanatory.
+ * Standardized page header for every settings section: a 40px tile with the
+ * section icon, the title, and a one-line description, as in the macOS System
+ * Settings panes.
  */
 export function SettingsSectionHeader({
     title,
@@ -39,28 +34,33 @@ export function SettingsSectionHeader({
     action,
     className,
 }: SectionHeaderProps) {
+    const tile = useContext(SettingsTileContext);
     return (
         <div
-            className={cn(
-                "flex items-start justify-between gap-4 pb-1",
-                className,
-            )}
+            className={cn("flex items-start justify-between gap-4", className)}
         >
-            <div className="min-w-0 flex-1">
-                <h2 className="flex items-center gap-2 text-[22px] font-bold tracking-tight">
-                    {Icon && (
-                        <Icon
-                            className="size-5 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                    )}
-                    <span>{title}</span>
-                </h2>
-                {description && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        {description}
-                    </p>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+                {Icon && (
+                    <div
+                        className={cn(
+                            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                            tile,
+                        )}
+                        aria-hidden="true"
+                    >
+                        <Icon className="size-5 text-primary-foreground" />
+                    </div>
                 )}
+                <div className="min-w-0">
+                    <h2 className="text-[22px] font-bold tracking-tight">
+                        {title}
+                    </h2>
+                    {description && (
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">
+                            {description}
+                        </p>
+                    )}
+                </div>
             </div>
             {action && <div className="shrink-0">{action}</div>}
         </div>

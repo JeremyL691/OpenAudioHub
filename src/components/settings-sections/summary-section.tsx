@@ -488,7 +488,7 @@ export function SummarySection() {
             {/* Custom summary prompts */}
             <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-[13px] font-semibold text-muted-foreground">
+                    <h3 className="text-[13px] font-semibold">
                         Custom Summary Prompts
                     </h3>
                     <Button
@@ -508,7 +508,7 @@ export function SummarySection() {
                 ) : (
                     <div className="divide-y divide-border">
                         {customPrompts.map((prompt) => (
-                            <div key={prompt.id} className="py-3">
+                            <div key={prompt.id} className="py-2.5">
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -524,7 +524,7 @@ export function SummarySection() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 setViewingPromptId(prompt.id)
@@ -533,7 +533,7 @@ export function SummarySection() {
                                             View
                                         </Button>
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 setEditingCustomPrompt({
@@ -546,7 +546,7 @@ export function SummarySection() {
                                             <Pencil className="size-4" />
                                         </Button>
                                         <Button
-                                            variant="outline"
+                                            variant="secondary"
                                             size="sm"
                                             onClick={() =>
                                                 handleDeleteCustomPrompt(
@@ -688,7 +688,7 @@ Transcription:
                             </div>
                             <div className="flex justify-end gap-2">
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     onClick={() => setEditingCustomPrompt(null)}
                                 >
                                     Cancel

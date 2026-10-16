@@ -1,6 +1,7 @@
 "use client";
 
 import { Mic } from "lucide-react";
+import Link from "next/link";
 import type * as React from "react";
 import {
     useCallback,
@@ -23,6 +24,11 @@ import {
 import { RecordingRow } from "@/components/dashboard/recording-row";
 import { MergeRecordingsDialog } from "@/components/recordings/merge-recordings-dialog";
 import { dateGroupFallbackLabel, dateGroupLabel } from "@/lib/format-date";
+import {
+    type CollectionId,
+    collectionLabel,
+    inCollection,
+} from "@/lib/recordings/collections";
 import { recordingsZipDownloadPath } from "@/lib/recordings/filename";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
@@ -54,6 +60,9 @@ interface RecordingListProps {
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
     initialChunkSize: number;
+    initialCollection?: CollectionId | null;
+    initialFilter?: StatusFilter;
+    initialQuery?: string;
 }
 
 export interface RecordingListHandle {
@@ -70,19 +79,13 @@ function persistSetting(field: string, value: unknown) {
     }).catch(() => {});
 }
 
-function transcriptSnippet(
-    text: string | undefined,
-    maxChars = 140,
-): string | null {
-    if (!text) return null;
-    const stripped = text
-        .replace(/\[[^\]]+\]/g, " ")
-        .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    if (!stripped) return null;
-    if (stripped.length <= maxChars) return stripped;
-    return `${stripped.slice(0, maxChars - 1).trimEnd()}…`;
+/** Total length of a day group, e.g. "35 min" or "1 h 35 min". */
+function formatGroupDuration(ms: number): string {
+    const minutes = Math.round(ms / 60_000);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
 export function RecordingList({
@@ -100,13 +103,17 @@ export function RecordingList({
     initialSortOrder,
     initialDensity,
     initialChunkSize,
+    initialCollection = null,
+    initialFilter = "all",
+    initialQuery = "",
     ref,
 }: RecordingListProps & { ref?: React.Ref<RecordingListHandle> }) {
     const [dateTimeFormat] = useState<DateTimeFormat>(initialDateTimeFormat);
     const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
     const [density, setDensity] = useState<ListDensity>(initialDensity);
-    const [query, setQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+    const [query, setQuery] = useState(initialQuery);
+    const [statusFilter, setStatusFilter] =
+        useState<StatusFilter>(initialFilter);
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
     const [hasHydrated, setHasHydrated] = useState(false);
     const [selectMode, setSelectMode] = useState(false);
@@ -154,13 +161,16 @@ export function RecordingList({
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
+        const inScope = initialCollection
+            ? recordings.filter((r) => inCollection(r, initialCollection))
+            : recordings;
         const searched = q
-            ? recordings.filter((r) => {
+            ? inScope.filter((r) => {
                   if (r.filename.toLowerCase().includes(q)) return true;
                   const t = transcriptions.get(r.id);
                   return !!t?.text && t.text.toLowerCase().includes(q);
               })
-            : recordings;
+            : inScope;
 
         // Status chips filter the loaded list; they do not refetch.
         const base = searched.filter((r) => {
@@ -203,6 +213,7 @@ export function RecordingList({
         recordings,
         transcriptions,
         inFlightActions,
+        initialCollection,
         query,
         statusFilter,
         sortOrder,
@@ -318,6 +329,24 @@ export function RecordingList({
     return (
         <div>
             <div className="bg-background lg:sticky lg:top-0 lg:z-10">
+                <div className="flex items-baseline justify-between gap-3 px-4 pt-4">
+                    <h2 className="min-w-0 truncate text-[17px] font-semibold">
+                        {initialCollection
+                            ? collectionLabel(initialCollection)
+                            : "All recordings"}
+                    </h2>
+                    <div className="flex shrink-0 items-baseline gap-3 text-xs tabular-nums text-muted-foreground">
+                        <span>{filtered.length}</span>
+                        {initialCollection && (
+                            <Link
+                                href="/recordings"
+                                className="text-link hover:underline"
+                            >
+                                Clear
+                            </Link>
+                        )}
+                    </div>
+                </div>
                 <RecordingListToolbar
                     query={query}
                     onQueryChange={setQuery}
@@ -360,8 +389,23 @@ export function RecordingList({
                 {grouped.map((group, gi) => (
                     <div key={group.label ?? `__ungrouped-${gi.toString()}`}>
                         {group.label && (
-                            <div className="sticky top-0 z-10 bg-background/85 px-4 pt-3 pb-1 text-[11px] font-semibold leading-none text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:static">
-                                {group.label}
+                            <div className="sticky top-0 z-10 flex items-baseline gap-2 bg-background/85 px-4 pt-3 pb-1 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:static">
+                                <span className="text-[13px] font-semibold">
+                                    {group.label}
+                                </span>
+                                <span className="text-xs tabular-nums text-muted-foreground">
+                                    {group.items.length}{" "}
+                                    {group.items.length === 1
+                                        ? "recording"
+                                        : "recordings"}
+                                    {" · "}
+                                    {formatGroupDuration(
+                                        group.items.reduce(
+                                            (sum, r) => sum + r.duration,
+                                            0,
+                                        ),
+                                    )}
+                                </span>
                             </div>
                         )}
                         <div className="flex flex-col gap-0.5 px-2">
@@ -373,9 +417,6 @@ export function RecordingList({
                                         currentRecording?.id === recording.id
                                     }
                                     inFlight={inFlightActions.get(recording.id)}
-                                    snippet={transcriptSnippet(
-                                        transcriptions.get(recording.id)?.text,
-                                    )}
                                     isCompact={isCompact}
                                     rowPadding={rowPadding}
                                     dateTimeFormat={dateTimeFormat}

@@ -66,7 +66,7 @@ export function DevSection() {
                 </p>
             </div>
 
-            <section className="space-y-3 rounded-xl bg-muted/60 p-4">
+            <section className="space-y-3 rounded-xl bg-muted p-4">
                 <div className="flex items-center justify-between gap-2">
                     <div>
                         <h4 className="text-[13px] font-medium">
@@ -81,7 +81,7 @@ export function DevSection() {
                         onClick={fetchPlaudInfo}
                         disabled={isLoadingPlaud}
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                     >
                         {isLoadingPlaud ? (
                             <Loader2 className="size-4 animate-spin" />

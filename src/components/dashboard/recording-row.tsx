@@ -9,11 +9,12 @@ import {
     Pencil,
     Play,
     Sparkles,
+    Star,
     Trash2,
 } from "lucide-react";
+import { MiniWaveform } from "@/components/app/mini-waveform";
 import { StatusBadge } from "@/components/app/status-badge";
 import { useConfirm } from "@/components/confirm-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -37,7 +38,6 @@ export function RecordingRow({
     recording,
     isSelected,
     inFlight,
-    snippet,
     isCompact,
     rowPadding,
     dateTimeFormat,
@@ -54,7 +54,6 @@ export function RecordingRow({
     recording: Recording;
     isSelected: boolean;
     inFlight: "transcribing" | "summarizing" | undefined;
-    snippet: string | null;
     isCompact: boolean;
     rowPadding: string;
     dateTimeFormat: DateTimeFormat;
@@ -89,7 +88,8 @@ export function RecordingRow({
                 className={cn(
                     "w-full rounded-lg text-left transition-colors",
                     rowPadding,
-                    selectMode && "flex items-center gap-2",
+                    "flex items-center gap-3",
+                    !selectMode && "pr-9",
                     isSelected
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent",
@@ -111,22 +111,73 @@ export function RecordingRow({
                         {checked && <Check className="size-3" />}
                     </span>
                 )}
+                <MiniWaveform
+                    peaks={recording.waveformPeaks}
+                    className={cn(
+                        "w-14 shrink-0",
+                        isSelected && "text-primary-foreground/80",
+                    )}
+                />
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <h3 className="min-w-0 truncate text-[13px] font-semibold">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <h3 className="min-w-0 flex-1 truncate text-[13px] font-medium">
                             {recording.filename}
                         </h3>
+                        {recording.starred && (
+                            <>
+                                <Star
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "size-3 shrink-0 fill-current",
+                                        !isSelected && "text-primary",
+                                    )}
+                                />
+                                <span className="sr-only">Starred</span>
+                            </>
+                        )}
+                        <span
+                            className={cn(
+                                "shrink-0 text-xs tabular-nums",
+                                isSelected
+                                    ? "text-primary-foreground"
+                                    : "text-muted-foreground",
+                            )}
+                        >
+                            {formatDurationMs(recording.duration)}
+                        </span>
+                    </div>
+                    <div
+                        className={cn(
+                            "flex min-w-0 items-center gap-2",
+                            isCompact ? "mt-px" : "mt-1",
+                        )}
+                    >
+                        <p
+                            className={cn(
+                                "min-w-0 flex-1 truncate text-xs tabular-nums",
+                                isSelected
+                                    ? "text-primary-foreground"
+                                    : "text-muted-foreground",
+                            )}
+                        >
+                            {formatDateTime(
+                                recording.startTime,
+                                dateTimeFormat,
+                            )}
+                            {" · "}
+                            {recordingSource(recording.deviceSn)}
+                        </p>
                         {inFlight ? (
                             <span
                                 className={cn(
-                                    "ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
                                     isSelected
                                         ? "bg-primary-foreground text-primary"
                                         : "bg-info text-info-foreground",
                                 )}
                             >
                                 <Loader2
-                                    className="size-3 animate-spin"
+                                    className="size-3 motion-safe:animate-spin"
                                     aria-hidden="true"
                                 />
                                 {inFlight === "transcribing"
@@ -134,53 +185,19 @@ export function RecordingRow({
                                     : "Summarizing"}
                             </span>
                         ) : (
-                            <span className="ml-auto shrink-0">
-                                <StatusBadge
-                                    className={cn(
-                                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                                        isSelected &&
-                                            "bg-primary-foreground text-primary",
-                                    )}
-                                    status={transcriptStatus({
-                                        hasTranscript: recording.hasTranscript,
-                                        hasSummary: recording.hasSummary,
-                                        pipelinePhase: recording.pipelinePhase,
-                                    })}
-                                />
-                            </span>
+                            <StatusBadge
+                                className={cn(
+                                    "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                    isSelected &&
+                                        "bg-primary-foreground text-primary",
+                                )}
+                                status={transcriptStatus({
+                                    hasTranscript: recording.hasTranscript,
+                                    hasSummary: recording.hasSummary,
+                                    pipelinePhase: recording.pipelinePhase,
+                                })}
+                            />
                         )}
-                    </div>
-                    <div
-                        className={cn(
-                            "flex min-w-0 items-center gap-2 text-xs tabular-nums",
-                            isSelected
-                                ? "text-primary-foreground"
-                                : "text-muted-foreground",
-                            isCompact ? "mt-0.5" : "mt-1",
-                        )}
-                    >
-                        <Badge
-                            variant="outline"
-                            className={cn(
-                                "shrink-0 px-1.5 py-0 text-[10px] font-normal",
-                                isSelected &&
-                                    "border-primary-foreground/30 text-primary-foreground",
-                            )}
-                        >
-                            {recordingSource(recording.deviceSn)}
-                        </Badge>
-                        <span className="min-w-0 truncate">
-                            {snippet ?? (
-                                <>
-                                    {formatDurationMs(recording.duration)}
-                                    {" · "}
-                                    {formatDateTime(
-                                        recording.startTime,
-                                        dateTimeFormat,
-                                    )}
-                                </>
-                            )}
-                        </span>
                     </div>
                 </div>
             </button>

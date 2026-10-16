@@ -73,7 +73,7 @@ export function TranscribeInBrowserButton({
             onClick={run}
             size="sm"
             className="h-10 sm:h-8"
-            variant="outline"
+            variant="secondary"
             disabled={disabled || busy}
             title="Run Whisper in your browser. No API key required; audio never leaves your machine."
         >

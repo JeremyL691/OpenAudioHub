@@ -1,14 +1,20 @@
 "use client";
 
 import { useDesktopMode } from "@/components/desktop-mode-provider";
-import { visibleSettingsNav } from "@/components/settings-nav-config";
+import {
+    visibleSettingsNav,
+    visibleSettingsNavGroups,
+} from "@/components/settings-nav-config";
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectSeparator,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { SettingsSection } from "@/types/settings";
 
 interface Props {
@@ -25,6 +31,7 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
     const desktop = useDesktopMode();
     const settingsNav = visibleSettingsNav(desktop);
     const activeNavItem = settingsNav.find((item) => item.id === activeSection);
+    const groups = visibleSettingsNavGroups(desktop);
 
     return (
         <div className="md:hidden">
@@ -43,13 +50,26 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
                     </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                    {settingsNav.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                            <div className="flex items-center gap-2">
-                                <item.icon className="size-4 text-muted-foreground" />
-                                <span>{item.name}</span>
-                            </div>
-                        </SelectItem>
+                    {groups.map((group, index) => (
+                        <SelectGroup key={group.label}>
+                            {index > 0 && <SelectSeparator />}
+                            {group.items.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={cn(
+                                                "flex size-[22px] shrink-0 items-center justify-center rounded-md",
+                                                item.tile,
+                                            )}
+                                            aria-hidden="true"
+                                        >
+                                            <item.icon className="size-3.5 text-primary-foreground" />
+                                        </span>
+                                        <span>{item.name}</span>
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
                     ))}
                 </SelectContent>
             </Select>

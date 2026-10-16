@@ -40,7 +40,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
     if (resetPasswordMode(token, error) === "invalid") {
         return (
             <div className="space-y-6">
-                <div className="space-y-3 rounded-lg border border-border bg-muted/60 p-4 text-[13px] text-muted-foreground">
+                <div className="space-y-3 rounded-xl bg-muted p-4 text-[13px] text-muted-foreground">
                     {error?.toUpperCase() === "INVALID_TOKEN" ? (
                         <p>
                             The reset link has expired or has already been used.

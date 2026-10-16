@@ -416,7 +416,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 icon={Download}
             />
             <div className="divide-y divide-border">
-                <div className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                     <Label
                         className="text-[13px] font-medium"
                         htmlFor="export-format"
@@ -462,7 +462,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                     </Select>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                     <div className="space-y-0.5 flex-1">
                         <div className="flex items-center gap-2">
                             <Label
@@ -500,7 +500,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
 
                 {desktopBridge && (
                     <>
-                        <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                             <Label
                                 htmlFor="auto-export-folder"
                                 className="text-[13px] font-medium"
@@ -523,7 +523,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                     id="auto-export-folder"
                                     data-testid="auto-export-folder"
                                     aria-describedby="auto-export-folder-path"
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
                                     onClick={handleChooseFolder}
                                 >
@@ -532,7 +532,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-4 py-3">
+                        <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                             <div className="space-y-0.5 flex-1">
                                 <Label
                                     className="text-[13px] font-medium"
@@ -595,7 +595,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 role="radiogroup"
                                 aria-labelledby="auto-export-file-name"
                                 data-testid="auto-export-title-mode"
-                                className="divide-y divide-border rounded-xl bg-muted/60 px-4"
+                                className="divide-y divide-border rounded-xl bg-muted px-4"
                             >
                                 {autoExportTitleOptions.map((option) => {
                                     const inputId = `auto-export-title-mode-${option.value}`;
@@ -707,7 +707,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 </div>
 
                 {desktopBridge && (
-                    <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex items-center justify-between gap-4 py-2.5 min-h-11">
                         <Label
                             htmlFor="backup-folder"
                             className="text-[13px] font-medium"
@@ -729,7 +729,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 id="backup-folder"
                                 data-testid="backup-folder"
                                 aria-describedby="backup-folder-path"
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={handleChooseBackupFolder}
                             >
@@ -762,7 +762,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 toast.error("Failed to reset onboarding");
                             }
                         }}
-                        variant="outline"
+                        variant="secondary"
                         className="h-10 w-full sm:h-8 sm:w-auto"
                     >
                         <RefreshCw className="size-4 mr-2" />
@@ -775,7 +775,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         <Button
                             onClick={handleExport}
                             disabled={isExporting}
-                            variant="outline"
+                            variant="secondary"
                             className="flex-1"
                         >
                             {isExporting ? (
@@ -798,7 +798,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 (backupJob !== null &&
                                     ACTIVE_STATUSES.has(backupJob.status))
                             }
-                            variant="outline"
+                            variant="secondary"
                             className="flex-1"
                         >
                             {isStartingBackup ||

@@ -56,7 +56,7 @@ export function ReportBugDialog({
                     <p className="text-[11px] font-semibold text-muted-foreground">
                         Preview
                     </p>
-                    <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 p-3 font-mono text-[11px] whitespace-pre-wrap break-words">
+                    <pre className="max-h-48 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] whitespace-pre-wrap break-words">
                         {preview}
                     </pre>
                 </div>

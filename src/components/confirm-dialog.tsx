@@ -151,7 +151,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
             >
                 <AlertDialogContent className="gap-4 p-5 sm:max-w-[420px]">
                     <AlertDialogHeader className="gap-1.5 sm:text-left">
-                        <AlertDialogTitle className="text-[15px] font-semibold">
+                        <AlertDialogTitle className="text-[17px] font-semibold">
                             {active?.title ?? ""}
                         </AlertDialogTitle>
                         {active?.description !== undefined && (
@@ -166,7 +166,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     <AlertDialogFooter className="gap-2 sm:justify-end">
                         <AlertDialogCancel
                             disabled={isRunning}
-                            className="h-10 px-4 sm:h-8"
+                            className="h-10 border-0 bg-secondary px-4 text-foreground hover:bg-accent sm:h-8"
                         >
                             {active?.cancelLabel ?? "Cancel"}
                         </AlertDialogCancel>
@@ -182,7 +182,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                             className={cn(
                                 "h-10 px-4 sm:h-8",
                                 active?.destructive &&
-                                    "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40",
+                                    "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/40",
                             )}
                         >
                             {isRunning

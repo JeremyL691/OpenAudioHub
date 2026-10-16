@@ -139,7 +139,7 @@ export function UserMenu({
                     {syncRingLabel(syncInput)}
                 </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end" className="w-72 p-0">
+            <DropdownMenuContent align="end" className="w-72 rounded-xl p-0">
                 <div className="flex items-center gap-3 border-b p-3">
                     <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"

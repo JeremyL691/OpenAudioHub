@@ -33,14 +33,13 @@ export function PlayerMiniBar({
         <section
             data-testid="mini-player"
             aria-label="Now playing"
-            className="absolute inset-x-0 top-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+            className="absolute inset-x-0 top-0 border-b border-border bg-background/85 backdrop-blur"
         >
-            <div className="mx-auto flex h-13 max-w-7xl items-center gap-3 px-4">
+            <div className="mx-auto flex h-12 max-w-7xl items-center gap-3 px-4">
                 <Button
                     size="icon"
-                    variant="outline"
                     onClick={onToggle}
-                    className="size-10 shrink-0 rounded-full border-transparent bg-primary text-primary-foreground shadow-none hover:bg-primary/90 hover:text-primary-foreground dark:bg-primary"
+                    className="size-10 shrink-0 rounded-full bg-primary text-primary-foreground sm:size-8"
                     aria-label={isPlaying ? "Pause" : "Play"}
                 >
                     {isPlaying ? (
@@ -56,10 +55,10 @@ export function PlayerMiniBar({
                     <ProgressBar
                         value={progress}
                         label="Playback progress"
-                        className="mt-1 h-1"
+                        className="mt-0.5 h-0.5"
                     />
                 </div>
-                <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                     {formatDuration(currentTime)} / {formatDuration(duration)}
                 </span>
             </div>

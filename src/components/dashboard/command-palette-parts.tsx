@@ -44,15 +44,16 @@ export function transcriptSnippet(
 }
 
 const PILL_CLASS =
-    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground group-data-[selected=true]:border-primary-foreground/30 group-data-[selected=true]:text-primary-foreground";
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground";
 
-const ITEM_CLASS = "group rounded-md py-1.5 text-[13px]";
+const ITEM_CLASS =
+    "group rounded-lg py-1.5 text-[13px] data-[selected=true]:bg-accent data-[selected=true]:text-foreground";
 
 const GROUP_CLASS =
     "[&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground";
 
 const KBD_CLASS =
-    "h-5 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-normal text-muted-foreground group-data-[selected=true]:border-primary-foreground/30 group-data-[selected=true]:bg-transparent group-data-[selected=true]:text-primary-foreground";
+    "h-5 rounded border border-border bg-muted px-1.5 font-mono text-[11px] font-normal text-muted-foreground";
 
 export function Row({
     icon,
@@ -75,7 +76,7 @@ export function Row({
                     {title}
                 </span>
                 {subtitle ? (
-                    <span className="truncate text-[11px] text-muted-foreground group-data-[selected=true]:text-primary-foreground">
+                    <span className="truncate text-[11px] text-muted-foreground">
                         {subtitle}
                     </span>
                 ) : null}

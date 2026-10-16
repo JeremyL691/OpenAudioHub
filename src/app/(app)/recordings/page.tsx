@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import type { StatusFilter } from "@/components/dashboard/recording-list-toolbar";
 import { Workstation } from "@/components/dashboard/workstation";
 import { db } from "@/db";
 import { getActivePipelinePhases } from "@/db/queries/overview";
@@ -11,20 +12,53 @@ import {
 } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
+import {
+    type CollectionId,
+    isCollectionId,
+} from "@/lib/recordings/collections";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
 import { isOwnSource, normalizeSource } from "@/lib/transcription/source";
 import { serializeRecording } from "@/types/recording";
 
+const STATUS_FILTER_VALUES: readonly StatusFilter[] = [
+    "all",
+    "transcribed",
+    "processing",
+    "untranscribed",
+];
+
+const MAX_QUERY_LENGTH = 200;
+
 interface RecordingsPageProps {
-    /** `?id=<recording>` preselects that recording (the list's deep-link target). */
-    searchParams: Promise<{ id?: string | string[] }>;
+    /**
+     * `id` preselects a recording (the list's deep-link target). `collection`,
+     * `filter` and `q` seed the list's collection, status filter and search.
+     */
+    searchParams: Promise<{
+        id?: string | string[];
+        collection?: string | string[];
+        filter?: string | string[];
+        q?: string | string[];
+    }>;
 }
 
 export default async function RecordingsPage({
     searchParams,
 }: RecordingsPageProps) {
     const session = await requireAuth();
-    const { id } = await searchParams;
+    const { id, collection, filter, q } = await searchParams;
+
+    const initialCollection: CollectionId | null =
+        typeof collection === "string" && isCollectionId(collection)
+            ? collection
+            : null;
+    const initialFilter: StatusFilter =
+        typeof filter === "string" &&
+        STATUS_FILTER_VALUES.includes(filter as StatusFilter)
+            ? (filter as StatusFilter)
+            : "all";
+    const initialQuery =
+        typeof q === "string" && q.length <= MAX_QUERY_LENGTH ? q : "";
 
     const [
         userRecordings,
@@ -44,6 +78,7 @@ export default async function RecordingsPage({
                 filesize: recordings.filesize,
                 deviceSn: recordings.deviceSn,
                 waveformPeaks: recordings.waveformPeaks,
+                starredAt: recordings.starredAt,
             })
             .from(recordings)
             .where(
@@ -97,19 +132,21 @@ export default async function RecordingsPage({
     // Content fields are encrypted at rest; decrypt server-side (this is
     // an RSC — client never sees a key) before serializing for the
     // workstation. Legacy plaintext rows pass through verbatim.
-    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) =>
-        serializeRecording(
-            { ...r, filename: decryptText(r.filename) },
-            {
-                hasTranscript: transcriptIds.has(r.id),
-                hasSummary: summaryIds.has(r.id),
-                pipelinePhase: pipelinePhases.get(r.id) ?? null,
-                // jsonb comes back already-parsed; coerce to the typed shape.
-                waveformPeaks: Array.isArray(waveformPeaks)
-                    ? (waveformPeaks as number[])
-                    : null,
-            },
-        ),
+    const recordingsData = userRecordings.map(
+        ({ waveformPeaks, starredAt, ...r }) =>
+            serializeRecording(
+                { ...r, filename: decryptText(r.filename) },
+                {
+                    hasTranscript: transcriptIds.has(r.id),
+                    hasSummary: summaryIds.has(r.id),
+                    pipelinePhase: pipelinePhases.get(r.id) ?? null,
+                    // jsonb comes back already-parsed; coerce to the typed shape.
+                    waveformPeaks: Array.isArray(waveformPeaks)
+                        ? (waveformPeaks as number[])
+                        : null,
+                    starred: starredAt != null,
+                },
+            ),
     );
 
     const transcriptionMap = new Map<
@@ -141,6 +178,9 @@ export default async function RecordingsPage({
             initialSettings={initialSettings}
             plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
             initialRecordingId={typeof id === "string" ? id : null}
+            initialCollection={initialCollection}
+            initialFilter={initialFilter}
+            initialQuery={initialQuery}
         />
     );
 }

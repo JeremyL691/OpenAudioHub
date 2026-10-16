@@ -138,7 +138,7 @@ export function CommandPalette({
                     onKeyDownCapture={handleKeyDownCapture}
                 >
                     <CommandInput
-                        className="h-12 text-[15px]"
+                        className="h-14 border-0 text-[17px] shadow-none"
                         placeholder="Search recordings, transcripts, or actions…"
                     />
 

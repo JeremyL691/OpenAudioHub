@@ -5,8 +5,11 @@ import {
     MoreHorizontal,
     RefreshCw,
     Sparkles,
+    Star,
     Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -18,6 +21,7 @@ import {
 import type { TimelineSegment } from "@/hooks/use-pipeline-status";
 import { downloadText } from "@/lib/download-text";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
+import { setRecordingStarred } from "@/lib/recordings/star";
 import {
     buildTranscriptExport,
     isTranscriptExportAvailable,
@@ -34,6 +38,8 @@ interface RecordingActionsMenuProps {
     timeline: TimelineSegment[] | null | undefined;
     /** A transcription or pipeline job is running. */
     busy: boolean;
+    /** Whether the recording is starred. Defaults to unstarred. */
+    starred?: boolean;
     onTranscribe: () => void;
     onDelete: () => void;
 }
@@ -48,10 +54,21 @@ export function RecordingActionsMenu({
     transcript,
     timeline,
     busy,
+    starred = false,
     onTranscribe,
     onDelete,
 }: RecordingActionsMenuProps) {
+    const router = useRouter();
     const hasTranscript = Boolean(transcript?.text);
+
+    const toggleStar = async () => {
+        try {
+            await setRecordingStarred(recordingId, !starred);
+            router.refresh();
+        } catch {
+            toast.error("Could not update the star");
+        }
+    };
 
     const exportAs = (format: TranscriptExportFormat) => {
         if (!transcript) return;
@@ -92,6 +109,15 @@ export function RecordingActionsMenu({
                         <Download className="size-4" />
                         Download audio
                     </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    data-testid="recording-star-toggle"
+                    onSelect={() => void toggleStar()}
+                >
+                    <Star
+                        className={starred ? "size-4 fill-current" : "size-4"}
+                    />
+                    {starred ? "Unstar" : "Star"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {TRANSCRIPT_EXPORT_FORMATS.map(({ format, label }) => (

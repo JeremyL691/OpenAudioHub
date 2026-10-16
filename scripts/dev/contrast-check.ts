@@ -100,6 +100,8 @@ const PAIRS: [string, string, number, string][] = [
     ["secondary-foreground", "secondary", 4.5, "secondary button"],
     ["muted-foreground", "background", 4.5, "helper text on page"],
     ["muted-foreground", "muted", 4.5, "helper text on muted surface"],
+    ["muted-foreground", "secondary", 4.5, "helper text on filled controls"],
+    ["muted-foreground", "card", 4.5, "helper text on cards"],
     ["accent-foreground", "accent", 4.5, "hover and active items"],
     ["destructive", "background", 4.5, "error text on page"],
     ["destructive-foreground", "destructive", 4.5, "destructive button"],

@@ -90,13 +90,10 @@ export function SummaryPanel({
     return (
         <section
             data-testid="summary-panel"
-            className="border-t border-border pt-6"
+            className="rounded-2xl bg-card p-5 shadow-card"
         >
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
-                    <ListChecks className="size-4" />
-                    Summary
-                </div>
+                <h2 className="text-[17px] font-semibold">Summary</h2>
                 <div className="flex flex-wrap items-center gap-2">
                     {!isSummarizing && (
                         <>
@@ -118,7 +115,7 @@ export function SummaryPanel({
                         onClick={() => void handleSummarize()}
                         size="sm"
                         className="h-10 sm:h-8"
-                        variant={hasSummary ? "outline" : "default"}
+                        variant={hasSummary ? "secondary" : "default"}
                         disabled={isSummarizing}
                     >
                         {isSummarizing ? (
@@ -152,7 +149,7 @@ export function SummaryPanel({
                     <div className="space-y-4">
                         <div
                             data-testid="summary-content"
-                            className="max-w-3xl text-[14px] leading-relaxed"
+                            className="text-sm leading-6"
                         >
                             <RichMarkdown content={summaryData.summary} />
                         </div>
@@ -160,7 +157,7 @@ export function SummaryPanel({
                         {summaryData.keyPoints &&
                             summaryData.keyPoints.length > 0 && (
                                 <div>
-                                    <h4 className="mb-2 text-[13px] font-semibold text-muted-foreground">
+                                    <h4 className="mb-2 text-[13px] font-semibold">
                                         Key Points
                                     </h4>
                                     <ul className="space-y-1">
@@ -169,9 +166,9 @@ export function SummaryPanel({
                                             return (
                                                 <li
                                                     key={key}
-                                                    className="text-sm text-muted-foreground flex items-start gap-2"
+                                                    className="flex items-start gap-2 text-sm leading-6"
                                                 >
-                                                    <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary shrink-0" />
+                                                    <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary" />
                                                     {point}
                                                 </li>
                                             );
@@ -183,7 +180,7 @@ export function SummaryPanel({
                         {summaryData.actionItems &&
                             summaryData.actionItems.length > 0 && (
                                 <div>
-                                    <h4 className="mb-2 text-[13px] font-semibold text-muted-foreground">
+                                    <h4 className="mb-2 text-[13px] font-semibold">
                                         Action Items
                                     </h4>
                                     <ul className="space-y-1">
@@ -192,9 +189,9 @@ export function SummaryPanel({
                                             return (
                                                 <li
                                                     key={key}
-                                                    className="text-sm text-muted-foreground flex items-start gap-2"
+                                                    className="flex items-start gap-2 text-sm leading-6"
                                                 >
-                                                    <ListChecks className="size-3.5 mt-0.5 text-primary shrink-0" />
+                                                    <ListChecks className="mt-1 size-3.5 shrink-0 text-primary" />
                                                     {item}
                                                 </li>
                                             );

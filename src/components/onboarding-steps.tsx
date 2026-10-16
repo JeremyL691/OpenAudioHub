@@ -96,7 +96,7 @@ export function OnboardingStepPlaud({
             </div>
 
             {hasPlaudConnection ? (
-                <Card className="border-primary/50 bg-primary/5 py-3">
+                <Card className="border-0 bg-primary/5 py-3">
                     <CardContent className="px-4">
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="size-5 text-primary" />
@@ -107,7 +107,7 @@ export function OnboardingStepPlaud({
                                 </p>
                             </div>
                             <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={onReconnect}
                             >
@@ -149,7 +149,7 @@ export function OnboardingStepAiProvider({
             </div>
 
             {hasOwnProvider ? (
-                <Card className="border-primary/50 bg-primary/5 py-3">
+                <Card className="border-0 bg-primary/5 py-3">
                     <CardContent>
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="size-5 text-primary" />
@@ -174,7 +174,7 @@ export function OnboardingStepAiProvider({
                         </p>
                         <Button
                             onClick={onGoToSettings}
-                            variant="outline"
+                            variant="secondary"
                             className="w-full"
                         >
                             Go to Settings

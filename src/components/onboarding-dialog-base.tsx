@@ -20,7 +20,7 @@ function OnboardingDialogOverlay({
         <DialogPrimitive.Overlay
             ref={ref}
             className={cn(
-                "fixed inset-0 z-[101] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:duration-200 data-[state=open]:duration-200",
+                "fixed inset-0 z-[101] bg-background/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:duration-200 data-[state=open]:duration-200",
                 className,
             )}
             {...props}
@@ -51,7 +51,7 @@ function OnboardingDialogContent({
             <DialogPrimitive.Content
                 ref={ref}
                 className={cn(
-                    "fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-lg shadow-black/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:duration-200 data-[state=open]:duration-200 sm:max-w-[600px] sm:rounded-xl",
+                    "fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border-0 bg-background p-6 shadow-card data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:duration-200 data-[state=open]:duration-200 sm:max-w-[600px] sm:rounded-2xl",
                     className,
                 )}
                 {...props}
@@ -108,7 +108,7 @@ function OnboardingDialogTitle({
     return (
         <DialogPrimitive.Title
             ref={ref}
-            className={cn("text-lg font-semibold tracking-tight", className)}
+            className={cn("text-[20px] font-bold tracking-tight", className)}
             {...props}
         />
     );

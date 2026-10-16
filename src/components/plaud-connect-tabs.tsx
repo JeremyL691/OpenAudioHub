@@ -97,7 +97,7 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
             <div
                 role="tablist"
                 aria-label="Plaud connection method"
-                className="grid grid-cols-3 gap-0.5 p-0.5 rounded-lg bg-muted"
+                className="grid grid-cols-3 gap-0.5 p-0.5 rounded-lg bg-secondary"
             >
                 {tabs.map((t) => (
                     <button
@@ -291,7 +291,7 @@ function DesktopConnectPane({
                         by itself.
                     </p>
                     <Button
-                        variant="outline"
+                        variant="secondary"
                         onClick={handleCancel}
                         className="w-full"
                     >
@@ -302,7 +302,7 @@ function DesktopConnectPane({
             {handoffError && (
                 <p
                     role="alert"
-                    className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+                    className="rounded-xl bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
                 >
                     {handoffError}
                 </p>
@@ -320,7 +320,7 @@ function DesktopConnectPane({
             </p>
             {hasConnector && (
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={onConnectWindow}
                     disabled={isLoading}
                     className="w-full"

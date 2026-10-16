@@ -3,12 +3,16 @@
 import {
     AudioLines,
     BookOpen,
-    LayoutDashboard,
+    Clock,
+    LayoutGrid,
     type LucideIcon,
+    Mic,
     Settings,
+    Star,
+    Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { Github } from "@/components/icons/icons";
 import { Logo } from "@/components/icons/logo";
@@ -25,54 +29,21 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+    COLLECTIONS,
+    type CollectionCounts,
+    type CollectionId,
+} from "@/lib/recordings/collections";
 import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
 
-interface NavItem {
-    href: string;
-    label: string;
-    icon: LucideIcon;
-    testId: string;
-    /** Path prefixes that mark this item as active. */
-    prefixes: string[];
-    group: "Library" | "App";
-}
+const COLLECTION_ICONS: Record<CollectionId, LucideIcon> = {
+    starred: Star,
+    recent: Clock,
+    plaud: Mic,
+    uploaded: Upload,
+};
 
-const NAV_ITEMS: NavItem[] = [
-    {
-        href: "/dashboard",
-        label: "Overview",
-        icon: LayoutDashboard,
-        testId: "nav-overview",
-        prefixes: ["/dashboard"],
-        group: "Library",
-    },
-    {
-        href: "/recordings",
-        label: "Recordings",
-        icon: AudioLines,
-        testId: "nav-recordings",
-        prefixes: ["/recordings", "/dev/demo-dashboard"],
-        group: "Library",
-    },
-    {
-        href: "/settings",
-        label: "Settings",
-        icon: Settings,
-        testId: "nav-settings",
-        prefixes: ["/settings"],
-        group: "App",
-    },
-    {
-        href: "/docs",
-        label: "Docs",
-        icon: BookOpen,
-        testId: "nav-docs",
-        prefixes: ["/docs"],
-        group: "App",
-    },
-];
-
-const NAV_GROUPS: NavItem["group"][] = ["Library", "App"];
+const LIBRARY_PREFIXES = ["/recordings", "/dev/demo-dashboard"];
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
     return prefixes.some(
@@ -80,12 +51,60 @@ function matchesPrefix(pathname: string, prefixes: string[]): boolean {
     );
 }
 
+function NavItem({
+    href,
+    label,
+    icon: Icon,
+    testId,
+    active,
+    count,
+}: {
+    href: string;
+    label: string;
+    icon: LucideIcon;
+    testId: string;
+    active: boolean;
+    count?: number;
+}) {
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={active}
+                className="h-10 gap-2.5 rounded-md px-2.5 text-[13px] data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold md:h-8 [&[data-active=true]>svg]:text-primary"
+            >
+                <Link
+                    href={href}
+                    data-testid={testId}
+                    aria-current={active ? "page" : undefined}
+                >
+                    <Icon />
+                    <span>{label}</span>
+                    {count !== undefined && (
+                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                            {count}
+                        </span>
+                    )}
+                </Link>
+            </SidebarMenuButton>
+        </SidebarMenuItem>
+    );
+}
+
 /**
  * Primary navigation for the signed-in app.
  * Desktop collapses it off-canvas; below md it opens as a sheet.
  */
-export function AppSidebar({ footer }: { footer: ReactNode }) {
+export function AppSidebar({
+    counts,
+    footer,
+}: {
+    counts: CollectionCounts;
+    footer: ReactNode;
+}) {
     const pathname = usePathname();
+    const collection = useSearchParams().get("collection");
+    const onLibrary = pathname === "/recordings";
 
     return (
         <Sidebar collapsible="offcanvas" data-testid="app-sidebar">
@@ -103,41 +122,68 @@ export function AppSidebar({ footer }: { footer: ReactNode }) {
                 </div>
             </SidebarHeader>
             <SidebarContent>
-                {NAV_GROUPS.map((group) => (
-                    <SidebarGroup key={group}>
-                        <SidebarGroupLabel className="text-[11px] font-semibold text-muted-foreground">
-                            {group}
-                        </SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {NAV_ITEMS.filter(
-                                    (item) => item.group === group,
-                                ).map((item) => (
-                                    <SidebarMenuItem key={item.href}>
-                                        <SidebarMenuButton
-                                            asChild
-                                            isActive={matchesPrefix(
-                                                pathname,
-                                                item.prefixes,
-                                            )}
-                                            className="h-10 gap-2.5 rounded-md text-[13px] data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold md:h-8 [&[data-active=true]>svg]:text-primary"
-                                        >
-                                            <Link
-                                                href={item.href}
-                                                data-testid={item.testId}
-                                            >
-                                                <item.icon />
-                                                <span>{item.label}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                ))}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                ))}
+                <SidebarGroup>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            <NavItem
+                                href="/dashboard"
+                                label="Dashboard"
+                                icon={LayoutGrid}
+                                testId="nav-overview"
+                                active={matchesPrefix(pathname, ["/dashboard"])}
+                            />
+                            <NavItem
+                                href="/recordings"
+                                label="Library"
+                                icon={AudioLines}
+                                testId="nav-recordings"
+                                active={
+                                    matchesPrefix(pathname, LIBRARY_PREFIXES) &&
+                                    collection === null
+                                }
+                                count={counts.all}
+                            />
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+                <SidebarGroup>
+                    <SidebarGroupLabel className="h-auto px-2.5 pt-4 text-[11px] font-semibold text-muted-foreground">
+                        Collections
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {COLLECTIONS.map((item) => (
+                                <NavItem
+                                    key={item.id}
+                                    href={`/recordings?collection=${item.id}`}
+                                    label={item.label}
+                                    icon={COLLECTION_ICONS[item.id]}
+                                    testId={`nav-collection-${item.id}`}
+                                    active={onLibrary && collection === item.id}
+                                    count={counts[item.id]}
+                                />
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
             </SidebarContent>
             <SidebarFooter className="gap-3 px-4 py-3 text-[11px] text-muted-foreground">
+                <SidebarMenu className="-mx-2">
+                    <NavItem
+                        href="/settings"
+                        label="Settings"
+                        icon={Settings}
+                        testId="nav-settings"
+                        active={matchesPrefix(pathname, ["/settings"])}
+                    />
+                    <NavItem
+                        href="/docs"
+                        label="Docs"
+                        icon={BookOpen}
+                        testId="nav-docs"
+                        active={matchesPrefix(pathname, ["/docs"])}
+                    />
+                </SidebarMenu>
                 {footer}
                 <div className="flex items-center gap-3 font-mono">
                     <Link

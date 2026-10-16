@@ -113,7 +113,7 @@ export function RenameRecordingDialog({
                     <DialogFooter className="gap-2 sm:justify-end">
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             className="h-10 px-4 sm:h-8"
                             onClick={onClose}
                             disabled={saving}

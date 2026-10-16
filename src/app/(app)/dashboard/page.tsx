@@ -7,6 +7,7 @@ import {
     getOverviewTotals,
     getPlaudStatus,
     getRecentRecordings,
+    getRecentWindowTotals,
     getRecordingFlags,
 } from "@/db/queries/overview";
 import { listUserProviders } from "@/lib/ai/list-providers";
@@ -32,14 +33,16 @@ export default async function DashboardPage({
     const session = await requireAuth();
     const userId = session.user.id;
 
-    const [totals, jobs, phases, recent, plaud, providers] = await Promise.all([
-        getOverviewTotals(userId),
-        getActivePipelineJobs(userId),
-        getActivePipelinePhases(userId),
-        getRecentRecordings(userId, 8),
-        getPlaudStatus(userId),
-        listUserProviders(userId),
-    ]);
+    const [totals, recentWindow, jobs, phases, recent, plaud, providers] =
+        await Promise.all([
+            getOverviewTotals(userId),
+            getRecentWindowTotals(userId),
+            getActivePipelineJobs(userId, 50),
+            getActivePipelinePhases(userId),
+            getRecentRecordings(userId, 8),
+            getPlaudStatus(userId),
+            listUserProviders(userId),
+        ]);
     const flags = await getRecordingFlags(
         userId,
         recent.map((row) => row.id),
@@ -47,15 +50,21 @@ export default async function DashboardPage({
 
     // Content fields are encrypted at rest; decrypt before the names reach
     // the client. Legacy plaintext rows pass through verbatim.
-    const recentRecordings = recent.map((row) =>
-        serializeRecording(
-            { ...row, filename: decryptText(row.filename) },
-            {
-                hasTranscript: flags.transcribed.has(row.id),
-                hasSummary: flags.summarized.has(row.id),
-                pipelinePhase: phases.get(row.id) ?? null,
-            },
-        ),
+    const recentRecordings = recent.map(
+        ({ waveformPeaks, starredAt, ...row }) =>
+            serializeRecording(
+                { ...row, filename: decryptText(row.filename) },
+                {
+                    hasTranscript: flags.transcribed.has(row.id),
+                    hasSummary: flags.summarized.has(row.id),
+                    pipelinePhase: phases.get(row.id) ?? null,
+                    // jsonb comes back already-parsed; coerce to the typed shape.
+                    waveformPeaks: Array.isArray(waveformPeaks)
+                        ? (waveformPeaks as number[])
+                        : null,
+                    starred: starredAt != null,
+                },
+            ),
     );
     const processing = jobs.map((job) => ({
         id: job.id,
@@ -68,6 +77,7 @@ export default async function DashboardPage({
     return (
         <OverviewView
             totals={totals}
+            recentWindow={recentWindow}
             processing={processing}
             recent={recentRecordings}
             plaud={plaud}

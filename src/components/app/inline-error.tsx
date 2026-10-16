@@ -24,7 +24,7 @@ export function InlineError({
         <div
             role="alert"
             className={cn(
-                "flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive sm:flex-row sm:items-center sm:justify-between",
+                "flex flex-col gap-3 rounded-xl bg-destructive/10 px-3 py-2.5 text-[13px] text-destructive sm:flex-row sm:items-center sm:justify-between",
                 className,
             )}
         >
@@ -36,7 +36,7 @@ export function InlineError({
                 <span>{message}</span>
             </p>
             {onRetry ? (
-                <Button variant="outline" size="sm" onClick={onRetry}>
+                <Button variant="secondary" size="sm" onClick={onRetry}>
                     {retryLabel}
                 </Button>
             ) : null}

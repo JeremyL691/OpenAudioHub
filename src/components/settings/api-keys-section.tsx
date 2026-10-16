@@ -185,7 +185,7 @@ export function ApiKeysSection() {
                     </Button>
                 </div>
             ) : (
-                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
+                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
                     {apiKeys.map((apiKey) => (
                         <div
                             key={apiKey.id}
@@ -200,7 +200,7 @@ export function ApiKeysSection() {
                                         {apiKey.keyPrefix}
                                     </span>
                                     {apiKey.revokedAt && (
-                                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                                        <span className="rounded-full bg-destructive px-2 py-0.5 text-[11px] font-medium text-destructive-foreground">
                                             Revoked
                                         </span>
                                     )}
@@ -219,7 +219,7 @@ export function ApiKeysSection() {
                                 </div>
                             </div>
                             <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="icon"
                                 className="self-end sm:self-center"
                                 onClick={() => handleRevoke(apiKey.id)}
@@ -247,7 +247,7 @@ export function ApiKeysSection() {
                             <div className="flex gap-2">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="secondary"
                                     className="flex-1"
                                     onClick={copyCreatedKey}
                                 >
@@ -298,7 +298,7 @@ export function ApiKeysSection() {
                             <div className="flex justify-end gap-2">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="secondary"
                                     onClick={() => setIsCreateOpen(false)}
                                     disabled={isCreating}
                                 >

@@ -110,7 +110,7 @@ export function WebhooksSection() {
                     </Button>
                 </div>
             ) : (
-                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
+                <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
                     {webhooks.map((webhook) => (
                         <WebhookRow
                             key={webhook.id}
@@ -143,7 +143,8 @@ function deliveryStatusClass(status: string): string {
     if (status === "success" || status === "delivered") {
         return "bg-success text-success-foreground";
     }
-    if (status === "failed") return "bg-destructive/10 text-destructive";
+    if (status === "failed")
+        return "bg-destructive text-destructive-foreground";
     return "bg-muted text-muted-foreground";
 }
 
@@ -205,14 +206,14 @@ function WebhookRow({
             </div>
             <div className="flex items-center gap-1 sm:justify-end">
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => onShowDeliveries(webhook)}
                 >
                     Deliveries
                 </Button>
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     size="icon"
                     onClick={() => onEdit(webhook)}
                     aria-label="Edit webhook"
@@ -220,7 +221,7 @@ function WebhookRow({
                     <Pencil className="size-4" />
                 </Button>
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     size="icon"
                     onClick={() => onDelete(webhook.id)}
                     aria-label="Delete webhook"

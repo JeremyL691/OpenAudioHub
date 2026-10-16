@@ -61,7 +61,7 @@ interface UseTranscriptionSummaryOptions {
 
 /**
  * Shared summary state for the transcription views. Both the dashboard
- * (`TranscriptionPanel`) and the recording detail page
+ * (the library detail pane) and the recording detail page
  * (`recordings/TranscriptionSection`) use the same endpoints with the
  * same expand/preset/optimistic-delete UX -- only the visual chrome
  * differs.

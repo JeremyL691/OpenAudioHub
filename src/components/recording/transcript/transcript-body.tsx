@@ -98,11 +98,9 @@ export function TranscriptBody({
                                     onClick={() => {
                                         onSeekTimestamp?.(segment.start_ms);
                                     }}
-                                    className={`relative flex w-full items-baseline gap-3 rounded-lg px-2 py-1.5 text-left text-[14px] leading-relaxed transition-colors hover:bg-accent/60 disabled:cursor-default disabled:hover:bg-transparent ${isActive ? "bg-transcript-active" : ""}`}
+                                    className={`flex w-full items-baseline gap-3 rounded-lg px-2 py-1.5 text-left text-[15px] leading-7 transition-colors hover:bg-accent/60 disabled:cursor-default disabled:hover:bg-transparent ${isActive ? "bg-transcript-active" : ""}`}
                                 >
-                                    <span
-                                        className={`w-14 shrink-0 font-mono text-xs tabular-nums ${isActive ? "text-link" : "text-muted-foreground"}`}
-                                    >
+                                    <span className="w-14 shrink-0 text-xs tabular-nums text-muted-foreground">
                                         {formatTimestamp(segment.start_ms)}
                                     </span>
                                     <span className="min-w-0 flex-1">
@@ -114,7 +112,10 @@ export function TranscriptBody({
                     })}
                 </ol>
             ) : (
-                <SpeakerTranscript text={text} className="text-[14px]" />
+                <SpeakerTranscript
+                    text={text}
+                    className="text-[15px] leading-7"
+                />
             )}
         </div>
     );

@@ -28,9 +28,8 @@ interface ToggleRowProps {
  *   1. The whole row is wrapped in `<label htmlFor>`, so clicking the
  *      description (not just the tiny switch) toggles. Big tap target,
  *      better readability, fewer rage-clicks at the switch.
- *   2. Hover/focus styles are uniform across every settings section
- *      that uses it — visual rhythm is decided here, not duplicated
- *      across 13 section files.
+ *   2. Row height and label styles are uniform across every settings
+ *      section that uses it, so the grouped lists keep one rhythm.
  */
 export function ToggleRow({
     id,
@@ -46,7 +45,7 @@ export function ToggleRow({
         <div className="min-w-0 flex-1">
             <span
                 className={cn(
-                    "block text-sm font-medium",
+                    "block text-[13px] font-medium",
                     disabled && "opacity-60",
                 )}
             >
@@ -72,10 +71,8 @@ export function ToggleRow({
     const row = (
         <div
             className={cn(
-                "flex items-center justify-between gap-4 py-3",
-                rowClickable &&
-                    !disabled &&
-                    "-mx-2 cursor-pointer rounded-md px-2 transition-colors hover:bg-accent/40",
+                "flex min-h-11 items-center justify-between gap-4 py-2.5",
+                rowClickable && !disabled && "cursor-pointer",
                 className,
             )}
         >

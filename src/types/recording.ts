@@ -37,6 +37,8 @@ export type Recording = Omit<
      * when never decoded; an empty array would be invalid (treat as null).
      */
     waveformPeaks?: number[] | null;
+    /** Whether the user starred this recording. */
+    starred?: boolean;
 };
 
 // Helper to serialize a recording query result. Optional fields let
@@ -48,6 +50,7 @@ export function serializeRecording(
         hasSummary?: boolean;
         pipelinePhase?: string | null;
         waveformPeaks?: number[] | null;
+        starred?: boolean;
     },
 ): Recording {
     return {
@@ -57,6 +60,7 @@ export function serializeRecording(
         hasTranscript: flags?.hasTranscript ?? false,
         hasSummary: flags?.hasSummary ?? false,
         pipelinePhase: flags?.pipelinePhase ?? null,
+        starred: flags?.starred ?? false,
         // Empty arrays would be invalid per the field contract ("null
         // when never decoded"); collapse them to null at the
         // serialization boundary so consumers never have to special-case

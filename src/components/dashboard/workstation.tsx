@@ -15,11 +15,13 @@ import {
     RecordingList,
     type RecordingListHandle,
 } from "@/components/dashboard/recording-list";
+import type { StatusFilter } from "@/components/dashboard/recording-list-toolbar";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
 import { RenameRecordingDialog } from "@/components/recordings/rename-recording-dialog";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
+import type { CollectionId } from "@/lib/recordings/collections";
 import {
     applyFilenameOverrides,
     reconcileFilenameOverrides,
@@ -46,6 +48,12 @@ interface WorkstationProps {
     plaudNeedsReconnect: boolean;
     /** Recording to select on first paint (`/recordings?id=`). Server-supplied. */
     initialRecordingId?: string | null;
+    /** Collection to narrow the list to (`/recordings?collection=`). */
+    initialCollection?: CollectionId | null;
+    /** Status filter to start on (`/recordings?filter=`). */
+    initialFilter?: StatusFilter;
+    /** Search text to prefill (`/recordings?q=`). */
+    initialQuery?: string;
 }
 
 /**
@@ -69,6 +77,9 @@ export function Workstation({
     initialSettings,
     plaudNeedsReconnect,
     initialRecordingId = null,
+    initialCollection = null,
+    initialFilter = "all",
+    initialQuery = "",
 }: WorkstationProps) {
     const { push, refresh } = useRouter();
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
@@ -309,7 +320,7 @@ export function Workstation({
                         />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-6 px-4 pt-4 pb-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0 lg:p-0">
+                    <div className="grid grid-cols-1 gap-6 px-4 pt-4 pb-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-0 lg:p-0">
                         {/*
                               Mobile master/detail: on <lg, only one
                               pane renders at a time. `mobileView ===
@@ -322,11 +333,12 @@ export function Workstation({
                             */}
                         <div
                             className={cn(
-                                "lg:block lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-border",
+                                "bg-background lg:block lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-border",
                                 mobileView === "detail" && "hidden",
                             )}
                         >
                             <RecordingList
+                                key={`${initialCollection ?? ""}|${initialFilter}|${initialQuery}`}
                                 ref={listRef}
                                 recordings={visibleRecordings}
                                 transcriptions={transcriptions}
@@ -358,6 +370,9 @@ export function Workstation({
                                 }
                                 initialDensity={initialSettings.listDensity}
                                 initialChunkSize={initialSettings.itemsPerPage}
+                                initialCollection={initialCollection}
+                                initialFilter={initialFilter}
+                                initialQuery={initialQuery}
                             />
                         </div>
 

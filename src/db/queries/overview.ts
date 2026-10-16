@@ -4,6 +4,7 @@ import {
     countDistinct,
     desc,
     eq,
+    gte,
     inArray,
     isNotNull,
     isNull,
@@ -17,6 +18,7 @@ import {
     recordings,
     transcriptions,
 } from "@/db/schema";
+import { RECENT_WINDOW_MS } from "@/lib/recordings/collections";
 
 /**
  * Pipeline job states that still need attention. Terminal states (completed,
@@ -130,6 +132,28 @@ export async function getActivePipelinePhases(
     return phases;
 }
 
+/** Count and total duration of the recordings started in the last 7 days. */
+export async function getRecentWindowTotals(userId: string) {
+    const since = new Date(Date.now() - RECENT_WINDOW_MS);
+    const [row] = await db
+        .select({
+            count: count(recordings.id),
+            totalMs: sql<number>`coalesce(sum(${recordings.duration}), 0)`,
+        })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, userId),
+                isNull(recordings.deletedAt),
+                gte(recordings.startTime, since),
+            ),
+        );
+    return {
+        count: Number(row?.count ?? 0),
+        totalMs: Number(row?.totalMs ?? 0),
+    };
+}
+
 export async function getRecentRecordings(userId: string, limit = 8) {
     return db
         .select({
@@ -140,6 +164,8 @@ export async function getRecentRecordings(userId: string, limit = 8) {
             createdAt: recordings.createdAt,
             filesize: recordings.filesize,
             deviceSn: recordings.deviceSn,
+            waveformPeaks: recordings.waveformPeaks,
+            starredAt: recordings.starredAt,
         })
         .from(recordings)
         .where(and(eq(recordings.userId, userId), isNull(recordings.deletedAt)))

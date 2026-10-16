@@ -112,7 +112,7 @@ export function NamingSection() {
                 <div
                     role="radiogroup"
                     aria-label="Recording name"
-                    className="divide-y divide-border rounded-xl bg-muted/60 px-4"
+                    className="divide-y divide-border rounded-xl bg-muted px-4"
                 >
                     {TITLE_MODE_OPTIONS.map((option) => {
                         const inputId = `recording-title-mode-${option.value}`;
@@ -120,7 +120,7 @@ export function NamingSection() {
                             <Label
                                 key={option.value}
                                 htmlFor={inputId}
-                                className="flex cursor-pointer items-start gap-3 py-3 font-normal"
+                                className="flex cursor-pointer items-start gap-3 py-2.5 min-h-11 font-normal"
                             >
                                 <input
                                     type="radio"
@@ -149,7 +149,7 @@ export function NamingSection() {
                 </div>
 
                 {titleMode === "ai" && (
-                    <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/60 px-4 py-3">
+                    <div className="flex items-center justify-between gap-4 rounded-xl bg-muted px-4 py-2.5 min-h-11">
                         <div className="min-w-0 flex-1 space-y-0.5">
                             <Label
                                 htmlFor="sync-title-plaud"

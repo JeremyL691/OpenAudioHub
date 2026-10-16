@@ -38,7 +38,7 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
 
     /**
      * Trigger transcription for a specific recording id. Used by:
-     *   - the per-recording "Transcribe" button in TranscriptionPanel
+     *   - the per-recording "Transcribe" button in the library detail pane
      *     (via a wrapper that targets the currently selected recording
      *     for backwards compatibility), and
      *   - the command palette's per-row "Transcribe X" quick actions,

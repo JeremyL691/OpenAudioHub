@@ -215,7 +215,7 @@ export function OnboardingDialog({
                         <div className="flex flex-1 gap-2">
                             {prevStep && (
                                 <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     className="h-10 sm:h-8"
                                     onClick={() => setStep(prevStep)}
                                 >

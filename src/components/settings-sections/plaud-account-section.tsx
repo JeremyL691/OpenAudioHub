@@ -182,8 +182,8 @@ export function PlaudAccountSection({
             </div>
 
             {info?.connected ? (
-                <div className="rounded-xl bg-muted/60 divide-y divide-border">
-                    <div className="flex items-center gap-3 px-4 py-3">
+                <div className="rounded-xl bg-muted divide-y divide-border">
+                    <div className="flex items-center gap-3 px-4 py-2.5 min-h-11">
                         <CheckCircle2 className="size-5 text-success shrink-0" />
                         <p className="flex-1 min-w-0 text-[13px] font-medium truncate">
                             {currentEmail ? (
@@ -197,7 +197,7 @@ export function PlaudAccountSection({
                             )}
                         </p>
                     </div>
-                    <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="flex items-center justify-between gap-4 px-4 py-2.5 min-h-11">
                         <span className="text-[13px]">Region: </span>
                         <span className="text-[13px] text-muted-foreground tabular-nums text-right">
                             {regionLabel(info.server, info.apiBase)}
@@ -217,7 +217,7 @@ export function PlaudAccountSection({
                         </p>
                     )}
 
-                    <div className="flex flex-wrap gap-2 px-4 py-3">
+                    <div className="flex flex-wrap gap-2 px-4 py-2.5 min-h-11">
                         {info.needsReconnect && (
                             <Button
                                 className="h-10 sm:h-8"
@@ -228,7 +228,7 @@ export function PlaudAccountSection({
                             </Button>
                         )}
                         <Button
-                            variant="outline"
+                            variant="secondary"
                             className="h-10 sm:h-8"
                             onClick={() => setConfirmOpen("switch")}
                         >
@@ -246,7 +246,7 @@ export function PlaudAccountSection({
                     </div>
                 </div>
             ) : (
-                <div className="rounded-xl bg-muted/60 px-4 py-3 space-y-3">
+                <div className="rounded-xl bg-muted px-4 py-3 space-y-3">
                     <p className="text-xs text-muted-foreground">
                         No Plaud account connected. Sign in below to start
                         syncing recordings.
@@ -297,7 +297,7 @@ export function PlaudAccountSection({
                     </DialogHeader>
                     <DialogFooter className="gap-2">
                         <Button
-                            variant="outline"
+                            variant="secondary"
                             onClick={() => setConfirmOpen(null)}
                             disabled={isMutating}
                         >

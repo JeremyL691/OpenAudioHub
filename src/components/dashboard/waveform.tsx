@@ -24,7 +24,6 @@ const CENTER_DEAD_ZONE_PX = 1;
 const MIN_BAR_HEIGHT_FRAC = 0.04;
 const PLAYHEAD_WIDTH_PX = 2;
 const PLAYHEAD_GLOW_PX = 6;
-const UNPLAYED_ALPHA = 0.35;
 const HOVER_LINE_ALPHA = 0.55;
 
 const formatSeconds = formatDuration;
@@ -111,8 +110,8 @@ export function Waveform({
         ctx.clearRect(0, 0, cssWidth, cssHeight);
 
         const styles = getComputedStyle(wrap);
-        const { playedStops, primary, muted } = readWaveformPalette((name) =>
-            styles.getPropertyValue(name),
+        const { playedStops, unplayed, primary, muted } = readWaveformPalette(
+            (name) => styles.getPropertyValue(name),
         );
 
         if (peaks.length === 0) return;
@@ -128,20 +127,7 @@ export function Waveform({
         const radius = Math.min(barWidth / 2, 2);
 
         const playedX = progress * cssWidth;
-        // The played part takes the brand gradient across its own span, so
-        // the colour moves from cyan towards violet as playback advances.
-        const playedFill = ctx.createLinearGradient(
-            0,
-            0,
-            Math.max(1, playedX),
-            0,
-        );
-        playedStops.forEach((color, i) => {
-            playedFill.addColorStop(
-                i / Math.max(1, playedStops.length - 1),
-                color,
-            );
-        });
+        const playedFill = playedStops[0] ?? primary;
 
         for (let i = 0; i < visibleBars; i++) {
             const x = i * slotWidth + (slotWidth - barWidth) / 2;
@@ -155,8 +141,8 @@ export function Waveform({
                 ctx.fillStyle = playedFill;
                 ctx.globalAlpha = 1;
             } else {
-                ctx.fillStyle = muted;
-                ctx.globalAlpha = UNPLAYED_ALPHA;
+                ctx.fillStyle = unplayed;
+                ctx.globalAlpha = 1;
             }
 
             const topY = centerY - CENTER_DEAD_ZONE_PX / 2 - halfH;

@@ -23,7 +23,7 @@ export function KeyHint({ keys, label, className }: KeyHintProps) {
                 {keys.map((key) => (
                     <Kbd
                         key={key}
-                        className="rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground"
+                        className="rounded-md border border-border bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground"
                     >
                         {key}
                     </Kbd>
