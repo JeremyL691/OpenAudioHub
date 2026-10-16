@@ -3,6 +3,8 @@ title: Notifications
 description: Bark push notifications, browser notifications, and email, with their setup.
 ---
 
+The Notifications settings page is hidden from the settings navigation for now. Open it directly at `/settings/notifications`; everything below still works.
+
 OpenAudioHub can notify you when a sync finds new recordings or a transcription finishes. Three backends are included: Bark for iOS push, browser notifications, and email over SMTP. You can enable any combination.
 
 Notifications never block sync. Each backend has a timeout, three seconds for Bark, and a similar limit for email. A notification that fails is logged and is not retried.

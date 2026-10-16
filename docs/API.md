@@ -18,7 +18,7 @@ Send a personal API key as a Bearer token:
 Authorization: Bearer oah_...
 ```
 
-Keys start with `oah_` and are 38 characters long. Keys created before 1.0.0 start with `op_` and still work. Keys are read-only. Create them under **Settings → Integrations → API Keys**. The key is shown once, and the database stores only its HMAC-SHA256 hash, keyed by `API_TOKEN_HASH_SECRET`, or by `BETTER_AUTH_SECRET` when that is unset.
+Keys start with `oah_` and are 38 characters long. Keys created before 1.0.0 start with `op_` and still work. Keys are read-only. Create them under **Settings → API Keys**. The key is shown once, and the database stores only its HMAC-SHA256 hash, keyed by `API_TOKEN_HASH_SECRET`, or by `BETTER_AUTH_SECRET` when that is unset.
 
 ## Endpoints
 
@@ -46,7 +46,7 @@ Errors use the envelope `{ "error", "code", "details" }`. Branch on `code`. The 
 
 ## Webhooks
 
-Webhooks are configured under **Settings → Integrations → Webhooks**. Each delivery is a `POST` with these headers:
+Webhooks are configured under **Settings → Webhooks**. Each delivery is a `POST` with these headers:
 
 ```http
 X-OpenAudioHub-Event: transcription.completed

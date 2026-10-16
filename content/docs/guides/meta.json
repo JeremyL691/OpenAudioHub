@@ -1,6 +1,7 @@
 {
     "title": "Guides",
     "pages": [
+        "using-the-library",
         "connect-plaud-account",
         "ai-providers",
         "notifications",

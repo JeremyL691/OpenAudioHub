@@ -12,7 +12,7 @@ The full endpoint reference is in [Public API](/docs/reference/public-api).
 
 ## Personal API keys
 
-Open **Settings → Integrations → API Keys** and create a key. Give it a name and, optionally, an expiry date. The key is shown once, so store it in a password manager or in the secret store of the tool that will use it.
+Open **Settings → API Keys** and create a key. Give it a name and, optionally, an expiry date. The key is shown once, so store it in a password manager or in the secret store of the tool that will use it.
 
 A key starts with `oah_`, followed by 34 characters. Keys created before version 1.0.0 start with `op_`, and they keep working.
 
@@ -27,7 +27,7 @@ Keys are read-only today. OpenAudioHub stores only an HMAC-SHA256 hash of each k
 
 ## Webhooks
 
-Open **Settings → Integrations → Webhooks** and create an endpoint. Provide:
+Open **Settings → Webhooks** and create an endpoint. Provide:
 
 - **URL:** where OpenAudioHub sends events.
 - **Events:** one or more of the event types below.
@@ -103,7 +103,7 @@ If your instance is reachable by other people, set `WEBHOOKS_REQUIRE_PUBLIC_TARG
 
 ### Retries
 
-A non-2xx response or a network error schedules a retry. Retries wait 30 seconds, 2 minutes, 10 minutes, 1 hour, and 6 hours. After six failed attempts, the delivery is marked dead. Failed deliveries are recorded, and you can review them in **Settings → Integrations → Webhooks**.
+A non-2xx response or a network error schedules a retry. Retries wait 30 seconds, 2 minutes, 10 minutes, 1 hour, and 6 hours. After six failed attempts, the delivery is marked dead. Failed deliveries are recorded, and you can review them in **Settings → Webhooks**.
 
 ## Write access
 
