@@ -4,6 +4,8 @@ Changes to OpenAudioHub are recorded here. Maintainers write entries at release 
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-16
+
 ### Added
 
 - **Dashboard**: the home page now opens with three tiles (Last 7 days, Not transcribed, Processing) that each open the matching list, your latest recording, a list of recent recordings, and a setup checklist while Plaud or an AI provider is still missing.
