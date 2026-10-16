@@ -4,6 +4,21 @@ Changes to OpenAudioHub are recorded here. Maintainers write entries at release 
 
 ## [Unreleased]
 
+### Added
+
+- **Dashboard**: the home page now opens with three tiles (Last 7 days, Not transcribed, Processing) that each open the matching list, your latest recording, a list of recent recordings, and a setup checklist while Plaud or an AI provider is still missing.
+- **Collections** in the sidebar: Starred, Last 7 days, From Plaud and Uploaded, each with a count.
+- **Star recordings** from the star button next to the title or from the recording's actions menu.
+- **Search from anywhere**: the search field in the toolbar opens the library filtered by your words, including transcript text.
+- **Settings search**, and colored icons for every settings section.
+
+### Changed
+
+- A new look across the app: macOS greys, soft card surfaces instead of outlines, filled secondary buttons and a calmer type scale, in light and dark mode.
+- Library rows show a small waveform, the duration next to the title, and the status next to the date. Day headings show how many recordings and how much audio each day holds.
+- On large screens the player stays docked at the bottom of the recording page, and on very wide windows the summary sits beside the transcript.
+- Waveforms draw the played part in a single blue.
+
 ## [1.5.1] - 2026-10-15
 
 ### Added
