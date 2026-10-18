@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-18
+
 ### Added
 
 - Browser extension for Plaud sign-in, built and released with the app. Install it from a release zip and use it for Google, Apple and email sign-in.
@@ -42,5 +44,6 @@ Initial release.
 - A forced manual run leaves the superseded job's work folder behind ([#30](https://github.com/JeremyL691/OpenAudioHub/issues/30)).
 - A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.0.0
