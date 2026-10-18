@@ -1,0 +1,23 @@
+# OpenAudioHub, self-hosted: one container, all data in one volume.
+#   1. Put ENCRYPTION_KEY (64 hex characters: `openssl rand -hex 32`) and APP_URL in a .env file next to this file.
+#   2. docker compose up -d
+# Keep ENCRYPTION_KEY safe: without it, encrypted titles, transcripts and summaries cannot be read.
+name: openaudiohub
+
+services:
+  app:
+    image: ghcr.io/jeremyl691/openaudiohub:${OPENAUDIOHUB_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      # Set to true only when a reverse proxy in front of the app sets X-Forwarded-For.
+      RATE_LIMIT_TRUST_PROXY_HEADERS: ${RATE_LIMIT_TRUST_PROXY_HEADERS:-false}
+      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - data:/data
+
+volumes:
+  data:
