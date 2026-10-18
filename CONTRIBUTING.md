@@ -77,4 +77,4 @@ Common types are `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci
 
 ## Conduct
 
-Everyone who takes part in this project is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Everyone who takes part in this project is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). To report a problem in private, follow its [Enforcement](CODE_OF_CONDUCT.md#enforcement) section.
