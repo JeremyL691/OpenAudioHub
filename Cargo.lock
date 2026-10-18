@@ -3421,7 +3421,7 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "lettre",
- "md-5 0.10.6",
+ "md-5 0.11.0",
  "ort",
  "rand 0.9.5",
  "reqwest",
