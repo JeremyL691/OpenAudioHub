@@ -84,7 +84,10 @@ jobs:
         working-directory: contract-tests
       - run: contract-tests/run.sh server
       - name: Extension end-to-end tests
-        run: xvfb-run -a pnpm --dir extension e2e
+        run: |
+          pnpm install --frozen-lockfile
+          xvfb-run -a pnpm e2e
+        working-directory: extension
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
