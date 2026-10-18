@@ -1,7 +1,7 @@
 import { type ChildProcess } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { type APIRequestContext } from "@playwright/test";
-import { anonymousContext } from "../helpers/api";
+import { anonymousContext, baseURL } from "../helpers/api";
 import {
     ensureFakePlaud,
     freshUser,
@@ -259,13 +259,25 @@ test.describe("plaud: connection and validation", () => {
         await anon.dispose();
             });
 
-    test("the connect page is public, not indexed, and titled", async () => {
+    test("the connect page is public, not indexed, titled, and ready for the extension", async () => {
         const anon = await anonymousContext();
         const res = await anon.get("/connect/plaud?code=abc");
         expect(res.status()).toBe(200);
         const html = await res.text();
         expect(html).toMatch(/<title>Connect Plaud[^<]*<\/title>/);
         expect(html).toContain("noindex");
+        expect(html).toContain('<meta name="openaudiohub-plaud-connect" content="1">');
+        const oldWord = ["con", "nector"].join("");
+        expect(html.toLowerCase()).not.toContain(oldWord);
+        expect(html).toContain('data-testid="connect-start"');
+        expect(html).toContain('data-testid="connect-install-link"');
+        const csp = res.headers()["content-security-policy"] ?? "";
+        expect(csp).toContain("default-src 'self';");
+        expect(csp).toContain("script-src 'self' 'unsafe-inline' blob:;");
+        expect(csp).not.toContain("chrome-extension:");
+        expect(csp).not.toContain("moz-extension:");
+        expect(csp).not.toContain("http://127.0.0.1:*");
+        expect(csp).not.toContain("http://localhost:*");
         await anon.dispose();
     });
 });
@@ -602,6 +614,59 @@ test.describe("plaud: sign-in and sync against the fake Plaud API", () => {
         expect(body.needsReconnect).toBe(false);
         expect(await (await api.get("/api/plaud/connection")).json()).toMatchObject({ connected: true, needsReconnect: false });
         await api.dispose();
+    });
+
+    test("the connect page completes a handoff from extension messages", async ({ browser }) => {
+        const owner = await freshUser("plaud-page");
+        const email = uniq("Page.User");
+        const token = await accountToken(email);
+        const { code } = await (await owner.post("/api/plaud/auth/handoff")).json();
+        const context = await browser.newContext({
+            baseURL,
+            extraHTTPHeaders: { origin: baseURL },
+            storageState: { cookies: [], origins: [] },
+        });
+        const page = await context.newPage();
+        await page.goto(`/connect/plaud?code=${code}`);
+        await expect(page.getByTestId("connect-start")).toBeVisible();
+        await expect(page.getByTestId("connect-install-link")).toHaveAttribute(
+            "href",
+            "/docs/guides/browser-extension",
+        );
+
+        // A message from another app and a message with another protocol version are ignored.
+        await page.evaluate(
+            ({ origin, token }) => {
+                window.postMessage({ app: "other-app", protocol: 1, kind: "token", accessToken: token, apiBase: origin }, origin);
+                window.postMessage({ app: "openaudiohub-extension", protocol: 2, kind: "token", accessToken: token, apiBase: origin }, origin);
+                window.postMessage({ app: "openaudiohub-extension", protocol: 1, kind: "waiting", site: "global" }, origin);
+            },
+            { origin: baseURL, token },
+        );
+        await expect(page.getByTestId("connect-waiting")).toBeVisible();
+        expect((await (await owner.get(`/api/plaud/auth/handoff?code=${code}`)).json()).status).toBe("pending");
+
+        await page.evaluate(
+            ({ origin, token, apiBase }) => {
+                window.postMessage({ app: "openaudiohub-extension", protocol: 1, kind: "token", accessToken: token, apiBase }, origin);
+            },
+            { origin: baseURL, token, apiBase: FAKE_PLAUD_URL },
+        );
+        await expect(page.getByTestId("connect-success")).toBeVisible();
+        expect((await (await owner.get(`/api/plaud/auth/handoff?code=${code}`)).json()).status).toBe("connected");
+
+        const second = await (await owner.post("/api/plaud/auth/handoff")).json();
+        const failed = await context.newPage();
+        await failed.goto(`/connect/plaud?code=${second.code}`);
+        await failed.evaluate((origin) => {
+            window.postMessage({ app: "openaudiohub-extension", protocol: 1, kind: "failed", reason: "cancelled" }, origin);
+        }, baseURL);
+        await expect(failed.getByTestId("connect-error")).toBeVisible();
+        await expect(failed.getByTestId("connect-error-text")).toHaveText(
+            "Sign-in was cancelled. Click the OpenAudioHub icon to try again.",
+        );
+        await context.close();
+        await owner.dispose();
     });
 
     test("disconnect keeps synced recordings and drops the connection", async () => {
