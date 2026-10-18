@@ -10,12 +10,27 @@ COPY web/ ./
 COPY docs/ /src/docs/
 RUN pnpm build
 
-# trixie: the bundled ONNX Runtime needs the libstdc++ of GCC 14.
-FROM rust:1-trixie AS server
+# cargo-chef keeps the dependency build in its own layer, so changing the app source does not
+# recompile every dependency in the image.
+FROM rust:1-trixie AS chef
+RUN cargo install cargo-chef --version 0.1.78 --locked
 WORKDIR /src
+
+FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 # The workspace lists the desktop app; only its manifest is needed here, so the lock file stays valid.
+COPY desktop-tauri/Cargo.toml desktop-tauri/Cargo.toml
+RUN mkdir -p desktop-tauri/src && echo 'fn main() {}' > desktop-tauri/src/main.rs
+RUN cargo chef prepare --recipe-path recipe.json
+
+# trixie: the bundled ONNX Runtime needs the libstdc++ of GCC 14.
+FROM chef AS server
+WORKDIR /src
+COPY --from=planner /src/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json -p oah --bin oah-server
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
 COPY desktop-tauri/Cargo.toml desktop-tauri/Cargo.toml
 RUN mkdir -p desktop-tauri/src && echo 'fn main() {}' > desktop-tauri/src/main.rs
 COPY --from=web /src/web/dist web/dist
