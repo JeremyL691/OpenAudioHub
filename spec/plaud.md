@@ -154,7 +154,7 @@ Side effects: creates or updates the connection. The stored email is the lowerca
 
 Auth: session
 
-Paste flow. The user copies an account token from the Plaud web app and submits it. Used by the desktop app and by users who cannot use the browser connector.
+Paste flow. The user copies an account token from the Plaud web app and submits it. Used by the desktop app and by users who cannot use the browser extension.
 
 Request body:
 
@@ -182,7 +182,7 @@ Side effects: as verify. The token signature is never checked locally.
 
 ### Browser handoff
 
-Used by the desktop app. The desktop app asks the server for a one-time code, opens the connect page with the code, and waits. The page gets the token from the browser connector and completes the handoff.
+Used by the desktop app and by the Web settings page. The app asks the server for a one-time code, opens the connect page with the code, and waits. The page receives the token from the browser extension and completes the handoff.
 
 #### POST /api/plaud/auth/handoff
 
@@ -237,7 +237,7 @@ Checks, in this order:
 1. Header not `same-origin`: `403 FORBIDDEN`, message "Cross-site requests are not allowed".
 2. Code missing, unknown, expired, or already connected: `410 PLAUD_HANDOFF_EXPIRED`, message "This sign-in link has expired. Start again from the OpenAudioHub app."
 3. `accessToken` missing or blank: `400 MISSING_REQUIRED_FIELD`, `details.field` is `"accessToken"`.
-4. The token is connected for the code's owner, with the same checks and save as connect-token (source `connector`). Errors from those checks are returned to the caller. The message is also stored on the code, and the code stays pending so the user can retry until it expires.
+4. The token is connected for the code's owner, with the same checks and save as connect-token (source `browser-extension`). Errors from those checks are returned to the caller. The message is also stored on the code, and the code stays pending so the user can retry until it expires.
 
 Response on success: `200 {"success": true}`. The code cannot be used again. Later status checks report `connected` until the code expires.
 
@@ -251,35 +251,35 @@ Auth: none
 
 Query: `code` (optional). The page reads the one-time code from it.
 
-Response: `200` HTML. The title is "Connect Plaud" with the app name after it. The page is marked `noindex, nofollow`.
+Response: `200` HTML. The title is "Connect Plaud | OpenAudioHub". The page is marked `noindex, nofollow`. The head contains `<meta name="openaudiohub-plaud-connect" content="1">`, which the browser extension checks before it delivers a sign-in.
 
-The page shows a waiting message while it looks for the connector bridge. It checks for the bridge every 250 ms, for up to four seconds. If the bridge is still missing, it shows a link to install the connector. When the bridge is found, the page shows a continue button. Pressing it calls the bridge's `connect()`, then posts the code, `accessToken` and `apiBase` to `POST /api/plaud/auth/handoff/complete` on the same origin. On success the page shows a success message. On failure it shows the error message and returns to the start view.
+The page has one of these views. Every view uses these test ids: `connect-start`, `connect-waiting`, `connect-success`, `connect-error`, `connect-error-text`, `connect-install-link`.
 
-### Browser connector bridge
+- **Missing code.** The error text "This sign-in link is missing the authorization code. Please start again from OpenAudioHub." No other view is shown.
+- **Start.** The title is "Connect Plaud to OpenAudioHub". Two steps follow: "1. Click the OpenAudioHub icon in your browser toolbar. If you do not see it, open the extensions menu." and "2. Choose Connect, then sign in to Plaud if asked." Below them is "Do not have the extension yet?" with the link "Install the browser extension". The link opens `/docs/guides/browser-extension` on the same origin in a new tab.
+- **Waiting.** The text "Waiting for Plaud sign-in. Finish signing in in the Plaud tab." The start view is hidden.
+- **Success.** The text "Plaud is connected. You can close this tab and return to OpenAudioHub."
+- **Failure.** The server's error message, or the failure text for the reason from [browser-extension.md](browser-extension.md). The page adds "Click the OpenAudioHub icon to try again." unless the failure text already ends with that sentence. The code stays pending on the server, so the user can try again until it expires.
 
-The connector is a browser extension. It makes the account token available to the page through a bridge object on `window`.
+The page listens for messages from the extension. It accepts a message only when all of these are true: `event.source` is the page window, `event.origin` equals `location.origin`, `data.app` is `"openaudiohub-extension"`, and `data.protocol` is `1`. The message shapes and failure texts are in [browser-extension.md](browser-extension.md).
 
-- Global name: `__openaudiohubConnector`.
-- `connect()` returns a promise of:
+- A `waiting` message shows the waiting view.
+- A `token` message posts `{ "code": "<code>", "accessToken": "<token>", "apiBase": "<base>" }` to `POST /api/plaud/auth/handoff/complete` on the same origin. The page handles one token at a time. After a success it ignores later messages.
+- A `failed` message shows the failure view.
 
-```json
-{
-  "accessToken": "string",
-  "apiBase": "https://api-euc1.plaud.ai",
-  "region": "global | euc1 | apse1 | unknown",
-  "capturedAt": 1700000000000
-}
-```
+The page's Content Security Policy is `default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'`. The page has an inline script, so it allows inline scripts. It makes no request except the handoff complete call.
 
-`capturedAt` is epoch milliseconds. The page passes `accessToken` and `apiBase` to the handoff complete call and does not read the other fields.
+### Browser extension
 
-The connect page links to the connector's installation instructions.
+The browser extension hands the Plaud sign-in to the page. It is built and released with the app. Its build, manifest, popup, flow, token rules and message contract are in [browser-extension.md](browser-extension.md).
+
+The page does not talk to the extension directly. The extension posts the messages above with `window.postMessage`, and it can do that on any page that carries the connect page meta element.
 
 ## Token storage, expiry, and reconnect
 
 - The account token is encrypted at rest with the server's encryption key. No endpoint returns it, and it is not written to logs.
 - Plaud issues the account token with a 24-hour expiry (read from its `exp` claim). The server never refreshes it.
-- The desktop build refreshes it in the background while the app runs (see [desktop.md](desktop.md) section 10.3): a hidden window loads the Plaud site on the web session saved by the interactive sign-in, and the token it hands out is posted to `connect-token` with source `connector`. Other builds do not refresh; when Plaud refuses the stored token, the user reconnects.
+- The desktop build refreshes it in the background while the app runs (see [desktop.md](desktop.md) section 10.3): a hidden window loads the Plaud site on the web session saved by the interactive sign-in, and the token it hands out is posted to `connect-token` with source `desktop-refresh`. Other builds do not refresh; when Plaud refuses the stored token, the user reconnects.
 - A 401 during sync stamps the connection as needing reconnect. Rows and recordings are kept. Reconnecting (any sign-in path) saves a new token and clears the flag.
 - Workspace tokens are minted from the account token at the start of each sync run and kept in memory only. If minting fails for any reason, the run uses the account token instead.
 - Pasted workspace tokens are refused everywhere, because they cannot be renewed.
