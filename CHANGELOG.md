@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.1.0] - 2026-10-18
+
+### Added
+
+- Browser extension for Plaud sign-in, built and released with the app. Install it from a release zip and use it for Google, Apple and email sign-in.
+
+### Changed
+
+- The Plaud connect page downloads the browser extension zip from the latest release. The Plaud account settings link to the extension guide.
+- Release pages list every download with a short description, and include a `SHA256SUMS.txt` file with the checksums of the Mac app, the browser extension, the installer and the compose file.
+
+## [1.0.0] - 2026-10-18
+
+Initial release.
+
+### Added
+
+- **Plaud sync.** Connect a Plaud account with a browser sign-in, an email code, or a pasted token. Recordings sync by hand or in the background, with a rate limit on manual syncs.
+- **Library.** Upload audio files, a dashboard, recording list with search, collections, stars, and merging of recordings. Recording pages include audio playback with a waveform, keyboard shortcuts, and editable titles.
+- **Transcription.** Presets for OpenAI, Google Gemini, ElevenLabs, Groq, Together AI, OpenRouter, SiliconFlow, OpenCode Go, LM Studio, Ollama, and any OpenAI-compatible service. Separate choices for transcription and summaries, with encrypted API keys.
+- **In-browser transcription.** Transcribe a recording on your own device with a Whisper model, with no provider and no audio sent to a third party.
+- **Long recordings.** An audio pipeline detects speech, splits long files into parts, transcribes them, and joins the transcripts. Files that exceed provider limits are compressed first.
+- **Summaries and titles.** AI summaries with action items and key points, AI titles, and selectable summary styles and prompt presets.
+- **Exports and backups.** Export recordings with transcripts, summaries, and audio. Create full backup archives, schedule backups, and auto export new recordings as MP3 or the original file (Mac app).
+- **Notifications.** Email (SMTP) and Bark push notifications when new recordings sync.
+- **Automation.** Personal API keys, a read-only public API under `/api/v1`, and signed webhook deliveries with a delivery log and redelivery.
+- **Storage.** Audio on local disk or in any S3-compatible bucket.
+- **Accounts and security.** Email and password accounts with password reset, sessions, sign-in rate limits, and field encryption at rest for titles, transcripts, summaries and tokens.
+- **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
+- **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
+
+### Known issues
+
+- The long-audio pipeline ignores the `speakerDiarization` and `diarizationSpeakerCount` settings ([#28](https://github.com/JeremyL691/OpenAudioHub/issues/28)).
+- A cancel that arrives after the last chunk still saves the transcript ([#29](https://github.com/JeremyL691/OpenAudioHub/issues/29)).
+- A forced manual run leaves the superseded job's work folder behind ([#30](https://github.com/JeremyL691/OpenAudioHub/issues/30)).
+- A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
+
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.0.0
