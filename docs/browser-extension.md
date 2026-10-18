@@ -6,7 +6,7 @@ The extension runs in Chrome, Edge, Brave and other Chromium browsers, version 1
 
 ## Install
 
-1. Open the [latest release](https://github.com/JeremyL691/OpenAudioHub/releases/latest) and download `OpenAudioHub_Extension_<version>.zip`.
+1. Download the [latest browser extension](https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/OpenAudioHub_Extension.zip). The link always downloads the newest release.
 2. Unzip the file. Keep the folder.
 3. Open `chrome://extensions` (or `edge://extensions`, or `brave://extensions`).
 4. Turn on **Developer mode**.

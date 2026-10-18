@@ -271,6 +271,9 @@ test.describe("plaud: connection and validation", () => {
         expect(html.toLowerCase()).not.toContain(oldWord);
         expect(html).toContain('data-testid="connect-start"');
         expect(html).toContain('data-testid="connect-install-link"');
+        expect(html).toContain(
+            "https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/OpenAudioHub_Extension.zip",
+        );
         const csp = res.headers()["content-security-policy"] ?? "";
         expect(csp).toContain("default-src 'self';");
         expect(csp).toContain("script-src 'self' 'unsafe-inline' blob:;");
@@ -631,7 +634,7 @@ test.describe("plaud: sign-in and sync against the fake Plaud API", () => {
         await expect(page.getByTestId("connect-start")).toBeVisible();
         await expect(page.getByTestId("connect-install-link")).toHaveAttribute(
             "href",
-            "/docs/guides/browser-extension",
+            "https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/OpenAudioHub_Extension.zip",
         );
 
         // A message from another app and a message with another protocol version are ignored.

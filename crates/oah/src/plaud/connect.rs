@@ -641,7 +641,7 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
         <li>Click the OpenAudioHub icon in your browser toolbar. If you do not see it, open the extensions menu.</li>
         <li>Choose Connect, then sign in to Plaud if asked.</li>
       </ol>
-      <p>Do not have the extension yet? <a class="link" id="install-link" data-testid="connect-install-link" href="/docs/guides/browser-extension" target="_blank" rel="noopener noreferrer">Install the browser extension</a></p>
+      <p>Do not have the extension yet? <a class="link" id="install-link" data-testid="connect-install-link" href="https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/OpenAudioHub_Extension.zip">Download the browser extension</a>, then <a class="link" href="/docs/guides/browser-extension" target="_blank" rel="noopener noreferrer">follow the install steps</a>.</p>
     </div>
     <div id="view-waiting" data-testid="connect-waiting" class="hidden">
       <p><span class="spinner"></span>Waiting for Plaud sign-in. Finish signing in in the Plaud tab.</p>

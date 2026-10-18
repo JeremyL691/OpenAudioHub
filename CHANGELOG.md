@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- The Plaud connect page and the Plaud account settings explain the browser extension and link to its guide.
+- The Plaud connect page downloads the browser extension zip from the latest release. The Plaud account settings link to the extension guide.
 - Release pages list every download with a short description, and include a `SHA256SUMS.txt` file with the checksums of the Mac app, the browser extension, the installer and the compose file.
 
 ## [1.0.0] - 2026-10-18
