@@ -6,6 +6,8 @@ RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/ ./
+# The docs site imports the Markdown files from the repository's docs folder.
+COPY docs/ /src/docs/
 RUN pnpm build
 
 # trixie: the bundled ONNX Runtime needs the libstdc++ of GCC 14.
