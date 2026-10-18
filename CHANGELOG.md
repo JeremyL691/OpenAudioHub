@@ -45,5 +45,4 @@ Initial release.
 - A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
 
 [Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.0.0
+[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.0
