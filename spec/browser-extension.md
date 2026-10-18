@@ -13,7 +13,7 @@ The connect page and the handoff endpoints are in [plaud.md](plaud.md). The desk
 - `pnpm --dir extension zip` also writes `extension/dist-zip/OpenAudioHub_Extension_<version>.zip`. The manifest is at the root of the archive.
 - `pnpm --dir extension build:test` writes a test build to `extension/dist-test/`. It is never released. See "Tests".
 - Other scripts: `typecheck` runs `tsc --noEmit`, `test` runs the Vitest unit tests, `e2e` runs the Playwright tests.
-- Each release attaches the zip to the GitHub Release. The extension version is the app version.
+- Each release attaches `OpenAudioHub_Extension_<version>.zip` and a copy named `OpenAudioHub_Extension.zip`. The copy is the download target on the connect page, at `https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/OpenAudioHub_Extension.zip`, so it always resolves to the newest release. The extension version is the app version.
 
 ## Browser support
 

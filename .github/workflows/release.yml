@@ -129,7 +129,10 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm zip
 
       - name: Copy the extension zip into the release files
-        run: cp extension/dist-zip/OpenAudioHub_Extension_*.zip dist/
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp "extension/dist-zip/OpenAudioHub_Extension_${version}.zip" dist/
+          cp "extension/dist-zip/OpenAudioHub_Extension_${version}.zip" dist/OpenAudioHub_Extension.zip
 
       - name: Take the release notes from CHANGELOG.md
         env:
@@ -161,6 +164,7 @@ jobs:
           |---|---|
           | \`OpenAudioHub_${version}_aarch64.dmg\` | Mac app for Apple Silicon (macOS 11 or later). See the [Mac app guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/desktop.md). |
           | \`OpenAudioHub_Extension_${version}.zip\` | Browser extension for Chrome, Edge and Brave. See the [browser extension guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/browser-extension.md). |
+          | \`OpenAudioHub_Extension.zip\` | The same extension under a name that always points to the newest release. The OpenAudioHub connect page downloads this file. |
           | \`install.sh\` | One-line installer for the server container. |
           | \`compose.yml\` | Docker Compose file for the server container. |
           | \`SHA256SUMS.txt\` | SHA-256 checksums of the files above. |
