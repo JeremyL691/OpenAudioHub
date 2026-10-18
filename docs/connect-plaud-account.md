@@ -23,10 +23,11 @@ If you signed up to Plaud with Google or Apple, the browser extension is the eas
 
 ## Sign in with the browser extension
 
-1. Install the browser extension that the sign-in panel describes.
+1. Install the [browser extension](browser-extension.md).
 2. Open **Settings**, then **Plaud Account**, then **Connect Plaud**. Stay on the **Sign in with Plaud** tab.
-3. Choose **Sign in with Plaud**. A sign-in window opens.
-4. Sign in to Plaud as usual. The extension passes the session to the sign-in window, which connects your account. The panel shows **Waiting for Plaud sign-in** until it does.
+3. Choose **Open Plaud sign-in**. A connect page opens in your browser.
+4. Click the **OpenAudioHub** icon in your browser toolbar. Choose your Plaud site, then choose **Connect**.
+5. Sign in to Plaud as usual. The extension passes the session to the page, which connects your account. The panel shows **Waiting for Plaud sign-in** until it does.
 
 You copy nothing. A sign-in lasts ten minutes. If it expires, start again.
 

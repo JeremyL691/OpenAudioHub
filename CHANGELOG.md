@@ -6,9 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Browser extension for Plaud sign-in, built and released with the app. Install it from a release zip and use it for Google, Apple and email sign-in.
+
 ### Changed
 
-- Release pages list every download with a short description, and include a `SHA256SUMS.txt` file with the checksums of the Mac app, the installer and the compose file.
+- The Plaud connect page and the Plaud account settings explain the browser extension and link to its guide.
+- Release pages list every download with a short description, and include a `SHA256SUMS.txt` file with the checksums of the Mac app, the browser extension, the installer and the compose file.
 
 ## [1.0.0] - 2026-10-18
 
