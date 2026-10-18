@@ -33,7 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm build
 
       # The key covers the build script, which pins every source archive and is part of the cache key.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: desktop-tauri/.cache/ffmpeg-*
           key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
