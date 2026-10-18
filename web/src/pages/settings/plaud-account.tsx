@@ -509,8 +509,16 @@ function BrowserTab({
     return (
         <div className="grid gap-4">
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-                Easiest path: install the <span className="font-medium">Browser extension</span> browser extension. Sign in to Plaud as usual
-                (Google, Apple, or email) and the connector brings the session back here. Nothing to copy or paste.
+                Sign in with your Plaud account in this browser, including Google and Apple sign-in. This needs the OpenAudioHub browser
+                extension.{" "}
+                <a
+                    className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
+                    href="/docs/guides/browser-extension"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Get the extension
+                </a>
             </p>
             {code ? (
                 <p role="status" className="flex items-center gap-2 text-sm">
@@ -535,7 +543,7 @@ function BrowserTab({
                 </Button>
             </div>
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-                Already installed? Reload this page so OpenAudioHub can detect it. Or use the{" "}
+                After the sign-in page opens, click the OpenAudioHub icon in your browser toolbar. Or use the{" "}
                 <button type="button" className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80" onClick={() => onSwitch("email")}>
                     email code
                 </button>{" "}
