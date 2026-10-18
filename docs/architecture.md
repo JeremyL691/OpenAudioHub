@@ -21,9 +21,9 @@ This page describes how the pieces of OpenAudioHub fit together. It is for peopl
           v                              v                    |
  +-------------------------------------------------------------+
  |  oah-server (Rust)                                          |
- |   HTTP API + web app   background workers   audio pipeline   |
- |          |                    |                  |           |
- +----------|--------------------|------------------|-----------+
+ |   HTTP API + web app   background workers   audio pipeline  |
+ |          |                    |                  |          |
+ +----------|--------------------|------------------|----------+
             v                    v                  v
         SQLite file        audio storage       ffmpeg + VAD model
      (one data folder)   (disk or S3 bucket)    (in the process)

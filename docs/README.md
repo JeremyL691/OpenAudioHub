@@ -38,6 +38,8 @@ You run the server yourself, with Docker Compose, or with the Mac app. These pag
 - [Architecture](architecture.md): how the pieces fit together, including the long-audio pipeline.
 - [Security model](security-model.md): authentication, sessions, rate limits, and trust boundaries.
 - [Encryption at rest](encryption-at-rest.md): which fields are encrypted, and how to protect the key.
+- [Error responses](../spec/errors.md): the error envelope and the error codes the server returns.
+- [Behavior specification](../spec/README.md): how every part of the product behaves, file by file.
 
 ## Contributing
 

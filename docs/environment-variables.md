@@ -4,7 +4,7 @@ The server reads these variables once, when it starts. Set them in `.env`, and p
 
 - An empty value counts as not set.
 - Unknown variables are ignored.
-- Numbers must be whole numbers inside the allowed range. Whether a wrong number stops the server or falls back to the default is noted in each table.
+- Numbers must be whole numbers inside the allowed range. A wrong number stops the server at startup, unless the table says otherwise.
 - True and false values accept `true`, `1`, `yes` or `on`, and `false`, `0`, `no` or `off`, in any case. Any other value stops the server at startup, unless the table says otherwise.
 
 Values marked **secret** must not appear in logs, screenshots or support messages.
@@ -36,7 +36,7 @@ Values marked **secret** must not appear in logs, screenshots or support message
 | Variable | Default | Meaning |
 |---|---|---|
 | `HOST` | `0.0.0.0` | The IP address to listen on. Must be an IP address. A wrong value stops the server. |
-| `PORT` | `3000` | The port to listen on. A wrong value stops the server. |
+| `PORT` | `3000` | The port to listen on. |
 | `OAH_DATA_DIR` | `./data` | The data folder. The container sets it to `/data`. |
 | `OAH_DATABASE_PATH` | `<OAH_DATA_DIR>/openaudiohub.sqlite` | The SQLite database file. |
 | `LOCAL_STORAGE_PATH` | `<OAH_DATA_DIR>/storage` | The folder for audio files stored on disk. |
@@ -60,10 +60,10 @@ S3 settings are used only when a recording is stored in S3. If the bucket settin
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AUDIO_PIPELINE_ENABLED` | `true` | `true` splits each recording into parts at pauses, and transcribes the parts one by one. `false` sends the whole file to the provider in one request. A wrong value stops the server. |
+| `AUDIO_PIPELINE_ENABLED` | `true` | `true` splits each recording into parts at pauses, and transcribes the parts one by one. `false` sends the whole file to the provider in one request. |
 | `WHISPER_MAX_BYTES` | `25165824` (24 MiB) | The largest file sent to a provider without re-encoding. Allowed range is 1 to 26214400 (25 MiB). A wrong value uses the default. |
-| `WHISPER_COMPRESS_BITRATE_KBPS` | `12` | The first bitrate, in kbps, used when a file is too large. The bitrate is halved until the file fits. |
-| `WHISPER_REQUEST_TIMEOUT_MS` | `3600000` (1 hour) | How long one provider request may take, in milliseconds. |
+| `WHISPER_COMPRESS_BITRATE_KBPS` | `12` | The first bitrate, in kbps, used when a file is too large. The bitrate is halved until the file fits. A wrong value uses the default. |
+| `WHISPER_REQUEST_TIMEOUT_MS` | `3600000` (1 hour) | How long one provider request may take, in milliseconds. A wrong value uses the default. |
 | `OPENCODE_GO_SESSION_ID` | `openaudiohub` | Sent as the `x-opencode-session` header to OpenCode Go. Set it only if OpenCode asks for a specific session ID. |
 
 ## Plaud sync
@@ -78,7 +78,7 @@ S3 settings are used only when a recording is stored in S3. If the bucket settin
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` | `60` | How many automatic summaries one account may make in one hour. |
+| `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` | `60` | How many automatic summaries one account may make in one hour. A wrong value uses the default. |
 
 ## Email
 
@@ -87,8 +87,8 @@ Email is on only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are all set. 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SMTP_HOST` | none | The mail server host name. |
-| `SMTP_PORT` | `465` when `SMTP_SECURE=true`, otherwise `587` | The mail server port. A value that is not a port number stops the server. |
-| `SMTP_SECURE` | `false` | `true` uses implicit TLS, usually on port 465. `false` uses STARTTLS, usually on port 587. Only the exact text `true` turns it on. |
+| `SMTP_PORT` | `465` when `SMTP_SECURE=true`, otherwise `587` | The mail server port. Must be a port number. |
+| `SMTP_SECURE` | `false` | `true` uses implicit TLS, usually on port 465. `false` uses STARTTLS, usually on port 587. Only the exact text `true` turns it on, and other values are not an error. |
 | `SMTP_USER` | none | The login name for the mail server. |
 | `SMTP_PASSWORD` | none | **Secret.** The mail server password or API key. |
 | `SMTP_FROM` | `SMTP_USER`, or `OpenAudioHub <noreply@…>` built from the host of `APP_URL` | The From address. A bare address or `Name <address>`. An invalid value stops the server. |
@@ -108,7 +108,7 @@ Provider keys and base addresses are set in the app, not in these variables. See
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OAH_LOG` | `info` | The log level, using the standard filter syntax, for example `info`, `warn` or `oah=debug`. |
+| `OAH_LOG` | `info` | The log level, using the standard filter syntax, for example `info`, `warn` or `oah=debug`. A value that is not a valid filter uses `info`. |
 
 ## Mac app and testing only
 

@@ -9,7 +9,7 @@ The Mac app always stores audio on disk. This page is for the self-hosted server
 - [Which recordings use S3](#which-recordings-use-s3)
 - [How audio is read](#how-audio-is-read)
 - [Encryption](#encryption)
-- [Existing recordings](#moving-from-local-storage)
+- [Moving from local storage](#moving-from-local-storage)
 
 ## Configure S3
 

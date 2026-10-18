@@ -117,7 +117,7 @@ The steps below are the Mac app's. For all sign-in methods, see [Connect your Pl
 
 The **Email code** and **Paste token** tabs work in the app too. The app never sees your Plaud password.
 
-The token is stored encrypted in the database. It is not written to the log. Plaud tokens last 24 hours; when one expires the connection shows **Sign-in expired** and you sign in once more on any of the three paths.
+The token is stored encrypted in the database. It is not written to the log. Plaud tokens expire after 24 hours. When one expires the connection shows **Sign-in expired** and you sign in once more on any of the three paths.
 
 ## Launch at login
 

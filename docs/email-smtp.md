@@ -1,6 +1,6 @@
 # Email (SMTP) setup
 
-OpenAudioHub sends email through an SMTP mail server that you choose. Email is optional. Without it, the server sends no email, and two features are unavailable: email notifications and password reset by email.
+OpenAudioHub sends email through an SMTP mail server that you choose. Email is optional. Without it, the server sends no email, so email notifications, password reset by email and export-ready emails are unavailable.
 
 - [What email is used for](#what-email-is-used-for)
 - [Configure SMTP](#configure-smtp)
