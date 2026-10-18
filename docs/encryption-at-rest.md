@@ -37,7 +37,7 @@ Do not change the key after you have data. Values written with one key cannot be
 | Webhook URLs and signing secrets | The webhook rows |
 | Webhook delivery payloads | The delivery rows |
 
-Each value is encrypted on its own. The API returns decrypted values to you when you are signed in, and to your API keys.
+Each value is encrypted on its own. The API returns decrypted values when you are signed in, and to requests that use your API keys.
 
 ## What is not encrypted
 
@@ -57,8 +57,7 @@ v1:<16-byte IV, hex>:<authentication tag, hex>:<ciphertext, hex>
 
 A new random IV is made for every value. Structured values, such as action items and key points, are stored as a small JSON wrapper that holds one encrypted string.
 
-Values without the `v1:` prefix are read as they are, so plain values still load. A value
-that starts with `v1:` but does not match the format is an error.
+Values without the `v1:` prefix are read as they are, so plain values still load. A value that starts with `v1:` but does not match the format is an error.
 
 ## Passwords and tokens
 

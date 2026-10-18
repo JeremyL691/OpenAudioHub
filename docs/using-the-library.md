@@ -1,6 +1,6 @@
 # Using the library
 
-The dashboard, the library and its collections, starring, search, merging, and the recording page.
+This page covers the dashboard, the library and its collections, starring, search, merging, and the recording page.
 
 - [Dashboard](#dashboard)
 - [Library and collections](#library-and-collections)
