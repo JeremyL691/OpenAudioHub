@@ -1,0 +1,29 @@
+import { resolve } from "node:path";
+import { defineConfig } from "@playwright/test";
+import { storageStatePath } from "./helpers/api";
+
+// Black-box contract suite. It talks to a running server over HTTP only, so the
+// same tests run against any implementation. The target is started by the caller
+// (see run.sh); this config never starts a server itself.
+const baseURL = process.env.OAH_BASE_URL ?? "http://localhost:3210";
+
+export default defineConfig({
+    testDir: "./tests",
+    globalSetup: "./helpers/global-setup.ts",
+    workers: 1,
+    fullyParallel: false,
+    retries: 0,
+    timeout: 60_000,
+    expect: { timeout: 10_000 },
+    reporter: [["list"]],
+    outputDir: resolve(__dirname, "../.dev-artifacts/contract-results"),
+    use: {
+        baseURL,
+        // Own rate-limit bucket for the main account's requests (see clientHeaders).
+        extraHTTPHeaders: {
+            origin: baseURL,
+            "x-forwarded-for": `10.0.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`,
+        },
+        storageState: storageStatePath,
+    },
+});

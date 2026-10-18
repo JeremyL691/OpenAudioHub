@@ -1,0 +1,14 @@
+{
+    "name": "openaudiohub-contract-tests",
+    "private": true,
+    "type": "commonjs",
+    "packageManager": "pnpm@12.11.2",
+    "scripts": {
+        "test": "./run.sh server"
+    },
+    "devDependencies": {
+        "@axe-core/playwright": "4.12.1",
+        "@playwright/test": "1.63.0",
+        "unzipper": "0.12.5"
+    }
+}
