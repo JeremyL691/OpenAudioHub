@@ -189,7 +189,7 @@ Encrypted fields in the database can be read only with the same `ENCRYPTION_KEY`
 `GET /api/health` answers `200 OK`:
 
 ```json
-{ "status": "ok", "version": "1.0.0" }
+{ "status": "ok", "version": "1.1.0" }
 ```
 
 - The answer means the server is up and the database answers a query.

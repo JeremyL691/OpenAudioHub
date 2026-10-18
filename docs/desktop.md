@@ -129,7 +129,7 @@ The check box is not available in development builds.
 
 The app makes these backups. For what you can export, see [Backup and restore](backup-and-restore.md).
 
-**A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-1.0.0.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
+**A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-1.1.0.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
 
 **A full backup from Settings.** Open **Settings**, then **Export/Backup**, then choose **Create full backup**. The app builds one zip file with your audio, transcripts, summaries and a `manifest.json` file. Download it while it is ready. It is kept for 7 days.
 

@@ -43,7 +43,7 @@ This guide covers the self-hosted server. It runs as one Docker container with o
    curl -fsS http://127.0.0.1:3000/api/health
    ```
 
-   The health check returns `{"status":"ok","version":"1.0.0"}`.
+   The health check returns `{"status":"ok","version":"1.1.0"}`.
 
 Keep `.env` safe. It holds `ENCRYPTION_KEY`. Without that key, the encrypted titles, transcripts and summaries in the database cannot be read. See [Backups](#backups).
 
@@ -175,7 +175,7 @@ docker compose pull
 docker compose up -d
 ```
 
-To pin a version, put `OPENAUDIOHUB_VERSION=1.0.0` in `.env` before you run `docker compose up -d`.
+To pin a version, put `OPENAUDIOHUB_VERSION=1.1.0` in `.env` before you run `docker compose up -d`.
 
 The server updates the database when it starts. Do not start an older image on data that a newer image has opened. If you need to go back, restore the backup you made before the upgrade.
 
@@ -184,7 +184,7 @@ The server updates the database when it starts. Do not start an older image on d
 The container checks `http://127.0.0.1:3000/api/health` every 30 seconds. The endpoint also checks the database. When the database answers, it returns:
 
 ```json
-{"status":"ok","version":"1.0.0"}
+{"status":"ok","version":"1.1.0"}
 ```
 
 Run `docker compose ps` to see the health state.
