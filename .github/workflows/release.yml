@@ -92,7 +92,7 @@ jobs:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/jeremyl691/openaudiohub,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-amd64
           cache-to: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-amd64,mode=max
@@ -140,7 +140,7 @@ jobs:
           context: .
           file: deploy/Dockerfile
           platforms: linux/arm64
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/jeremyl691/openaudiohub,push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-arm64
           cache-to: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-arm64,mode=max
