@@ -1,0 +1,44 @@
+OpenAudioHub
+Copyright (C) 2026 Jeremy Liu
+
+OpenAudioHub is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License, version 3 only, as published by the Free Software Foundation. The full license text is in the LICENSE file. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; see the license for details.
+
+Third-party components
+======================
+
+The components below are included in this repository, in the server container image, or in the Mac app. Each keeps its own license.
+
+Silero VAD model
+  File: crates/oah/models/silero_vad.onnx (compiled into the server and the Mac app)
+  License: MIT, Copyright (c) 2020-present Silero Team
+  License text: crates/oah/models/SILERO_LICENSE.txt
+  Project: https://github.com/snakers4/silero-vad
+
+ONNX Runtime, through the ort crate
+  Used by the server and the Mac app for the voice activity detection model.
+  ONNX Runtime: MIT License, Copyright (c) Microsoft Corporation.
+  ort crate: MIT OR Apache-2.0.
+  Project: https://github.com/microsoft/onnxruntime and https://github.com/pykeio/ort
+
+ffmpeg and ffprobe, Mac app
+  Files: desktop-tauri/binaries/ffmpeg-<target> and ffprobe-<target>, built by desktop-tauri/scripts/build-ffmpeg.sh.
+  The build is LGPL-only: it does not use --enable-gpl, --enable-nonfree or --enable-version3.
+  ffmpeg 9.0.2: GNU Lesser General Public License, version 2.1 or later. https://ffmpeg.org
+  libopus 1.6.1 (linked into ffmpeg): BSD 3-Clause License. https://opus-codec.org
+  LAME 4.0 (linked into ffmpeg as libmp3lame): GNU Lesser General Public License, version 2.0. https://lame.sourceforge.io
+  The corresponding source archives are fetched and checked by build-ffmpeg.sh. The release workflow attaches them to each GitHub Release.
+
+ffmpeg and ffprobe, server container image
+  The server image (deploy/Dockerfile) installs the Debian trixie ffmpeg package. Its license is the license of that Debian package, which can include GPL-licensed parts. The package copyright file is in the image at /usr/share/doc/ffmpeg/copyright.
+
+Whisper model for browser transcription
+  Not bundled. The browser downloads the onnx-community/whisper-base model from the Hugging Face hub the first time a user runs browser transcription. The model is a conversion of OpenAI's Whisper weights, released under the MIT License. The model files stay in the browser cache and are not part of this repository or the release.
+
+Fonts
+  No font files are bundled. The web app asks for the system font and the Geist font family by name and uses the operating system fallback when it is not installed.
+
+Other dependencies
+  The Rust crates in Cargo.lock and the npm packages in web/pnpm-lock.yaml and contract-tests/pnpm-lock.yaml are separate works. Each one carries its own license, which is stated in its package metadata.
+
+Trademarks
+  Plaud is a trademark of its owner. OpenAudioHub is an independent project. It is not affiliated with, endorsed by, or sponsored by Plaud Inc.
