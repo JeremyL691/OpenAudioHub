@@ -43,6 +43,11 @@ jobs:
   contract:
     runs-on: ubuntu-24.04
     container: rust:1-trixie
+    # Chromium falls back to the default download name when the process locale is not
+    # UTF-8, which hides filenames derived from non-ASCII titles.
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     steps:
       - uses: actions/checkout@v4
       - run: |
