@@ -1,0 +1,374 @@
+//! Summaries and titles (spec/ai.md "Summaries", "Title generation"; spec/workers.md "Auto-summary").
+//! A manual summary runs as a `summary` job; concurrent requests wait on that one job.
+
+mod generate;
+mod prompts;
+mod text;
+mod title;
+
+use std::time::Duration;
+
+use axum::body::Bytes;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum::{Json, Router};
+use serde_json::{Map, Value, json};
+
+use crate::auth::CurrentUser;
+use crate::db::now_ms;
+use crate::error::{ApiResult, AppError};
+use crate::jobs::{self, Job, NewJob};
+use crate::time::iso;
+use crate::{AppState, ai, config, routes};
+use generate::{Failed, Plan};
+
+const AUTO_LIMIT_DEFAULT: u64 = 60;
+const HOUR_MS: i64 = 3_600_000;
+const POLL: Duration = Duration::from_millis(300);
+const WORKERS: usize = 2;
+
+pub fn router() -> Router<AppState> {
+    Router::new().route(
+        "/api/recordings/{id}/summary",
+        get(get_summary).post(post_summary).delete(delete_summary),
+    )
+}
+
+/// Starts the summary job workers.
+pub fn spawn(state: &AppState) {
+    let worker = state.clone();
+    jobs::spawn_workers(
+        state.db.clone(),
+        state.wakeup.clone(),
+        "summary",
+        WORKERS,
+        1,
+        move |job: Job| {
+            let state = worker.clone();
+            async move { generate::run_job(&state, job).await }
+        },
+    );
+}
+
+/// Called after a transcript is saved: auto title, then auto summary. Never fails the caller.
+pub async fn after_transcript(state: &AppState, user_id: &str, recording_id: &str) {
+    emit(
+        state,
+        user_id,
+        recording_id,
+        "transcription.completed",
+        None,
+    )
+    .await;
+    if let Err(e) = auto(state, user_id, recording_id).await {
+        tracing::error!(recording = recording_id, code = e.code, error = %e.message, "automatic summary step failed");
+    }
+}
+
+async fn auto(state: &AppState, user_id: &str, recording_id: &str) -> Result<(), Failed> {
+    let settings = routes::settings::effective(state, user_id).await?;
+    if settings.get("autoGenerateTitle") == Some(&Value::Bool(true))
+        && let Err(e) = title::generate(state, user_id, recording_id, &settings).await
+    {
+        tracing::error!(recording = recording_id, code = e.code, error = %e.message, "title generation failed");
+    }
+    if settings.get("autoSummarize") != Some(&Value::Bool(true)) {
+        return Ok(());
+    }
+    let limit = config::number(
+        "AUTO_SUMMARY_RATE_LIMIT_PER_HOUR",
+        AUTO_LIMIT_DEFAULT,
+        1,
+        u32::MAX as u64,
+    )
+    .unwrap_or(AUTO_LIMIT_DEFAULT) as u32;
+    let decision = state
+        .limiter
+        .hit(&format!("auto-summary:{user_id}"), limit, HOUR_MS, now_ms());
+    if !decision.allowed {
+        tracing::warn!(
+            recording = recording_id,
+            limit,
+            "auto-summary rate limit exceeded; skipped"
+        );
+        emit(
+            state,
+            user_id,
+            recording_id,
+            "summary.failed",
+            Some("Automatic summary limit reached"),
+        )
+        .await;
+        return Ok(());
+    }
+    let preset = settings
+        .get("autoSummarizePreset")
+        .and_then(Value::as_str)
+        .filter(|p| !p.is_empty());
+    let plan = generate::plan(&settings, preset, None, "");
+    let result = generate::run(state, user_id, recording_id, &plan).await;
+    match &result {
+        Ok(()) => emit(state, user_id, recording_id, "summary.completed", None).await,
+        Err(e) => {
+            emit(
+                state,
+                user_id,
+                recording_id,
+                "summary.failed",
+                Some(&e.message),
+            )
+            .await
+        }
+    }
+    result
+}
+
+async fn emit(
+    state: &AppState,
+    user_id: &str,
+    recording_id: &str,
+    event: &str,
+    failure: Option<&str>,
+) {
+    crate::webhooks::emit_soft(state, user_id, recording_id, event, failure).await;
+}
+
+fn recording_not_found() -> AppError {
+    AppError::not_found("RECORDING_NOT_FOUND", "Recording not found")
+}
+
+fn gone() -> AppError {
+    AppError::new(StatusCode::GONE, "NOT_FOUND", generate::DELETED_MESSAGE)
+}
+
+/// Maps a failed job's stored error to the response the request gets.
+fn failure(code: Option<String>, message: Option<String>) -> AppError {
+    let message = message.unwrap_or_else(|| "Something went wrong".to_owned());
+    let (status, code) = match code.as_deref() {
+        Some("NOT_FOUND") => return gone(),
+        Some("INVALID_INPUT") => (StatusCode::BAD_REQUEST, "INVALID_INPUT"),
+        Some("AI_PROVIDER_NOT_CONFIGURED") => {
+            (StatusCode::BAD_REQUEST, "AI_PROVIDER_NOT_CONFIGURED")
+        }
+        Some("AI_PROVIDER_API_ERROR") => (StatusCode::BAD_GATEWAY, "AI_PROVIDER_API_ERROR"),
+        Some("UPSTREAM_BAD_RESPONSE") => (StatusCode::BAD_GATEWAY, "UPSTREAM_BAD_RESPONSE"),
+        _ => return AppError::internal(message),
+    };
+    AppError::new(status, code, message)
+}
+
+#[derive(sqlx::FromRow)]
+struct SummaryRow {
+    summary: Option<String>,
+    action_items: Option<String>,
+    key_points: Option<String>,
+    provider: String,
+    model: String,
+    prompt_id: Option<String>,
+    language: Option<String>,
+    created_at: i64,
+}
+
+async fn load_row(state: &AppState, user_id: &str, id: &str) -> ApiResult<Option<SummaryRow>> {
+    let row = sqlx::query_as::<_, SummaryRow>(
+        "SELECT summary, action_items, key_points, provider, model, prompt_id, language, created_at
+         FROM ai_enhancements WHERE recording_id = ? AND user_id = ?",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    Ok(row)
+}
+
+async fn is_generating(state: &AppState, user_id: &str, id: &str) -> ApiResult<bool> {
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM jobs WHERE kind = 'summary' AND recording_id = ? AND user_id = ? AND state IN ('queued', 'running')",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(count > 0)
+}
+
+/// Opens the encrypted fields of a saved summary into the response shape.
+fn view(state: &AppState, row: SummaryRow) -> ApiResult<Value> {
+    let summary = match row.summary.as_deref() {
+        Some(s) => Some(
+            state
+                .config
+                .field_key
+                .decrypt(s)
+                .map_err(AppError::internal)?,
+        ),
+        None => None,
+    };
+    Ok(json!({
+        "summary": summary,
+        "keyPoints": open_list(state, row.key_points.as_deref())?,
+        "actionItems": open_list(state, row.action_items.as_deref())?,
+        "provider": row.provider,
+        "model": row.model,
+        "promptId": row.prompt_id,
+        "language": row.language,
+        "createdAt": iso(row.created_at),
+    }))
+}
+
+fn open_list(state: &AppState, stored: Option<&str>) -> ApiResult<Vec<String>> {
+    let Some(raw) = stored else {
+        return Ok(Vec::new());
+    };
+    let envelope: Value = serde_json::from_str(raw).map_err(AppError::internal)?;
+    let opened = state
+        .config
+        .field_key
+        .decrypt_json(&envelope)
+        .map_err(AppError::internal)?;
+    Ok(opened
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+async fn get_summary(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    generate::duration_of(&state, &user.id, &id)
+        .await?
+        .ok_or_else(recording_not_found)?;
+    let generating = is_generating(&state, &user.id, &id).await?;
+    let mut out = match load_row(&state, &user.id, &id).await? {
+        Some(row) => view(&state, row)?,
+        None => json!({ "summary": null }),
+    };
+    out["generating"] = json!(generating);
+    Ok(Json(out))
+}
+
+/// The request body: an empty body or a JSON object.
+fn request_fields(body: &Bytes) -> ApiResult<Map<String, Value>> {
+    if body.iter().all(u8::is_ascii_whitespace) {
+        return Ok(Map::new());
+    }
+    match serde_json::from_slice::<Value>(body) {
+        Ok(Value::Object(map)) => Ok(map),
+        _ => Err(AppError::bad_request(
+            "INVALID_INPUT",
+            "Request body must be a JSON object",
+        )),
+    }
+}
+
+/// Waits for the summary job to finish and returns the plan it ran with.
+async fn wait_for(state: &AppState, job_id: &str) -> ApiResult<Plan> {
+    loop {
+        let row = sqlx::query_as::<_, (String, Option<String>, Option<String>, String)>(
+            "SELECT state, error_code, error_message, payload FROM jobs WHERE id = ?",
+        )
+        .bind(job_id)
+        .fetch_optional(&state.db)
+        .await?;
+        match row {
+            None => return Err(gone()),
+            Some((s, _, _, payload)) if s == "done" => {
+                return serde_json::from_str::<Plan>(&payload).map_err(AppError::internal);
+            }
+            Some((s, code, message, _)) if s != "queued" && s != "running" => {
+                return Err(failure(code, message));
+            }
+            Some(_) => tokio::time::sleep(POLL).await,
+        }
+    }
+}
+
+async fn post_summary(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    let fields = request_fields(&body)?;
+    generate::duration_of(&state, &user.id, &id)
+        .await?
+        .ok_or_else(recording_not_found)?;
+    let source: String = fields
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .chars()
+        .take(20)
+        .collect();
+    if generate::load_transcript(&state, &user.id, &id, &source)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::bad_request(
+            "INVALID_INPUT",
+            "Transcribe the recording first",
+        ));
+    }
+    if ai::enhancement_provider(&state, &user.id).await?.is_none() {
+        return Err(AppError::bad_request(
+            "AI_PROVIDER_NOT_CONFIGURED",
+            "No AI provider can make summaries.",
+        ));
+    }
+    let settings = routes::settings::effective(&state, &user.id).await?;
+    let preset = fields
+        .get("preset")
+        .and_then(Value::as_str)
+        .filter(|p| !p.is_empty());
+    let language = fields.get("language").and_then(Value::as_str);
+    let plan = generate::plan(&settings, preset, language, &source);
+    let payload = serde_json::to_value(&plan).map_err(AppError::internal)?;
+    // A request made while a run is active joins that run: its plan is the one the job holds.
+    let job_id = jobs::enqueue(
+        &state.db,
+        NewJob {
+            kind: "summary",
+            user_id: Some(&user.id),
+            recording_id: Some(&id),
+            payload,
+        },
+    )
+    .await?;
+    state.wakeup.notify();
+    let ran = wait_for(&state, &job_id).await?;
+    let row = load_row(&state, &user.id, &id).await?.ok_or_else(gone)?;
+    let mut out = view(&state, row)?;
+    out["promptFallback"] = json!(ran.prompt_fallback);
+    Ok(Json(out))
+}
+
+async fn delete_summary(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let removed = sqlx::query("DELETE FROM ai_enhancements WHERE recording_id = ? AND user_id = ?")
+        .bind(&id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+    if removed > 0 {
+        sqlx::query("UPDATE recordings SET updated_at = ? WHERE id = ? AND user_id = ?")
+            .bind(now_ms())
+            .bind(&id)
+            .bind(&user.id)
+            .execute(&state.db)
+            .await?;
+    }
+    Ok(Json(json!({ "success": true })))
+}
