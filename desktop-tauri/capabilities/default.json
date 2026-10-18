@@ -1,0 +1,18 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "default",
+    "description": "The commands the app's own page may call. This file has no remote URL: src/main.rs adds the list at startup for the one origin this launch serves (http://127.0.0.1:<port>). Other origins get nothing.",
+    "local": false,
+    "windows": [
+        "main"
+    ],
+    "permissions": [
+        "allow-prefs-get",
+        "allow-prefs-set",
+        "allow-open-plaud-browser",
+        "allow-pick-folder",
+        "allow-save-text-file",
+        "allow-desktop-secret",
+        "allow-selftest-report"
+    ]
+}
