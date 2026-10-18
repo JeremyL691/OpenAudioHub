@@ -11,7 +11,7 @@ give the not-found page. Webhook routes are described in `webhooks.md`. API keys
 
 ## Common rules
 
-- Errors use one envelope: `{ "error": "<message>", "code": "<CODE>", "details": { ... } }`.
+- Errors use one envelope: `{ "error": "<message>", "code": "<CODE>", "details": { ... } }`. The codes are listed in [errors.md](errors.md).
   `details` is present only when there is something to add. Clients branch on `code`.
 - Any response with status 500 or higher adds `details.errorId`, in the form `err_`
   followed by 8 hexadecimal characters.

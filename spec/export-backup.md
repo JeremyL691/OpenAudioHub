@@ -2,7 +2,7 @@
 
 This file covers three things: the quick export (`GET /api/export`), full backup jobs that build a zip archive (`/api/backup`), and scheduled backups and auto export on the desktop build.
 
-Related files: [`recordings.md`](recordings.md) for uploads and deletes, [`settings.md`](settings.md) for the settings fields used here, [`error-codes`](../docs/error-codes.md) for the error envelope.
+Related files: [`recordings.md`](recordings.md) for uploads and deletes, [`settings.md`](settings.md) for the settings fields used here, [`errors.md`](errors.md) for the error envelope.
 
 ## Shared rules
 
