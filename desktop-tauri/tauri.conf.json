@@ -1,0 +1,35 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "OpenAudioHub",
+    "version": "1.1.0",
+    "identifier": "io.github.jeremyl691.openaudiohub",
+    "build": {},
+    "app": {
+        "withGlobalTauri": false,
+        "windows": [],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": [
+            "app",
+            "dmg",
+            "nsis"
+        ],
+        "icon": [
+            "icons/icon.png"
+        ],
+        "category": "Productivity",
+        "shortDescription": "Your Plaud recordings, transcribed and summarized on your own computer.",
+        "externalBin": [
+            "binaries/ffmpeg",
+            "binaries/ffprobe"
+        ],
+        "macOS": {
+            "signingIdentity": "-",
+            "minimumSystemVersion": "11.0"
+        }
+    }
+}
