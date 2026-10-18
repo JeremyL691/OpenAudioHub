@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OpenAudioHub">
+  <defs>
+    <linearGradient id="oah-mark-gradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#01ADFB"/>
+      <stop offset="0.5" stop-color="#2A5DFA"/>
+      <stop offset="1" stop-color="#6B14FB"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#oah-mark-gradient)">
+    <circle cx="19.5" cy="17.1" r="5.2"/>
+    <circle cx="21.2" cy="49.4" r="5.2"/>
+    <circle cx="52.3" cy="33.1" r="5.2"/>
+    <rect x="18.6" y="29.65" width="4.2" height="6.9" rx="2.1"/>
+    <rect x="24" y="25.85" width="4.2" height="14.5" rx="2.1"/>
+    <rect x="29.9" y="21.3" width="4.2" height="23.6" rx="2.1"/>
+    <rect x="35.7" y="25.85" width="4.2" height="14.5" rx="2.1"/>
+    <rect x="41" y="29.65" width="4.2" height="6.9" rx="2.1"/>
+  </g>
+  <g fill="none" stroke="url(#oah-mark-gradient)" stroke-width="3.8" stroke-linecap="round">
+    <path d="M26.24 14.16 A19.7 19.7 0 0 1 50.74 26.91"/>
+    <path d="M16.48 45.13 A19.7 19.7 0 0 1 15.48 22.27"/>
+    <path d="M50.74 39.09 A19.7 19.7 0 0 1 27.23 52.11"/>
+  </g>
+</svg>
