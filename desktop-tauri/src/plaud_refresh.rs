@@ -231,7 +231,7 @@ async fn check(
         .and_then(|c| c.get("region").and_then(Value::as_str).map(str::to_owned));
     let api_base = custom_base
         .unwrap_or_else(|| api_base_for(region_claim.as_deref(), on_china_page).to_owned());
-    let body = json!({ "accessToken": token, "apiBase": api_base, "source": "connector" });
+    let body = json!({ "accessToken": token, "apiBase": api_base, "source": "desktop-refresh" });
     let posted = match post_json(&refresher.client, port, &cookie, CONNECT_TOKEN_PATH, &body).await
     {
         Err(Failure::Unauthorized) => {

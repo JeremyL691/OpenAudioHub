@@ -387,7 +387,7 @@ pub(crate) async fn capture_token(
     }
 }
 
-/// Opens the one-time browser-connector handoff in the user's default browser.
+/// Opens the one-time browser sign-in handoff in the user's default browser.
 /// The URL is built from the app window origin so the frontend cannot choose a
 /// destination or scheme for the native opener.
 #[tauri::command]

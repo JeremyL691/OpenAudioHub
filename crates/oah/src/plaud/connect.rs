@@ -534,6 +534,7 @@ pub async fn handoff_complete(
         Some(r) if r.1 > now && r.2.is_none() => r,
         _ => return Err(expired()),
     };
+    tracing::info!(source = "browser-extension", "plaud handoff complete");
 
     match complete_connect(&state, &user_id, &b).await {
         Ok(()) => {
@@ -561,6 +562,7 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="openaudiohub-plaud-connect" content="1">
   <title>Connect Plaud | OpenAudioHub</title>
   <style>
     :root {
@@ -571,11 +573,10 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
       --border: rgba(0, 0, 0, 0.08);
       --primary: #0071e3;
       --primary-hover: #0077ed;
-      --primary-fg: #ffffff;
       --error: #df1b41;
       --success: #34c759;
     }
-    @media (prefers-color-scheme: dark) {
+    @media (prefers-color-scheme: dark){
       :root {
         --bg: #000000;
         --card: #1c1c1e;
@@ -584,7 +585,6 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
         --border: rgba(255, 255, 255, 0.12);
         --primary: #2997ff;
         --primary-hover: #3ca1ff;
-        --primary-fg: #ffffff;
         --error: #ff453a;
         --success: #30d158;
       }
@@ -602,7 +602,7 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
     }
     .card {
       background: var(--card);
-      border: 1px solid var(--border);
+      border: solid 1px var(--border);
       border-radius: 16px;
       max-width: 440px;
       width: 100%;
@@ -610,34 +610,12 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
       text-align: center;
     }
-    h1 { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
-    p { font-size: 14px; color: var(--sub); line-height: 1.5; margin-bottom: 20px; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 40px;
-      background: var(--primary);
-      color: var(--primary-fg);
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background 0.15s ease;
-      margin-top: 8px;
-    }
-    .btn:hover { background: var(--primary-hover); }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-      margin-top: 8px;
-    }
-    .btn-secondary:hover { background: var(--border); }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+    p { font-size: 14px; color: var(--sub); line-height: 1.5; margin-bottom: 16px; }
+    .steps { text-align: left; margin: 0 0 20px; padding-left: 20px; color: var(--sub); font-size: 14px; line-height: 1.6; }
+    .steps li { margin-bottom: 8px; }
+    .link { color: var(--primary); text-decoration: none; }
+    .link:hover { text-decoration: underline; }
     .spinner {
       display: inline-block;
       width: 18px;
@@ -650,7 +628,7 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
       margin-right: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .error-msg { color: var(--error); margin-top: 12px; font-size: 13px; }
+    .error-msg { color: var(--error); }
     .success-msg { color: var(--success); font-weight: 600; font-size: 16px; }
     .hidden { display: none; }
   </style>
@@ -658,104 +636,104 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
 <body>
   <main class="card">
     <h1>Connect Plaud to OpenAudioHub</h1>
-    <div id="view-initial">
-      <p id="status-text"><span class="spinner"></span>Waiting for the Plaud browser connector...</p>
-      <div id="btn-container" class="hidden">
-        <p>Sign in to Plaud in this browser. When you click below, the connector will capture your sign-in and return it to OpenAudioHub.</p>
-        <button id="btn-continue" class="btn" type="button">Continue with Plaud</button>
-      </div>
-      <div id="install-container" class="hidden">
-        <p>OpenAudioHub Connector extension was not found in this browser. Please install the extension, then reload this page.</p>
-        <a id="btn-install" class="btn" href="https://github.com/JeremyL691/openaudiohub-connector#installation" target="_blank" rel="noopener noreferrer">Install Connector Extension</a>
-        <button id="btn-reload" class="btn btn-secondary" type="button" onclick="location.reload()">Reload</button>
-      </div>
-      <div id="error-container" class="hidden">
-        <p class="error-msg" id="error-text"></p>
-        <button class="btn btn-secondary" type="button" onclick="location.reload()">Try Again</button>
-      </div>
+    <div id="view-start" data-testid="connect-start">
+      <ol class="steps">
+        <li>Click the OpenAudioHub icon in your browser toolbar. If you do not see it, open the extensions menu.</li>
+        <li>Choose Connect, then sign in to Plaud if asked.</li>
+      </ol>
+      <p>Do not have the extension yet? <a class="link" id="install-link" data-testid="connect-install-link" href="/docs/guides/browser-extension" target="_blank" rel="noopener noreferrer">Install the browser extension</a></p>
     </div>
-    <div id="view-working" class="hidden">
-      <p><span class="spinner"></span>Waiting for Plaud sign-in in browser…</p>
-      <p style="font-size:12px">Please complete the sign-in in the opened Plaud tab.</p>
+    <div id="view-waiting" data-testid="connect-waiting" class="hidden">
+      <p><span class="spinner"></span>Waiting for Plaud sign-in. Finish signing in in the Plaud tab.</p>
     </div>
-    <div id="view-success" class="hidden">
-      <p class="success-msg">✓ Plaud is connected!</p>
-      <p style="margin-top:8px">You can close this tab and return to the OpenAudioHub app.</p>
+    <div id="view-success" data-testid="connect-success" class="hidden">
+      <p class="success-msg">Plaud is connected. You can close this tab and return to OpenAudioHub.</p>
+    </div>
+    <div id="view-error" data-testid="connect-error" class="hidden">
+      <p class="error-msg" id="error-text" data-testid="connect-error-text"></p>
     </div>
   </main>
   <script>
-    (function() {
-      const code = (new URLSearchParams(window.location.search).get("code") || "").trim();
-      const statusText = document.getElementById("status-text");
-      const btnContainer = document.getElementById("btn-container");
-      const installContainer = document.getElementById("install-container");
-      const errorContainer = document.getElementById("error-container");
-      const errorText = document.getElementById("error-text");
-      const btnContinue = document.getElementById("btn-continue");
-      const viewInitial = document.getElementById("view-initial");
-      const viewWorking = document.getElementById("view-working");
-      const viewSuccess = document.getElementById("view-success");
+    (function () {
+      var code = (new URLSearchParams(window.location.search).get("code") || "").trim();
+      var viewStart = document.getElementById("view-start");
+      var viewWaiting = document.getElementById("view-waiting");
+      var viewSuccess = document.getElementById("view-success");
+      var viewError = document.getElementById("view-error");
+      var errorText = document.getElementById("error-text");
+      var busy = false;
+      var done = false;
+      var retry = "Click the OpenAudioHub icon to try again.";
+      var failureText = {
+        timeout: "Plaud sign-in timed out after 5 minutes. Click the OpenAudioHub icon to try again.",
+        cancelled: "Sign-in was cancelled. Click the OpenAudioHub icon to try again.",
+        replaced: "Another Plaud sign-in started in this browser."
+      };
+
+      function show(element) { element.classList.remove("hidden"); }
+      function hide(element) { element.classList.add("hidden"); }
+
+      function showError(message) {
+        hide(viewStart);
+        hide(viewWaiting);
+        hide(viewSuccess);
+        var text = typeof message === "string" && message ? message : "The Plaud sign-in did not finish.";
+        if (!text.endsWith(retry)) text += " " + retry;
+        errorText.textContent = text;
+        show(viewError);
+      }
 
       if (!code) {
-        statusText.classList.add("hidden");
+        hide(viewStart);
         errorText.textContent = "This sign-in link is missing the authorization code. Please start again from OpenAudioHub.";
-        errorContainer.classList.remove("hidden");
+        show(viewError);
         return;
       }
 
-      function getBridge() {
-        return window.__openaudiohubConnector;
+      function complete(accessToken, apiBase) {
+        if (busy || done) return;
+        busy = true;
+        var body = { code: code, accessToken: accessToken };
+        if (apiBase) body.apiBase = apiBase;
+        fetch("/api/plaud/auth/handoff/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(function (res) {
+          if (res.ok) return null;
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            throw new Error(data.error || data.message || "The sign-in could not be completed.");
+          });
+        }).then(function () {
+          done = true;
+          hide(viewStart);
+          hide(viewWaiting);
+          hide(viewError);
+          show(viewSuccess);
+        }).catch(function (err) {
+          busy = false;
+          showError(err && err.message ? err.message : "The sign-in could not be completed.");
+        });
       }
 
-      let checks = 0;
-      const interval = setInterval(function() {
-        const bridge = getBridge();
-        if (bridge && typeof bridge.connect === "function") {
-          clearInterval(interval);
-          statusText.classList.add("hidden");
-          btnContainer.classList.remove("hidden");
+      window.addEventListener("message", function (event) {
+        if (window !== event.source) return;
+        if (event.origin !== location.origin) return;
+        var data = event.data;
+        if (!data || data.app !== "openaudiohub-extension" || data.protocol !== 1) return;
+        if (done) return;
+        if (data.kind === "waiting") {
+          hide(viewStart);
+          hide(viewError);
+          show(viewWaiting);
           return;
         }
-        checks++;
-        if (checks >= 16) {
-          clearInterval(interval);
-          statusText.classList.add("hidden");
-          installContainer.classList.remove("hidden");
-        }
-      }, 250);
-
-      btnContinue.addEventListener("click", async function() {
-        const bridge = getBridge();
-        if (!bridge) {
-          installContainer.classList.remove("hidden");
-          btnContainer.classList.add("hidden");
+        if (data.kind === "token" && typeof data.accessToken === "string") {
+          complete(data.accessToken, typeof data.apiBase === "string" ? data.apiBase : "");
           return;
         }
-        viewInitial.classList.add("hidden");
-        viewWorking.classList.remove("hidden");
-        try {
-          const payload = await bridge.connect();
-          const res = await fetch("/api/plaud/auth/handoff/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: code,
-              accessToken: payload.accessToken,
-              apiBase: payload.apiBase || undefined
-            })
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.message || data.error || ("Server rejected connection (" + res.status + ")"));
-          }
-          viewWorking.classList.add("hidden");
-          viewSuccess.classList.remove("hidden");
-        } catch (err) {
-          viewWorking.classList.add("hidden");
-          viewInitial.classList.remove("hidden");
-          btnContainer.classList.add("hidden");
-          errorText.textContent = err.message || "Failed to connect Plaud. Please try again.";
-          errorContainer.classList.remove("hidden");
+        if (data.kind === "failed") {
+          showError(failureText[data.reason] || "The Plaud sign-in did not finish.");
         }
       });
     })();
