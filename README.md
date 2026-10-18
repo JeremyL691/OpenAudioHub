@@ -1,38 +1,97 @@
 <p align="center">
-  <img src="desktop-tauri/icons/icon.png" width="120" alt="OpenAudioHub logo">
+  <img src="web/public/og.png" alt="OpenAudioHub. Long recordings, intelligently transcribed." width="840">
 </p>
 
-<h1 align="center">OpenAudioHub</h1>
-
 <p align="center">
-  Sync your Plaud recordings, transcribe and summarize them on infrastructure you control.
+  <strong>A self-hosted server and Mac app for your Plaud recordings.</strong><br>
+  Sync them, transcribe and summarize them with the AI providers you choose, and keep everything on infrastructure you control.
 </p>
 
 <p align="center">
   <a href="https://github.com/JeremyL691/OpenAudioHub/actions/workflows/ci.yml"><img src="https://github.com/JeremyL691/OpenAudioHub/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://github.com/JeremyL691/OpenAudioHub/releases/latest"><img src="https://img.shields.io/github/v/release/JeremyL691/OpenAudioHub" alt="Latest release"></a>
+  <a href="https://github.com/JeremyL691/OpenAudioHub/releases/latest"><img src="https://img.shields.io/github/v/release/JeremyL691/OpenAudioHub?color=4f6bf5" alt="Latest release"></a>
+  <a href="#download-the-mac-app"><img src="https://img.shields.io/badge/macOS-Apple%20Silicon-111111?logo=apple" alt="macOS, Apple Silicon"></a>
+  <a href="https://github.com/JeremyL691/OpenAudioHub/pkgs/container/openaudiohub"><img src="https://img.shields.io/badge/container-ghcr.io-2496ed?logo=docker&amp;logoColor=white" alt="Container image on ghcr.io"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
 </p>
 
-OpenAudioHub is a self-hosted server and Mac app that keeps your Plaud recordings in one searchable library, with transcripts, summaries and titles from the AI providers you choose.
+<p align="center">
+  <a href="#download-the-mac-app">Mac app</a> ·
+  <a href="#self-hosting-quick-start">Self-hosting</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="docs/public-api.md">Public API</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/JeremyL691/OpenAudioHub/discussions">Discussions</a>
+</p>
+
+## Why OpenAudioHub
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Your recordings, your storage</h3>
+      Audio stays on your disk or in your own S3-compatible bucket. Titles, transcripts, summaries and tokens are encrypted at rest, and you can export everything at any time.
+    </td>
+    <td width="50%" valign="top">
+      <h3>The AI provider you choose</h3>
+      OpenAI, Google Gemini, ElevenLabs, Groq, OpenRouter, Ollama, LM Studio or any OpenAI-compatible service. Or transcribe in the browser with a Whisper model, with no audio sent anywhere.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Built for long recordings</h3>
+      Speech detection splits hours of audio at natural pauses, transcribes the parts and joins them into one transcript. Finished parts are kept, so a retry picks up where it stopped.
+    </td>
+    <td width="50%" valign="top">
+      <h3>A Mac app or one container</h3>
+      Run it as a native app on an Apple Silicon Mac, or as a single container with one SQLite data volume. Both run the same server.
+    </td>
+  </tr>
+</table>
 
 ## Screenshots
 
 <table>
   <tr>
-    <td><img src="docs/images/dashboard.png" alt="Dashboard"></td>
-    <td><img src="docs/images/library.png" alt="Library"></td>
+    <td width="50%"><img src="docs/images/dashboard.png" alt="The Dashboard, with totals for the last seven days, the latest recording and recent recordings"></td>
+    <td width="50%"><img src="docs/images/library.png" alt="The library, with the recording list, filters and a preview with the transcript and the player"></td>
   </tr>
   <tr>
-    <td><img src="docs/images/recording.png" alt="Recording page"></td>
-    <td><img src="docs/images/settings.png" alt="Settings"></td>
+    <td align="center"><sub><b>Dashboard.</b> This week's totals, the latest recording and recent activity.</sub></td>
+    <td align="center"><sub><b>Library.</b> Search, filters and collections, with a preview beside the list.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/recording.png" alt="A recording page, with the transcript, the summary with key points and action items, and the waveform player"></td>
+    <td width="50%"><img src="docs/images/settings.png" alt="The AI Providers settings page, with the settings sections in a sidebar"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Recording.</b> Transcript, summary and waveform playback on one page.</sub></td>
+    <td align="center"><sub><b>Settings.</b> AI providers, summaries, Plaud, storage and backups.</sub></td>
   </tr>
 </table>
+
+## How it works
+
+```mermaid
+flowchart LR
+    plaud["Plaud account"] -- sync --> server
+    upload["Audio uploads"] --> server
+    subgraph server["OpenAudioHub server"]
+        direction TB
+        library["Library<br/>SQLite + audio storage"] --> pipeline["Long-audio pipeline<br/>speech detection and chunking"]
+    end
+    pipeline -- "audio parts" --> ai["AI provider<br/>of your choice"]
+    ai -- "transcripts, summaries, titles" --> library
+    server --> out["Web app and Mac app<br/>exports and backups<br/>API, webhooks, notifications"]
+```
+
+Everything runs in one process: the HTTP API, the web app, the background workers and the audio pipeline. See [Architecture](docs/architecture.md) for the details.
 
 ## Features
 
 - **Plaud sync.** Connect your Plaud account in the browser, with an email code or a pasted token. Sync runs by hand or in the background.
-- **Transcription.** Use OpenAI, Google Gemini, ElevenLabs, Groq, OpenRouter, Ollama, LM Studio or any OpenAI-compatible service. You can also transcribe in the browser with a Whisper model, without sending audio to a provider.
+- **Transcription.** Presets for OpenAI, Google Gemini, ElevenLabs, Groq, Together AI, OpenRouter, SiliconFlow, OpenCode Go, LM Studio, Ollama and any OpenAI-compatible service. See [AI providers](docs/providers.md).
+- **In-browser transcription.** Transcribe on your own device with a Whisper model, without sending audio to a provider.
 - **Long recordings.** Speech detection splits long files into parts, transcribes them and joins the results.
 - **Summaries and titles.** Summaries with key points and action items, and automatic titles, in the style you choose.
 - **Library.** Search, collections, stars, merging, playback with a waveform, and keyboard shortcuts.
@@ -51,6 +110,12 @@ OpenAudioHub runs natively on Apple Silicon Macs (macOS 11 or later).
 
 Your library stays on your Mac, in `~/Library/Application Support/OpenAudioHub`. See the [Mac app guide](docs/desktop.md).
 
+To check the download, compare its checksum with the matching line in `SHA256SUMS.txt` on the release page:
+
+```sh
+shasum -a 256 OpenAudioHub_*_aarch64.dmg
+```
+
 ## Self-hosting quick start
 
 You need Docker with Compose v2, and a domain name with an HTTPS reverse proxy for anyone who connects from outside your machine.
@@ -61,7 +126,7 @@ Install with one command. It downloads the compose file, creates the encryption 
 curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
 ```
 
-To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.0.0`. The installer never overwrites an existing `.env`.
+To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.0.0`. The installer never overwrites an existing `.env`. To read the script before you run it, download [`install.sh`](deploy/install.sh) from the release first.
 
 Or set it up by hand:
 
@@ -116,6 +181,7 @@ The full guide, including running the server locally and building the Mac app, i
 | [`spec/`](spec) | Behavior specification that the server, web app and tests follow |
 | [`docs/`](docs) | User, self-hosting and developer documentation |
 | [`deploy/`](deploy) | Container image, compose file and installer |
+| [`tools/`](tools) | Scripts that build the demo data and capture the screenshots |
 | [`.github/`](.github) | CI, release workflow, issue and pull request templates |
 
 ## Contributing and security
