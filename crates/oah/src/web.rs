@@ -36,11 +36,11 @@ pub async fn security_headers(
     };
     // In-browser transcription downloads its speech model from the Hugging Face hub.
     let models = " https://huggingface.co https://*.huggingface.co https://*.hf.co";
-    // The connect page has an inline script and inline handlers (plaud/connect.rs), so it keeps
-    // 'unsafe-inline'. It does not eval, and it only posts to this server.
+    // The connect page has an inline script (plaud/connect.rs), so it keeps 'unsafe-inline'.
+    // It does not eval, and it only posts to this server.
     let csp = if is_connect {
-        "default-src 'self' http://127.0.0.1:* http://localhost:*; \
-         script-src 'self' 'unsafe-inline' chrome-extension: moz-extension: blob:; \
+        "default-src 'self'; \
+         script-src 'self' 'unsafe-inline' blob:; \
          worker-src 'self' blob:; \
          style-src 'self' 'unsafe-inline'; \
          img-src 'self' data: blob: https:; \
@@ -49,7 +49,7 @@ pub async fn security_headers(
             .to_string()
     } else {
         format!(
-            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' chrome-extension: moz-extension:; worker-src 'self' blob:; \
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'; worker-src 'self' blob:; \
              style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; \
              connect-src 'self'{ipc}{models}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         )
