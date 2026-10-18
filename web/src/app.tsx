@@ -17,7 +17,6 @@ const Dashboard = lazy(() => import("./pages/dashboard/dashboard"));
 const Library = lazy(() => import("./pages/library/library"));
 const Recording = lazy(() => import("./pages/recording/recording"));
 const Settings = lazy(() => import("./pages/settings/settings"));
-const ConnectPlaud = lazy(() => import("./pages/settings/connect-plaud"));
 const NotFound = lazy(() => import("./pages/not-found"));
 
 export function App() {
@@ -34,7 +33,6 @@ export function App() {
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/suspended" element={<Suspended />} />
-                    <Route path="/connect/plaud" element={<ConnectPlaud />} />
                     <Route element={<Shell />}>
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/recordings" element={<Library />} />
