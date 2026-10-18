@@ -282,7 +282,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 - Shows the connected account's email with a status badge ("Connected" or "Sign-in expired"), or a connect area when not connected. The state comes from `GET /api/plaud/connection`.
 - When the sign-in has expired: the text "Reconnect Plaud to keep recordings syncing." and a "Reconnect" button, which opens the Plaud sign-in.
 - Other actions: "Switch account" (confirmation "Switch Plaud account?") and "Disconnect". Both call `DELETE /api/plaud/connection`. Disconnecting shows "Plaud account disconnected".
-- Connecting uses three tabs: "Sign in with Plaud", "Email code" ("Plaud email", "Verification code") and "Paste token" ("Account token"). Connecting shows "Plaud account connected". See `plaud.md`.
+- Connecting uses three tabs: "Sign in with Plaud", "Email code" ("Plaud email", "Verification code") and "Paste token" ("Account token"). Connecting shows "Plaud account connected". The "Sign in with Plaud" tab uses the browser extension, described in [browser-extension.md](browser-extension.md). See `plaud.md`.
 
 ### 4.8 Sync (`sync`)
 

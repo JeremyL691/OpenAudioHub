@@ -11,6 +11,7 @@ The contract tests in `contract-tests/` check the specification against a runnin
 | `ai.md` | AI providers, presets, summaries, titles and prompt presets. |
 | `audio-pipeline.md` | The pipeline for long recordings: probing, voice activity detection, chunking, transcript merging, repair and disk budget. |
 | `auth.md` | Accounts, sign-up and sign-in, the session cookie, the desktop session exchange, password reset, rate limits and origin checks. |
+| `browser-extension.md` | The browser extension: build, manifest, popup, flow, token rules and page messages. |
 | `deployment.md` | The server container: image, compose file, environment variables, data volume, health check and upgrades. |
 | `desktop.md` | The macOS desktop app: start and quit, windows, tray, menu, preferences, launch at login and the data folder. |
 | `errors.md` | The error envelope, and the codes the server returns with their statuses and meanings. |

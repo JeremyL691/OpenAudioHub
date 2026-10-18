@@ -26,7 +26,7 @@ Unless a row says otherwise, a page path returns the same result signed in or ou
 | GET | `/recordings` | session | As `/dashboard` |
 | GET | `/recordings/{id}` | session | Signed out: 307 to `/login`. Suspended: 307 to `/suspended`. Active, own recording: 200 app shell. Otherwise 404 not-found page |
 | GET | `/settings`, `/settings/{section}` | session | As `/dashboard`, for a listed section (see "Settings sections"). Other sections: 404 not-found page |
-| GET | `/connect/plaud` | none | 200 app shell |
+| GET | `/connect/plaud` | none | 200 HTML page (see `plaud.md`) |
 | GET | `/install` | none | 200 app shell |
 | GET | `/docs`, `/docs/{path}` | none | 200 app shell, for any path under `/docs` |
 | GET | `/api/health` | none | 200 JSON, or 503 when the database does not answer |
@@ -184,7 +184,7 @@ same header:
 Content Security Policy for the app (directives in order):
 
 - `default-src 'self'`
-- `script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' chrome-extension: moz-extension:`
+- `script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'`
 - `worker-src 'self' blob:`
 - `style-src 'self' 'unsafe-inline'`
 - `img-src 'self' data: blob:`, `media-src 'self' blob:`, `font-src 'self'`
@@ -237,6 +237,7 @@ The copy is in `web/src/pages/public/install.tsx`.
 | `/docs` | OpenAudioHub Docs |
 | `/docs/guides/using-the-library` | Using the library |
 | `/docs/guides/connect-plaud-account` | Connect your Plaud account |
+| `/docs/guides/browser-extension` | Browser extension |
 | `/docs/guides/ai-providers` | AI providers |
 | `/docs/guides/notifications` | Notifications |
 | `/docs/guides/automation-and-webhooks` | Automation API and webhooks |

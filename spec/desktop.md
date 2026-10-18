@@ -311,7 +311,7 @@ The refresh uses a hidden window (label `plaud-refresh`, title "Plaud token refr
 - A refresh is due when `connected` is true and either `needsReconnect` is true, or the expiry is within 6 hours from now or already past. An unknown expiry with no `needsReconnect` is not refreshed.
 - Retry guard, kept in memory: a capture for a token with the same expiry is not repeated within 6 hours. A token with a new expiry is tried at once. The guard resets at each start.
 - The capture page is `https://web.plaud.cn/` when `server` is `cn`, otherwise `https://web.plaud.ai/`.
-- On a token, the shell posts `POST /api/plaud/auth/connect-token` with the session cookie and the JSON body `{"accessToken": "<token>", "apiBase": "<host>", "source": "connector"}`. `apiBase` is the connection's `apiBase` when it is not empty, otherwise the host from this table:
+- On a token, the shell posts `POST /api/plaud/auth/connect-token` with the session cookie and the JSON body `{"accessToken": "<token>", "apiBase": "<host>", "source": "desktop-refresh"}`. `apiBase` is the connection's `apiBase` when it is not empty, otherwise the host from this table:
 
   | Region claim in the token | API host |
   |---------------------------|----------|
