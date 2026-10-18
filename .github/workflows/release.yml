@@ -47,14 +47,14 @@ jobs:
         run: npx @tauri-apps/cli@2 build --bundles app,dmg
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openaudiohub-dmg
           path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload the ffmpeg source archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-source
           path: desktop-tauri/binaries/source/*
