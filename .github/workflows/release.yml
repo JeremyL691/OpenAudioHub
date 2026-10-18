@@ -108,6 +108,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: corepack enable
+
       - uses: actions/download-artifact@v4
         with:
           name: openaudiohub-dmg
@@ -117,6 +123,13 @@ jobs:
         with:
           name: ffmpeg-source
           path: dist/source
+
+      - name: Build the browser extension
+        working-directory: extension
+        run: pnpm install --frozen-lockfile && pnpm zip
+
+      - name: Copy the extension zip into the release files
+        run: cp extension/dist-zip/OpenAudioHub_Extension_*.zip dist/
 
       - name: Take the release notes from CHANGELOG.md
         env:
@@ -147,6 +160,7 @@ jobs:
           | File | What it is |
           |---|---|
           | \`OpenAudioHub_${version}_aarch64.dmg\` | Mac app for Apple Silicon (macOS 11 or later). See the [Mac app guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/desktop.md). |
+          | \`OpenAudioHub_Extension_${version}.zip\` | Browser extension for Chrome, Edge and Brave. See the [browser extension guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/browser-extension.md). |
           | \`install.sh\` | One-line installer for the server container. |
           | \`compose.yml\` | Docker Compose file for the server container. |
           | \`SHA256SUMS.txt\` | SHA-256 checksums of the files above. |
@@ -160,7 +174,7 @@ jobs:
       - name: Write the checksums
         run: |
           cp deploy/install.sh deploy/compose.yml dist/
-          (cd dist && sha256sum ./*.dmg install.sh compose.yml | sed 's| \./| |' > SHA256SUMS.txt)
+          (cd dist && sha256sum ./*.dmg ./*.zip install.sh compose.yml | sed 's| \./| |' > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
 
       - name: Create the draft release
@@ -172,6 +186,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/*.dmg
+            dist/*.zip
             dist/install.sh
             dist/compose.yml
             dist/SHA256SUMS.txt
