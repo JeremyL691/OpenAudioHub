@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a problem with the server, the web app, the Mac app or the installer.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Do not include passwords, API keys, encryption keys, recordings or transcripts. Security problems belong in a private report: see SECURITY.md.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where did it happen?
+      options:
+        - Self-hosted server (Docker)
+        - Mac app
+        - Installer script
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenAudioHub version
+      description: For the server, the "version" field of /api/health. For the Mac app, the release you installed.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the library
+        2. Select two recordings and choose Merge
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Docker version or macOS version, browser and the provider you use for transcription or summaries.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: For the server, run `docker compose logs app`. For the Mac app, open `main.log` in the data folder. Remove anything private before you paste.
+      render: text

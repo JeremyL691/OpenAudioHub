@@ -1,0 +1,302 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  mac-app:
+    name: Mac app (Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # pnpm version comes from the packageManager field of web/package.json.
+      - run: corepack enable
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install pkg-config
+        run: command -v pkg-config >/dev/null 2>&1 || brew install pkg-config
+
+      - name: Install web dependencies and build the web app
+        working-directory: web
+        run: pnpm install --frozen-lockfile && pnpm build
+
+      # The key covers the build script, which pins every source archive and is part of the cache key.
+      - uses: actions/cache@v4
+        with:
+          path: desktop-tauri/.cache/ffmpeg-*
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
+
+      - name: Build ffmpeg and ffprobe sidecars
+        working-directory: desktop-tauri
+        run: scripts/build-ffmpeg.sh
+
+      - name: Build the Mac app
+        working-directory: desktop-tauri
+        run: npx @tauri-apps/cli@2 build --bundles app,dmg
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaudiohub-dmg
+          path: target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload the ffmpeg source archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: desktop-tauri/binaries/source/*
+          if-no-files-found: error
+
+  image-amd64:
+    name: Server image (amd64)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/jeremyl691/openaudiohub
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          outputs: type=image,name=ghcr.io/jeremyl691/openaudiohub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-amd64
+          cache-to: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-amd64,mode=max
+
+      - name: Export the image digest
+        run: |
+          mkdir -p /tmp/digests
+          echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest-amd64.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-amd64
+          path: /tmp/digests/digest-amd64.txt
+          retention-days: 1
+
+  image-arm64:
+    name: Server image (arm64)
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/jeremyl691/openaudiohub
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/arm64
+          outputs: type=image,name=ghcr.io/jeremyl691/openaudiohub,push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-arm64
+          cache-to: type=registry,ref=ghcr.io/jeremyl691/openaudiohub:buildcache-arm64,mode=max
+
+      - name: Export the image digest
+        run: |
+          mkdir -p /tmp/digests
+          echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest-arm64.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-arm64
+          path: /tmp/digests/digest-arm64.txt
+          retention-days: 1
+
+  image:
+    name: Server image
+    needs: [image-amd64, image-arm64]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-digest-amd64
+          path: /tmp/digests
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-digest-arm64
+          path: /tmp/digests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/jeremyl691/openaudiohub
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Create the multi-platform manifest
+        env:
+          IMAGE: ghcr.io/jeremyl691/openaudiohub
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(-t "$tag")
+          done <<< "$TAGS"
+          amd64="$(cat /tmp/digests/digest-amd64.txt)"
+          arm64="$(cat /tmp/digests/digest-arm64.txt)"
+          docker buildx imagetools create "${args[@]}" "$IMAGE@$amd64" "$IMAGE@$arm64"
+
+  release:
+    name: Draft GitHub Release
+    needs: [mac-app, image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: corepack enable
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openaudiohub-dmg
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: dist/source
+
+      - name: Build the browser extension
+        working-directory: extension
+        run: pnpm install --frozen-lockfile && pnpm zip
+
+      - name: Copy the extension zip into the release files
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp "extension/dist-zip/OpenAudioHub_Extension_${version}.zip" dist/
+          cp "extension/dist-zip/OpenAudioHub_Extension_${version}.zip" dist/OpenAudioHub_Extension.zip
+
+      - name: Take the release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { lines[++n] = $0 }
+            END {
+              while (n > 0 && lines[n] ~ /^[[:space:]]*$/) n--
+              s = 1
+              while (s <= n && lines[s] ~ /^[[:space:]]*$/) s++
+              for (i = s; i <= n; i++) print lines[i]
+            }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ]; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          # Drop the link reference lines at the end of the section.
+          sed -i '/^\[[^]]*\]: /d' "$RUNNER_TEMP/release-notes.md"
+          cat >> "$RUNNER_TEMP/release-notes.md" <<EOF
+
+          ## Downloads
+
+          | File | What it is |
+          |---|---|
+          | \`OpenAudioHub_${version}_aarch64.dmg\` | Mac app for Apple Silicon (macOS 11 or later). See the [Mac app guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/desktop.md). |
+          | \`OpenAudioHub_Extension_${version}.zip\` | Browser extension for Chrome, Edge and Brave. See the [browser extension guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/browser-extension.md). |
+          | \`OpenAudioHub_Extension.zip\` | The same extension under a name that always points to the newest release. The OpenAudioHub connect page downloads this file. |
+          | \`install.sh\` | One-line installer for the server container. |
+          | \`compose.yml\` | Docker Compose file for the server container. |
+          | \`SHA256SUMS.txt\` | SHA-256 checksums of the files above. |
+          | \`ffmpeg-*\`, \`lame-*\`, \`opus-*\` | Source code of the LGPL and BSD audio libraries bundled in the Mac app. |
+
+          Server image: \`ghcr.io/jeremyl691/openaudiohub:${version}\` for linux/amd64 and linux/arm64.
+
+          Install the server with \`curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/install.sh | OAH_VERSION=${version} sh\`. See [self-hosting](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/self-hosting.md).
+          EOF
+
+      - name: Write the checksums
+        run: |
+          cp deploy/install.sh deploy/compose.yml dist/
+          (cd dist && sha256sum ./*.dmg ./*.zip install.sh compose.yml | sed 's| \./| |' > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Create the draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: OpenAudioHub ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/install.sh
+            dist/compose.yml
+            dist/SHA256SUMS.txt
+            dist/source/*
