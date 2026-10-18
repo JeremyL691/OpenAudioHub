@@ -16,7 +16,7 @@ aws-sdk-s3 = "1.144"
 argon2 = "0.6.0"
 axum = { version = "0.8", features = ["multipart"] }
 hex = "0.4.3"
-rand = "0.9"
+rand = "0.10"
 scrypt = "0.12.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
