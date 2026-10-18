@@ -26,5 +26,12 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
+### Known issues
+
+- The long-audio pipeline ignores the `speakerDiarization` and `diarizationSpeakerCount` settings ([#28](https://github.com/JeremyL691/OpenAudioHub/issues/28)).
+- A cancel that arrives after the last chunk still saves the transcript ([#29](https://github.com/JeremyL691/OpenAudioHub/issues/29)).
+- A forced manual run leaves the superseded job's work folder behind ([#30](https://github.com/JeremyL691/OpenAudioHub/issues/30)).
+- A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
+
 [Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.0.0
