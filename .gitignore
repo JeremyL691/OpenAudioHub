@@ -5,6 +5,9 @@
 node_modules/
 web/dist/
 web/tsconfig.tsbuildinfo
+extension/dist/
+extension/dist-test/
+extension/dist-zip/
 
 # Tauri
 desktop-tauri/gen/

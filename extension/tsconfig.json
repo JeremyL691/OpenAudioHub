@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["DOM", "DOM.Iterable", "ES2022"],
+        "types": ["chrome", "node"],
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true
+    },
+    "include": ["src", "tests", "build.mjs"],
+    "exclude": ["dist", "dist-test", "dist-zip", "node_modules"]
+}
