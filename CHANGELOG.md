@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Release pages list every download with a short description, and include a `SHA256SUMS.txt` file with the checksums of the Mac app, the installer and the compose file.
+
 ## [1.0.0] - 2026-10-18
 
 Initial release.

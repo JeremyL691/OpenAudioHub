@@ -138,6 +138,30 @@ jobs:
             echo "CHANGELOG.md has no section for $version" >&2
             exit 1
           fi
+          # Drop the link reference lines at the end of the section.
+          sed -i '/^\[[^]]*\]: /d' "$RUNNER_TEMP/release-notes.md"
+          cat >> "$RUNNER_TEMP/release-notes.md" <<EOF
+
+          ## Downloads
+
+          | File | What it is |
+          |---|---|
+          | \`OpenAudioHub_${version}_aarch64.dmg\` | Mac app for Apple Silicon (macOS 11 or later). See the [Mac app guide](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/desktop.md). |
+          | \`install.sh\` | One-line installer for the server container. |
+          | \`compose.yml\` | Docker Compose file for the server container. |
+          | \`SHA256SUMS.txt\` | SHA-256 checksums of the files above. |
+          | \`ffmpeg-*\`, \`lame-*\`, \`opus-*\` | Source code of the LGPL and BSD audio libraries bundled in the Mac app. |
+
+          Server image: \`ghcr.io/jeremyl691/openaudiohub:${version}\` for linux/amd64 and linux/arm64.
+
+          Install the server with \`curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}/install.sh | OAH_VERSION=${version} sh\`. See [self-hosting](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/self-hosting.md).
+          EOF
+
+      - name: Write the checksums
+        run: |
+          cp deploy/install.sh deploy/compose.yml dist/
+          (cd dist && sha256sum ./*.dmg install.sh compose.yml | sed 's| \./| |' > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
 
       - name: Create the draft release
         uses: softprops/action-gh-release@v2
@@ -148,6 +172,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist/*.dmg
+            dist/install.sh
+            dist/compose.yml
+            dist/SHA256SUMS.txt
             dist/source/*
-            deploy/install.sh
-            deploy/compose.yml
