@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           apt-get update
-          apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl xvfb
+          apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl xvfb xauth
           curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
           apt-get install -y nodejs
           corepack enable
