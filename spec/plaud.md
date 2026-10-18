@@ -4,7 +4,7 @@ This module covers the Plaud connection: status, disconnect, the sign-in flows, 
 
 Plaud's API is not public. Everything in the last section is what the app sends and reads today.
 
-Environment variables are listed in [deployment.md](deployment.md). Error envelope and codes are in the error codes document. Recording fields are in [recordings.md](recordings.md). Webhook events are in [webhooks.md](webhooks.md).
+Environment variables are listed in [deployment.md](deployment.md). Error envelope and codes are in [errors.md](errors.md). Recording fields are in [recordings.md](recordings.md). Webhook events are in [webhooks.md](webhooks.md).
 
 ## Concepts
 
@@ -474,7 +474,7 @@ Retries against Plaud: a 429 waits the `Retry-After` seconds, or 1, 2, then 4 se
 
 ## Errors
 
-Every error uses the standard envelope (see the error codes document). Codes used by this module:
+Every error uses the standard envelope (see [errors.md](errors.md)). Codes used by this module:
 
 | Code | Status | `details` | When |
 | --- | --- | --- | --- |

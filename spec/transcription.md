@@ -12,7 +12,7 @@ Related files:
 - `settings.md`: user settings used here (language, speaker labels, title, auto-summary).
 - `settings.md` also describes the public `/api/v1` transcript read.
 
-Every endpoint in this file needs a session cookie unless it says otherwise. Errors use the envelope in `docs/error-codes.md`: `error`, `code`, and optional `details`.
+Every endpoint in this file needs a session cookie unless it says otherwise. Errors use the envelope in [errors.md](errors.md): `error`, `code`, and optional `details`.
 
 ## Transcript data
 

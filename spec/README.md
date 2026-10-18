@@ -13,6 +13,7 @@ The contract tests in `contract-tests/` check the specification against a runnin
 | `auth.md` | Accounts, sign-up and sign-in, the session cookie, the desktop session exchange, password reset, rate limits and origin checks. |
 | `deployment.md` | The server container: image, compose file, environment variables, data volume, health check and upgrades. |
 | `desktop.md` | The macOS desktop app: start and quit, windows, tray, menu, preferences, launch at login and the data folder. |
+| `errors.md` | The error envelope, and the codes the server returns with their statuses and meanings. |
 | `export-backup.md` | The quick export, full backup archives and scheduled backups. |
 | `pages.md` | The routes the server answers: web pages, redirects, health, install and docs links, and not-found responses. |
 | `plaud.md` | The Plaud connection, its sign-in flows, sync, and the Plaud web API the app calls. |
