@@ -1,0 +1,25 @@
+# Rust
+/target/
+
+# Node
+node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Tauri
+desktop-tauri/gen/
+desktop-tauri/.cache/
+desktop-tauri/binaries/
+
+# Test output
+contract-tests/test-results/
+contract-tests/playwright-report/
+contract-tests/.auth/
+
+# Local files
+.dev-artifacts/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
