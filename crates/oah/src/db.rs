@@ -6,7 +6,7 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 
 /// Opens (or creates) the database and applies pending migrations.
-/// WAL + synchronous=FULL: no committed write is lost on power failure (spec R0 §3).
+/// WAL + synchronous=FULL: no committed write is lost on power failure.
 pub async fn open(path: &Path) -> Result<SqlitePool, sqlx::Error> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", path.display()))?
         .create_if_missing(true)
