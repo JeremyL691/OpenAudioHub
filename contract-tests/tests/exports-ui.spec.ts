@@ -94,13 +94,13 @@ test("transcript and summary exports download complete content", async ({ page, 
         const txtPromise = page.waitForEvent("download");
         await transcriptToolbar.getByRole("button", { name: "Download transcript as TXT" }).click();
         const txtDownload = await txtPromise;
-        expect(txtDownload.suggestedFilename()).toBe(`${title.replace("/", "-")}.txt`);
+        expect(txtDownload.suggestedFilename(), `download URL: ${txtDownload.url()}`).toBe(`${title.replace("/", "-")}.txt`);
         expect(await downloadedText(txtDownload)).toBe(FAKE_DIARIZED);
 
         const jsonPromise = page.waitForEvent("download");
         await transcriptToolbar.getByRole("button", { name: "Download transcript as JSON" }).click();
         const jsonDownload = await jsonPromise;
-        expect(jsonDownload.suggestedFilename()).toBe(`${title.replace("/", "-")}.json`);
+        expect(jsonDownload.suggestedFilename(), `download URL: ${jsonDownload.url()}`).toBe(`${title.replace("/", "-")}.json`);
         expect(JSON.parse(await downloadedText(jsonDownload))).toMatchObject({ text: FAKE_DIARIZED });
 
         await page.getByRole("button", { name: "Recording actions" }).click();

@@ -64,3 +64,4 @@ jobs:
         with:
           name: contract-results
           path: .dev-artifacts/
+          include-hidden-files: true

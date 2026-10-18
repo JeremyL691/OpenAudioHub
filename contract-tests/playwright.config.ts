@@ -25,5 +25,7 @@ export default defineConfig({
             "x-forwarded-for": `10.0.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`,
         },
         storageState: storageStatePath,
+        // Keep a trace for a failed run, so CI failures can be inspected afterwards.
+        trace: "retain-on-failure",
     },
 });
