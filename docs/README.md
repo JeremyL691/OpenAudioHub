@@ -17,6 +17,7 @@ These guides cover the day-to-day features.
 
 - [Using the library](using-the-library.md): the dashboard, the library and its collections, starring, search, merging, and the recording page.
 - [Connect your Plaud account](connect-plaud-account.md): the three sign-in methods, regions, sync, and what happens when a sign-in expires.
+- [Browser extension](browser-extension.md): install the extension, sign in to Plaud, and review its permissions and privacy.
 - [AI providers](providers.md): add providers, choose the one used for transcription and for summaries, and use local models.
 - [Notifications](notifications.md): email and Bark push when new recordings sync.
 - [Automation API and webhooks](automation-and-webhooks.md): personal API keys, and signed webhook deliveries.

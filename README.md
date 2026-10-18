@@ -89,7 +89,7 @@ Everything runs in one process: the HTTP API, the web app, the background worker
 
 ## Features
 
-- **Plaud sync.** Connect your Plaud account in the browser, with an email code or a pasted token. Sync runs by hand or in the background.
+- **Plaud sync.** Connect your Plaud account with the browser extension, an email code, or a pasted token. Sync runs by hand or in the background.
 - **Transcription.** Presets for OpenAI, Google Gemini, ElevenLabs, Groq, Together AI, OpenRouter, SiliconFlow, OpenCode Go, LM Studio, Ollama and any OpenAI-compatible service. See [AI providers](docs/providers.md).
 - **In-browser transcription.** Transcribe on your own device with a Whisper model, without sending audio to a provider.
 - **Long recordings.** Speech detection splits long files into parts, transcribes them and joins the results.

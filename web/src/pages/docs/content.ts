@@ -1,6 +1,7 @@
 import readme from "../../../../docs/README.md?raw";
 import usingTheLibrary from "../../../../docs/using-the-library.md?raw";
 import connectPlaud from "../../../../docs/connect-plaud-account.md?raw";
+import browserExtension from "../../../../docs/browser-extension.md?raw";
 import providers from "../../../../docs/providers.md?raw";
 import notifications from "../../../../docs/notifications.md?raw";
 import automation from "../../../../docs/automation-and-webhooks.md?raw";
@@ -39,6 +40,7 @@ export const DOC_PAGES: DocPage[] = [
     { url: "/docs", title: "OpenAudioHub Docs", file: "README.md" },
     { url: "/docs/guides/using-the-library", title: "Using the library", group: "Guides", file: "using-the-library.md" },
     { url: "/docs/guides/connect-plaud-account", title: "Connect your Plaud account", group: "Guides", file: "connect-plaud-account.md" },
+    { url: "/docs/guides/browser-extension", title: "Browser extension", group: "Guides", file: "browser-extension.md" },
     { url: "/docs/guides/ai-providers", title: "AI providers", group: "Guides", file: "providers.md" },
     { url: "/docs/guides/notifications", title: "Notifications", group: "Guides", file: "notifications.md" },
     { url: "/docs/guides/automation-and-webhooks", title: "Automation API and webhooks", group: "Guides", file: "automation-and-webhooks.md" },
@@ -60,6 +62,7 @@ const SOURCES: Record<string, string> = {
     "README.md": readme,
     "using-the-library.md": usingTheLibrary,
     "connect-plaud-account.md": connectPlaud,
+    "browser-extension.md": browserExtension,
     "providers.md": providers,
     "notifications.md": notifications,
     "automation-and-webhooks.md": automation,

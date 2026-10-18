@@ -113,7 +113,7 @@ The steps below are the Mac app's. For all sign-in methods, see [Connect your Pl
 
 1. Open **Settings**, then **Plaud Account**.
 2. Choose **Connect Plaud**.
-3. Choose **Sign in with Plaud**. A page opens in your browser for the connector handoff; finish the sign-in there.
+3. Choose **Sign in with Plaud**, then **Open Plaud sign-in**. A connect page opens in your browser. Finish the sign-in there with the [browser extension](browser-extension.md).
 
 The **Email code** and **Paste token** tabs work in the app too. The app never sees your Plaud password.
 
