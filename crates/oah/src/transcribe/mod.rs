@@ -525,15 +525,7 @@ async fn queue_pipeline(
     manual: bool,
 ) -> ApiResult<String> {
     if manual {
-        let now = now_ms();
-        sqlx::query(
-            "UPDATE jobs SET state = 'cancelled', updated_at = ?, finished_at = ? WHERE kind = 'pipeline' AND recording_id = ? AND state IN ('queued', 'running')",
-        )
-        .bind(now)
-        .bind(now)
-        .bind(recording_id)
-        .execute(&state.db)
-        .await?;
+        crate::pipeline::supersede(state, recording_id).await?;
     }
     let payload = json!({
         "providerId": provider.id,
