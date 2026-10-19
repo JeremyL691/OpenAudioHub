@@ -368,7 +368,7 @@ Active statuses (block delete, retry and cancel): `queued`, `running`, `paused_d
 
 Transitions:
 
-- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, and then queues the new one.
+- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, has its work folder deleted, and is replaced by the new one.
 - `queued` → `running` → `completed`, `needs_alignment`, or `failed`.
 - `running` ↔ `paused_disk`.
 - `queued`, `running`, or `paused_disk` → `cancelled` on cancel.

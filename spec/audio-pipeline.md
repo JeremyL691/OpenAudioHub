@@ -79,8 +79,8 @@ enabled, the request:
    If none is available, it gives `400 NO_TRANSCRIPTION_PROVIDER` and creates no job.
 3. Refuses a recording whose stored duration is over 24 hours with
    `413 TRANSCRIPTION_FAILED`, message `Recordings over 24 hours cannot be transcribed`.
-4. Marks the recording's queued or running pipeline job as cancelled. The work folder of
-   that job is not removed by this step.
+4. Marks the recording's queued or running pipeline job as cancelled and deletes its work
+   folder (section 13.3).
 5. Creates the new pipeline job and answers `202 { "jobId": "<id>", "status": "queued" }`.
 
 Concurrent identical manual requests for the same recording and provider share one run.
@@ -535,7 +535,8 @@ the status is `queued`, `running` or `paused_disk`.
 - A job whose provider call was in progress during a crash is sent again, with its attempt
   count restarting at 1. The provider may therefore receive the same chunk twice, and bill
   for it twice.
-- A forced manual run (section 3.1) leaves the superseded job's work folder in place.
+- A forced manual run (section 3.1) cancels the superseded job and deletes its work
+  folder before the new job is queued.
 
 ---
 
@@ -599,6 +600,7 @@ These responses have no `code` field. The `error` text is the only detail.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
-- Cancel and save against the same job has a unit test in the server code.
+- Cancel and save against the same job, and the work folder of a superseded job, have unit
+  tests in the server code.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.
