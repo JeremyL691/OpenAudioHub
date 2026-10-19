@@ -171,8 +171,8 @@ exists (reused decoded audio or speech probabilities) sets no progress.
   the claim number), capped at 1 hour, plus up to 20 % random extra.
 - After the third claim, a transient failure makes the job `failed` with code
   `PIPELINE_RETRY`.
-- A manual retry does not reset the claim counter. A job that already used its three
-  claims therefore fails at once on its next transient error.
+- A manual retry resets the claim counter to 0, so the retried job gets its three claims
+  again (section 13.2).
 - Terminal failures (section 12) are never retried by the queue.
 
 ---
@@ -521,8 +521,8 @@ the status is `queued`, `running` or `paused_disk`.
 
 `POST ... { "action": "retry" }` is allowed only when the status is `failed`.
 
-- The job becomes `queued` with progress 0, its error fields are cleared, and its
-  claim counter is not reset (section 5).
+- The job becomes `queued` with progress 0, its error fields are cleared, and its claim
+  counter is reset to 0 (section 5).
 - Chunks that are not completed go back to `queued` with 0 attempts. Completed chunks are
   kept and are not sent again.
 - The stored provider is cleared (section 3.4).
@@ -600,7 +600,7 @@ These responses have no `code` field. The `error` text is the only detail.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
-- Cancel and save against the same job, and the work folder of a superseded job, have unit
-  tests in the server code.
+- Cancel and save against the same job, the speaker settings read by the pipeline, the
+  retry claim counter and the superseded work folder have unit tests in the server code.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.

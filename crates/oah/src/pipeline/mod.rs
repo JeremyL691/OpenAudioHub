@@ -289,11 +289,12 @@ async fn change(
         if status != "failed" {
             return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
         }
-        // Completed chunks are kept; failed or unfinished ones are sent again.
+        // Completed chunks are kept; failed or unfinished ones are sent again. The claim counter
+        // starts over so the explicit retry gets its full three claims (section 13.2).
         let mut tx = state.db.begin().await?;
         let moved = sqlx::query(
             "UPDATE jobs SET state = 'queued', run_after = ?, error_code = NULL, error_message = NULL, progress = 0,
-             finished_at = NULL, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'failed'",
+             attempts = 0, finished_at = NULL, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'failed'",
         )
         .bind(now)
         .bind(now)
@@ -392,6 +393,31 @@ mod tests {
             .execute(&state.db)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_manual_retry_resets_the_claim_counter() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, attempts, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'failed', '{}', 3, 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'failed', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let response = change(&state, "u", "r", "retry").await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let (job_state, attempts): (String, i64) =
+            sqlx::query_as("SELECT state, attempts FROM jobs WHERE id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((job_state.as_str(), attempts), ("queued", 0));
     }
 
     #[tokio::test]
