@@ -90,6 +90,21 @@ pub fn pipeline_dir(state: &AppState, job_id: &str) -> PathBuf {
     state.config.storage_root.join(".pipeline").join(job_id)
 }
 
+/// Marks the job cancelled unless it already reached a final phase. Returns false when the job
+/// finished first, so the caller can tell the user the cancel came too late.
+pub(super) async fn cancel(db: &SqlitePool, job_id: &str) -> Result<bool, sqlx::Error> {
+    let res = sqlx::query(
+        "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES (?, 'cancelled', ?)
+         ON CONFLICT (job_id) DO UPDATE SET phase = 'cancelled', updated_at = excluded.updated_at
+         WHERE pipeline_runs.phase NOT IN ('cancelled', 'completed', 'needs_alignment', 'failed')",
+    )
+    .bind(job_id)
+    .bind(crate::db::now_ms())
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected() == 1)
+}
+
 /// Sets the phase shown to users. A cancelled job keeps its phase.
 pub(super) async fn set_phase(
     db: &SqlitePool,
@@ -362,7 +377,7 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
     } else {
         "completed"
     };
-    transcribe::save_transcript(
+    let stored = transcribe::save_transcript(
         state,
         Saved {
             user_id,
@@ -372,11 +387,16 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
             model: &model,
             transcription_type: "server",
             timeline,
+            job: Some((id, phase)),
         },
     )
-    .await
-    .map_err(|e| Stop::Retry(e.message))?;
-    set_phase(db, id, phase).await?;
+    .await;
+    match stored {
+        Ok(()) => {}
+        // A cancel that reached the job first wins over the save (spec section 13.1).
+        Err(e) if e.code == "JOB_CANCELLED" => return Err(Stop::Cancelled),
+        Err(e) => return Err(Stop::Retry(e.message)),
+    }
     let _ = tokio::fs::remove_dir_all(&dir).await;
     Ok(())
 }

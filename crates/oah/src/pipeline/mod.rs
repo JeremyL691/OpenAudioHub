@@ -260,8 +260,11 @@ async fn change(
     if !matches!(status, "queued" | "running" | "paused_disk") {
         return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
     }
-    // The worker sees the cancelled phase at its next check and removes the files itself.
-    run::set_phase(&state.db, &job.id, "cancelled").await?;
+    // The worker sees the cancelled phase at its next check and removes the files itself. A
+    // job that finished its save first cannot be cancelled any more (section 13.1).
+    if !run::cancel(&state.db, &job.id).await? {
+        return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
+    }
     sqlx::query("UPDATE jobs SET state = 'cancelled', finished_at = ?, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'queued'")
         .bind(now)
         .bind(now)
@@ -276,4 +279,62 @@ async fn change(
         Json(json!({ "jobId": job.id, "status": "cancelled" })),
     )
         .into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open_memory().await.unwrap(),
+        )
+    }
+
+    async fn seed_user_recording(state: &AppState) {
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    async fn seed_job(state: &AppState, job_state: &str, phase: &str) {
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', ?, '{}', 0, 0, 0)")
+            .bind(job_state)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', ?, 0)")
+            .bind(phase)
+            .execute(&state.db)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_cancel_after_the_saved_result_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "completed").await;
+        let response = change(&state, "u", "r", "cancel").await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "completed");
+    }
 }

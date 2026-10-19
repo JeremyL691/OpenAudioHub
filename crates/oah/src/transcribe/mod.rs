@@ -70,6 +70,10 @@ pub struct Saved<'a> {
     pub transcription_type: &'a str,
     /// Pipeline timeline JSON and its source; `None` for whole-file runs.
     pub timeline: Option<(serde_json::Value, &'a str)>,
+    /// The pipeline job that produced this transcript and the phase it ends in. The phase is
+    /// written in the same transaction as the transcript, so a cancel that arrived first wins
+    /// and a save that committed first is never overwritten (spec/audio-pipeline.md 13.1).
+    pub job: Option<(&'a str, &'a str)>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -109,6 +113,30 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         None => (None, None),
     };
     let mut tx = state.db.begin().await?;
+    // The terminal phase is written in the same transaction as the transcript. A cancel that
+    // committed first leaves the phase at `cancelled`, the guard misses, and the save rolls
+    // back. A save that committed first leaves `completed`/`needs_alignment`, which the cancel
+    // endpoint refuses to overwrite (spec/audio-pipeline.md section 13.1).
+    if let Some((job_id, phase)) = saved.job {
+        let moved = sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT (job_id) DO UPDATE SET phase = excluded.phase, updated_at = excluded.updated_at
+             WHERE pipeline_runs.phase <> 'cancelled'",
+        )
+        .bind(job_id)
+        .bind(phase)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        if moved.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Err(AppError::new(
+                StatusCode::CONFLICT,
+                "JOB_CANCELLED",
+                "The job was cancelled",
+            ));
+        }
+    }
     let previous: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM transcriptions WHERE recording_id = ? AND user_id = ?",
     )
@@ -439,6 +467,7 @@ async fn run_once(
             model: options.model.as_str(),
             transcription_type: "server",
             timeline: None,
+            job: None,
         },
     )
     .await?;
@@ -622,5 +651,95 @@ mod tests {
             speaker_settings(&state, "u").await.unwrap(),
             (false, Some(3))
         );
+    }
+
+    fn transcript(text: &str) -> Transcript {
+        Transcript {
+            text: text.into(),
+            language: None,
+            segments: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_job_never_saves_a_transcript() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'cancelled', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'cancelled', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("late words");
+        let err = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "JOB_CANCELLED");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+
+    #[tokio::test]
+    async fn a_save_writes_the_transcript_and_its_final_phase_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("words");
+        save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap();
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((stored, phase.as_str()), (1, "completed"));
     }
 }

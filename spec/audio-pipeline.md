@@ -467,7 +467,9 @@ On a successful merge, the server stores one transcript row:
   (automatic title and summary, as set in the settings; see `ai.md` and `workers.md`).
 
 The job then becomes `needs_alignment` (no timeline) or `completed`, its progress is 1,
-and its work folder is deleted.
+and its work folder is deleted. The terminal phase is written in the same database
+transaction as the transcript, so a stored transcript and the phase shown to users always
+agree (section 13.1).
 
 ### 12.2 Terminal failures
 
@@ -509,8 +511,10 @@ the status is `queued`, `running` or `paused_disk`.
 - A running or paused job gets phase `cancelled`. The worker notices it at its next check
   and deletes the work folder. Checks happen before each chunk send, between retries,
   after each speech-detection block, and every second while paused.
-- A cancel requested after the last chunk has finished does not stop the save. The
-  transcript is stored, and the status still reads `cancelled`.
+- A cancel is checked again when the transcript is saved. If it committed before the
+  save, nothing is stored and the work folder is deleted. If the save committed first,
+  the cancel does nothing: the transcript stays and the status reads `completed` or
+  `needs_alignment`.
 - Cancelling a `failed` job is not allowed (`409`).
 
 ### 13.2 Retry
@@ -595,5 +599,6 @@ These responses have no `code` field. The `error` text is the only detail.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
+- Cancel and save against the same job has a unit test in the server code.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.
