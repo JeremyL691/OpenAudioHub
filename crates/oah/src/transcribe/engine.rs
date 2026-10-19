@@ -47,7 +47,7 @@ pub async fn transcribe_file(
         eleven_style(provider, path, options, timeout).await
     } else if provider.preset().is_some_and(|p| p.chat_transcription) {
         chat_style(state, provider, path, options, timeout, &work).await
-    } else if options.model.contains("diarize") {
+    } else if options.model.contains("diarize") && options.diarize {
         diarized_style(state, provider, path, options, timeout, &work).await
     } else {
         whisper_style(provider, path, options, timeout, &work, state).await
@@ -844,6 +844,76 @@ mod tests {
         assert_eq!(segments[2].end, 1.3);
         assert_eq!(segments[3].start, 1.5);
         assert_eq!(segments[3].speaker.as_deref(), Some("Speaker 1"));
+    }
+
+    #[tokio::test]
+    async fn a_diarizing_model_with_diarization_off_uses_the_whisper_style() {
+        use std::sync::{Arc, Mutex};
+        use tokio::sync::oneshot;
+        async fn receive(
+            tx: axum::extract::State<Arc<Mutex<Option<oneshot::Sender<String>>>>>,
+            req: Request<Body>,
+        ) -> axum::Json<Value> {
+            let body = to_bytes(req.into_body(), 1024 * 1024).await.unwrap();
+            let _ = tx
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .send(String::from_utf8_lossy(&body).into_owned());
+            axum::Json(json!({"text": "Plain transcript"}))
+        }
+        let (tx, rx) = oneshot::channel();
+        let tx = Arc::new(Mutex::new(Some(tx)));
+        let app = Router::new()
+            .route("/audio/transcriptions", post(receive))
+            .with_state(tx);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        let path = dir.path().join("fixture.wav");
+        tokio::fs::write(&path, b"safe test audio bytes")
+            .await
+            .unwrap();
+        let provider = Provider {
+            id: "p".into(),
+            name: "OpenAI".into(),
+            base_url: format!("http://{addr}"),
+            api_key: "fake-local-key".into(),
+            model: Some("gpt-4o-transcribe-diarize".into()),
+        };
+        let options = Options {
+            filename: "Fixture".into(),
+            model: "gpt-4o-transcribe-diarize".into(),
+            language: None,
+            diarize: false,
+            speaker_count: None,
+        };
+        let transcript = transcribe_file(&state, &provider, &path, &options)
+            .await
+            .unwrap();
+        let body = rx.await.unwrap();
+        assert!(
+            body.contains("name=\"response_format\"") && body.contains("json"),
+            "the whisper-style request is sent: {body}"
+        );
+        assert!(
+            !body.contains("diarized_json"),
+            "no diarized request when speaker labels are off: {body}"
+        );
+        assert_eq!(transcript.text, "Plain transcript");
+        assert!(transcript.segments.is_empty());
+        assert!(
+            !transcript.text.contains("Speaker"),
+            "no speaker labels when speaker labels are off"
+        );
     }
 
     #[tokio::test]

@@ -112,12 +112,30 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         ),
         None => (None, None),
     };
-    let mut tx = state.db.begin().await?;
+    // BEGIN IMMEDIATE takes the write lock before the ownership read below, so a cancel that
+    // commits at the same moment waits here instead of invalidating this snapshot. Without it a
+    // concurrent cancel makes the phase write fail with SQLITE_BUSY_SNAPSHOT instead of the
+    // clean JOB_CANCELLED answer.
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
     // The terminal phase is written in the same transaction as the transcript. A cancel that
     // committed first leaves the phase at `cancelled`, the guard misses, and the save rolls
     // back. A save that committed first leaves `completed`/`needs_alignment`, which the cancel
     // endpoint refuses to overwrite (spec/audio-pipeline.md section 13.1).
     if let Some((job_id, phase)) = saved.job {
+        // The job must belong to the same user; the phase write stays scoped like every other
+        // query of the save.
+        let owner: Option<String> = sqlx::query_scalar("SELECT user_id FROM jobs WHERE id = ?")
+            .bind(job_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if owner.as_deref() != Some(saved.user_id) {
+            tx.rollback().await?;
+            return Err(AppError::new(
+                StatusCode::CONFLICT,
+                "JOB_CANCELLED",
+                "The job was cancelled",
+            ));
+        }
         let moved = sqlx::query(
             "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES (?, ?, ?)
              ON CONFLICT (job_id) DO UPDATE SET phase = excluded.phase, updated_at = excluded.updated_at
@@ -525,7 +543,7 @@ async fn queue_pipeline(
     manual: bool,
 ) -> ApiResult<String> {
     if manual {
-        crate::pipeline::supersede(state, recording_id).await?;
+        crate::pipeline::supersede(state, user_id, recording_id).await?;
     }
     let payload = json!({
         "providerId": provider.id,
@@ -654,6 +672,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_forced_run_replaces_the_active_job_through_queue_pipeline() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('old', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('old', 'transcribing', 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let work = state.config.storage_root.join(".pipeline").join("old");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("audio.pcm"), b"pcm").unwrap();
+        let provider = Provider {
+            id: "p".into(),
+            name: "OpenAI".into(),
+            base_url: "http://127.0.0.1:1".into(),
+            api_key: "k".into(),
+            model: Some("whisper-1".into()),
+        };
+        let options = Options {
+            filename: "Fixture".into(),
+            model: "whisper-1".into(),
+            language: None,
+            diarize: true,
+            speaker_count: None,
+        };
+        let new_id = queue_pipeline(&state, "u", "r", &provider, &options, true)
+            .await
+            .unwrap();
+        assert_ne!(new_id, "old", "a forced run queues a new job");
+        assert!(!work.exists(), "the superseded work folder is removed");
+        let old_state: String = sqlx::query_scalar("SELECT state FROM jobs WHERE id = 'old'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(old_state, "cancelled");
+    }
+
+    #[tokio::test]
     async fn a_cancelled_job_never_saves_a_transcript() {
         let dir = tempfile::tempdir().unwrap();
         let state = state(dir.path()).await;
@@ -669,6 +729,117 @@ mod tests {
         .await
         .unwrap();
         let text = transcript("late words");
+        let err = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "JOB_CANCELLED");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+
+    /// A file-backed database, so two connections can really run at once.
+    async fn file_state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open(&dir.join("test.sqlite")).await.unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_write_that_holds_the_lock_does_not_break_the_save() {
+        // The save takes the write lock before it reads anything. Another writer that already
+        // holds the lock therefore makes the save wait, instead of failing its phase write with
+        // SQLITE_BUSY_SNAPSHOT after the ownership read.
+        let dir = tempfile::tempdir().unwrap();
+        let state = file_state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        // Another writer takes the write lock and holds it for a moment.
+        let mut holder = state.db.acquire().await.unwrap();
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE jobs SET updated_at = updated_at WHERE id = 'j'")
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            sqlx::query("COMMIT").execute(&mut *holder).await.unwrap();
+        });
+        let text = transcript("words");
+        let saved = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await;
+        assert!(
+            saved.is_ok(),
+            "the save waits for the lock instead of failing, got {:?}",
+            saved.err().map(|e| e.code)
+        );
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "completed");
+    }
+
+    #[tokio::test]
+    async fn a_save_refuses_a_job_of_another_user() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('other', 'o@x.test', 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'other', NULL, 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("words");
         let err = save_transcript(
             &state,
             Saved {

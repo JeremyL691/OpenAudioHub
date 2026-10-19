@@ -125,7 +125,7 @@ export function TranscriptionSection() {
                     id="speaker-diarization"
                     field="speakerDiarization"
                     label="Speaker labels"
-                    hint="Breaks the transcript down by speaker (Speaker 1:, Speaker 2:). Only ElevenLabs Scribe handles this; other providers ignore it."
+                    hint="Breaks the transcript down by speaker (Speaker 1:, Speaker 2:). Used by ElevenLabs Scribe and by diarizing OpenAI models; other providers ignore it."
                 />
                 {settings.speakerDiarization ? (
                     <Row

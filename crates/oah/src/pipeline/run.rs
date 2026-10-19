@@ -176,6 +176,27 @@ pub async fn run(state: AppState, job: Job) -> Outcome {
     }
 }
 
+/// Options of one pipeline run: the stored model and language, and the speaker settings read
+/// when the job runs, the same way the synchronous path reads them (spec section 3.3).
+async fn run_options(
+    state: &AppState,
+    user_id: &str,
+    filename: String,
+    model: String,
+    language: Option<String>,
+) -> Step<Options> {
+    let (diarize, speaker_count) = transcribe::speaker_settings(state, user_id)
+        .await
+        .map_err(|e| Stop::Retry(e.message))?;
+    Ok(Options {
+        filename,
+        model,
+        language,
+        diarize,
+        speaker_count,
+    })
+}
+
 fn truncate(text: String) -> String {
     text.chars().take(ERROR_CHARS).collect()
 }
@@ -256,18 +277,14 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
         .field_key
         .decrypt(&filename)
         .unwrap_or_else(|_| "recording".to_owned());
-    // Speaker settings are read when the job runs, the same way the synchronous path reads them
-    // (spec section 3.3).
-    let (diarize, speaker_count) = transcribe::speaker_settings(state, user_id)
-        .await
-        .map_err(|e| Stop::Retry(e.message))?;
-    let options = Options {
+    let options = run_options(
+        state,
+        user_id,
         filename,
-        model: model.clone(),
-        language: payload.language.clone(),
-        diarize,
-        speaker_count,
-    };
+        model.clone(),
+        payload.language.clone(),
+    )
+    .await?;
 
     // Duration limits (spec section 6.2).
     let probed = media::probe(&state.config.ffprobe, &audio)
@@ -366,9 +383,35 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
         .collect();
     let merged = merge::merge(&chunks);
 
-    let timeline = match merged.timestamp_source {
+    save_merged(
+        state,
+        id,
+        user_id,
+        recording_id,
+        &provider.name,
+        &model,
+        &merged,
+    )
+    .await?;
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+    Ok(())
+}
+
+/// Saves the merged result as the job's transcript. The terminal phase goes into the same
+/// transaction as the transcript, and a cancel that committed first wins over the save
+/// (spec section 13.1).
+async fn save_merged(
+    state: &AppState,
+    job_id: &str,
+    user_id: &str,
+    recording_id: &str,
+    provider: &str,
+    model: &str,
+    merged: &merge::Merged,
+) -> Step<()> {
+    let timeline = match &merged.timestamp_source {
         Some(source) if !merged.timeline.is_empty() => {
-            Some((Value::Array(merged.timeline), source))
+            Some((Value::Array(merged.timeline.clone()), *source))
         }
         _ => None,
     };
@@ -377,28 +420,25 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
     } else {
         "completed"
     };
-    let stored = transcribe::save_transcript(
+    match transcribe::save_transcript(
         state,
         Saved {
             user_id,
             recording_id,
             transcript: &merged.transcript,
-            provider: &provider.name,
-            model: &model,
+            provider,
+            model,
             transcription_type: "server",
             timeline,
-            job: Some((id, phase)),
+            job: Some((job_id, phase)),
         },
     )
-    .await;
-    match stored {
-        Ok(()) => {}
-        // A cancel that reached the job first wins over the save (spec section 13.1).
-        Err(e) if e.code == "JOB_CANCELLED" => return Err(Stop::Cancelled),
-        Err(e) => return Err(Stop::Retry(e.message)),
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(e) if e.code == "JOB_CANCELLED" => Err(Stop::Cancelled),
+        Err(e) => Err(Stop::Retry(e.message)),
     }
-    let _ = tokio::fs::remove_dir_all(&dir).await;
-    Ok(())
 }
 
 /// Decodes the source to PCM once the disk budget allows it (spec section 7). A decode that
@@ -799,6 +839,174 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn run_options_read_the_speaker_settings_when_the_job_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let defaults = run_options(&state, "u", "Fixture".into(), "whisper-1".into(), None)
+            .await
+            .ok()
+            .unwrap();
+        assert!(defaults.diarize);
+        assert_eq!(defaults.speaker_count, None);
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', ?, 0)")
+            .bind(
+                serde_json::json!({"speakerDiarization": false, "diarizationSpeakerCount": 4})
+                    .to_string(),
+            )
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let stored = run_options(
+            &state,
+            "u",
+            "Fixture".into(),
+            "whisper-1".into(),
+            Some("en".into()),
+        )
+        .await
+        .ok()
+        .unwrap();
+        assert!(!stored.diarize);
+        assert_eq!(stored.speaker_count, Some(4));
+        assert_eq!(stored.language.as_deref(), Some("en"));
+    }
+
+    async fn save_state() -> (AppState, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        (state, dir)
+    }
+
+    fn merged(text: &str) -> merge::Merged {
+        merge::Merged {
+            transcript: transcribe::Transcript {
+                text: text.into(),
+                language: Some("en".into()),
+                segments: Vec::new(),
+            },
+            timeline: Vec::new(),
+            timestamp_source: None,
+            needs_alignment: true,
+        }
+    }
+
+    #[tokio::test]
+    async fn the_worker_save_is_stopped_by_a_cancel_that_committed_first() {
+        let (state, _dir) = save_state().await;
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'cancelled', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let outcome = save_merged(
+            &state,
+            "j",
+            "u",
+            "r",
+            "OpenAI",
+            "whisper-1",
+            &merged("late"),
+        )
+        .await;
+        assert!(matches!(outcome, Err(Stop::Cancelled)));
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0, "a cancelled job stores no transcript");
+    }
+
+    #[tokio::test]
+    async fn the_worker_save_writes_the_transcript_and_its_phase() {
+        let (state, _dir) = save_state().await;
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        save_merged(
+            &state,
+            "j",
+            "u",
+            "r",
+            "OpenAI",
+            "whisper-1",
+            &merged("words"),
+        )
+        .await
+        .ok()
+        .unwrap();
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((stored, phase.as_str()), (1, "needs_alignment"));
+    }
+
+    #[tokio::test]
+    async fn unreadable_speaker_settings_are_a_retry_not_a_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        // Stored settings that cannot be parsed make the read fail.
+        sqlx::query(
+            "INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', 'not json', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let outcome = run_options(&state, "u", "Fixture".into(), "whisper-1".into(), None).await;
+        assert!(
+            matches!(outcome, Err(Stop::Retry(_))),
+            "an unreadable settings row is retried, not failed"
+        );
+    }
 
     #[test]
     fn wav_header_matches_pcm_length() {
