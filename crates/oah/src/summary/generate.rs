@@ -6,10 +6,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use super::prompts;
 use super::text::{self, Reply};
+use super::{AUTO_LIMIT_DEFAULT, HOUR_MS, prompts};
 use crate::AppState;
 use crate::ai::{self, AiError, ChatOptions, Provider};
+use crate::config;
 use crate::db::now_ms;
 use crate::error::{ApiResult, AppError};
 use crate::jobs::{Job, Outcome};
@@ -31,6 +32,16 @@ pub struct Plan {
     pub prompt_fallback: bool,
     pub language: String,
     pub source: String,
+    /// Set for an automatic run. Jobs written before this field existed are manual runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<String>,
+}
+
+impl Plan {
+    /// Whether this plan was queued by the automatic step rather than by a request.
+    pub fn is_auto(&self) -> bool {
+        self.trigger.as_deref() == Some("auto")
+    }
 }
 
 /// A failed run: an error code and a message that is safe to store and show.
@@ -95,6 +106,7 @@ pub fn plan(
         prompt_fallback,
         language: language.to_owned(),
         source: source.to_owned(),
+        trigger: None,
     }
 }
 
@@ -186,12 +198,61 @@ pub async fn run_job(state: &AppState, job: Job) -> Outcome {
             };
         }
     };
+    // The hourly cap applies to automatic runs, counted when the run starts. A manual run is
+    // never capped, so a user who asks for a summary always gets one.
+    if plan.is_auto() {
+        let limit = config::number(
+            "AUTO_SUMMARY_RATE_LIMIT_PER_HOUR",
+            AUTO_LIMIT_DEFAULT,
+            1,
+            u32::MAX as u64,
+        )
+        .unwrap_or(AUTO_LIMIT_DEFAULT) as u32;
+        let decision =
+            state
+                .limiter
+                .hit(&format!("auto-summary:{user_id}"), limit, HOUR_MS, now_ms());
+        if !decision.allowed {
+            tracing::warn!(
+                recording = recording_id,
+                limit,
+                "auto-summary limit reached"
+            );
+            crate::webhooks::emit_soft(
+                state,
+                user_id,
+                recording_id,
+                "summary.failed",
+                Some("Automatic summary limit reached"),
+            )
+            .await;
+            return Outcome::Done;
+        }
+    }
     match run(state, user_id, recording_id, &plan).await {
-        Ok(()) => Outcome::Done,
-        Err(e) => Outcome::Failed {
-            code: e.code,
-            message: e.message,
-        },
+        Ok(()) => {
+            if plan.is_auto() {
+                crate::webhooks::emit_soft(state, user_id, recording_id, "summary.completed", None)
+                    .await;
+            }
+            Outcome::Done
+        }
+        Err(e) => {
+            if plan.is_auto() {
+                crate::webhooks::emit_soft(
+                    state,
+                    user_id,
+                    recording_id,
+                    "summary.failed",
+                    Some(&e.message),
+                )
+                .await;
+            }
+            Outcome::Failed {
+                code: e.code,
+                message: e.message,
+            }
+        }
     }
 }
 
@@ -279,20 +340,30 @@ async fn save(
     plan: &Plan,
     reply: &Reply,
 ) -> Result<(), Failed> {
+    // An empty answer is a failed run, not a summary. Saving it would mark the recording ready
+    // while the detail pane has nothing to show.
+    let summary_text = reply.summary.trim();
+    if summary_text.is_empty() && reply.key_points.is_empty() && reply.action_items.is_empty() {
+        return Err(Failed {
+            code: "UPSTREAM_BAD_RESPONSE",
+            message: "The provider returned an empty answer.".to_owned(),
+        });
+    }
     let key = &state.config.field_key;
     let action_items = key.encrypt_json(&json!(reply.action_items)).to_string();
     let key_points = key.encrypt_json(&json!(reply.key_points)).to_string();
     let saved = sqlx::query(
-        "INSERT INTO ai_enhancements (id, recording_id, user_id, summary, action_items, key_points, provider, model, source, prompt_id, language, created_at)
-         SELECT ?, id, user_id, ?, ?, ?, ?, ?, 'openaudiohub', ?, ?, ? FROM recordings
+        "INSERT INTO ai_enhancements (id, recording_id, user_id, summary, action_items, key_points, provider, model, source, prompt_id, language, created_at, has_content)
+         SELECT ?, id, user_id, ?, ?, ?, ?, ?, 'openaudiohub', ?, ?, ?, 1 FROM recordings
          WHERE id = ? AND user_id = ? AND deleted_at IS NULL
          ON CONFLICT (recording_id, user_id) DO UPDATE SET
             summary = excluded.summary, action_items = excluded.action_items, key_points = excluded.key_points,
-            provider = excluded.provider, model = excluded.model, prompt_id = excluded.prompt_id,
-            language = excluded.language, created_at = excluded.created_at",
+            provider = excluded.provider, model = excluded.model, source = excluded.source,
+            prompt_id = excluded.prompt_id, language = excluded.language, created_at = excluded.created_at,
+            has_content = 1",
     )
     .bind(ids::new_id())
-    .bind(key.encrypt(&reply.summary))
+    .bind((!summary_text.is_empty()).then(|| key.encrypt(summary_text)))
     .bind(action_items)
     .bind(key_points)
     .bind(&provider.name)

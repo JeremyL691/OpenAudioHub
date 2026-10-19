@@ -79,6 +79,33 @@ export async function anonymousContext(): Promise<APIRequestContext> {
     });
 }
 
+/** Test-only control call to the fake AI server (see fakes/fake-ai.mjs). */
+export async function fakeAiControl(path: string, body: Record<string, unknown> = {}): Promise<void> {
+    const origin = fakeAiBaseUrl.replace(/\/v1$/, "");
+    const res = await fetch(`${origin}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`fake AI control ${path} failed: ${res.status}`);
+}
+
+export interface FakeAiRequest {
+    seq: number;
+    method: string;
+    path: string;
+    fields: Record<string, string>;
+    json: { messages?: string; [key: string]: unknown } | null;
+}
+
+/** Requests the fake AI server received, newest last. `path` keeps only matching ones. */
+export async function fakeAiRequests(path?: string): Promise<FakeAiRequest[]> {
+    const origin = fakeAiBaseUrl.replace(/\/v1$/, "");
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    const res = await fetch(`${origin}/__requests${query}`);
+    return (await res.json()) as FakeAiRequest[];
+}
+
 /** Marks onboarding done and points AI at the fake provider. Idempotent. */
 export async function configureAccount(api: APIRequestContext): Promise<void> {
     const put = await api.put("/api/settings/user", {

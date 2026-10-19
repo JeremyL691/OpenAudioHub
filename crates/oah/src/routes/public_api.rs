@@ -266,7 +266,7 @@ struct RecordingRow {
     has_transcription: bool,
     has_summary: bool,
 }
-const RECORD_SELECT: &str = "SELECT r.id,r.filename,r.created_at,r.updated_at,r.start_time,r.duration,r.filesize,r.device_sn,d.name AS device_name,d.model AS device_model,EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id) AS has_transcription,EXISTS(SELECT 1 FROM ai_enhancements a WHERE a.recording_id=r.id AND a.user_id=r.user_id) AS has_summary FROM recordings r LEFT JOIN plaud_devices d ON d.user_id=r.user_id AND d.serial_number=r.device_sn";
+const RECORD_SELECT: &str = "SELECT r.id,r.filename,r.created_at,r.updated_at,r.start_time,r.duration,r.filesize,r.device_sn,d.name AS device_name,d.model AS device_model,EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id) AS has_transcription,EXISTS(SELECT 1 FROM ai_enhancements a WHERE a.recording_id=r.id AND a.user_id=r.user_id AND a.has_content=1) AS has_summary FROM recordings r LEFT JOIN plaud_devices d ON d.user_id=r.user_id AND d.serial_number=r.device_sn";
 fn recording_json(state: &AppState, row: &RecordingRow) -> ApiResult<Value> {
     let device = if row.device_name.is_some() || row.device_model.is_some() {
         json!({"serial_number":row.device_sn,"name":row.device_name,"model":row.device_model})

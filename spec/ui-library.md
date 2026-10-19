@@ -566,7 +566,7 @@ Row status badges show the state of the recording, in this order of precedence:
 |---|---|
 | A summary job is running | Summarizing |
 | A transcription job is running | Transcribing |
-| Has a summary | Summary ready |
+| Has a summary with content | Summary ready |
 | Has a transcript | Transcript ready |
 | None of these | Not transcribed |
 

@@ -15,5 +15,3 @@ web/dist
 web/tsconfig.tsbuildinfo
 *.log
 .DS_Store
-CLAUDE.md
-AGENTS.md

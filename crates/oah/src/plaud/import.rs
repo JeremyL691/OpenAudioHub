@@ -177,11 +177,13 @@ pub async fn import_content(
     .bind(recording_id)
     .fetch_one(&state.db)
     .await?;
-    let has_summary: bool =
-        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM ai_enhancements WHERE recording_id = ?)")
-            .bind(recording_id)
-            .fetch_one(&state.db)
-            .await?;
+    // An empty row left by an older run does not count, so Plaud's summary can still fill it.
+    let has_summary: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM ai_enhancements WHERE recording_id = ? AND has_content = 1)",
+    )
+    .bind(recording_id)
+    .fetch_one(&state.db)
+    .await?;
     if has_transcript && has_summary {
         return Ok(false);
     }
@@ -193,6 +195,7 @@ pub async fn import_content(
         .unwrap_or_default();
     let now = crate::db::now_ms();
     let mut imported = false;
+    let mut transcript_added = false;
 
     if !has_transcript {
         let is_transcript = |item: &Value| {
@@ -232,6 +235,7 @@ pub async fn import_content(
                 .execute(&state.db)
                 .await?;
                 imported = true;
+                transcript_added = true;
             }
         }
     }
@@ -263,8 +267,8 @@ pub async fn import_content(
             if !text.is_empty() || !key_points.is_empty() || !action_items.is_empty() {
                 let key = &state.config.field_key;
                 sqlx::query(
-                    "INSERT INTO ai_enhancements (id, recording_id, user_id, summary, action_items, key_points, provider, model, source, prompt_id, language, created_at) \
-                     VALUES (?, ?, ?, ?, ?, ?, 'plaud', 'plaud-native', 'plaud', NULL, NULL, ?) ON CONFLICT (recording_id, user_id) DO NOTHING",
+                    "INSERT INTO ai_enhancements (id, recording_id, user_id, summary, action_items, key_points, provider, model, source, prompt_id, language, created_at, has_content) \
+                     VALUES (?, ?, ?, ?, ?, ?, 'plaud', 'plaud-native', 'plaud', NULL, NULL, ?, 1) ON CONFLICT (recording_id, user_id) DO NOTHING",
                 )
                 .bind(ids::new_id())
                 .bind(recording_id)
@@ -278,6 +282,11 @@ pub async fn import_content(
                 imported = true;
             }
         }
+    }
+    // Plaud's transcript arrives outside the transcription job, so the automatic summary step
+    // runs from here. It queues at most one run per recording.
+    if transcript_added {
+        crate::summary::queue_auto(state, user_id, recording_id).await?;
     }
     Ok(imported)
 }

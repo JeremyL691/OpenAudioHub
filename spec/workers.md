@@ -35,7 +35,7 @@ Terms used below:
 | Export job worker | Starts at boot. Claims a job when one is queued. | When a job is queued. Idle workers check again every 5 seconds. | One job at a time. | A failed build is retried, up to 3 attempts in total, with backoff (section 8). | Job is marked failed. The partial archive is deleted. An incomplete archive fails the job at once. |
 | Export maintenance | Every 30 seconds. | Every 30 seconds | All expired archives in each pass. | Retried on the next pass. | Archive file and job row stay until the file delete succeeds. |
 | Scheduled backup | Every 30 seconds. Desktop app only. | Daily = 24 hours. Weekly = 7 days. Monthly = 30 days. | Skipped while the user has an active export job. | A failed copy is not retried until the interval has passed since the scheduled job was created. | The export job is still complete. No backup file is written. The failure is logged. |
-| Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass. | The failure is logged. The recording is exported on a later pass. |
+| Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
 
 Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 10 to 12.
@@ -85,7 +85,7 @@ Users are ordered by last sync time, oldest first, with never-synced users first
 2. Asks Plaud for recordings, newest edit first, 50 per page. Paging stops when a page is short, or after 2 pages in a row with nothing new, nothing updated, and nothing imported.
 3. Processes each page in groups of 5 recordings in parallel.
 4. For each recording:
-   - **Not in the database:** downloads the audio, detects its format, stores it, and creates the recording. The title is the Plaud file name, or the date-based title if the user's title mode is `date`. Emits `recording.synced`.
+   - **Not in the database:** downloads the audio, detects its format, stores it, and creates the recording. The title is the Plaud file name, or `YYYY-MM-DD` (local time at the recording) if the user's title mode is `date`. Emits `recording.synced`.
    - **In the database with the same Plaud version:** skipped. If Plaud transcript import is on and the recording is missing a Plaud transcript or summary, the import fills the gap.
    - **In the database with a new Plaud version:** downloads the audio again and updates the recording. Emits `recording.updated`.
    - **Deleted by the user:** never restored. Skipped.
@@ -132,7 +132,9 @@ When an upload or a Plaud sync adds a recording and the user has auto-transcribe
 
 ### When it runs
 
-It runs right after a transcript is saved, from any path that saves one: a manual run, an automatic run, a browser transcript, and a finished audio pipeline job. The save step waits for the summary step before it returns. Automatic summary runs inside that step, not as a queued job.
+It runs right after a transcript is saved, from any path that saves one: a manual run, an automatic run, a browser transcript, and a finished audio pipeline job. It is also queued after Plaud's own transcript is imported.
+
+The save step queues the run and returns. An automatic summary is a job of kind `summary`, the same kind a manual request uses, so a recording has at most one run at a time and the recording's status covers it. The job records the trigger in its payload.
 
 ### Rules
 
@@ -438,7 +440,7 @@ These run in the open web page, not on the server. They are shown only when the 
 | Plaud "needs reconnect" mark | Database | Kept until a sync succeeds or the user reconnects. |
 | Running Plaud sync | Memory | Lost. The next pass starts a new sync. |
 | Auto-transcription job | Database | Kept. A job whose worker stopped is claimed again after its lease runs out. |
-| Auto-summary running | Not tracked. | Lost with the process. The transcript keeps its state. The summary is not retried. |
+| Auto-summary running | Database, as a `summary` job. | Kept. A job whose worker stopped is claimed again after its lease runs out. |
 | Manual summary job | Database | Kept. A job whose worker stopped is claimed again after its lease runs out. |
 | Webhook delivery in progress | Database, status `processing` | Claimed again once its 15-minute claim has run out (section 7). |
 | Export job in progress | Database, with a claim and a lease | Claimed again after the 120-second lease runs out (section 8). A claim that was taken over cannot write its result. |
@@ -451,7 +453,7 @@ These run in the open web page, not on the server. They are shown only when the 
 
 These are current limits of the design.
 
-1. **Auto-summary can run beside a manual summary.** The automatic summary does not check for a manual summary job for the same recording.
+1. **An automatic run joins a manual one.** Both are `summary` jobs for the same recording, so a request made while one is queued or running waits for it instead of starting a second model call.
 2. **Rate limits are kept in process memory.** The manual sync limit, the automatic summary cap and the sign-in limits are counted per process and start again after a restart.
 3. **The `keep_both` transcript mode does not change auto-transcription.** A recording with any transcript, from Plaud or from the server, is not transcribed by the job under either mode.
 4. **A failed "export ready" email is not retried.** The job is complete, and nothing sends the email again.

@@ -12,6 +12,23 @@ import {
     transcribeAndWait,
 } from "../helpers/transcription-extra";
 
+/** Polls until an automatic summary has content, then returns the summary body. */
+async function waitForSummary(
+    api: APIRequestContext,
+    id: string,
+): Promise<{ summary: string | null; provider?: string; status?: string }> {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+        const body = (await (await api.get(`/api/recordings/${id}/summary`)).json()) as {
+            summary: string | null;
+            provider?: string;
+            status?: string;
+        };
+        if (body.status === "completed" || Date.now() > deadline) return body;
+        await new Promise((r) => setTimeout(r, 500));
+    }
+}
+
 /** Runs a test body with a fresh signed-in user, then disposes the context. */
 async function withUser(
     label: string,
@@ -310,9 +327,8 @@ test.describe("transcribe: successful runs", () => {
             await addProvider(api, fakeProvider());
             const id = await uploadRecording(api);
             expect(await transcribeAndWait(api, id)).toBeLessThan(300);
-            const sum = (await (
-                await api.get(`/api/recordings/${id}/summary`)
-            ).json()) as { summary: string | null; provider?: string };
+            // The automatic run is a queued job, so the transcript step returns before it finishes.
+            const sum = await waitForSummary(api, id);
             expect(sum.summary).toBeTruthy();
             expect(sum.provider).toBe("Custom");
         });

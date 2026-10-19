@@ -57,6 +57,8 @@ export interface PipelineState {
 }
 
 /** GET and POST /api/recordings/{id}/summary (spec/ai.md). */
+export type SummaryStatus = "idle" | "queued" | "running" | "completed" | "failed";
+
 export interface SummaryData {
     summary: string | null;
     keyPoints?: string[];
@@ -67,6 +69,10 @@ export interface SummaryData {
     language?: string;
     createdAt?: string;
     generating?: boolean;
+    /** Where the run stands, from the server. Older servers send only `generating`. */
+    status?: SummaryStatus;
+    /** Why the last run failed, when it did. */
+    error?: string;
 }
 
 /** One saved AI provider, from GET /api/settings/ai/providers. */

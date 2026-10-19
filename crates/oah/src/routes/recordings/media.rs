@@ -70,6 +70,18 @@ pub async fn to_mp3(ffmpeg: &Path, src: &Path, dst: &Path) -> bool {
     run(&mut cmd).await
 }
 
+/// Converts any audio file to an Ogg container with Opus audio at `dst`. True on success.
+pub async fn to_ogg_opus(ffmpeg: &Path, src: &Path, dst: &Path) -> bool {
+    let mut cmd = Command::new(ffmpeg);
+    cmd.args(["-v", "error", "-i"])
+        .arg(src)
+        .args([
+            "-map", "0:a:0", "-codec:a", "libopus", "-b:a", "96k", "-f", "ogg",
+        ])
+        .arg(dst);
+    run(&mut cmd).await
+}
+
 /// Extracts waveform peak amplitudes (normalized 0.0 to 1.0) across `count` buckets from an audio file using ffmpeg.
 pub async fn compute_peaks(ffmpeg: &Path, src: &Path, count: usize) -> Option<Vec<f64>> {
     if count == 0 {

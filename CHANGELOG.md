@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Recording names in date mode use the plain date, and a later Plaud rename no longer replaces a date, generated or hand-edited title.
+- Auto export writes the format chosen in settings. OGG output is an Ogg container with Opus audio, and the original format keeps the real file extension.
+- Auto export only saves recordings that arrive while it is on, once each, and changing the format re-saves earlier exports in the new format.
+- A Plaud metadata change updates the recording without downloading its audio again.
+- An automatic summary appears in the recording as soon as it finishes, and a failed or empty run no longer leaves the recording marked as summarized.
+
+### Added
+
+- Recording names can fix date titles written by earlier versions, after a preview of each change.
+- The summary status reports whether a run is queued, running, done or failed.
+
 ## [1.1.0] - 2026-10-18
 
 ### Added
@@ -45,5 +58,4 @@ Initial release.
 - A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
 
 [Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.0.0
+[1.1.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.0
