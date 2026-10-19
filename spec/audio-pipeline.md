@@ -79,8 +79,9 @@ enabled, the request:
    If none is available, it gives `400 NO_TRANSCRIPTION_PROVIDER` and creates no job.
 3. Refuses a recording whose stored duration is over 24 hours with
    `413 TRANSCRIPTION_FAILED`, message `Recordings over 24 hours cannot be transcribed`.
-4. Marks the recording's queued or running pipeline job as cancelled and deletes its work
-   folder (section 13.3).
+4. Cancels the recording's queued or running pipeline job and deletes its work folder
+   (section 13.3). A job whose transcript was already saved keeps its result and is
+   recorded as done.
 5. Creates the new pipeline job and answers `202 { "jobId": "<id>", "status": "queued" }`.
 
 Concurrent identical manual requests for the same recording and provider share one run.
@@ -372,7 +373,8 @@ A chunk's state is one of `queued`, `running`, `completed`, `failed`.
 
 The provider is called with the job's model and language, and with the user's speaker
 settings read when the job runs. `speakerDiarization` off means no speaker labels are
-requested. `diarizationSpeakerCount` is sent as the speaker count hint when it is set and
+requested: a diarizing model then uses the whisper-style request instead of the diarized
+one. `diarizationSpeakerCount` is sent as the speaker count hint when it is set and
 diarization is on; a style that has no such field ignores it. Routing depends on the
 provider's style:
 
@@ -381,7 +383,7 @@ provider's style:
 | Google Gemini | Text transcription request with the WAV, 20 MB limit | Text only, no timings. The language is the job's language. |
 | ElevenLabs | Speech-to-text request with word timings, speaker labels when diarization is on, and the speaker count hint when one is set. The request itself retries up to 2 times on 429, 500, 502, 503, 504 and 524, waiting 1 s and then 2 s. | Segments from word timings. With diarization on, speaker labels are `Speaker N`, numbered by first appearance in the chunk. Words without a speaker continue the previous speaker, or `Unknown speaker`. |
 | Chat-based transcription | Chat request with the audio as base64 (mp3 or wav) | Text only, no timings. |
-| Diarizing model (model name contains `diarize`) | Diarized JSON request | Segments with speaker labels `Speaker N`, numbered per chunk. |
+| Diarizing model (model name contains `diarize`) | Diarized JSON request, only when diarization is on; with it off the whisper-style request is used | Segments with speaker labels `Speaker N`, numbered per chunk. |
 | Whisper-style (default) | Multipart request. `verbose_json` for most models, `json` for `gpt-4o` models | With `verbose_json`: text, language and segments. With `json`: text only. |
 
 - The chunk WAV is well below the provider upload limits, so no re-encoding happens.
@@ -536,7 +538,8 @@ the status is `queued`, `running` or `paused_disk`.
   count restarting at 1. The provider may therefore receive the same chunk twice, and bill
   for it twice.
 - A forced manual run (section 3.1) cancels the superseded job and deletes its work
-  folder before the new job is queued.
+  folder before the new job is queued. A superseded job whose transcript was already
+  saved is recorded as done instead.
 
 ---
 
@@ -600,7 +603,8 @@ These responses have no `code` field. The `error` text is the only detail.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
-- Cancel and save against the same job, the speaker settings read by the pipeline, the
-  retry claim counter and the superseded work folder have unit tests in the server code.
+- Cancel and save against the same job, the status table, the speaker settings read by the
+  pipeline (including a diarizing model with speaker labels off), the retry claim counter
+  and the superseded work folder have unit tests in the server code.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.

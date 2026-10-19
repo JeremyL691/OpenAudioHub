@@ -87,7 +87,7 @@ A provider name that is not a preset uses the whisper style. A stored base URL o
 Settings that affect every run (from the user's settings):
 
 - `defaultTranscriptionLanguage`: when set, passed as the language hint to the provider. Not set means automatic detection.
-- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models. A long recording reads it when its pipeline job runs.
+- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models. A long recording reads it when its pipeline job runs. With it off, a diarizing model uses the whisper-style request and returns no speaker labels.
 - `diarizationSpeakerCount`: optional speaker count hint, used only with diarization. A long recording reads it when its pipeline job runs.
 - `transcriptionQuality`: stored, but it does not change the request.
 
@@ -97,10 +97,7 @@ Request, sent to `{baseUrl}/audio/transcriptions` as `multipart/form-data`, with
 
 - `file`: the recording audio. The filename is the recording title with an extension that matches the detected format (mp3, wav, m4a, and so on). The content type matches that format.
 - `model`: the model chosen above.
-- `response_format`: chosen from the model name:
-  - name contains `diarize`: `diarized_json`, and the form also sends `chunking_strategy` = `auto`.
-  - name starts with `gpt-4o`: `json`.
-  - anything else: `verbose_json`.
+- `response_format`: `json` when the model name starts with `gpt-4o`, `verbose_json` otherwise.
 - `language`: only when a language hint is set.
 
 Response parsing:
@@ -115,7 +112,8 @@ Timeout. Each request waits up to `WHISPER_REQUEST_TIMEOUT_MS` (default 3,600,00
 
 ### Diarized output
 
-Used when the model name contains `diarize`:
+Used when the model name contains `diarize` and `speakerDiarization` is on. The request
+sends `response_format` = `diarized_json` and also `chunking_strategy` = `auto`:
 
 1. The audio is converted to mp3 first.
 2. If the audio is longer than 1,199 seconds, it is cut into equal parts of at most 1,199 seconds. Each part is sent separately as `diarized_json` with its own file name (`<name>-part-N.mp3`).
@@ -368,7 +366,7 @@ Active statuses (block delete, retry and cancel): `queued`, `running`, `paused_d
 
 Transitions:
 
-- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, has its work folder deleted, and is replaced by the new one.
+- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, has its work folder deleted, and is replaced by the new one. A job whose transcript was already saved keeps its result and is recorded as done.
 - `queued` → `running` → `completed`, `needs_alignment`, or `failed`.
 - `running` ↔ `paused_disk`.
 - `queued`, `running`, or `paused_disk` → `cancelled` on cancel.

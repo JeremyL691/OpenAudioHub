@@ -8,8 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- A long recording sends the speaker settings the user chose, so speaker labels can be turned off and a speaker count can be passed to the provider.
-- A cancel that arrives after the last chunk no longer stores a transcript. A cancelled job stays cancelled, and a run whose transcript was already saved is not marked cancelled.
+- A long recording sends the speaker settings the user chose, so speaker labels can be turned off and a speaker count can be passed to the provider. A diarizing model also stops labelling speakers when they are turned off.
+- A cancel that arrives after the last chunk no longer stores a transcript. A cancelled job stays cancelled, and a run whose transcript was already saved keeps its result instead of being marked cancelled.
 - A forced transcription run deletes the work folder of the job it replaces.
 - A manual retry of a failed long recording gets its three attempts again instead of failing at once on the next transient error.
 

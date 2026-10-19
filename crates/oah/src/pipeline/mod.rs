@@ -155,9 +155,9 @@ fn status_of(job_state: &str, phase: &str) -> &'static str {
         "cancelled"
     } else if job_state == "failed" {
         "failed"
-    } else if phase == "completed" {
+    } else if job_state == "done" && phase == "completed" {
         "completed"
-    } else if phase == "needs_alignment" {
+    } else if job_state == "done" && phase == "needs_alignment" {
         "needs_alignment"
     } else if job_state == "queued" {
         "queued"
@@ -463,6 +463,23 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!((job_state.as_str(), phase.as_str()), ("done", "completed"));
+    }
+
+    #[test]
+    fn statuses_follow_the_spec_table() {
+        // spec/audio-pipeline.md section 4, first matching row wins.
+        assert_eq!(status_of("running", "cancelled"), "cancelled");
+        assert_eq!(status_of("cancelled", "transcribing"), "cancelled");
+        assert_eq!(status_of("failed", "transcribing"), "failed");
+        assert_eq!(status_of("done", "completed"), "completed");
+        assert_eq!(status_of("done", "needs_alignment"), "needs_alignment");
+        assert_eq!(status_of("queued", "queued"), "queued");
+        assert_eq!(status_of("running", "paused_disk"), "paused_disk");
+        // A save that committed before the job recorded its outcome still reads running,
+        // because the job has not finished yet.
+        assert_eq!(status_of("running", "completed"), "running");
+        assert_eq!(status_of("running", "needs_alignment"), "running");
+        assert_eq!(status_of("running", "transcribing"), "running");
     }
 
     #[tokio::test]

@@ -176,6 +176,27 @@ pub async fn run(state: AppState, job: Job) -> Outcome {
     }
 }
 
+/// Options of one pipeline run: the stored model and language, and the speaker settings read
+/// when the job runs, the same way the synchronous path reads them (spec section 3.3).
+async fn run_options(
+    state: &AppState,
+    user_id: &str,
+    filename: String,
+    model: String,
+    language: Option<String>,
+) -> Step<Options> {
+    let (diarize, speaker_count) = transcribe::speaker_settings(state, user_id)
+        .await
+        .map_err(|e| Stop::Retry(e.message))?;
+    Ok(Options {
+        filename,
+        model,
+        language,
+        diarize,
+        speaker_count,
+    })
+}
+
 fn truncate(text: String) -> String {
     text.chars().take(ERROR_CHARS).collect()
 }
@@ -256,18 +277,14 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
         .field_key
         .decrypt(&filename)
         .unwrap_or_else(|_| "recording".to_owned());
-    // Speaker settings are read when the job runs, the same way the synchronous path reads them
-    // (spec section 3.3).
-    let (diarize, speaker_count) = transcribe::speaker_settings(state, user_id)
-        .await
-        .map_err(|e| Stop::Retry(e.message))?;
-    let options = Options {
+    let options = run_options(
+        state,
+        user_id,
         filename,
-        model: model.clone(),
-        language: payload.language.clone(),
-        diarize,
-        speaker_count,
-    };
+        model.clone(),
+        payload.language.clone(),
+    )
+    .await?;
 
     // Duration limits (spec section 6.2).
     let probed = media::probe(&state.config.ffprobe, &audio)
@@ -799,6 +816,48 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn run_options_read_the_speaker_settings_when_the_job_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let defaults = run_options(&state, "u", "Fixture".into(), "whisper-1".into(), None)
+            .await
+            .ok()
+            .unwrap();
+        assert!(defaults.diarize);
+        assert_eq!(defaults.speaker_count, None);
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', ?, 0)")
+            .bind(
+                serde_json::json!({"speakerDiarization": false, "diarizationSpeakerCount": 4})
+                    .to_string(),
+            )
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let stored = run_options(
+            &state,
+            "u",
+            "Fixture".into(),
+            "whisper-1".into(),
+            Some("en".into()),
+        )
+        .await
+        .ok()
+        .unwrap();
+        assert!(!stored.diarize);
+        assert_eq!(stored.speaker_count, Some(4));
+        assert_eq!(stored.language.as_deref(), Some("en"));
+    }
 
     #[test]
     fn wav_header_matches_pcm_length() {
