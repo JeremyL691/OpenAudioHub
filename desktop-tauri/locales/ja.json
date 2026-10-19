@@ -1,0 +1,45 @@
+{
+    "menu": {
+        "open": "OpenAudioHub を開く",
+        "data": "データフォルダーを開く",
+        "logs": "ログフォルダーを開く",
+        "config": "設定を編集…",
+        "keys": "キーを書き出す…",
+        "login": "ログイン時に起動",
+        "language": "言語",
+        "quit": "OpenAudioHub を終了"
+    },
+    "dialog": {
+        "exportKeysTitle": "暗号化キーを書き出しますか？",
+        "exportKeysBody": "このファイルにはデータを保護するキーが含まれています。安全な場所に保管し、決して共有しないでください。",
+        "exportKeysConfirm": "書き出す…",
+        "cancel": "キャンセル",
+        "exportKeysSaveTitle": "暗号化キーを書き出す",
+        "exportKeysFailedTitle": "キーを書き出せませんでした",
+        "chooseFolderTitle": "書き出しフォルダーを選択",
+        "saveDownloadTitle": "ダウンロードを保存",
+        "freeSpaceTitle": "OpenAudioHub にはディスクの空き容量が必要です",
+        "freeSpaceBody": "データのあるディスク（{folder}）の空き容量は {free} MB だけです。200 MB 以上空けてから OpenAudioHub を開き直してください。",
+        "startFailedTitle": "OpenAudioHub を起動できませんでした"
+    },
+    "error": {
+        "downloadInProgress": "ダウンロードはすでに実行中です",
+        "formatInvalid": "format は mp3 または original である必要があります",
+        "idsInvalid": "ids は 1〜100 件の録音 ID である必要があります",
+        "serverNoAnswer": "サーバーがダウンロード要求に応答しませんでした。",
+        "downloadCouldNotStart": "ダウンロードを開始できませんでした: {reason}",
+        "downloadRefused": "サーバーがダウンロードを拒否しました (HTTP {status})。",
+        "saveDialogFailed": "保存ダイアログを開けませんでした。",
+        "downloadStalled": "ダウンロードが停止したため中止しました。",
+        "downloadFailed": "ダウンロードに失敗しました: {reason}",
+        "downloadSaveFailed": "ダウンロードを保存できませんでした: {reason}",
+        "folderPickerFailed": "フォルダーの選択画面を開けませんでした。",
+        "keysUnreadable": "キーファイルを読み込めません: {reason}",
+        "keysUnwritable": "{path} に書き込めません: {reason}",
+        "closeActionInvalid": "closeAction は background か quit である必要があります",
+        "launchAtLoginFailed": "ログイン時の起動を変更できませんでした: {reason}",
+        "databaseOpenFailed": "データベースを開けません: {reason}",
+        "databaseBackupFailed": "アップグレード前のデータベースをバックアップできなかったため、OpenAudioHub は起動しませんでした: {reason}",
+        "noFreePort": "アプリ用の空きローカルポートがありません"
+    }
+}

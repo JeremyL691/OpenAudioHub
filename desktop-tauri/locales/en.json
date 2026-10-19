@@ -1,0 +1,45 @@
+{
+    "menu": {
+        "open": "Open OpenAudioHub",
+        "data": "Open Data Folder",
+        "logs": "Open Logs Folder",
+        "config": "Edit Configuration…",
+        "keys": "Export Keys…",
+        "login": "Launch at Login",
+        "language": "Language",
+        "quit": "Quit OpenAudioHub"
+    },
+    "dialog": {
+        "exportKeysTitle": "Export the encryption keys?",
+        "exportKeysBody": "The file contains the keys that protect your data. Store it somewhere safe and never share it.",
+        "exportKeysConfirm": "Export…",
+        "cancel": "Cancel",
+        "exportKeysSaveTitle": "Export the encryption keys",
+        "exportKeysFailedTitle": "The keys could not be exported",
+        "chooseFolderTitle": "Choose the export folder",
+        "saveDownloadTitle": "Save download",
+        "freeSpaceTitle": "OpenAudioHub needs more free disk space",
+        "freeSpaceBody": "Only {free} MB are free on the disk that holds {folder}. Free at least 200 MB on that disk and open OpenAudioHub again.",
+        "startFailedTitle": "OpenAudioHub could not start"
+    },
+    "error": {
+        "downloadInProgress": "A download is already in progress",
+        "formatInvalid": "format must be mp3 or original",
+        "idsInvalid": "ids must be 1 to 100 recording ids",
+        "serverNoAnswer": "The server did not answer the download request.",
+        "downloadCouldNotStart": "The download could not start: {reason}",
+        "downloadRefused": "The server refused the download (HTTP {status}).",
+        "saveDialogFailed": "Could not open the save dialog.",
+        "downloadStalled": "The download stalled and was stopped.",
+        "downloadFailed": "The download failed: {reason}",
+        "downloadSaveFailed": "The download could not be saved: {reason}",
+        "folderPickerFailed": "Could not open the folder picker.",
+        "keysUnreadable": "cannot read the keys file: {reason}",
+        "keysUnwritable": "cannot write {path}: {reason}",
+        "closeActionInvalid": "closeAction must be background or quit",
+        "launchAtLoginFailed": "could not change launch at login: {reason}",
+        "databaseOpenFailed": "cannot open the database: {reason}",
+        "databaseBackupFailed": "could not back up the database before the upgrade, so OpenAudioHub did not start: {reason}",
+        "noFreePort": "no free local port for the app"
+    }
+}
