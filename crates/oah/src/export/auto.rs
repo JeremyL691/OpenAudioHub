@@ -60,8 +60,12 @@ pub(crate) async fn auto_export_eligible(state: &AppState, user_id: &str) -> boo
 }
 
 /// The extension a recording is exported with, for a given format.
+///
+/// An Opus file is an Ogg container, so `original` saves it with the `.ogg` extension the user
+/// expects while the bytes stay untouched.
 fn export_ext(format: &str, stored_ext: &str) -> String {
     match format {
+        "original" if stored_ext == "opus" => "ogg".to_owned(),
         "original" if !stored_ext.is_empty() => stored_ext.to_owned(),
         "original" => "mp3".to_owned(),
         "ogg" => "ogg".to_owned(),
@@ -149,7 +153,142 @@ async fn export_new(
         rename_ai_titles(state, user_id, folder).await?;
     }
     export_pending(state, user_id, folder, mode, format).await?;
+    if format == "original" {
+        normalize_opus_exports(state, user_id, folder, mode).await?;
+    }
     reexport_outdated(state, user_id, folder, mode, format).await
+}
+
+/// Renames previous automatic exports of an Opus file from `.opus` to `.ogg`, the container's
+/// name, without rewriting a byte. Only a file this app wrote, still at the recorded path and
+/// still under the automatic name is touched, and only while it is byte-identical to the stored
+/// audio. A file the user changed or renamed stays. The new file is in place before the old one
+/// goes; a failed pass keeps the old file for the next one.
+async fn normalize_opus_exports(
+    state: &AppState,
+    user_id: &str,
+    folder: &Path,
+    mode: &str,
+) -> Result<(), String> {
+    let exported: Vec<(String, i64, String, String, String)> = sqlx::query_as(
+        "SELECT id, start_time, auto_export_path, filename, title_source FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
+         AND auto_export_path IS NOT NULL AND auto_export_attempts < ?",
+    )
+    .bind(user_id)
+    .bind(MAX_ATTEMPTS)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    for (id, start, encrypted_path, encrypted_title, title_source) in exported {
+        let Some(stored_path) = decrypt_path(state, &encrypted_path) else {
+            continue;
+        };
+        if ext_of(&stored_path) != "opus" {
+            continue;
+        }
+        let path = PathBuf::from(&stored_path);
+        if !path.exists() || path.parent() != Some(folder) {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()).map(str::to_owned) else {
+            continue;
+        };
+        let automatic = match mode {
+            "date" => is_numbered(&stem, &date_stem(start).await),
+            "ai" => {
+                is_numbered(&stem, &date_stem(start).await)
+                    || (title_source == "ai"
+                        && is_numbered(&stem, &safe_name(&title_of(state, &encrypted_title), &id)))
+            }
+            _ => is_numbered(&stem, &safe_name(&title_of(state, &encrypted_title), &id)),
+        };
+        if !automatic {
+            continue;
+        }
+        let (storage_type, storage_path): (String, String) =
+            sqlx::query_as("SELECT storage_type, storage_path FROM recordings WHERE id = ?")
+                .bind(&id)
+                .fetch_one(&state.db)
+                .await
+                .map_err(|e| e.to_string())?;
+        if !matches!(ext_of(&storage_path).as_str(), "opus" | "ogg") {
+            continue;
+        }
+        let Ok(source) = state
+            .storage
+            .materialize(&storage_type, &storage_path)
+            .await
+        else {
+            continue;
+        };
+        // A file that no longer matches the stored audio was changed by the user; it stays.
+        if !same_bytes(&path, source.path()).await {
+            continue;
+        }
+        let target = folder.join(format!("{stem}.ogg"));
+        let dest = if tokio::fs::try_exists(&target).await.unwrap_or(false) {
+            // A pass that stopped after writing the new file left it here; adopting it keeps a
+            // retry from writing a second copy beside it.
+            if same_bytes(&target, source.path()).await {
+                target
+            } else {
+                unique_path(folder, &stem, "ogg").await
+            }
+        } else {
+            target
+        };
+        if !tokio::fs::try_exists(&dest).await.unwrap_or(false) {
+            let tmp = folder.join(format!(".{}.partial", ids::new_id()));
+            if tokio::fs::copy(&path, &tmp).await.is_err() {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                count_failure(state, &id).await;
+                continue;
+            }
+            if tokio::fs::rename(&tmp, &dest).await.is_err() {
+                let _ = tokio::fs::remove_file(&tmp).await;
+                count_failure(state, &id).await;
+                continue;
+            }
+        }
+        // The row points at the new name first, so a failure between the steps cannot leave an
+        // unrecorded file behind.
+        finish(state, &id, &dest).await?;
+        let _ = tokio::fs::remove_file(&path).await;
+    }
+    Ok(())
+}
+
+/// Whether two files hold the same bytes. Sizes are compared before any content is read.
+async fn same_bytes(a: &Path, b: &Path) -> bool {
+    use tokio::io::AsyncReadExt;
+    let (Ok(ma), Ok(mb)) = (tokio::fs::metadata(a).await, tokio::fs::metadata(b).await) else {
+        return false;
+    };
+    if ma.len() != mb.len() {
+        return false;
+    }
+    let (Ok(mut fa), Ok(mut fb)) = (
+        tokio::fs::File::open(a).await,
+        tokio::fs::File::open(b).await,
+    ) else {
+        return false;
+    };
+    let mut ba = vec![0u8; 64 * 1024];
+    let mut bb = vec![0u8; 64 * 1024];
+    loop {
+        let Ok(na) = fa.read(&mut ba).await else {
+            return false;
+        };
+        let Ok(nb) = fb.read(&mut bb).await else {
+            return false;
+        };
+        if na != nb || ba[..na] != bb[..nb] {
+            return false;
+        }
+        if na == 0 {
+            return true;
+        }
+    }
 }
 
 /// Clears the retry count of every recording when the folder or format differs from the last pass.
@@ -531,16 +670,20 @@ fn escape_windows_reserved(name: &str) -> String {
     }
 }
 
-/// A title that already ends with the extension loses it first,
-/// so the export is not named `x.mp3.mp3`.
+/// A title that already ends with the extension loses it first, so the export is not named
+/// `x.mp3.mp3`. An Opus file exported as `.ogg` drops either name, since both describe it.
 fn strip_extension(stem: &str, ext: &str) -> String {
-    let suffix = format!(".{}", ext.to_lowercase());
-    let lower = stem.to_lowercase();
-    if lower.ends_with(&suffix) {
-        stem[..stem.len() - suffix.len()].to_owned()
-    } else {
-        stem.to_owned()
+    let mut suffixes = vec![format!(".{}", ext.to_lowercase())];
+    if ext.eq_ignore_ascii_case("ogg") {
+        suffixes.push(".opus".to_owned());
     }
+    let lower = stem.to_lowercase();
+    for suffix in suffixes {
+        if lower.ends_with(&suffix) {
+            return stem[..stem.len() - suffix.len()].to_owned();
+        }
+    }
+    stem.to_owned()
 }
 
 /// `stem.ext`, or `stem (2).ext` and so on when that name is taken. Existing files are never overwritten.
@@ -582,8 +725,20 @@ mod tests {
         assert_eq!(export_ext("mp3", "opus"), "mp3");
         assert_eq!(export_ext("ogg", "mp3"), "ogg");
         assert_eq!(export_ext("ogg", "opus"), "ogg");
-        assert_eq!(export_ext("original", "opus"), "opus");
+        // An Opus file is an Ogg container, so its export carries the container's name.
+        assert_eq!(export_ext("original", "opus"), "ogg");
+        assert_eq!(export_ext("original", "wav"), "wav");
+        assert_eq!(export_ext("original", "ogg"), "ogg");
+        assert_eq!(export_ext("original", "mp3"), "mp3");
         assert_eq!(export_ext("original", ""), "mp3");
+    }
+
+    #[test]
+    fn an_opus_title_does_not_keep_its_extension() {
+        assert_eq!(strip_extension("Meeting.opus", "ogg"), "Meeting");
+        assert_eq!(strip_extension("Meeting.OPUS", "ogg"), "Meeting");
+        assert_eq!(strip_extension("Meeting.ogg", "ogg"), "Meeting");
+        assert_eq!(strip_extension("Meeting.opus", "wav"), "Meeting.opus");
     }
 
     #[test]
@@ -947,5 +1102,166 @@ mod tests {
         assert_eq!(strip_extension("recording.mp3", "mp3"), "recording");
         assert_eq!(strip_extension("recording.MP3", "mp3"), "recording");
         assert_eq!(strip_extension("recording.ogg", "mp3"), "recording.ogg");
+    }
+
+    /// Writes an Ogg/Opus file into storage and adds a recording that points at it.
+    async fn store_opus(state: &crate::AppState, dir: &std::path::Path, id: &str) -> PathBuf {
+        let source = dir.join("source.opus");
+        let made = tokio::process::Command::new(&state.config.ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+            .arg("sine=frequency=440:duration=1")
+            .args(["-c:a", "libopus", "-f", "ogg"])
+            .arg(&source)
+            .status()
+            .await
+            .map(|s| s.success())
+            .unwrap_or(false);
+        assert!(made, "the test needs ffmpeg to make an Ogg/Opus file");
+        let key = format!("u/{id}.opus");
+        store_audio(state, &key, &source).await;
+        add_recording(state, id, &key, true).await;
+        source
+    }
+
+    async fn original_settings(folder: &std::path::Path, mode: &str) -> serde_json::Value {
+        json!({
+            "autoExport": true,
+            "autoExportFolder": folder.to_string_lossy(),
+            "autoExportFormat": "original",
+            "autoExportTitleMode": mode,
+        })
+    }
+
+    async fn set_settings(state: &crate::AppState, settings: serde_json::Value) {
+        sqlx::query("UPDATE user_settings SET data = ? WHERE user_id = 'u'")
+            .bind(settings.to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+    }
+
+    fn names(folder: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(folder)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn original_format_saves_an_opus_file_as_ogg_byte_for_byte() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        let source = store_opus(&state, dir.path(), "a").await;
+        set_settings(&state, original_settings(&folder, "original").await).await;
+
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync.ogg"]);
+        let written = std::fs::read(folder.join("Team sync.ogg")).unwrap();
+        assert!(written.starts_with(b"OggS"));
+        assert_eq!(
+            written,
+            std::fs::read(&source).unwrap(),
+            "the bytes are the stored file's, not a re-encode"
+        );
+
+        // A second pass is quiet: one file, and no `.opus` beside it.
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync.ogg"]);
+    }
+
+    #[tokio::test]
+    async fn a_previous_opus_export_is_renamed_to_ogg_without_a_copy() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        tokio::fs::create_dir_all(&folder).await.unwrap();
+        let source = store_opus(&state, dir.path(), "a").await;
+        // An export written by an earlier version: the stored extension was kept.
+        let old = folder.join("Team sync.opus");
+        std::fs::copy(&source, &old).unwrap();
+        set_settings(&state, original_settings(&folder, "original").await).await;
+        sqlx::query("UPDATE recordings SET auto_export_path = ? WHERE id = 'a'")
+            .bind(state.config.field_key.encrypt(&old.to_string_lossy()))
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync.ogg"]);
+        assert_eq!(
+            std::fs::read(folder.join("Team sync.ogg")).unwrap(),
+            std::fs::read(&source).unwrap()
+        );
+
+        // A repeated pass does not rename again or add a numbered copy.
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync.ogg"]);
+    }
+
+    #[tokio::test]
+    async fn a_changed_previous_opus_export_is_left_alone() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        tokio::fs::create_dir_all(&folder).await.unwrap();
+        let source = store_opus(&state, dir.path(), "a").await;
+        let old = folder.join("Team sync.opus");
+        // The user edited the exported file, so it no longer matches the stored audio.
+        let mut edited = std::fs::read(&source).unwrap();
+        edited.extend_from_slice(b"edited");
+        std::fs::write(&old, &edited).unwrap();
+        set_settings(&state, original_settings(&folder, "original").await).await;
+        sqlx::query("UPDATE recordings SET auto_export_path = ? WHERE id = 'a'")
+            .bind(state.config.field_key.encrypt(&old.to_string_lossy()))
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync.opus"]);
+        assert_eq!(std::fs::read(&old).unwrap(), edited);
+    }
+
+    #[tokio::test]
+    async fn a_previous_opus_export_under_a_user_name_is_left_alone() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        tokio::fs::create_dir_all(&folder).await.unwrap();
+        let source = store_opus(&state, dir.path(), "a").await;
+        let renamed = folder.join("My own name.opus");
+        std::fs::copy(&source, &renamed).unwrap();
+        set_settings(&state, original_settings(&folder, "original").await).await;
+        sqlx::query("UPDATE recordings SET auto_export_path = ? WHERE id = 'a'")
+            .bind(state.config.field_key.encrypt(&renamed.to_string_lossy()))
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["My own name.opus"]);
+    }
+
+    #[tokio::test]
+    async fn an_ogg_taken_by_the_user_makes_the_rename_step_aside() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        tokio::fs::create_dir_all(&folder).await.unwrap();
+        let source = store_opus(&state, dir.path(), "a").await;
+        let old = folder.join("Team sync.opus");
+        std::fs::copy(&source, &old).unwrap();
+        // Another file already holds the target name.
+        let other = folder.join("Team sync.ogg");
+        std::fs::write(&other, b"not the recording").unwrap();
+        set_settings(&state, original_settings(&folder, "original").await).await;
+        sqlx::query("UPDATE recordings SET auto_export_path = ? WHERE id = 'a'")
+            .bind(state.config.field_key.encrypt(&old.to_string_lossy()))
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        auto_export(&state).await.unwrap();
+        assert_eq!(names(&folder), ["Team sync (2).ogg", "Team sync.ogg"]);
+        assert_eq!(std::fs::read(&other).unwrap(), b"not the recording");
+        assert!(!old.exists());
     }
 }
