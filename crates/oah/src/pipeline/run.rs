@@ -981,6 +981,33 @@ mod tests {
         assert_eq!((stored, phase.as_str()), (1, "needs_alignment"));
     }
 
+    #[tokio::test]
+    async fn unreadable_speaker_settings_are_a_retry_not_a_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        // Stored settings that cannot be parsed make the read fail.
+        sqlx::query(
+            "INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', 'not json', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let outcome = run_options(&state, "u", "Fixture".into(), "whisper-1".into(), None).await;
+        assert!(
+            matches!(outcome, Err(Stop::Retry(_))),
+            "an unreadable settings row is retried, not failed"
+        );
+    }
+
     #[test]
     fn wav_header_matches_pcm_length() {
         let wav = wav_bytes(&[1, 2, 3, 4]);

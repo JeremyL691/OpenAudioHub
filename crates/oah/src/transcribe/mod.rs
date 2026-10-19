@@ -752,6 +752,74 @@ mod tests {
         assert_eq!(stored, 0);
     }
 
+    /// A file-backed database, so two connections can really run at once.
+    async fn file_state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open(&dir.join("test.sqlite")).await.unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_write_that_holds_the_lock_does_not_break_the_save() {
+        // The save takes the write lock before it reads anything. Another writer that already
+        // holds the lock therefore makes the save wait, instead of failing its phase write with
+        // SQLITE_BUSY_SNAPSHOT after the ownership read.
+        let dir = tempfile::tempdir().unwrap();
+        let state = file_state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        // Another writer takes the write lock and holds it for a moment.
+        let mut holder = state.db.acquire().await.unwrap();
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE jobs SET updated_at = updated_at WHERE id = 'j'")
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            sqlx::query("COMMIT").execute(&mut *holder).await.unwrap();
+        });
+        let text = transcript("words");
+        let saved = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await;
+        assert!(
+            saved.is_ok(),
+            "the save waits for the lock instead of failing, got {:?}",
+            saved.err().map(|e| e.code)
+        );
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "completed");
+    }
+
     #[tokio::test]
     async fn a_save_refuses_a_job_of_another_user() {
         let dir = tempfile::tempdir().unwrap();
