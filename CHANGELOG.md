@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - A long recording sends the speaker settings the user chose, so speaker labels can be turned off and a speaker count can be passed to the provider.
+- A cancel that arrives after the last chunk no longer stores a transcript. A cancelled job stays cancelled, and a run whose transcript was already saved is not marked cancelled.
 
 ## [1.1.1] - 2026-10-18
 

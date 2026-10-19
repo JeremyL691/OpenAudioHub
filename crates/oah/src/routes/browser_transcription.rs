@@ -78,6 +78,7 @@ pub async fn from_browser(
             model,
             transcription_type: "browser",
             timeline: None,
+            job: None,
         },
     )
     .await?;
