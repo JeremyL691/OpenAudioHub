@@ -352,15 +352,30 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
             let imported = import_for(state, ctx, &id, &r.id).await;
             Ok(Outcome::Unchanged { imported })
         }
-        Some((id, None, _, _, _, prev_source)) => {
-            // The audio is already stored, so a changed Plaud version only refreshes metadata.
-            // Downloading again would replace a file the user may be playing, and delete the old
-            // object, for changes that never touch the audio itself.
-            let follow = may_follow_plaud(&prev_source);
-            match update_row(state, r, &id, follow).await {
-                Ok(true) => {}
-                Ok(false) => return Ok(Outcome::Skipped),
-                Err(e) => return Err(e),
+        Some((id, None, _, prev_type, prev_key, prev_source)) => {
+            // A stored file is kept: a changed Plaud version only refreshes metadata, so a rename
+            // or an edit in Plaud never replaces a file the user may be playing. The exception is a
+            // missing object, which would leave the recording unplayable for good.
+            if audio_present(state, &prev_type, &prev_key).await {
+                let follow = may_follow_plaud(&prev_source);
+                match update_row(state, r, &id, follow).await {
+                    Ok(true) => {}
+                    Ok(false) => return Ok(Outcome::Skipped),
+                    Err(e) => return Err(e),
+                }
+            } else {
+                let storage = import::store_audio(state, &ctx.user_id, &ctx.client, &r.id).await?;
+                match update_row_with_audio(state, r, &id, Some(&storage), true).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        delete_audio(state, storage.storage_type, &storage.key).await;
+                        return Ok(Outcome::Skipped);
+                    }
+                    Err(e) => {
+                        delete_audio(state, storage.storage_type, &storage.key).await;
+                        return Err(e);
+                    }
+                }
             }
             import_for(state, ctx, &id, &r.id).await;
             Ok(Outcome::Updated(id))
@@ -378,6 +393,15 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
             Ok(Outcome::New(id))
         }
     }
+}
+
+/// Whether the stored audio object still exists. A storage error that is not "not found" counts as
+/// present, so a transient failure never triggers a download.
+async fn audio_present(state: &AppState, storage_type: &str, key: &str) -> bool {
+    !matches!(
+        state.storage.head_size(storage_type, key).await,
+        Err(crate::storage::StorageError::NotFound)
+    )
 }
 
 /// Deletes an audio object that no row points at. A failure is logged, not returned.
@@ -491,7 +515,8 @@ async fn insert_row(
     Ok(id)
 }
 
-/// Overwrites a row with Plaud's values. False when the row was deleted meanwhile, so nothing changed.
+/// Overwrites a row with Plaud's values, keeping the stored audio. False when the row was deleted
+/// meanwhile, so nothing changed.
 ///
 /// `follow_name` is false when the local title is the user's (a date, a generated title, or a
 /// hand edit), and the stored name is then kept.
@@ -499,6 +524,17 @@ async fn update_row(
     state: &AppState,
     r: &Recording,
     id: &str,
+    follow_name: bool,
+) -> Result<bool, ItemError> {
+    update_row_with_audio(state, r, id, None, follow_name).await
+}
+
+/// The same update, optionally replacing the stored audio. Used when the object was missing.
+async fn update_row_with_audio(
+    state: &AppState,
+    r: &Recording,
+    id: &str,
+    storage: Option<&import::Stored>,
     follow_name: bool,
 ) -> Result<bool, ItemError> {
     let now = now_ms();
@@ -511,9 +547,14 @@ async fn update_row(
                 .unwrap_or_else(|| r.id.clone()),
         )
     });
+    let peaks = storage
+        .and_then(|s| s.peaks.as_ref())
+        .and_then(|p| serde_json::to_string(p).ok());
     let done = sqlx::query(
         "UPDATE recordings SET device_sn = ?, filename = COALESCE(?, filename), duration = ?, start_time = ?, end_time = ?, \
-         filesize = ?, file_md5 = ?, plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ? \
+         filesize = ?, file_md5 = ?, plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ?, \
+         storage_type = COALESCE(?, storage_type), storage_path = COALESCE(?, storage_path), \
+         downloaded_at = COALESCE(?, downloaded_at), waveform_peaks = COALESCE(?, waveform_peaks) \
          WHERE id = ? AND deleted_at IS NULL",
     )
     .bind(r.serial_number.clone().unwrap_or_default())
@@ -528,6 +569,10 @@ async fn update_row(
     .bind(r.zonemins)
     .bind(r.scene)
     .bind(now)
+    .bind(storage.map(|s| s.storage_type))
+    .bind(storage.map(|s| s.key.as_str()))
+    .bind(storage.map(|_| now))
+    .bind(peaks)
     .bind(id)
     .execute(&state.db)
     .await?;
@@ -752,6 +797,28 @@ mod title_tests {
             title_for("ai", &recording(None, Some(0))).await,
             ("rec-1".to_owned(), "original")
         );
+    }
+
+    #[tokio::test]
+    async fn a_missing_audio_object_is_reported_as_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::Config::for_tests(dir.path());
+        config.storage_root = dir.path().join("storage");
+        tokio::fs::create_dir_all(&config.storage_root)
+            .await
+            .unwrap();
+        let state = crate::AppState::new(config, crate::db::open_memory().await.unwrap());
+
+        // A stored object counts as present.
+        tokio::fs::create_dir_all(state.config.storage_root.join("u"))
+            .await
+            .unwrap();
+        tokio::fs::write(state.config.storage_root.join("u/here.mp3"), b"ID3")
+            .await
+            .unwrap();
+        assert!(audio_present(&state, "local", "u/here.mp3").await);
+        // A missing one does not, so the sync downloads it again.
+        assert!(!audio_present(&state, "local", "u/gone.mp3").await);
     }
 
     #[test]

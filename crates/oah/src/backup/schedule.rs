@@ -539,9 +539,10 @@ async fn reexport_outdated(
             count_failure(state, &id).await;
             continue;
         }
-        // The new file is in place, so the old one can go.
-        let _ = tokio::fs::remove_file(&path).await;
+        // The row points at the new file first, so a failed write of the marker cannot leave an
+        // unrecorded export behind.
         finish(state, &id, &dest).await?;
+        let _ = tokio::fs::remove_file(&path).await;
     }
     Ok(())
 }
