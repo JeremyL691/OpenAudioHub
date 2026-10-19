@@ -452,6 +452,7 @@ async fn run_options(
     filename: String,
 ) -> ApiResult<Options> {
     let settings = routes::settings::effective(state, user_id).await?;
+    let (diarize, speaker_count) = speaker_settings_from(&settings);
     Ok(Options {
         filename,
         model,
@@ -461,15 +462,28 @@ async fn run_options(
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .map(str::to_owned),
-        diarize: settings
-            .get("speakerDiarization")
-            .and_then(Value::as_bool)
-            .unwrap_or(true),
-        speaker_count: settings
-            .get("diarizationSpeakerCount")
-            .and_then(Value::as_u64)
-            .and_then(|n| u32::try_from(n).ok()),
+        diarize,
+        speaker_count,
     })
+}
+
+/// The speaker settings of one run, read from a user's effective settings. Shared by the
+/// synchronous path and the pipeline worker (spec/transcription.md, spec/audio-pipeline.md).
+pub async fn speaker_settings(state: &AppState, user_id: &str) -> ApiResult<(bool, Option<u32>)> {
+    let settings = routes::settings::effective(state, user_id).await?;
+    Ok(speaker_settings_from(&settings))
+}
+
+fn speaker_settings_from(settings: &serde_json::Map<String, Value>) -> (bool, Option<u32>) {
+    let diarize = settings
+        .get("speakerDiarization")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let count = settings
+        .get("diarizationSpeakerCount")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok());
+    (diarize, count)
 }
 
 /// Creates the audio pipeline job. A forced run first cancels the recording's active pipeline job.
@@ -563,4 +577,50 @@ async fn needs_transcript(state: &AppState, user_id: &str, recording_id: &str) -
     .fetch_one(&state.db)
     .await?;
     Ok(found == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open_memory().await.unwrap(),
+        )
+    }
+
+    async fn seed_user_recording(state: &AppState) {
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn speaker_settings_follow_the_users_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        assert_eq!(speaker_settings(&state, "u").await.unwrap(), (true, None));
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', ?, 0)")
+            .bind(json!({"speakerDiarization": false, "diarizationSpeakerCount": 3}).to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(
+            speaker_settings(&state, "u").await.unwrap(),
+            (false, Some(3))
+        );
+    }
 }

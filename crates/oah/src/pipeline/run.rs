@@ -241,12 +241,17 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
         .field_key
         .decrypt(&filename)
         .unwrap_or_else(|_| "recording".to_owned());
+    // Speaker settings are read when the job runs, the same way the synchronous path reads them
+    // (spec section 3.3).
+    let (diarize, speaker_count) = transcribe::speaker_settings(state, user_id)
+        .await
+        .map_err(|e| Stop::Retry(e.message))?;
     let options = Options {
         filename,
         model: model.clone(),
         language: payload.language.clone(),
-        diarize: true,
-        speaker_count: None,
+        diarize,
+        speaker_count,
     };
 
     // Duration limits (spec section 6.2).

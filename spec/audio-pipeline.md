@@ -108,9 +108,9 @@ A pipeline job stores:
 | `language` | The `defaultTranscriptionLanguage` setting when the job was created, or null. |
 | `trigger` | `manual` or `auto`. |
 
-Speaker settings (`speakerDiarization`, `diarizationSpeakerCount`) are not stored and
-are not read by the pipeline. The pipeline always asks for speaker labels where the
-provider supports them, and never sends a speaker count (see section 10.3).
+Speaker settings (`speakerDiarization`, `diarizationSpeakerCount`) are not stored in the
+payload. The worker reads them from the user's effective settings when the job runs, the
+same way a synchronous run does (section 10.3).
 
 ### 3.4 Provider and model at run time
 
@@ -370,13 +370,16 @@ A chunk's state is one of `queued`, `running`, `completed`, `failed`.
 
 ### 10.3 Provider routing
 
-The provider is called with the job's model and language. The speaker count is never
-sent. Routing depends on the provider's style:
+The provider is called with the job's model and language, and with the user's speaker
+settings read when the job runs. `speakerDiarization` off means no speaker labels are
+requested. `diarizationSpeakerCount` is sent as the speaker count hint when it is set and
+diarization is on; a style that has no such field ignores it. Routing depends on the
+provider's style:
 
 | Style | Request | What the pipeline gets back |
 |-------|---------|-----------------------------|
 | Google Gemini | Text transcription request with the WAV, 20 MB limit | Text only, no timings. The language is the job's language. |
-| ElevenLabs | Speech-to-text request with word timings and speaker labels (diarization on). The request itself retries up to 2 times on 429, 500, 502, 503, 504 and 524, waiting 1 s and then 2 s. | Segments from word timings. Speaker labels are `Speaker N`, numbered by first appearance in the chunk. Words without a speaker continue the previous speaker, or `Unknown speaker`. |
+| ElevenLabs | Speech-to-text request with word timings, speaker labels when diarization is on, and the speaker count hint when one is set. The request itself retries up to 2 times on 429, 500, 502, 503, 504 and 524, waiting 1 s and then 2 s. | Segments from word timings. With diarization on, speaker labels are `Speaker N`, numbered by first appearance in the chunk. Words without a speaker continue the previous speaker, or `Unknown speaker`. |
 | Chat-based transcription | Chat request with the audio as base64 (mp3 or wav) | Text only, no timings. |
 | Diarizing model (model name contains `diarize`) | Diarized JSON request | Segments with speaker labels `Speaker N`, numbered per chunk. |
 | Whisper-style (default) | Multipart request. `verbose_json` for most models, `json` for `gpt-4o` models | With `verbose_json`: text, language and segments. With `json`: text only. |
