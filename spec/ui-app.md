@@ -226,7 +226,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 | `providers` | AI Providers | Connect transcription and summary providers. Anything OpenAI-compatible works. |
 | `transcription` | Transcription | Provider choice and default options for turning audio into text. |
 | `summary` | Summary | Which provider writes summaries, and the prompt presets it uses. |
-| `naming` | Recording names | Choose how new recordings are named. Existing recordings keep their names. |
+| `naming` | Recording names | Choose how new recordings are named, and fix date titles written before the date mode used plain dates. |
 | `plaud-account` | Plaud Account | The Plaud cloud account OpenAudioHub pulls recordings from. |
 | `sync` | Sync | When and how OpenAudioHub pulls new recordings from your Plaud device. |
 | `playback` | Playback | Start-up settings the player applies to every recording. |
@@ -276,6 +276,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 - A radio group labelled "Recording name" with three options: the original file name ("Keep the name from Plaud or the uploaded file."), the recording date ("Name by recording date, e.g. 2026-10-12."), and an AI-generated title. Saves `recordingTitleMode`. A failed save restores the previous option.
 - "Sync titles to Plaud" (switch). Saves `syncTitleToPlaud`.
 - The default for a new account is the AI-generated title.
+- "Existing date titles": a "Check titles" button reads `GET /api/recordings/title-repair` and lists each candidate with its current name and the date it would become, as unchecked checkboxes (`title-repair-list`, `title-repair-item`). "Update selected" posts the picked ids and their expected names to `POST /api/recordings/title-repair`, then reloads the list. A title that changed since the check is skipped. With no candidates the section reads "No titles need fixing."
 
 ### 4.7 Plaud Account (`plaud-account`)
 

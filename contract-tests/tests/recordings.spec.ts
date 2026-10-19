@@ -12,6 +12,7 @@ import {
 // Private audio is cacheable by the browser only, never by shared caches.
 const AUDIO_CACHE = "private, max-age=31536000, immutable";
 
+
 /**
  * Two accounts shared by the whole file. Sign-up is limited per IP, so the file
  * creates no more than these two; every test uploads its own recordings.
@@ -84,6 +85,9 @@ test.describe("recordings: list and detail", () => {
     let second: { id: string; filename: string };
 
     test.beforeAll(async () => {
+        // Sign-up is limited per IP per minute, and a full run spends that budget in earlier
+        // files, so the two shared accounts may need to wait for the window to pass.
+        test.setTimeout(180_000);
         api = (await people()).owner;
         first = await uploadUnique(api, MP3.file, MP3.mime, "list-a");
         second = await uploadUnique(api, WAV.file, WAV.mime, "list-b");

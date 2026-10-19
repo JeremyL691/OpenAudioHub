@@ -45,6 +45,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/recordings/merge", post(merge))
         .route(
+            "/api/recordings/title-repair",
+            get(title_repair_preview).post(title_repair_apply),
+        )
+        .route(
             "/api/recordings/{id}",
             get(detail).patch(rename).delete(remove),
         )
@@ -184,7 +188,7 @@ async fn list_rows(db: &SqlitePool, key: &FieldKey, user_id: &str) -> ApiResult<
             .into_iter()
             .collect();
     let summarized: HashSet<String> = sqlx::query_scalar(
-        "SELECT recording_id FROM ai_enhancements WHERE user_id = ? AND summary IS NOT NULL",
+        "SELECT recording_id FROM ai_enhancements WHERE user_id = ? AND has_content = 1",
     )
     .bind(user_id)
     .fetch_all(db)
@@ -441,6 +445,8 @@ struct NewRecording<'a> {
     file_md5: &'a str,
     storage_type: &'a str,
     storage_path: &'a str,
+    title_source: &'a str,
+    auto_export_eligible: bool,
 }
 
 async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResult<()> {
@@ -448,7 +454,7 @@ async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResu
     sqlx::query(
         "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, \
          end_time, filesize, file_md5, storage_type, storage_path, downloaded_at, plaud_version, is_trash, \
-         created_at, updated_at) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?)",
+         created_at, updated_at, title_source, auto_export_eligible) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?, ?, ?)",
     )
     .bind(r.id)
     .bind(r.user_id)
@@ -464,6 +470,8 @@ async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResu
     .bind(now)
     .bind(now)
     .bind(now)
+    .bind(r.title_source)
+    .bind(r.auto_export_eligible)
     .execute(db)
     .await?;
     Ok(())
@@ -526,8 +534,9 @@ async fn rename(
             .detail("field", "filename")
             .detail("maxLength", 200));
     }
+    // A name the user typed is theirs, so a later sync must not replace it.
     let res = sqlx::query(
-        "UPDATE recordings SET filename = ?, updated_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+        "UPDATE recordings SET filename = ?, title_source = 'manual', updated_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
     )
     .bind(state.config.field_key.encrypt(&name))
     .bind(now_ms())
@@ -618,6 +627,121 @@ async fn star(
     Ok(Json(json!({ "id": id, "starred": starred })))
 }
 
+// ---- title repair ----
+
+/// One recording whose stored date-time title can become a plain date.
+fn repair_json(id: &str, current: &str, suggested: &str, start: i64) -> Value {
+    json!({
+        "id": id,
+        "filename": current,
+        "suggestedFilename": suggested,
+        "startTime": time::iso(start),
+    })
+}
+
+/// Recordings whose title looks like a date-time title this app wrote before it used plain dates.
+///
+/// `title_source` is not enough on its own: rows written before it existed carry `unknown`, and a
+/// date-time title is not something a user types. Candidates are listed for the user to pick from,
+/// and are never applied automatically.
+async fn title_repair_preview(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> ApiResult<Json<Value>> {
+    let rows: Vec<(String, String, i64, String)> = sqlx::query_as(
+        "SELECT id, filename, start_time, title_source FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
+         AND title_source != 'manual' AND title_source != 'ai' AND start_time > 0 ORDER BY start_time DESC",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await?;
+    let mut candidates = Vec::new();
+    for (id, encrypted, start, _) in rows {
+        let Ok(current) = state.config.field_key.decrypt(&encrypted) else {
+            continue;
+        };
+        let offset = local_offset_at(start).await;
+        if let Some(day) = crate::plaud::sync::repair_candidate(&current, start, offset) {
+            candidates.push(repair_json(&id, &current, &day, start));
+        }
+    }
+    Ok(Json(json!({ "candidates": candidates })))
+}
+
+/// Applies the picked titles. Each pick names the title it expects, so a recording renamed since
+/// the preview is skipped rather than overwritten.
+async fn title_repair_apply(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Pick {
+        id: String,
+        expected_filename: String,
+    }
+    let picks: Vec<Pick> = serde_json::from_slice::<Value>(&body)
+        .ok()
+        .and_then(|v| v.get("picks").and_then(Value::as_array).cloned())
+        .map(|list| {
+            list.into_iter()
+                .filter_map(|item| serde_json::from_value(item).ok())
+                .collect()
+        })
+        .ok_or_else(|| invalid("picks must be a list of { id, expectedFilename }"))?;
+    if picks.is_empty() {
+        return Ok(Json(json!({ "renamed": [], "skipped": [] })));
+    }
+    let mut renamed = Vec::new();
+    let mut skipped = Vec::new();
+    for pick in picks {
+        let row: Option<(String, i64)> = sqlx::query_as(
+            "SELECT filename, start_time FROM recordings WHERE id = ? AND user_id = ? AND deleted_at IS NULL \
+             AND title_source != 'manual' AND title_source != 'ai'",
+        )
+        .bind(&pick.id)
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await?;
+        let Some((encrypted, start)) = row else {
+            skipped.push(json!({ "id": pick.id, "reason": "not found" }));
+            continue;
+        };
+        let current = state
+            .config
+            .field_key
+            .decrypt(&encrypted)
+            .map_err(AppError::internal)?;
+        if current != pick.expected_filename {
+            skipped.push(json!({ "id": pick.id, "reason": "renamed" }));
+            continue;
+        }
+        let offset = local_offset_at(start).await;
+        let Some(day) = crate::plaud::sync::repair_candidate(&current, start, offset) else {
+            skipped.push(json!({ "id": pick.id, "reason": "not a date title" }));
+            continue;
+        };
+        let done = sqlx::query(
+            "UPDATE recordings SET filename = ?, title_source = 'date', updated_at = ? \
+             WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND filename = ?",
+        )
+        .bind(state.config.field_key.encrypt(&day))
+        .bind(now_ms())
+        .bind(&pick.id)
+        .bind(&user.id)
+        .bind(&encrypted)
+        .execute(&state.db)
+        .await?;
+        if done.rows_affected() == 1 {
+            renamed.push(json!({ "id": pick.id, "filename": day }));
+        } else {
+            skipped.push(json!({ "id": pick.id, "reason": "renamed" }));
+        }
+    }
+    Ok(Json(json!({ "renamed": renamed, "skipped": skipped })))
+}
+
 // ---- upload, audio, peaks ----
 
 /// Title of an upload in `original` mode: the file name without its extension, or the id when that is blank.
@@ -640,6 +764,32 @@ pub(crate) async fn local_offset() -> ::time::UtcOffset {
         .filter(|o| o.status.success());
     out.and_then(|o| parse_offset(String::from_utf8_lossy(&o.stdout).trim()))
         .unwrap_or(::time::UtcOffset::UTC)
+}
+
+/// The UTC offset in effect at `ms`, so a date computed for a past instant follows the daylight
+/// saving rules of that instant. Falls back to the current offset when the system cannot answer.
+pub(crate) async fn local_offset_at(ms: i64) -> ::time::UtcOffset {
+    let secs = ms.div_euclid(1000).to_string();
+    // BSD date takes `-r <epoch>`, GNU date takes `-d @<epoch>`.
+    for args in [["-r", secs.as_str(), "+%z"], ["-d", secs.as_str(), "+%z"]] {
+        let arg = if args[0] == "-d" {
+            format!("@{}", args[1])
+        } else {
+            args[1].to_owned()
+        };
+        let out = Command::new("date")
+            .args([args[0], arg.as_str(), args[2]])
+            .output()
+            .await
+            .ok()
+            .filter(|o| o.status.success());
+        if let Some(offset) =
+            out.and_then(|o| parse_offset(String::from_utf8_lossy(&o.stdout).trim()))
+        {
+            return offset;
+        }
+    }
+    local_offset().await
 }
 
 /// `+0800` / `-0530` → offset.
@@ -774,6 +924,8 @@ async fn upload(
     } else {
         upload_title(&stem, &id)
     };
+    let title_source = if by_date { "date" } else { "original" };
+    let eligible = crate::backup::schedule::auto_export_eligible(&state, &user.id).await;
     let plaud_file_id = format!("uploaded-{id}");
     let stored = format!("{}/{plaud_file_id}.{ext}", user.id);
     let storage_type = state.storage.active_type();
@@ -797,6 +949,8 @@ async fn upload(
             file_md5: &file_md5,
             storage_type,
             storage_path: &stored,
+            title_source,
+            auto_export_eligible: eligible,
         },
     )
     .await;
@@ -1408,6 +1562,9 @@ async fn merge(
         .min()
         .unwrap_or_else(now_ms);
     let plaud_file_id = format!("merged-{id}");
+    // A merged recording is made here, so its title is the user's and sync never rewrites it.
+    let title_source = "manual";
+    let eligible = crate::backup::schedule::auto_export_eligible(&state, &user.id).await;
     let saved = insert(
         &state.db,
         key,
@@ -1422,6 +1579,8 @@ async fn merge(
             file_md5: &file_md5,
             storage_type,
             storage_path: &stored,
+            title_source,
+            auto_export_eligible: eligible,
         },
     )
     .await;
@@ -1670,6 +1829,8 @@ mod tests {
                 file_md5: &md5,
                 storage_type: "local",
                 storage_path: &storage,
+                title_source: "original",
+                auto_export_eligible: false,
             };
             insert(&db, &key, new).await.unwrap();
         }
@@ -1751,6 +1912,8 @@ mod tests {
                     file_md5: &md5,
                     storage_type: kind,
                     storage_path: key,
+                    title_source: "original",
+                    auto_export_eligible: false,
                 },
             )
             .await

@@ -48,7 +48,7 @@ pub async fn generate(
         tracing::warn!(recording = recording_id, "title reply had no usable line");
         return Ok(());
     };
-    sqlx::query("UPDATE recordings SET filename = ?, updated_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL")
+    sqlx::query("UPDATE recordings SET filename = ?, title_source = 'ai', updated_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL")
         .bind(state.config.field_key.encrypt(&title))
         .bind(now_ms())
         .bind(recording_id)
