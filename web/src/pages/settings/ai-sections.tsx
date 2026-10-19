@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
+import { api, errorMessage } from "@/lib/api";
+import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { Group, Row, StackedField, ToggleRow, SettingSelect, AUTO, fromOptionValue, toOptionValue, useSettings, type CustomPrompt, type Option, type OptionGroup, type SummaryPromptConfig, type UserSettings } from "./shared";
 import { SUMMARY_PROMPT_PLACEHOLDER } from "./prompt-texts";
 
@@ -493,6 +495,13 @@ const TITLE_MODES: { value: UserSettings["recordingTitleMode"]; label: string; h
     },
 ];
 
+interface TitleCandidate {
+    id: string;
+    filename: string;
+    suggestedFilename: string;
+    startTime: string;
+}
+
 export function NamingSection() {
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
@@ -535,7 +544,130 @@ export function NamingSection() {
                     hint="Send generated titles back to the Plaud device and rename the file there"
                 />
             </div>
+            <DateTitleRepair />
         </div>
+    );
+}
+
+/**
+ * Fixes titles written before the date mode used plain dates.
+ *
+ * Candidates are listed, never applied on their own: a date-time title cannot prove it was
+ * generated rather than typed, so the user picks.
+ */
+function DateTitleRepair() {
+    const ids = useId();
+    const [candidates, setCandidates] = useState<TitleCandidate[] | null>(null);
+    const [picked, setPicked] = useState<Set<string>>(new Set());
+    const [loading, setLoading] = useState(false);
+    const [applying, setApplying] = useState(false);
+    const [error, setError] = useState<unknown>(null);
+
+    const check = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await api<{ candidates: TitleCandidate[] }>("/api/recordings/title-repair");
+            setCandidates(data.candidates);
+            setPicked(new Set());
+        } catch (err) {
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void check();
+    }, [check]);
+
+    const toggle = (id: string) => {
+        setPicked((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const apply = async () => {
+        if (!candidates) return;
+        setApplying(true);
+        try {
+            const picks = candidates
+                .filter((c) => picked.has(c.id))
+                .map((c) => ({ id: c.id, expectedFilename: c.filename }));
+            const result = await api<{ renamed: { id: string; filename: string }[]; skipped: { id: string; reason: string }[] }>(
+                "/api/recordings/title-repair",
+                { method: "POST", json: { picks } },
+            );
+            if (result.renamed.length > 0) {
+                toast.success(result.renamed.length === 1 ? "1 title updated" : `${result.renamed.length} titles updated`);
+            }
+            if (result.skipped.length > 0) {
+                toast.message(result.skipped.length === 1 ? "1 title was skipped" : `${result.skipped.length} titles were skipped`);
+            }
+            window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+            await check();
+        } catch (err) {
+            toast.error(errorMessage(err, "Could not update the titles"));
+        } finally {
+            setApplying(false);
+        }
+    };
+
+    const open = (candidates?.length ?? 0) > 0;
+
+    return (
+        <section className="grid gap-3 border-t border-border pt-4">
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                    <h2 className="text-[13px] font-semibold text-foreground">Existing date titles</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Earlier versions named date titles with the time added. Check the list, then choose which to shorten to the date.
+                    </p>
+                </div>
+                <Button variant="secondary" className="px-3" disabled={loading || applying} onClick={() => void check()}>
+                    {loading ? <Spinner /> : null}
+                    Check titles
+                </Button>
+            </div>
+            {error ? (
+                <p role="alert" className="text-sm text-destructive">
+                    {errorMessage(error, "Could not read the titles")}
+                </p>
+            ) : null}
+            {candidates === null ? null : !open ? (
+                <p className="text-sm text-muted-foreground">No titles need fixing.</p>
+            ) : (
+                <>
+                    <ul data-testid="title-repair-list" className="divide-y divide-border rounded-xl bg-muted px-4">
+                        {candidates.map((candidate) => (
+                            <li key={candidate.id} className="flex items-start gap-3 py-2.5">
+                                <input
+                                    type="checkbox"
+                                    id={`${ids}-repair-${candidate.id}`}
+                                    data-testid="title-repair-item"
+                                    checked={picked.has(candidate.id)}
+                                    onChange={() => toggle(candidate.id)}
+                                    className="mt-0.5 size-4 shrink-0 accent-primary"
+                                />
+                                <label htmlFor={`${ids}-repair-${candidate.id}`} className="min-w-0 flex-1 text-[13px] font-normal">
+                                    <span className="block truncate">{candidate.filename}</span>
+                                    <span className="block text-xs text-muted-foreground">Becomes {candidate.suggestedFilename}</span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="flex justify-end">
+                        <Button variant="primary" className="px-3" disabled={picked.size === 0 || applying} onClick={() => void apply()}>
+                            {applying ? <Spinner /> : null}
+                            Update selected
+                        </Button>
+                    </div>
+                </>
+            )}
+        </section>
     );
 }
 

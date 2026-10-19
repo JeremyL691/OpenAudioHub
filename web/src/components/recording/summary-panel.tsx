@@ -51,19 +51,38 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
     const [savedTemplate, setSavedTemplate] = useState("general");
     const userPicked = useRef(false);
 
+    const alive = useRef(true);
+    useEffect(() => {
+        alive.current = true;
+        return () => {
+            alive.current = false;
+        };
+    }, [recordingId]);
+
     const load = useCallback(async () => {
         try {
             const data = await api<SummaryData>(`/api/recordings/${encodeURIComponent(recordingId)}/summary`);
+            // A run that finished elsewhere may arrive after the panel moved to another recording.
+            if (!alive.current) return;
             setSummary(data);
         } catch (err) {
+            if (!alive.current) return;
             toast.error(errorMessage(err, "Could not load the summary"));
         } finally {
-            setLoaded(true);
+            if (alive.current) setLoaded(true);
         }
     }, [recordingId]);
 
     useEffect(() => {
         void load();
+    }, [load]);
+
+    // A transcript that arrives, or a run that finishes, changes the list; re-read so the pane
+    // never keeps an empty result the library no longer shows.
+    useEffect(() => {
+        const onChange = () => void load();
+        window.addEventListener(RECORDINGS_CHANGED, onChange);
+        return () => window.removeEventListener(RECORDINGS_CHANGED, onChange);
     }, [load]);
 
     // The template saved in settings is the default choice.
@@ -83,8 +102,9 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
         };
     }, []);
 
-    // Another request may be generating this summary (for example after a reload). Poll until it finishes.
-    const serverGenerating = summary?.generating === true;
+    // Another run may be generating this summary, from a reload or the automatic step. Poll until it ends.
+    const status = summary?.status;
+    const serverGenerating = status ? status === "queued" || status === "running" : summary?.generating === true;
     useEffect(() => {
         if (!serverGenerating) return;
         const timer = window.setTimeout(() => void load(), POLL_MS);
@@ -107,7 +127,8 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
     const chosenTemplate = template ?? savedTemplate;
     const templateName = templateOptions.find((o) => o.value === (summary?.promptId ?? chosenTemplate))?.label;
     const busy = generating || serverGenerating;
-    const hasSummary = Boolean(summary?.summary);
+    const hasSummary = hasSummaryContent(summary);
+    const failed = status === "failed" ? summary?.error ?? "The summary could not be made." : null;
 
     const generate = async () => {
         setGenerating(true);
@@ -194,9 +215,14 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
                 <p className="mt-2 text-sm text-muted-foreground">A summary is available once the recording has a transcript.</p>
             ) : (
                 <>
+                    {failed && !busy ? (
+                        <p role="alert" data-testid="summary-error" className="mt-4 text-sm text-destructive">
+                            {failed}
+                        </p>
+                    ) : null}
                     {hasSummary && summary ? (
                         <div data-testid="summary-content" className="mt-4 grid gap-4 text-sm leading-6 text-foreground">
-                            <Formatted text={summary.summary ?? ""} />
+                            {summary.summary?.trim() ? <Formatted text={summary.summary} /> : null}
                             {summary.keyPoints?.length ? <ListSection title="Key Points" items={summary.keyPoints} /> : null}
                             {summary.actionItems?.length ? <ActionSection items={summary.actionItems} /> : null}
                         </div>
@@ -213,7 +239,7 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
                                 {summary.model ? <Chip mono>{summary.model}</Chip> : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(summary.summary ?? "").then(() => toast.success("Summary copied"), () => toast.error("Could not copy the summary"))}>
+                                <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(summaryPlain(exportInput())).then(() => toast.success("Summary copied"), () => toast.error("Could not copy the summary"))}>
                                     <Copy aria-hidden="true" /> Copy
                                 </Button>
                                 <Button variant="ghost" size="sm" aria-label="Download summary as Markdown" onClick={() => downloadText(`${base}.md`, "text/markdown", summaryMarkdown(exportInput()))}>
@@ -232,6 +258,12 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
             )}
         </Card>
     );
+}
+
+/** A summary the pane can show: text, key points or action items. */
+export function hasSummaryContent(data: SummaryData | null): boolean {
+    if (!data) return false;
+    return Boolean(data.summary?.trim()) || Boolean(data.keyPoints?.length) || Boolean(data.actionItems?.length);
 }
 
 function Chip({ children, mono = false }: { children: ReactNode; mono?: boolean }) {

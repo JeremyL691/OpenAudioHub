@@ -20,11 +20,11 @@ use crate::db::now_ms;
 use crate::error::{ApiResult, AppError};
 use crate::jobs::{self, Job, NewJob};
 use crate::time::iso;
-use crate::{AppState, ai, config, routes};
+use crate::{AppState, ai, routes};
 use generate::{Failed, Plan};
 
-const AUTO_LIMIT_DEFAULT: u64 = 60;
-const HOUR_MS: i64 = 3_600_000;
+pub(crate) const AUTO_LIMIT_DEFAULT: u64 = 60;
+pub(crate) const HOUR_MS: i64 = 3_600_000;
 const POLL: Duration = Duration::from_millis(300);
 const WORKERS: usize = 2;
 
@@ -51,7 +51,10 @@ pub fn spawn(state: &AppState) {
     );
 }
 
-/// Called after a transcript is saved: auto title, then auto summary. Never fails the caller.
+/// Called after a transcript is saved: auto title, then a queued auto summary. Never fails the caller.
+///
+/// The summary is a job like a manual run, so the recording's status covers it and a reload sees
+/// the same state. The save step does not wait for the model.
 pub async fn after_transcript(state: &AppState, user_id: &str, recording_id: &str) {
     emit(
         state,
@@ -66,6 +69,39 @@ pub async fn after_transcript(state: &AppState, user_id: &str, recording_id: &st
     }
 }
 
+/// Queues an automatic summary for a recording that has none, once. Returns whether it queued.
+///
+/// Used both after a transcript is saved and after Plaud's own transcript is imported, so the
+/// same recording never gets two automatic runs.
+pub async fn queue_auto(state: &AppState, user_id: &str, recording_id: &str) -> ApiResult<bool> {
+    let settings = routes::settings::effective(state, user_id).await?;
+    if settings.get("autoSummarize") != Some(&Value::Bool(true)) {
+        return Ok(false);
+    }
+    if has_content(state, recording_id).await? {
+        return Ok(false);
+    }
+    let preset = settings
+        .get("autoSummarizePreset")
+        .and_then(Value::as_str)
+        .filter(|p| !p.is_empty());
+    let plan = generate::plan(&settings, preset, None, "");
+    let mut payload = serde_json::to_value(&plan).map_err(AppError::internal)?;
+    payload["trigger"] = json!("auto");
+    jobs::enqueue(
+        &state.db,
+        NewJob {
+            kind: "summary",
+            user_id: Some(user_id),
+            recording_id: Some(recording_id),
+            payload,
+        },
+    )
+    .await?;
+    state.wakeup.notify();
+    Ok(true)
+}
+
 async fn auto(state: &AppState, user_id: &str, recording_id: &str) -> Result<(), Failed> {
     let settings = routes::settings::effective(state, user_id).await?;
     if settings.get("autoGenerateTitle") == Some(&Value::Bool(true))
@@ -73,55 +109,18 @@ async fn auto(state: &AppState, user_id: &str, recording_id: &str) -> Result<(),
     {
         tracing::error!(recording = recording_id, code = e.code, error = %e.message, "title generation failed");
     }
-    if settings.get("autoSummarize") != Some(&Value::Bool(true)) {
-        return Ok(());
-    }
-    let limit = config::number(
-        "AUTO_SUMMARY_RATE_LIMIT_PER_HOUR",
-        AUTO_LIMIT_DEFAULT,
-        1,
-        u32::MAX as u64,
-    )
-    .unwrap_or(AUTO_LIMIT_DEFAULT) as u32;
-    let decision = state
-        .limiter
-        .hit(&format!("auto-summary:{user_id}"), limit, HOUR_MS, now_ms());
-    if !decision.allowed {
-        tracing::warn!(
-            recording = recording_id,
-            limit,
-            "auto-summary rate limit exceeded; skipped"
-        );
-        emit(
-            state,
-            user_id,
-            recording_id,
-            "summary.failed",
-            Some("Automatic summary limit reached"),
-        )
-        .await;
-        return Ok(());
-    }
-    let preset = settings
-        .get("autoSummarizePreset")
-        .and_then(Value::as_str)
-        .filter(|p| !p.is_empty());
-    let plan = generate::plan(&settings, preset, None, "");
-    let result = generate::run(state, user_id, recording_id, &plan).await;
-    match &result {
-        Ok(()) => emit(state, user_id, recording_id, "summary.completed", None).await,
-        Err(e) => {
-            emit(
-                state,
-                user_id,
-                recording_id,
-                "summary.failed",
-                Some(&e.message),
-            )
-            .await
-        }
-    }
-    result
+    queue_auto(state, user_id, recording_id).await?;
+    Ok(())
+}
+
+/// Whether a recording has a summary the UI can show: text, key points or action items.
+pub async fn has_content(state: &AppState, recording_id: &str) -> ApiResult<bool> {
+    let row: Option<i64> =
+        sqlx::query_scalar("SELECT has_content FROM ai_enhancements WHERE recording_id = ?")
+            .bind(recording_id)
+            .fetch_optional(&state.db)
+            .await?;
+    Ok(row == Some(1))
 }
 
 async fn emit(
@@ -182,17 +181,6 @@ async fn load_row(state: &AppState, user_id: &str, id: &str) -> ApiResult<Option
     Ok(row)
 }
 
-async fn is_generating(state: &AppState, user_id: &str, id: &str) -> ApiResult<bool> {
-    let count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM jobs WHERE kind = 'summary' AND recording_id = ? AND user_id = ? AND state IN ('queued', 'running')",
-    )
-    .bind(id)
-    .bind(user_id)
-    .fetch_one(&state.db)
-    .await?;
-    Ok(count > 0)
-}
-
 /// Opens the encrypted fields of a saved summary into the response shape.
 fn view(state: &AppState, row: SummaryRow) -> ApiResult<Value> {
     let summary = match row.summary.as_deref() {
@@ -247,13 +235,52 @@ async fn get_summary(
     generate::duration_of(&state, &user.id, &id)
         .await?
         .ok_or_else(recording_not_found)?;
-    let generating = is_generating(&state, &user.id, &id).await?;
+    let (status, error) = run_state(&state, &user.id, &id).await?;
     let mut out = match load_row(&state, &user.id, &id).await? {
         Some(row) => view(&state, row)?,
         None => json!({ "summary": null }),
     };
-    out["generating"] = json!(generating);
+    out["generating"] = json!(matches!(status, "queued" | "running"));
+    out["status"] = json!(status);
+    if let Some(message) = error {
+        out["error"] = json!(message);
+    }
     Ok(Json(out))
+}
+
+/// The run state of a recording's summary: the active or latest job, else whether content exists.
+///
+/// The UI uses this instead of guessing from the presence of a row, so "ready" always means the
+/// detail pane has something to show.
+async fn run_state(
+    state: &AppState,
+    user_id: &str,
+    id: &str,
+) -> ApiResult<(&'static str, Option<String>)> {
+    let job: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT state, error_message FROM jobs WHERE kind = 'summary' AND recording_id = ? AND user_id = ? \
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let content = has_content(state, id).await?;
+    if let Some((job_state, message)) = job {
+        match job_state.as_str() {
+            "queued" => return Ok(("queued", None)),
+            "running" => return Ok(("running", None)),
+            // A failed re-run keeps the previous summary, so the pane still has something to show.
+            // The failure is only the state when there is nothing else.
+            "failed" if !content => return Ok(("failed", message)),
+            _ => {}
+        }
+    }
+    Ok(if content {
+        ("completed", None)
+    } else {
+        ("idle", None)
+    })
 }
 
 /// The request body: an empty body or a JSON object.
