@@ -10,6 +10,7 @@ import {
     configureAccount,
     fixture,
     newUserContext,
+    uploadRecording,
 } from "../helpers/api";
 
 // Black-box UI checks for the recordings library, the detail page, the mini
@@ -79,6 +80,17 @@ async function namedRecording(
  * Waits until the transcript is stored. Transcription may answer 202 and finish
  * later; the audio pipeline route reports the job state.
  */
+/** Polls until `read` returns a value, or fails the test after `timeoutMs`. */
+async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 30_000): Promise<T> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const value = await read();
+        if (value !== undefined) return value;
+        if (Date.now() > deadline) throw new Error("timed out waiting");
+        await new Promise((r) => setTimeout(r, 500));
+    }
+}
+
 async function waitForTranscript(
     api: APIRequestContext,
     id: string,
@@ -461,6 +473,29 @@ test("deleting from the detail page asks first, then removes the recording", asy
     await page.waitForURL(/\/recordings$/);
     const gone = await request.get(`/api/recordings/${id}`);
     expect(gone.status()).toBe(404);
+});
+
+test("a summary made automatically appears without a manual re-run", async ({ browser }) => {
+    // The library row says ready only when the detail pane has content, so opening the pane after
+    // the run finished must show the text, not an empty result.
+    const { api, page, dispose } = await freshUser(browser, "ui-summary-auto");
+    try {
+        await api.put("/api/settings/user", { data: { autoSummarize: true } });
+        const id = await uploadRecording(api);
+        const transcribe = await api.post(`/api/recordings/${id}/transcribe`);
+        expect(transcribe.status()).toBe(200);
+        await waitFor(async () => {
+            const json = await (await api.get(`/api/recordings/${id}/summary`)).json();
+            return json.status === "completed" ? json : undefined;
+        });
+
+        await page.goto(`/recordings/${id}`);
+        await page.getByRole("tab", { name: "Summary" }).click();
+        await expect(page.getByTestId("summary-content")).toContainText("Contract summary");
+        await expect(page.getByTestId("summary-generate")).toContainText("Re-generate");
+    } finally {
+        await dispose();
+    }
 });
 
 test("a transcript shows its text and the summary generates", async ({

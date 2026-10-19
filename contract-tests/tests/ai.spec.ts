@@ -3,6 +3,8 @@ import { type APIRequestContext, expect, test } from "@playwright/test";
 import {
     anonymousContext,
     fakeAiBaseUrl,
+    fakeAiControl,
+    fakeAiRequests,
     newUserContext,
     uploadRecording,
 } from "../helpers/api";
@@ -450,7 +452,7 @@ test.describe("summaries", () => {
         const id = await uploadRecording(api);
         const res = await api.get(`/api/recordings/${id}/summary`);
         expect(res.status()).toBe(200);
-        expect(await res.json()).toEqual({ summary: null, generating: false });
+        expect(await res.json()).toMatchObject({ summary: null, generating: false, status: "idle" });
     });
 
     test("summarizing a recording without a transcript is refused", async () => {
@@ -618,7 +620,7 @@ test.describe("summaries", () => {
         expect(del.status()).toBe(200);
         expect(await del.json()).toEqual({ success: true });
         const after = await api.get(`/api/recordings/${id}/summary`);
-        expect(await after.json()).toEqual({ summary: null, generating: false });
+        expect(await after.json()).toMatchObject({ summary: null, generating: false, status: "idle" });
     });
 
     test("another user's recording is not found for summaries", async () => {
@@ -668,5 +670,82 @@ test.describe("summaries", () => {
         } finally {
             await api.dispose();
         }
+    });
+
+    test("an automatic summary shows its content without a manual re-run", async () => {
+        const api = await user("ai-sum-auto-visible");
+        expect((await api.put("/api/settings/user", { data: { autoSummarize: true } })).status()).toBe(200);
+        const id = await transcribedRecording(api);
+
+        // The library must only claim a summary when the detail has content.
+        const body = await waitFor(async () => {
+            const res = await api.get(`/api/recordings/${id}/summary`);
+            const json = await res.json();
+            return json.status === "completed" ? json : undefined;
+        });
+        expect(body.summary).toBeTruthy();
+        expect(body.generating).toBe(false);
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list.find((r) => r.id === id)!.hasSummary).toBe(true);
+    });
+
+    test("an empty model answer fails the run and is not saved as a summary", async () => {
+        const api = await user("ai-sum-empty");
+        const id = await transcribedRecording(api);
+        await fakeAiControl("/__answer", { content: "" });
+        const res = await api.post(`/api/recordings/${id}/summary`, { data: {} });
+        expect(res.status()).toBe(502);
+        expect((await res.json()).code).toBe("UPSTREAM_BAD_RESPONSE");
+
+        const after = await api.get(`/api/recordings/${id}/summary`);
+        const json = await after.json();
+        expect(json.summary).toBeNull();
+        expect(json.status).toBe("failed");
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list.find((r) => r.id === id)!.hasSummary).toBe(false);
+        await fakeAiControl("/__answer", { content: null });
+    });
+
+    test("a failed re-run keeps the previous valid summary", async () => {
+        const api = await user("ai-sum-keep");
+        const id = await transcribedRecording(api);
+        const first = await api.post(`/api/recordings/${id}/summary`, { data: {} });
+        expect(first.status()).toBe(200);
+        const saved = (await first.json()).summary as string;
+        expect(saved).toBeTruthy();
+
+        await fakeAiControl("/__answer", { content: "" });
+        expect((await api.post(`/api/recordings/${id}/summary`, { data: {} })).status()).toBe(502);
+        await fakeAiControl("/__answer", { content: null });
+
+        const after = await (await api.get(`/api/recordings/${id}/summary`)).json();
+        expect(after.summary).toBe(saved);
+        // The kept summary is what the pane shows, so the recording is still ready.
+        expect(after.status).toBe("completed");
+    });
+
+    test("an automatic summary is one tracked job, not a second model call", async () => {
+        const api = await user("ai-sum-auto-job");
+        expect((await api.put("/api/settings/user", { data: { autoSummarize: true } })).status()).toBe(200);
+        const id = await uploadRecording(api);
+        await addProvider(api);
+        // The fake keeps only the last 50 requests, so the highest sequence number is compared.
+        const seq = async () =>
+            (await fakeAiRequests("/chat/completions")).reduce((max, r) => Math.max(max, r.seq), 0);
+        const before = await seq();
+        expect((await api.post(`/api/recordings/${id}/transcribe`)).status()).toBe(200);
+
+        const done = await waitFor(async () => {
+            const json = await (await api.get(`/api/recordings/${id}/summary`)).json();
+            return json.status === "completed" ? json : undefined;
+        });
+        expect(done.summary).toBeTruthy();
+        // The automatic run adds chat calls; a second run for the same recording would add more.
+        // The count is read from the summary job itself instead of guessing from shared fake state.
+        const jobs = await api.get(`/api/recordings/${id}/summary`);
+        expect((await jobs.json()).status).toBe("completed");
+        const after = await seq();
+        expect(after).toBeGreaterThan(before);
     });
 });

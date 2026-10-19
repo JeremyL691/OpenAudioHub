@@ -433,11 +433,13 @@ Automatic work starts when a transcript is saved (see `transcription.md`):
 
 1. A `transcription.completed` webhook event is emitted (see `webhooks.md`).
 2. If the user's `autoGenerateTitle` setting is true (the default), a title is generated (see [Title generation](#title-generation)).
-3. If the user's `autoSummarize` setting is true, a summary is made. It uses the `autoSummarizePreset` setting as the prompt when that is set, else the saved prompt default.
+3. If the user's `autoSummarize` setting is true and the recording has no summary with content, a summary job is queued. It uses the `autoSummarizePreset` setting as the prompt when that is set, else the saved prompt default. The save step does not wait for it.
+
+An automatic run is a `summary` job, so it appears in the recording's status and a request made while it runs waits for it.
 
 Limits and results of the summary step:
 
-- It runs at most `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` times per user per hour (default `60`, valid range 1 to 4,294,967,295). The count is kept in memory of the server process. Attempts count, including failed ones.
+- Automatic runs are limited to `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` per user per hour (default `60`, valid range 1 to 4,294,967,295), counted when a run starts. The count is kept in memory of the server process. Attempts count, including failed ones.
 - When the limit is reached, no summary is made and a `summary.failed` webhook event is sent with the message `Automatic summary limit reached`.
 - On success a `summary.completed` event is sent. On failure a `summary.failed` event is sent with the failure message.
 - A failed automatic step never removes the transcript, and never fails the transcription.
@@ -457,6 +459,19 @@ Settings are read and written with `PUT /api/settings/user` (see `settings.md`):
 | `promptId` | string | Prompt id used. |
 | `language` | string | Language code used. |
 | `createdAt` | ISO timestamp | When the summary was saved. |
+
+### Run status
+
+`GET /api/recordings/{id}/summary` also returns `status`, the state of the newest `summary` job for the recording, and `error` when that job failed:
+
+| `status` | Meaning |
+| --- | --- |
+| `idle` | No run, and no summary with content. |
+| `queued`, `running` | A run is queued or going. `generating` is true for both. |
+| `completed` | The newest run finished, or the recording has a summary with content. |
+| `failed` | The newest run failed and there is no summary with content. `error` holds its message. A failed re-run that kept a previous valid summary reports `completed`. |
+
+A summary counts as present only when it has text, key points or action items. An empty answer from the model is a failed run and saves nothing, so the recording never shows as ready with an empty pane.
 
 ---
 

@@ -5,6 +5,7 @@
 // Test hooks:
 //   GET /__requests          the last 50 requests received (newest last), each with a growing `seq`
 //   GET /__requests?path=X   only those whose path ends with X
+//   POST /__answer           { content } overrides the chat answer; null restores the fixed one
 import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? process.env.FAKE_AI_PORT ?? 3299);
@@ -20,6 +21,8 @@ const segments = [
 
 const requests = [];
 let seq = 0;
+/** Chat answer override: a string replaces the fixed reply, null restores it. */
+let answerOverride = null;
 
 function send(res, status, body) {
     res.writeHead(status, { "content-type": "application/json" });
@@ -70,6 +73,11 @@ createServer((req, res) => {
         if (req.method === "GET" && path === "/__requests") {
             const filter = url.searchParams.get("path");
             return send(res, 200, requests.filter((r) => !filter || r.path.endsWith(filter)));
+        }
+        if (req.method === "POST" && path === "/__answer") {
+            const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+            answerOverride = typeof body.content === "string" ? body.content : null;
+            return send(res, 200, { ok: true, override: answerOverride });
         }
 
         let json = null;
@@ -122,14 +130,14 @@ createServer((req, res) => {
         if (req.method === "POST" && path === "/chat/completions") {
             const text = json ? messageText(json.messages) : "";
             const wantsJson = Boolean(json?.response_format) || /\bjson\b/i.test(text);
-            const content = wantsJson
+            const content = answerOverride ?? (wantsJson
                 ? JSON.stringify({
                       title: "Contract Title",
                       summary: CHAT_TEXT,
                       keyPoints: ["First point", "Second point"],
                       actionItems: ["Follow up"],
                   })
-                : CHAT_TEXT;
+                : CHAT_TEXT);
             return send(res, 200, {
                 id: "chatcmpl-contract",
                 object: "chat.completion",
