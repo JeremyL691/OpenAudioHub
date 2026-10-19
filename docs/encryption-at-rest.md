@@ -44,8 +44,7 @@ Each value is encrypted on its own. The API returns decrypted values when you ar
 - **Audio files.** They are plain files on disk, or plain objects in your bucket. Protect the folder or the bucket. See [S3-compatible storage](storage-s3.md#encryption).
 - **Other fields.** Recording IDs, dates, durations, file sizes, device serial numbers and models, the names of the events, your email address and your name.
 - **Your settings that are not listed above**, such as theme, sync interval and list density.
-- **Full backup zips.** A zip has the decrypted titles, transcripts and summaries. See [Backup and restore](backup-and-restore.md#full-backup-zip).
-- **Transcript exports.** They are plain text too.
+- **Transcript exports and downloaded audio.** They are plain files. See [Backup and restore](backup-and-restore.md).
 
 ## How values are stored
 

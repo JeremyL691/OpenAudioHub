@@ -4,7 +4,7 @@ This file describes how the server is deployed as a container: the image, the co
 
 ## 1. Deployment shape
 
-- One container runs one process, `oah-server`. The process serves the HTTP API and the web app, and runs every background worker: transcription, the audio pipeline, summaries, webhook delivery, Plaud sync, backups, and the waveform backfill.
+- One container runs one process, `oah-server`. The process serves the HTTP API and the web app, and runs every background worker: transcription, the audio pipeline, summaries, webhook delivery, Plaud sync, automatic exports, and the waveform backfill.
 - The web app is embedded in the server binary in release builds. The image has no Node runtime and no separate web server.
 - Data is stored in SQLite, with the audio files in a folder, both under one data directory (`/data` in the image).
 - There is no separate database container, no separate worker container, and no reverse proxy inside the image. A reverse proxy in front of the container is optional (see section 7).
@@ -245,7 +245,7 @@ The command sets a new random password of 24 hex characters, deletes all session
 - To back up a running instance, take an online copy of the database file with SQLite's backup mechanism (for example the `.backup` command of the `sqlite3` program), and copy the `storage/` folder after that.
 - Store the backup together with the `ENCRYPTION_KEY` in a separate place. A backup without the key cannot be read.
 
-The in-app export and backup of user data (`/api/backup`, and the export on the Export & Backup page) are separate from these server backups. See `export-backup.md`.
+The in-app export of user data (the Export page, and auto export in the desktop app) is separate from these server backups. See `export.md`.
 
 ## 11. Limits and behaviour summary
 

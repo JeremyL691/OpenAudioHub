@@ -336,7 +336,7 @@ Errors:
 7. Set the connection's last sync time to now, clear the "needs reconnect" flag, and update the stored workspace id if one was found. This step runs only when the list was read without a failure. Failed recordings do not prevent it.
 8. Return the counts and errors.
 
-Exporting is not part of the run. Recordings added by the run are marked for the automatic export schedule (see [export-backup.md](export-backup.md)); recordings that were already there are not.
+Exporting is not part of the run. Recordings added by the run are marked for the automatic export schedule (see [export.md](export.md)); recordings that were already there are not.
 
 ### Listing recordings
 

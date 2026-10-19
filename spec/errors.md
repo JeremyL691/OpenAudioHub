@@ -88,9 +88,9 @@ The table lists the status each code uses in an error response. A code can use m
 | `PLAUD_WORKSPACE_TOKEN_PASTED` | 502 | Plaud returned a short-lived workspace token at verify. |
 | `PLAUD_WORKSPACE_UNAVAILABLE` | 400 | Plaud refused the workspace token request during connect. |
 
-### Export and backup
+### Export
 
-This group has no codes of its own. Export and backup routes use `CONFLICT`, `INVALID_INPUT` and `NOT_FOUND` from the General group. Failed export jobs record `EXPORT_FAILED` or `EXPORT_INCOMPLETE` on the job, not in an error response. See `export-backup.md`.
+This group has no codes of its own. Export routes use `INVALID_INPUT` from the General group. See `export.md`.
 
 ### Webhooks
 
@@ -109,7 +109,7 @@ This group has no codes of its own. Webhook routes use `CONFLICT`, `INVALID_INPU
 
 | Code | HTTP status | Meaning |
 | --- | --- | --- |
-| `CONFLICT` | 409 | The action is not allowed in the current state: the webhook is disabled, a delivery is already in progress, the export is not ready, or an audio pipeline job is active for the recording. |
+| `CONFLICT` | 409 | The action is not allowed in the current state: the webhook is disabled, a delivery is already in progress, or an audio pipeline job is active for the recording. |
 | `DATABASE_UNAVAILABLE` | 503 | The health check cannot reach the database. |
 | `INTERNAL_ERROR` | 500 | Unexpected failure. The cause is logged, not sent. `details.errorId` is set. |
 | `INVALID_INPUT` | 400 | A request value is malformed or out of range. `details.field` usually names the field. Upload parse errors use the status the multipart parser gives. |

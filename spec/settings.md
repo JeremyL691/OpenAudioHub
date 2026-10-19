@@ -28,9 +28,8 @@ give the not-found page. Webhook routes are described in `webhooks.md`. API keys
 Auth: session. Response `200`, one flat object.
 
 Every field in the table below is always present, with its stored value or its default.
-These are also always present: `barkPushUrl` (null when unset), `barkPushUrlSet`,
-`userEmail` and `lastScheduledBackupAt`. `summaryPrompt` is present only after it has
-been set.
+These are also always present: `barkPushUrl` (null when unset), `barkPushUrlSet` and
+`userEmail`. `summaryPrompt` is present only after it has been set.
 
 ```json
 {
@@ -40,8 +39,7 @@ been set.
   "marketingEmailConsent": false,
   "barkPushUrl": null,
   "barkPushUrlSet": false,
-  "userEmail": "person@example.com",
-  "lastScheduledBackupAt": null
+  "userEmail": "person@example.com"
 }
 ```
 
@@ -49,8 +47,6 @@ Read-only fields:
 
 - `barkPushUrlSet`: `true` when a Bark push URL is stored.
 - `userEmail`: the account email.
-- `lastScheduledBackupAt`: completion time (ISO 8601) of the latest scheduled backup, or
-  null.
 
 Encrypted fields (`summaryPrompt`, `titleGenerationPrompt`, `barkPushUrl`) are returned
 decrypted.
@@ -72,10 +68,10 @@ Errors:
 
 Check order: the fields are checked in the order they appear in the body. Then
 `autoGenerateTitle` is set from `recordingTitleMode` if that field is present. Then the
-two folder fields are checked, then `autoExport`. The first failing rule gives the error.
+export folder is checked, then `autoExport`. The first failing rule gives the error.
 
 Side effects: updates the settings record. Turning `autoExport` on in the desktop app
-starts its export window at once (see `export-backup.md`). Settings are read by background
+starts its export window at once (see `export.md`). Settings are read by background
 jobs on their next run.
 
 #### Fields
@@ -115,8 +111,6 @@ as sent, without a check.
 | `autoExportFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
 | `autoExportFormat` | string | `"mp3"` | `mp3`, `ogg`, `original` |
 | `autoExportTitleMode` | string | `"original"` | `original`, `date`, `ai` |
-| `backupFrequency` | string or null | `null` | any string or null; values not checked |
-| `backupFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
 | `defaultProviders` | object or null | `null` | object or null; contents not checked |
 | `onboardingCompleted` | boolean | `false` | |
 | `autoGenerateTitle` | boolean | `true` | boolean. Ignored when `recordingTitleMode` is in the same request |
@@ -144,14 +138,16 @@ Errors for the rules above are `400 INVALID_INPUT` with `details.field` set to t
 
 Folder and export rules (desktop app only):
 
-- `autoExportFolder` or `backupFolder` set to a string on a server that is not the desktop
-  app: `400`, `details.field` set to that field, `Invalid value for <field>`.
-- The same fields on the desktop app: the folder must exist and not be read-only. Otherwise
+- `autoExportFolder` set to a string on a server that is not the desktop app: `400`,
+  `details.field` = `autoExportFolder`, `Invalid value for autoExportFolder`.
+- The same field on the desktop app: the folder must exist and not be read-only. Otherwise
   `400`, same shape.
 - `autoExport: true` on a server that is not the desktop app: `400`, `details.field` =
   `autoExport`, message `Auto export is only available in the desktop app`.
 - `autoExport: true` on the desktop app with no export folder stored: `400`,
   `details.field` = `autoExport`, message `Choose an export folder in the desktop app first`.
+- `backupFrequency` and `backupFolder` are retired. Values are ignored, never stored, and
+  never returned.
 
 ---
 
@@ -533,4 +529,4 @@ Errors: `404 RECORDING_NOT_FOUND`, as above.
   The contract suite checks only the test email's error responses and its address rules.
 - Desktop-app behaviour of the folder fields and auto export.
 - S3 storage, including presigned audio redirects.
-- The values accepted for `backupFrequency`, and the contents of `defaultProviders`.
+- The contents of `defaultProviders`.

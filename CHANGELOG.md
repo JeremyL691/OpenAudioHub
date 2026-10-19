@@ -6,8 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-18
+
 ### Fixed
 
+- Audio downloads in the Mac app open the macOS save dialog and save the file. Selecting several recordings saves one zip file. Downloads no longer replace the window or leave the app unresponsive.
+- Auto export renames a date-named file to the AI title only when the title came from the AI. Original, date and hand-edited titles keep the date name.
 - Recording names in date mode use the plain date, and a later Plaud rename no longer replaces a date, generated or hand-edited title.
 - Auto export writes the format chosen in settings. OGG output is an Ogg container with Opus audio, and the original format keeps the real file extension.
 - Auto export only saves recordings that arrive while it is on, once each, and changing the format re-saves earlier exports in the new format.
@@ -18,6 +22,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Recording names can fix date titles written by earlier versions, after a preview of each change.
 - The summary status reports whether a run is queued, running, done or failed.
+
+### Removed
+
+- Full backup archives and scheduled backups, including the `/api/backup` routes and the backup settings. Existing archives and records are left in place.
 
 ## [1.1.0] - 2026-10-18
 
@@ -57,5 +65,6 @@ Initial release.
 - A forced manual run leaves the superseded job's work folder behind ([#30](https://github.com/JeremyL691/OpenAudioHub/issues/30)).
 - A manual retry does not reset the job's claim counter ([#31](https://github.com/JeremyL691/OpenAudioHub/issues/31)).
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.1
 [1.1.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.0

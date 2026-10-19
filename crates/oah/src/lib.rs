@@ -1,11 +1,11 @@
 pub mod ai;
 pub mod auth;
-pub mod backup;
 pub mod cli;
 pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod error;
+pub mod export;
 pub mod ids;
 pub mod jobs;
 pub mod notify;
@@ -70,7 +70,7 @@ pub fn start_workers(state: &AppState) {
     summary::spawn(state);
     webhooks::spawn(state);
     plaud::spawn(state);
-    backup::spawn(state);
+    export::spawn(state);
     routes::recordings::spawn_waveform_backfill(state);
 }
 
@@ -81,7 +81,7 @@ pub fn app(state: AppState) -> Router {
         .merge(pipeline::router())
         .merge(summary::router())
         .merge(plaud::router())
-        .merge(backup::router())
+        .merge(export::router())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::origin_check,

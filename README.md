@@ -66,7 +66,7 @@
   </tr>
   <tr>
     <td align="center"><sub><b>Recording.</b> Transcript, summary and waveform playback on one page.</sub></td>
-    <td align="center"><sub><b>Settings.</b> AI providers, summaries, Plaud, storage and backups.</sub></td>
+    <td align="center"><sub><b>Settings.</b> AI providers, summaries, Plaud, storage and exports.</sub></td>
   </tr>
 </table>
 
@@ -82,7 +82,7 @@ flowchart LR
     end
     pipeline -- "audio parts" --> ai["AI provider<br/>of your choice"]
     ai -- "transcripts, summaries, titles" --> library
-    server --> out["Web app and Mac app<br/>exports and backups<br/>API, webhooks, notifications"]
+    server --> out["Web app and Mac app<br/>exports<br/>API, webhooks, notifications"]
 ```
 
 Everything runs in one process: the HTTP API, the web app, the background workers and the audio pipeline. See [Architecture](docs/architecture.md) for the details.
@@ -95,7 +95,7 @@ Everything runs in one process: the HTTP API, the web app, the background worker
 - **Long recordings.** Speech detection splits long files into parts, transcribes them and joins the results.
 - **Summaries and titles.** Summaries with key points and action items, and automatic titles, in the style you choose.
 - **Library.** Search, collections, stars, merging, playback with a waveform, and keyboard shortcuts.
-- **Export and backup.** Export recordings with their transcripts and summaries, create full backups, and schedule them.
+- **Export.** Export recordings with their transcripts and summaries, download audio in bulk, and auto export new recordings on the Mac app.
 - **Automation.** Personal API keys, a read-only public API, and signed webhooks with a delivery log.
 - **Storage and privacy.** Keep audio on local disk or in an S3-compatible bucket. Titles, transcripts, summaries and tokens are encrypted at rest.
 - **Notifications.** Email and Bark push when new recordings arrive.

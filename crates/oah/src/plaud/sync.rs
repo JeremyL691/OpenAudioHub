@@ -509,7 +509,7 @@ async fn insert_row(
     .bind(now)
     .bind(now)
     .bind(title_source)
-    .bind(crate::backup::schedule::auto_export_eligible(state, &ctx.user_id).await)
+    .bind(crate::export::auto::auto_export_eligible(state, &ctx.user_id).await)
     .execute(&state.db)
     .await?;
     Ok(id)

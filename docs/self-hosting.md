@@ -129,12 +129,6 @@ Back up two things:
 
 For what the app can export, and the difference between the export and a server backup, see [Backup and restore](backup-and-restore.md).
 
-### Full backup in the app
-
-Open **Settings**, then **Export/Backup**, then choose **Create full backup**. The server builds a zip file with the audio, the transcripts, the summaries and a `manifest.json` file. Download it while it is ready. The server keeps the file for 7 days. If a full backup finished in the last 24 hours, the button shows that one instead of making a new one.
-
-This backup holds your content but not the encryption key. Store the key apart from the backup.
-
 ### Copy the data volume
 
 This method copies the database and the audio files together. Stop the container first, so the database is not changing during the copy.

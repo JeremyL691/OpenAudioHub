@@ -1,6 +1,6 @@
 # Background workers
 
-This file describes everything OpenAudioHub does without a request from a user: timers, queues, automatic transcription and summaries, outgoing webhooks, export and backup jobs, notifications, and what happens when the process stops.
+This file describes everything OpenAudioHub does without a request from a user: timers, queues, automatic transcription and summaries, outgoing webhooks, automatic exports, notifications, and what happens when the process stops.
 
 Endpoints that start or read this work live in other files:
 
@@ -8,7 +8,7 @@ Endpoints that start or read this work live in other files:
 - Transcription requests, providers, and the audio pipeline status: `transcription.md`
 - Summaries, titles, and presets: `ai.md`
 - Webhook endpoints, payloads, signatures, and delivery records: `webhooks.md`
-- Export archive, backup jobs, and scheduled backup settings: `export-backup.md`
+- Automatic export of new recordings: `export.md`
 - Audio pipeline worker: `audio-pipeline.md`
 - Password reset and account sessions: `auth.md`
 - Test email and notification settings: `settings.md`
@@ -32,13 +32,10 @@ Terms used below:
 | Auto-transcription | A job is queued when an upload or a Plaud sync adds a recording, and the user has auto-transcribe on. | When a job is queued. Idle workers check again every 5 seconds for delayed retries. | Two jobs at a time, across users. | Retryable provider errors are retried, up to 3 attempts in total, with backoff (section 4). | The job is marked failed. The recording keeps no transcript. A `transcription.failed` event is sent. |
 | Auto-summary | Right after a transcript is saved, when the user has auto-summarize on. | None (event-driven) | Runs inside the save step for that recording. | None. Hourly cap per user (section 5). | An event `summary.failed` is emitted. The transcript is kept. |
 | Manual summary job | A request for a summary (`ai.md`). | When a job is queued | Two jobs at a time. | None. A failed job is not retried. | The job fails and its error is returned to the request. |
-| Export job worker | Starts at boot. Claims a job when one is queued. | When a job is queued. Idle workers check again every 5 seconds. | One job at a time. | A failed build is retried, up to 3 attempts in total, with backoff (section 8). | Job is marked failed. The partial archive is deleted. An incomplete archive fails the job at once. |
-| Export maintenance | Every 30 seconds. | Every 30 seconds | All expired archives in each pass. | Retried on the next pass. | Archive file and job row stay until the file delete succeeds. |
-| Scheduled backup | Every 30 seconds. Desktop app only. | Daily = 24 hours. Weekly = 7 days. Monthly = 30 days. | Skipped while the user has an active export job. | A failed copy is not retried until the interval has passed since the scheduled job was created. | The export job is still complete. No backup file is written. The failure is logged. |
 | Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
 
-Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 10 to 12.
+Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 9 to 11.
 
 ---
 
@@ -46,14 +43,14 @@ Notifications (email, Bark, browser) are not timers. They are sent inline when t
 
 ### Startup
 
-At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the export job worker, the auto-transcription and summary job workers, the audio pipeline worker, and the maintenance loop that runs export cleanup and, on the desktop app, scheduled backups and auto export.
+At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the auto-transcription and summary job workers, the audio pipeline worker, and, in the desktop app only, the automatic export loop.
 
 Background Plaud sync can be turned off with `BACKGROUND_SYNC_ENABLED`. The audio pipeline has its own switch (`AUDIO_PIPELINE_ENABLED`).
 
 ### Process guards
 
 - **Unhandled exception.** The process has no handler that logs and exits on an uncaught error. A panic inside a job handler is caught and the job is treated as a retryable failure. A panic in another background task ends only that task.
-- **Shutdown signals.** On `SIGINT` (Ctrl-C) or `SIGTERM` the server stops accepting connections and lets in-flight requests finish. Background workers are not waited for. Work in progress is recovered at the next start (section 13).
+- **Shutdown signals.** On `SIGINT` (Ctrl-C) or `SIGTERM` the server stops accepting connections and lets in-flight requests finish. Background workers are not waited for. Work in progress is recovered at the next start (section 12).
 
 ---
 
@@ -90,11 +87,11 @@ Users are ordered by last sync time, oldest first, with never-synced users first
    - **In the database with a new Plaud version:** downloads the audio again and updates the recording. Emits `recording.updated`.
    - **Deleted by the user:** never restored. Skipped.
    - **Any error on one recording:** recorded as `Failed to sync <file name>: <error>`. The other recordings continue.
-5. Sends notifications for new recordings (sections 10 and 11).
+5. Sends notifications for new recordings (sections 9 and 10).
 6. If the user has auto-transcribe on, queues a transcription job for each new recording (section 4).
 7. Saves the sync time on the connection, clears the "needs reconnect" mark, and updates the workspace ID if Plaud reports a new one. This step runs only when the recording list was read without a failure.
 
-Automatic export is not part of a pass. The export schedule picks up new recordings (`export-backup.md`).
+Automatic export is not part of a pass. The auto export loop picks up new recordings (`export.md`).
 
 ### Failures
 
@@ -219,87 +216,19 @@ Every other failure is transient and follows the backoff schedule. A delivery th
 
 ---
 
-## 8. Export job worker
+## 8. Automatic export (desktop app only)
 
-Full export archives are described in `export-backup.md`. This section covers the worker.
+The automatic export of new recordings is described in `export.md`. This section covers its loop.
 
-### Timing and claims
-
-- The worker claims a job when one is queued. While idle, it checks again every 5 seconds, which is how delayed retries run.
-- One job runs at a time.
-- A running job holds a lease of 120 seconds. The worker renews the lease in the background while the build runs. If the worker stops, the lease runs out and the job is claimed again from the start. A worker that has lost its lease does not save its result.
-
-### Maintenance pass (every 30 seconds)
-
-1. Removes expired archives (see Cleanup below).
-2. On the desktop app only: schedules backups (section 9) and exports new recordings through auto export (`export-backup.md`).
-
-Each step is independent. An error in one step is logged and does not stop the pass.
-
-### Running one job
-
-- The build has two limits. It stops if it makes no progress for 5 minutes, or if it runs for more than 3 hours in total. Progress means bytes written or a recording finished.
-- If the build fails or is stopped by either limit, the attempt is recorded as an error against this attempt only.
-- If an incomplete archive would result (audio missing or unreadable for one or more recordings), the archive is discarded. The job fails at once. The error text is `Export incomplete: audio was missing or unreadable for <n> recording(s). The archive was discarded.`
-- A result is saved only if this attempt still owns the job. If another worker took the job over while this one was running, this result is discarded and its file is deleted. No notification is sent.
-- After any failure, the partial file for this attempt is deleted.
-
-### Retry policy
-
-- A failed build goes back to pending and is claimed again after a backoff: 30 seconds after the first failure, then twice as long each time, capped at one hour, with up to 20% random extra time.
-- A job gets 3 attempts in total (`export-backup.md`). After the last attempt the job is marked failed for good, and the failure is logged.
-- An incomplete archive (missing audio) is not retried. The job fails at once.
-
-### Cleanup
-
-- For each completed archive past its `expiresAt`, the stored file is deleted first. A file that is already missing counts as deleted. The job row is deleted only after the file is gone. If the file delete fails, the row stays and the next pass tries again.
-
-### Notifications on success
-
-- **Manual export.** When the archive is ready, the "export ready" email is sent to the account's address, if SMTP is configured and the account has a plain email address (section 10.3).
-- **Scheduled backup.** No email. The archive is copied to the backup folder instead (section 9).
+- The loop starts only when the server runs in the desktop app. It runs once at startup and then every 30 seconds.
+- Each pass reads every user whose settings have automatic export on and a folder set, and exports the recordings that qualify.
+- A failed write is counted. After three failures the recording is left alone until the folder or format changes, which resets the count.
+- A pass error for one user is logged and does not stop the other users.
+- No notifications are sent for an automatic export.
 
 ---
 
-## 9. Scheduled backups (desktop app only)
-
-Scheduled backups run only when the server runs in the desktop app. Settings and the list of backups are in `export-backup.md`.
-
-### Schedule
-
-| Frequency | Interval |
-|-----------|----------|
-| daily | 24 hours |
-| weekly | 7 days |
-| monthly | 30 days |
-
-A user's backup is due when either:
-
-- No backup has ever been copied and no scheduled job has ever been created, or
-- The later of the last copied backup time and the last scheduled job creation time is more than one interval ago.
-
-Using the later of the two stops a backup from being queued again while the previous one is still building, and right after a failed copy.
-
-A backup is not queued when the user already has an active export job. Errors for one user are logged. They do not stop other users.
-
-### Copy to the backup folder
-
-- Runs after the scheduled job completes.
-- Folder: the user's configured backup folder. If none is set, `Documents/OpenAudioHub Backups` in the user's home folder. The folder is created if it does not exist.
-- File name: `OpenAudioHub-backup-YYYY-MM-DD.zip`, using the server's local calendar date. If the name is taken, `-2`, `-3`, and so on are added before `.zip`.
-- The archive is written to a temporary file in the same folder. It is renamed to the final name only when the copy completes. A partial copy never appears as a backup.
-- Failure: the temporary file is deleted. The error is logged. The scheduled job itself stays complete.
-- The last-backup time is updated only after a successful copy.
-
-### Pruning
-
-- After each successful copy, only backup files that match the name pattern are considered. Files with other names are never touched.
-- The newest 5 backup files are kept, by modified time. Older ones are deleted.
-- A pruning failure is logged and does not fail the copy.
-
----
-
-## 10. Email notifications
+## 9. Email notifications
 
 ### 10.1 Transport
 
@@ -312,7 +241,7 @@ A backup is not queued when the user already has an active export job. Errors fo
 - Plain-text body: the text version if one is given. Otherwise the HTML with tags removed.
 - No retry for a single send.
 - Two send paths:
-  - **Soft send** (used by sync and the export job): returns true or false. Errors are logged, not raised.
+  - **Soft send** (used by sync notifications): returns true or false. Errors are logged, not raised.
   - **Strict send** (used by the test email): raises an error with one of these messages:
     - `SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD.` (the server refused the login)
     - `Timed out waiting for the SMTP server. Check that SMTP_HOST and SMTP_PORT are right.` (timeout)
@@ -336,15 +265,6 @@ Layout: every email uses the same branded layout, with a preview line, a heading
 - Button text: view recordings. Footer link: manage notifications.
 - Plain text: states the count, lists names, and gives both links.
 
-**Export ready**
-- Trigger: a manual export job completes, SMTP is configured, and the account has a plain email address. Not sent for scheduled backups.
-- Subject: `Your OpenAudioHub export is ready`.
-- Preview line: `Your OpenAudioHub data export is ready to download.`
-- Heading: `Your export is ready`.
-- Body: says the archive holds every recording's audio, transcript, and AI summary.
-- Fields: `downloadUrl` = `<APP_URL>/settings/export`. Used for the button and the footer link.
-- Button: download export.
-
 **Test email**
 - Trigger: the user asks for a test email (`settings.md`). Uses the strict send, so the caller sees the error.
 - Subject: `Test Email from OpenAudioHub`.
@@ -362,7 +282,7 @@ Layout: every email uses the same branded layout, with a preview line, a heading
 
 ---
 
-## 11. Bark push notifications
+## 10. Bark push notifications
 
 Bark is a push service. Each user sets their own push URL in settings (`settings.md`). The server sends to that URL. No Bark server setting is needed.
 
@@ -421,7 +341,7 @@ What the recording sync sends:
 
 ---
 
-## 12. Browser notifications
+## 11. Browser notifications
 
 These run in the open web page, not on the server. They are shown only when the user has allowed notifications in the browser.
 
@@ -432,7 +352,7 @@ These run in the open web page, not on the server. They are shown only when the 
 
 ---
 
-## 13. Crash and restart recovery
+## 12. Crash and restart recovery
 
 | State | Where it is kept | What happens after a restart or crash |
 |-------|------------------|---------------------------------------|
@@ -443,26 +363,23 @@ These run in the open web page, not on the server. They are shown only when the 
 | Auto-summary running | Database, as a `summary` job. | Kept. A job whose worker stopped is claimed again after its lease runs out. |
 | Manual summary job | Database | Kept. A job whose worker stopped is claimed again after its lease runs out. |
 | Webhook delivery in progress | Database, status `processing` | Claimed again once its 15-minute claim has run out (section 7). |
-| Export job in progress | Database, with a claim and a lease | Claimed again after the 120-second lease runs out (section 8). A claim that was taken over cannot write its result. |
-| Scheduled backup due | Database | Recomputed on the next maintenance pass. |
 | Email send in progress | Not tracked. | Lost. The email is not sent again. |
 
 ---
 
-## 14. Known weak spots
+## 13. Known weak spots
 
 These are current limits of the design.
 
 1. **An automatic run joins a manual one.** Both are `summary` jobs for the same recording, so a request made while one is queued or running waits for it instead of starting a second model call.
 2. **Rate limits are kept in process memory.** The manual sync limit, the automatic summary cap and the sign-in limits are counted per process and start again after a restart.
 3. **The `keep_both` transcript mode does not change auto-transcription.** A recording with any transcript, from Plaud or from the server, is not transcribed by the job under either mode.
-4. **A failed "export ready" email is not retried.** The job is complete, and nothing sends the email again.
-5. **A run that takes longer than 10 minutes is abandoned.** Changes already saved stay. The rest of that user's work is done at a later pass.
-6. **No graceful stop for workers.** Shutdown waits for requests only. Running builds, transcriptions and requests are cut off, and recovered later by their leases or claims.
+4. **A run that takes longer than 10 minutes is abandoned.** Changes already saved stay. The rest of that user's work is done at a later pass.
+5. **No graceful stop for workers.** Shutdown waits for requests only. Running builds, transcriptions and requests are cut off, and recovered later by their leases or claims.
 
 ---
 
-## 15. Workers and environment variables
+## 14. Workers and environment variables
 
 | Variable | Default | Effect |
 |----------|---------|--------|
@@ -475,7 +392,7 @@ These are current limits of the design.
 | `SMTP_USER`, `SMTP_PASSWORD` | unset | SMTP login. Both are needed for email. |
 | `SMTP_FROM` | unset | Sender address. |
 | `SMTP_REPLY_TO` | unset | Reply-To address. |
-| `OAH_DESKTOP` | unset | `1` turns on desktop mode. Scheduled backups and auto export run only in desktop mode. |
+| `OAH_DESKTOP` | unset | `1` turns on desktop mode. Automatic export runs only in desktop mode. |
 | `AUDIO_PIPELINE_ENABLED` | see `deployment.md` | Turns on the audio pipeline. Auto-transcription may hand work to it. |
 | `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | see `deployment.md` | Controls the URL policy for webhook targets. |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS` | unset | Startup warning when not `true`. |
