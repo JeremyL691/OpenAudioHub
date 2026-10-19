@@ -1,0 +1,45 @@
+{
+    "menu": {
+        "open": "OpenAudioHub 열기",
+        "data": "데이터 폴더 열기",
+        "logs": "로그 폴더 열기",
+        "config": "설정 편집…",
+        "keys": "키 내보내기…",
+        "login": "로그인 시 실행",
+        "language": "언어",
+        "quit": "OpenAudioHub 종료"
+    },
+    "dialog": {
+        "exportKeysTitle": "암호화 키를 내보낼까요?",
+        "exportKeysBody": "이 파일에는 데이터를 보호하는 키가 들어 있습니다. 안전한 곳에 보관하고 절대 공유하지 마세요.",
+        "exportKeysConfirm": "내보내기…",
+        "cancel": "취소",
+        "exportKeysSaveTitle": "암호화 키 내보내기",
+        "exportKeysFailedTitle": "키를 내보내지 못했습니다",
+        "chooseFolderTitle": "내보낼 폴더 선택",
+        "saveDownloadTitle": "다운로드 저장",
+        "freeSpaceTitle": "OpenAudioHub에 더 많은 디스크 공간이 필요합니다",
+        "freeSpaceBody": "데이터가 있는 디스크({folder})의 여유 공간이 {free}MB뿐입니다. 최소 200MB를 확보한 후 OpenAudioHub를 다시 여세요.",
+        "startFailedTitle": "OpenAudioHub를 시작하지 못했습니다"
+    },
+    "error": {
+        "downloadInProgress": "이미 다운로드가 진행 중입니다",
+        "formatInvalid": "format은 mp3 또는 original이어야 합니다",
+        "idsInvalid": "ids는 1~100개의 녹음 ID여야 합니다",
+        "serverNoAnswer": "서버가 다운로드 요청에 응답하지 않았습니다.",
+        "downloadCouldNotStart": "다운로드를 시작하지 못했습니다: {reason}",
+        "downloadRefused": "서버가 다운로드를 거부했습니다(HTTP {status}).",
+        "saveDialogFailed": "저장 대화상자를 열지 못했습니다.",
+        "downloadStalled": "다운로드가 멈춰 중지했습니다.",
+        "downloadFailed": "다운로드 실패: {reason}",
+        "downloadSaveFailed": "다운로드를 저장하지 못했습니다: {reason}",
+        "folderPickerFailed": "폴더 선택기를 열지 못했습니다.",
+        "keysUnreadable": "키 파일을 읽을 수 없습니다: {reason}",
+        "keysUnwritable": "{path}에 쓸 수 없습니다: {reason}",
+        "closeActionInvalid": "closeAction은 background 또는 quit이어야 합니다",
+        "launchAtLoginFailed": "로그인 시 실행을 변경하지 못했습니다: {reason}",
+        "databaseOpenFailed": "데이터베이스를 열 수 없습니다: {reason}",
+        "databaseBackupFailed": "업그레이드 전에 데이터베이스를 백업하지 못해 OpenAudioHub가 시작되지 않았습니다: {reason}",
+        "noFreePort": "앱에 사용할 로컬 포트가 없습니다"
+    }
+}

@@ -152,6 +152,8 @@ pub struct AppConfig {
     pub close_action: Option<String>,
     pub show_tray: Option<bool>,
     pub launch_at_login: Option<bool>,
+    /// The interface language chosen in the page or the menu, as a language tag.
+    pub locale: Option<String>,
     pub last_version: Option<String>,
     raw: Map<String, Value>,
 }
@@ -211,6 +213,7 @@ impl AppConfig {
                 .map(str::to_owned),
             show_tray: raw.get("showTray").and_then(Value::as_bool),
             launch_at_login: raw.get("launchAtLogin").and_then(Value::as_bool),
+            locale: raw.get("locale").and_then(Value::as_str).map(str::to_owned),
             last_version,
             raw,
         })
@@ -232,6 +235,7 @@ impl AppConfig {
             ("closeAction", self.close_action.as_ref().map(|v| json!(v))),
             ("showTray", self.show_tray.map(|v| json!(v))),
             ("launchAtLogin", self.launch_at_login.map(|v| json!(v))),
+            ("locale", self.locale.as_ref().map(|v| json!(v))),
         ] {
             if let Some(value) = value {
                 raw.insert(key.into(), value);
