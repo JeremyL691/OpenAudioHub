@@ -18,7 +18,7 @@ use crate::db::now_ms;
 use crate::error::{ApiResult, AppError};
 use crate::routes::settings;
 use crate::webhooks;
-use crate::{AppState, config, ids, time, transcribe};
+use crate::{AppState, config, ids, transcribe};
 
 const REJECTED: &str = "Plaud rejected the stored token. Reconnect your Plaud account.";
 const BATCH: usize = 5;
@@ -103,7 +103,7 @@ struct Ctx {
     user_id: String,
     client: Client,
     import_content: bool,
-    date_titles: bool,
+    title_mode: String,
     /// Set when Plaud refuses the token during content import; the rest of the run skips content.
     content_stopped: AtomicBool,
     errors: Mutex<Vec<String>>,
@@ -220,14 +220,13 @@ async fn sync_inner(state: &AppState, user_id: &str, report: &mut Report) -> Res
     };
     let auto_transcribe = flag("autoTranscribe", false);
     let plaud_only = text("transcriptMode", "plaud_only") == "plaud_only";
-
     let (client, workspace) = client_for(state, &conn).await?;
 
     let ctx = Ctx {
         user_id: user_id.to_owned(),
         client,
         import_content: flag("importPlaudContent", false),
-        date_titles: text("recordingTitleMode", "ai") == "date",
+        title_mode: text("recordingTitleMode", "ai"),
         content_stopped: AtomicBool::new(false),
         errors: Mutex::new(Vec::new()),
     };
@@ -288,7 +287,7 @@ async fn sync_pages(
                         report.new += 1;
                         webhooks::emit_soft(state, &ctx.user_id, &id, "recording.synced", None)
                             .await;
-                        new_titles.push(title(ctx.date_titles, r));
+                        new_titles.push(title_for(&ctx.title_mode, r).await.0);
                         new_ids.push(id);
                         changed = true;
                     }
@@ -339,8 +338,8 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
         ));
     }
     let version = r.version_ms.unwrap_or(0).to_string();
-    let existing: Option<(String, Option<i64>, String, String, String)> = sqlx::query_as(
-        "SELECT id, deleted_at, plaud_version, storage_type, storage_path FROM recordings WHERE user_id = ? AND plaud_file_id = ?",
+    let existing: Option<(String, Option<i64>, String, String, String, String)> = sqlx::query_as(
+        "SELECT id, deleted_at, plaud_version, storage_type, storage_path, title_source FROM recordings WHERE user_id = ? AND plaud_file_id = ?",
     )
     .bind(&ctx.user_id)
     .bind(&r.id)
@@ -348,30 +347,20 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
     .await?;
     match existing {
         // Deleted here: never imported again, no download.
-        Some((_, Some(_), _, _, _)) => Ok(Outcome::Skipped),
-        Some((id, None, prev, _, _)) if prev == version => {
+        Some((_, Some(_), _, _, _, _)) => Ok(Outcome::Skipped),
+        Some((id, None, prev, _, _, _)) if prev == version => {
             let imported = import_for(state, ctx, &id, &r.id).await;
             Ok(Outcome::Unchanged { imported })
         }
-        Some((id, None, _, prev_type, prev_key)) => {
-            let storage = import::store_audio(state, &ctx.user_id, &ctx.client, &r.id).await?;
-            match update_row(state, r, &id, &storage).await {
+        Some((id, None, _, _, _, prev_source)) => {
+            // The audio is already stored, so a changed Plaud version only refreshes metadata.
+            // Downloading again would replace a file the user may be playing, and delete the old
+            // object, for changes that never touch the audio itself.
+            let follow = may_follow_plaud(&prev_source);
+            match update_row(state, r, &id, follow).await {
                 Ok(true) => {}
-                Ok(false) => {
-                    // Deleted while downloading: the delete wins and the audio goes.
-                    delete_audio(state, storage.storage_type, &storage.key).await;
-                    return Ok(Outcome::Skipped);
-                }
-                Err(e) => {
-                    delete_audio(state, storage.storage_type, &storage.key).await;
-                    return Err(e);
-                }
-            }
-            // The row points at the new audio now, so the previous version's object is unreferenced.
-            if (prev_type.as_str(), prev_key.as_str())
-                != (storage.storage_type, storage.key.as_str())
-            {
-                delete_audio(state, &prev_type, &prev_key).await;
+                Ok(false) => return Ok(Outcome::Skipped),
+                Err(e) => return Err(e),
             }
             import_for(state, ctx, &id, &r.id).await;
             Ok(Outcome::Updated(id))
@@ -398,19 +387,61 @@ async fn delete_audio(state: &AppState, storage_type: &str, key: &str) {
     }
 }
 
-/// The title Plaud's name gives, or a date title for new rows when the user chose dates.
-fn title(date_titles: bool, r: &Recording) -> String {
-    if date_titles {
-        time::iso(r.start_time.unwrap_or(0))
-            .get(..16)
-            .unwrap_or_default()
-            .replace('T', " ")
-    } else {
+/// The name a new row gets, and where that name came from.
+///
+/// `date` gives `YYYY-MM-DD` in the server's local time, using the offset in effect at the
+/// recording's own instant so a recording made before a daylight-saving change keeps its day.
+/// A recording without a usable start time keeps Plaud's name, because a date title would
+/// otherwise claim 1970-01-01.
+async fn title_for(mode: &str, r: &Recording) -> (String, &'static str) {
+    let plaud_name = || {
         r.filename
             .clone()
             .filter(|f| !f.trim().is_empty())
             .unwrap_or_else(|| r.id.clone())
+    };
+    match mode {
+        "date" => match r.start_time.filter(|ms| *ms > 0) {
+            Some(start) => {
+                let offset = crate::routes::recordings::local_offset_at(start).await;
+                (crate::time::local_date(start, offset), "date")
+            }
+            None => (plaud_name(), "original"),
+        },
+        _ => (plaud_name(), "original"),
     }
+}
+
+/// Whether a sync update may follow Plaud's new name. Only a title that is still the original
+/// one may be replaced; a date, generated, hand-edited or unknown title is the user's.
+fn may_follow_plaud(title_source: &str) -> bool {
+    title_source == "original"
+}
+
+/// The `YYYY-MM-DD` a historical date-time title should become, when the title is one of the
+/// shapes this app wrote for a date title on the recording's own day.
+pub(crate) fn repair_candidate(
+    title: &str,
+    start: i64,
+    offset: ::time::UtcOffset,
+) -> Option<String> {
+    if start <= 0 {
+        return None;
+    }
+    let day = crate::time::local_date(start, offset);
+    let rest = title.strip_prefix(day.as_str())?;
+    let rest = rest.strip_prefix(' ').or_else(|| rest.strip_prefix('T'))?;
+    let ok = rest.len() >= 5
+        && rest.is_char_boundary(5)
+        && rest.as_bytes()[..5].iter().enumerate().all(|(i, b)| {
+            if i == 2 {
+                *b == b':'
+            } else {
+                b.is_ascii_digit()
+            }
+        })
+        && rest[5..].chars().all(|c| c.is_ascii_digit() || c == ':');
+    ok.then_some(day)
 }
 
 async fn insert_row(
@@ -422,6 +453,7 @@ async fn insert_row(
     let id = ids::new_id();
     let now = now_ms();
     let start = r.start_time.unwrap_or(0);
+    let (title, title_source) = title_for(&ctx.title_mode, r).await;
     let peaks_json = storage
         .peaks
         .as_ref()
@@ -429,14 +461,14 @@ async fn insert_row(
     sqlx::query(
         "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, \
          storage_type, storage_path, auto_export_path, downloaded_at, plaud_version, timezone, zonemins, scene, is_trash, waveform_peaks, \
-         deleted_at, starred_at, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?)",
+         deleted_at, starred_at, created_at, updated_at, title_source, auto_export_eligible) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 0, ?, NULL, NULL, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&ctx.user_id)
     .bind(r.serial_number.clone().unwrap_or_default())
     .bind(&r.id)
-    .bind(state.config.field_key.encrypt(&title(ctx.date_titles, r)))
+    .bind(state.config.field_key.encrypt(&title))
     .bind(r.duration.unwrap_or(0))
     .bind(start)
     .bind(r.end_time.unwrap_or(start))
@@ -452,43 +484,49 @@ async fn insert_row(
     .bind(peaks_json)
     .bind(now)
     .bind(now)
+    .bind(title_source)
+    .bind(crate::backup::schedule::auto_export_eligible(state, &ctx.user_id).await)
     .execute(&state.db)
     .await?;
     Ok(id)
 }
 
 /// Overwrites a row with Plaud's values. False when the row was deleted meanwhile, so nothing changed.
+///
+/// `follow_name` is false when the local title is the user's (a date, a generated title, or a
+/// hand edit), and the stored name is then kept.
 async fn update_row(
     state: &AppState,
     r: &Recording,
     id: &str,
-    storage: &import::Stored,
+    follow_name: bool,
 ) -> Result<bool, ItemError> {
     let now = now_ms();
-    let peaks_json = storage
-        .peaks
-        .as_ref()
-        .and_then(|p| serde_json::to_string(p).ok());
+    // NULL leaves the stored value alone, so a title the user owns survives the update.
+    let new_name = follow_name.then(|| {
+        state.config.field_key.encrypt(
+            &r.filename
+                .clone()
+                .filter(|f| !f.trim().is_empty())
+                .unwrap_or_else(|| r.id.clone()),
+        )
+    });
     let done = sqlx::query(
-        "UPDATE recordings SET device_sn = ?, filename = ?, duration = ?, start_time = ?, end_time = ?, filesize = ?, file_md5 = ?, \
-         storage_type = ?, storage_path = ?, downloaded_at = ?, plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, \
-         waveform_peaks = COALESCE(?, waveform_peaks), is_trash = 0, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+        "UPDATE recordings SET device_sn = ?, filename = COALESCE(?, filename), duration = ?, start_time = ?, end_time = ?, \
+         filesize = ?, file_md5 = ?, plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ? \
+         WHERE id = ? AND deleted_at IS NULL",
     )
     .bind(r.serial_number.clone().unwrap_or_default())
-    .bind(state.config.field_key.encrypt(&title(false, r)))
+    .bind(new_name)
     .bind(r.duration.unwrap_or(0))
     .bind(r.start_time.unwrap_or(0))
     .bind(r.end_time.unwrap_or(0))
     .bind(r.filesize.unwrap_or(0))
     .bind(r.file_md5.clone().unwrap_or_default())
-    .bind(storage.storage_type)
-    .bind(storage.key.as_str())
-    .bind(now)
     .bind(version_text(r))
     .bind(r.timezone)
     .bind(r.zonemins)
     .bind(r.scene)
-    .bind(peaks_json)
     .bind(now)
     .bind(id)
     .execute(&state.db)
@@ -654,5 +692,96 @@ mod file_id_tests {
         for bad in ["", "../etc", "a/b", "a\\b", "x.y", &"a".repeat(129)] {
             assert!(!super::safe_file_id(bad), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::*;
+
+    fn recording(filename: Option<&str>, start: Option<i64>) -> Recording {
+        Recording {
+            id: "rec-1".into(),
+            filename: filename.map(str::to_owned),
+            duration: Some(3000),
+            start_time: start,
+            end_time: start,
+            filesize: None,
+            file_md5: None,
+            serial_number: None,
+            version_ms: Some(1),
+            timezone: None,
+            zonemins: None,
+            scene: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn date_mode_names_by_day_only() {
+        // 2026-10-18T06:30:00Z. The local day depends on the machine's zone, so the title is
+        // compared with the day that same offset produces, never with a hard-coded date.
+        let start = 1_792_305_000_000;
+        let (title, source) = title_for("date", &recording(Some("Plaud name"), Some(start))).await;
+        let offset = crate::routes::recordings::local_offset_at(start).await;
+        assert_eq!(title, crate::time::local_date(start, offset));
+        assert_eq!(title.len(), 10);
+        assert!(!title.contains(':'), "{title}");
+        assert_eq!(source, "date");
+    }
+
+    #[tokio::test]
+    async fn date_mode_keeps_the_plaud_name_without_a_start_time() {
+        for start in [None, Some(0), Some(-5)] {
+            let (title, source) = title_for("date", &recording(Some("Plaud name"), start)).await;
+            assert_eq!(title, "Plaud name");
+            assert_eq!(source, "original");
+        }
+    }
+
+    #[tokio::test]
+    async fn original_mode_uses_the_plaud_name_then_the_id() {
+        assert_eq!(
+            title_for("original", &recording(Some("Team sync"), Some(0))).await,
+            ("Team sync".to_owned(), "original")
+        );
+        assert_eq!(
+            title_for("original", &recording(Some("   "), Some(0))).await,
+            ("rec-1".to_owned(), "original")
+        );
+        assert_eq!(
+            title_for("ai", &recording(None, Some(0))).await,
+            ("rec-1".to_owned(), "original")
+        );
+    }
+
+    #[test]
+    fn a_sync_update_only_follows_plaud_for_an_original_title() {
+        assert!(may_follow_plaud("original"));
+        for kept in ["date", "ai", "manual", "unknown"] {
+            assert!(!may_follow_plaud(kept), "{kept}");
+        }
+    }
+
+    #[test]
+    fn the_repair_candidate_matches_a_date_time_shape_of_the_same_day() {
+        let offset = ::time::UtcOffset::from_hms(8, 0, 0).unwrap();
+        let start = 1_792_305_000_000;
+        let day = crate::time::local_date(start, offset);
+        assert_eq!(day, "2026-10-18");
+        for shape in [
+            format!("{day} 23:30"),
+            format!("{day}T23:30"),
+            format!("{day} 23:30:05"),
+        ] {
+            assert_eq!(
+                repair_candidate(&shape, start, offset).as_deref(),
+                Some(day.as_str()),
+                "{shape}"
+            );
+        }
+        // A plain date is already the target, and a title from another day is not this recording's.
+        assert!(repair_candidate(&day, start, offset).is_none());
+        assert!(repair_candidate("Team sync", start, offset).is_none());
+        assert!(repair_candidate("2026-10-19 09:00", start, offset).is_none());
     }
 }

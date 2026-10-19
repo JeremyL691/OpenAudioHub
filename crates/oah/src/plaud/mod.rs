@@ -3,7 +3,7 @@
 mod api;
 mod connect;
 mod import;
-mod sync;
+pub(crate) mod sync;
 
 pub use sync::push_title;
 pub mod token;

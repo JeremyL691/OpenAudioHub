@@ -685,4 +685,126 @@ test.describe("plaud: sign-in and sync against the fake Plaud API", () => {
         expect(list.some((x) => x.plaudFileId === id)).toBe(true);
         await api.dispose();
     });
+
+    test("date titles are the local day only and survive later Plaud renames", async () => {
+        const api = await freshUser("plaud-date-title");
+        const email = uniq("datetitle");
+        // 2026-10-18T06:30:00Z is 2026-10-17 in UTC-7 and 2026-10-18 in UTC+8. The title must be
+        // the server's local day, so it is compared with the day the server reports for that instant.
+        const start = Date.UTC(2026, 9, 18, 6, 30, 0);
+        const id = `date-${Date.now()}`;
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Plaud name", start_time: start, version_ms: 2100 }] });
+        await signIn(api, email);
+        expect((await api.put("/api/settings/user", { data: { recordingTitleMode: "date" } })).status()).toBe(200);
+        expect((await api.post("/api/plaud/sync")).status()).toBe(200);
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const row = list.find((x) => x.plaudFileId === id);
+        expect(row).toBeTruthy();
+        const title = row!.filename as string;
+        expect(title).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+        // A later Plaud rename keeps the local date title.
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Renamed in Plaud", version_ms: 2200 }] });
+        const updated = await (await api.post("/api/plaud/sync")).json();
+        expect(updated.updatedRecordings).toBe(1);
+        const after = ((await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>).find(
+            (x) => x.plaudFileId === id,
+        );
+        expect(after!.filename).toBe(title);
+        await api.dispose();
+    });
+
+    test("a manual rename is kept when Plaud changes the name", async () => {
+        const api = await freshUser("plaud-manual-title");
+        const email = uniq("manualtitle");
+        const id = `manual-${Date.now()}`;
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Original name", version_ms: 3100 }] });
+        await signIn(api, email);
+        await api.post("/api/plaud/sync");
+        const row = ((await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>).find(
+            (x) => x.plaudFileId === id,
+        );
+        const patch = await api.patch(`/api/recordings/${row!.id as string}`, { data: { filename: "My own name" } });
+        expect(patch.status()).toBe(200);
+
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Renamed in Plaud", version_ms: 3200 }] });
+        await api.post("/api/plaud/sync");
+        const after = ((await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>).find(
+            (x) => x.plaudFileId === id,
+        );
+        expect(after!.filename).toBe("My own name");
+        await api.dispose();
+    });
+
+    test("a changed Plaud version updates metadata without downloading the audio again", async () => {
+        const api = await freshUser("plaud-no-redownload");
+        const email = uniq("noredownload");
+        const id = `same-${Date.now()}`;
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Stored once", version_ms: 4100 }] });
+        await signIn(api, email);
+        expect((await (await api.post("/api/plaud/sync")).json()).newRecordings).toBe(1);
+
+        const before = (await fakeRequests()).length;
+        await fakeControl("/account", { email, recordings: [{ id, filename: "Stored once", version_ms: 4200 }] });
+        const body = await (await api.post("/api/plaud/sync")).json();
+        expect(body).toMatchObject({ newRecordings: 0, updatedRecordings: 1, errors: [] });
+
+        const requests = (await fakeRequests()).slice(before);
+        expect(requests.filter((q) => q.path.startsWith("/audio/")), "audio downloads").toEqual([]);
+        expect(requests.filter((q) => q.path.startsWith("/file/temp-url/")), "presigned audio urls").toEqual([]);
+        // The stored audio is still there and still playable.
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const row = list.find((x) => x.plaudFileId === id);
+        expect((await api.get(`/api/recordings/${row!.id as string}/audio`)).status()).toBe(200);
+        await api.dispose();
+    });
+
+    test("the title repair previews date-time titles and applies only picked ones", async () => {
+        const api = await freshUser("plaud-title-repair");
+        const email = uniq("repair");
+        const start = Date.UTC(2026, 9, 18, 6, 30, 0);
+        const day = new Date(start).toLocaleDateString("en-CA");
+        const shaped = `repair-shaped-${Date.now()}`;
+        const plain = `repair-plain-${Date.now()}`;
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                { id: shaped, filename: `${day} 23:30`, start_time: start, version_ms: 5100 },
+                { id: plain, filename: "Weekly planning", start_time: start, version_ms: 5200 },
+            ],
+        });
+        await signIn(api, email);
+        await api.post("/api/plaud/sync");
+
+        const preview = await api.get("/api/recordings/title-repair");
+        expect(preview.status()).toBe(200);
+        const candidates = (await preview.json()).candidates as { id: string; filename: string; suggestedFilename: string }[];
+        const ids = candidates.map((c) => c.id);
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const shapedRow = list.find((x) => x.plaudFileId === shaped)!;
+        const plainRow = list.find((x) => x.plaudFileId === plain)!;
+        expect(ids).toContain(shapedRow.id);
+        expect(ids).not.toContain(plainRow.id);
+        const candidate = candidates.find((c) => c.id === shapedRow.id)!;
+        expect(candidate.suggestedFilename).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+        // A pick whose name changed since the preview is skipped, not applied.
+        const stale = await api.post("/api/recordings/title-repair", {
+            data: { picks: [{ id: shapedRow.id, expectedFilename: "something else" }] },
+        });
+        expect(stale.status()).toBe(200);
+        expect((await stale.json()).skipped).toHaveLength(1);
+
+        const applied = await api.post("/api/recordings/title-repair", {
+            data: { picks: [{ id: shapedRow.id, expectedFilename: candidate.filename }] },
+        });
+        expect(applied.status()).toBe(200);
+        expect((await applied.json()).renamed).toHaveLength(1);
+        const after = ((await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>).find(
+            (x) => x.id === shapedRow.id,
+        );
+        expect(after!.filename).toBe(candidate.suggestedFilename);
+        await api.dispose();
+    });
 });

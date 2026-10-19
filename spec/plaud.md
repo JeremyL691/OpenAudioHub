@@ -336,7 +336,7 @@ Errors:
 7. Set the connection's last sync time to now, clear the "needs reconnect" flag, and update the stored workspace id if one was found. This step runs only when the list was read without a failure. Failed recordings do not prevent it.
 8. Return the counts and errors.
 
-Exporting is not part of the run. New recordings are picked up by the automatic export schedule (see [export-backup.md](export-backup.md)).
+Exporting is not part of the run. Recordings added by the run are marked for the automatic export schedule (see [export-backup.md](export-backup.md)); recordings that were already there are not.
 
 ### Listing recordings
 
@@ -352,7 +352,7 @@ Plaud recording to the OpenAudioHub recording row:
 | Plaud field | Recording field | Notes |
 | --- | --- | --- |
 | `id` | `plaudFileId` | Unique per user. |
-| `filename` | `filename` | Stored encrypted, returned decrypted. On insert, replaced by a date-based title when `recordingTitleMode` is `date`. On update, always set to Plaud's name. |
+| `filename` | `filename` | Stored encrypted, returned decrypted. On insert, replaced by `YYYY-MM-DD` (server local time) when `recordingTitleMode` is `date`, and kept as Plaud's name when the recording has no start time. On update, set to Plaud's name only while the stored title is still the original one; a date, generated, hand-edited or unknown title is kept. |
 | `duration` (ms) | `duration` | Milliseconds. |
 | `start_time` (epoch ms) | `startTime` | |
 | `end_time` (epoch ms) | `endTime` | |
@@ -372,6 +372,8 @@ Not stored: `keywords`, `filetag_id_list`, `edit_time`, `ori_ready`, `version`, 
 
 The audio is downloaded in its original form (`is_opus=0`, see the Plaud web API section). The file extension and content type come from sniffing the bytes. Plaud often labels Ogg/Opus files as `.mp3`, so the sniffed type wins.
 
+The audio is downloaded once, when the recording is first added. A later Plaud version only refreshes metadata: the stored audio object, its path, `downloadedAt` and the waveform are kept, so a rename or an edit in Plaud never re-downloads or replaces the file.
+
 The object key is `<userId>/<plaudFileId>.<ext>`. If another recording of the same user already holds that key, ` (2)`, ` (3)`, and so on are added before the extension, up to 100 tries.
 
 ### Matching and dedupe
@@ -380,7 +382,7 @@ Each Plaud recording matches an existing row by `(user, plaudFileId)`.
 
 1. **Deleted here.** If the row is deleted (tombstoned), skip it. No download happens, even when Plaud's version changed. A recording deleted in OpenAudioHub is never imported again.
 2. **Unchanged.** If `version_ms` equals the stored `plaudVersion`, skip it. No download happens. Content import can still fill gaps for it (see below).
-3. **Changed.** Download the audio, store it, and overwrite the row's fields with Plaud's values. The row keeps its id. The recording is counted under `updatedRecordings`.
+3. **Changed.** Overwrite the row's metadata with Plaud's values. The stored audio is not downloaded again. The row keeps its id and its title unless the title is still the original one (see "Field mapping"). The recording is counted under `updatedRecordings`.
 4. **New.** Download the audio, store it, and insert the row. Counted under `newRecordings`.
 
 A concurrent delete during a download wins. The row is not revived, and the downloaded object is removed.
@@ -395,8 +397,8 @@ Devices are written when the account is connected (every sign-in path). Sync doe
 
 When `importPlaudContent` is on, sync also fills gaps from Plaud's own transcript and summary. It never overwrites an existing transcript or summary.
 
-- A transcript is imported when the recording has no Plaud transcript yet. It is stored with source `plaud`, provider `plaud`, model `plaud-native`. No webhook event is sent for it.
-- A summary is imported when the recording has no summary yet. It is stored with source `plaud`. The inline copy is preferred over the presigned link.
+- A transcript is imported when the recording has no Plaud transcript yet. It is stored with source `plaud`, provider `plaud`, model `plaud-native`. No webhook event is sent for it. When the import adds a transcript and auto-summarize is on with no summary yet, an automatic summary job is queued once (`workers.md`, section 5). A repeated sync does not queue another.
+- A summary is imported when the recording has no summary with content yet. It is stored with source `plaud`. The inline copy is preferred over the presigned link.
 - Items must be ready (`task_status` equal to 1) and have a link.
 - If the account token is refused during this pass, the pass stops. Other failures skip one item. Audio already synced is kept.
 

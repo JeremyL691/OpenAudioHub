@@ -227,6 +227,26 @@ Errors:
 - `401` `AUTH_SESSION_MISSING`; `404` `RECORDING_NOT_FOUND`.
 Side effects: `waveformPeaks` and `updatedAt` are set on the first save.
 
+### GET /api/recordings/title-repair
+
+Auth: session.
+
+Response: `200` with `{ "candidates": [...] }`, newest first. Each candidate is `{ "id", "filename", "suggestedFilename", "startTime" }`.
+
+- A candidate is a live recording whose title starts with the recording's own day (`YYYY-MM-DD` in server local time) followed by a time, which is the shape earlier versions wrote for a date title.
+- Recordings with a `manual` or `ai` title are never candidates. A recording without a start time is not one either.
+- Nothing changes.
+
+### POST /api/recordings/title-repair
+
+Auth: session. Request: `{ "picks": [{ "id": "...", "expectedFilename": "..." }] }`.
+
+Response: `200` with `{ "renamed": [{ "id", "filename" }], "skipped": [{ "id", "reason" }] }`.
+
+- Each pick is applied only when the stored name still equals `expectedFilename`, the title is still a date-time title of that recording's day, and the title is not `manual` or `ai`. Otherwise the pick is skipped with `renamed`, `not found`, or `not a date title`.
+- A renamed title is stored as the date and marked with title source `date`.
+- An empty `picks` list answers `200` with empty results. A body without a `picks` list is `400 INVALID_INPUT`.
+
 ### GET /api/recordings/download
 Auth: session
 Request: query `ids` (required): comma-separated recording ids. Duplicates are ignored. Optional query `format`: `mp3` (default) or `original`.
