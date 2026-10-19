@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import { Group, Loading, LoadError, Row, SettingSelect } from "./shared";
+import { useI18n } from "@/lib/i18n";
 
 /** The preferences bridge the desktop app exposes to its window. */
 interface DesktopPreferences {
@@ -26,6 +27,7 @@ export function desktopBridge(): DesktopBridge | null {
 
 /** Shown only in the desktop app. Its controls call the desktop bridge, not the server. */
 export function DesktopSection() {
+    const { t } = useI18n();
     const ids = useId();
     const [prefs, setPrefs] = useState<DesktopPreferences | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -34,7 +36,7 @@ export function DesktopSection() {
     useEffect(() => {
         const bridge = desktopBridge();
         if (!bridge) {
-            setLoadError("The desktop app is not available.");
+            setLoadError(t("settings.desktop.notAvailable"));
             return;
         }
         let alive = true;
@@ -44,7 +46,7 @@ export function DesktopSection() {
                 if (alive) setPrefs(next);
             })
             .catch((err: unknown) => {
-                if (alive) setLoadError(errorMessage(err, "Could not read the preferences."));
+                if (alive) setLoadError(errorMessage(err, t("settings.desktop.loadFailed")));
             });
         return () => {
             alive = false;
@@ -60,19 +62,19 @@ export function DesktopSection() {
             setPrefs(await bridge.setPreferences(patch));
         } catch (err) {
             setPrefs(previous);
-            toast.error(errorMessage(err, "Could not save the preferences."));
+            toast.error(errorMessage(err, t("settings.desktop.saveFailed")));
         }
     };
 
     if (loadError) {
         return <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />;
     }
-    if (!prefs) return <Loading label="Loading desktop settings" />;
+    if (!prefs) return <Loading label={t("settings.desktop.loading")} />;
 
     return (
         <div className="grid gap-6">
             <Group>
-                <Row htmlFor={`${ids}-tray`} label="Show in the menu bar">
+                <Row htmlFor={`${ids}-tray`} label={t("settings.desktop.showTray")}>
                     <Switch
                         id={`${ids}-tray`}
                         data-testid="desktop-show-tray-switch"
@@ -80,23 +82,23 @@ export function DesktopSection() {
                         onCheckedChange={(next) => void update({ showTray: next })}
                     />
                 </Row>
-                <Row htmlFor={`${ids}-close`} label="When the window is closed">
+                <Row htmlFor={`${ids}-close`} label={t("settings.desktop.closeAction")}>
                     <SettingSelect
                         id={`${ids}-close`}
                         testId="desktop-close-action"
                         value={prefs.closeAction}
                         onValueChange={(v) => void update({ closeAction: v as DesktopPreferences["closeAction"] })}
                         options={[
-                            { value: "background", label: "Keep running in the background" },
-                            { value: "quit", label: "Quit the app" },
+                            { value: "background", label: t("settings.desktop.closeBackground") },
+                            { value: "quit", label: t("settings.desktop.closeQuit") },
                         ]}
                         className="w-64 max-w-full"
                     />
                 </Row>
                 <Row
                     htmlFor={`${ids}-login`}
-                    label="Launch at login"
-                    hint="Start OpenAudioHub when you sign in to your Mac. It starts without a window and stays in the menu bar."
+                    label={t("settings.desktop.launchAtLogin")}
+                    hint={t("settings.desktop.launchAtLoginHint")}
                 >
                     <Switch
                         id={`${ids}-login`}

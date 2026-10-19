@@ -1,12 +1,14 @@
 import { Pause, Play } from "lucide-react";
 import { formatClock } from "@/lib/format";
 import { usePlayer } from "./player-context";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * The compact bar shown under the top bar once the full player has scrolled out of view.
  * It takes no space in the page layout and does nothing when clicked.
  */
 export function MiniPlayer() {
+    const { t } = useI18n();
     const player = usePlayer();
     if (!player || !player.current || player.playerOnScreen) return null;
     const { current, playing, time, duration, toggle } = player;
@@ -14,13 +16,13 @@ export function MiniPlayer() {
 
     return (
         <section
-            aria-label="Now playing"
+            aria-label={t("library.player.nowPlaying")}
             data-testid="mini-player"
             className="pointer-events-auto fixed inset-x-0 top-[52px] z-30 flex items-center gap-3 border-b border-border bg-background/90 px-4 py-2 backdrop-blur-md"
         >
             <button
                 type="button"
-                aria-label={playing ? "Pause" : "Play"}
+                aria-label={playing ? t("library.player.pause") : t("library.player.play")}
                 onClick={toggle}
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring"
             >
@@ -30,7 +32,7 @@ export function MiniPlayer() {
                 <p className="truncate text-sm font-medium text-foreground">{current.title}</p>
                 <div
                     role="progressbar"
-                    aria-label="Playback progress"
+                    aria-label={t("library.player.playbackProgress")}
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={progress}

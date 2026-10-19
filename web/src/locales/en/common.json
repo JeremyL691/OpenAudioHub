@@ -1,0 +1,35 @@
+{
+    "action": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "remove": "Remove",
+        "retry": "Retry",
+        "close": "Close",
+        "copy": "Copy",
+        "copied": "Copied",
+        "done": "Done",
+        "edit": "Edit",
+        "rename": "Rename",
+        "search": "Search",
+        "loading": "Loading",
+        "back": "Back",
+        "next": "Next",
+        "skip": "Skip",
+        "download": "Download",
+        "upload": "Upload",
+        "confirm": "Confirm",
+        "deleting": "Deleting…"
+    },
+    "error": {
+        "generic": "Something went wrong.",
+        "loadFailed": "Could not load this.",
+        "saveFailed": "Could not save the change."
+    },
+    "duration": {
+        "seconds": "{value} s",
+        "minutes": "{value} min",
+        "hours": "{hours} h {minutes} min",
+        "recorded": "{value} recorded"
+    }
+}

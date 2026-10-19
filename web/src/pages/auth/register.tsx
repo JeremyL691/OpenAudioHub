@@ -6,10 +6,12 @@ import { refreshSession, useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { usePublicConfig } from "@/lib/public-config";
 import { AuthField, AuthInput, AuthLayout } from "./auth-layout";
+import { useI18n } from "@/lib/i18n";
 
 const MIN_PASSWORD = 8;
 
 export default function Page() {
+    const { t } = useI18n();
     const session = useSession();
     const navigate = useNavigate();
     const [name, setName] = useState("");
@@ -25,11 +27,11 @@ export default function Page() {
     async function onSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (password !== confirmPassword) {
-            toast.error("Passwords do not match");
+            toast.error(t("auth.register.mismatch"));
             return;
         }
         if (password.length < MIN_PASSWORD) {
-            toast.error("Password must be at least 8 characters");
+            toast.error(t("auth.register.tooShort"));
             return;
         }
         setPending(true);
@@ -39,24 +41,24 @@ export default function Page() {
                 json: { name, email, password, callbackURL: "/dashboard" },
             });
             await refreshSession();
-            toast.success("Account created successfully");
+            toast.success(t("auth.register.success"));
             navigate("/dashboard", { replace: true });
         } catch (err) {
             if (err instanceof ApiError && err.code === "REGISTRATION_DISABLED") {
-                toast.error("Registration is disabled on this instance");
+                toast.error(t("auth.register.disabled"));
                 navigate("/login", { replace: true });
                 return;
             }
-            toast.error(errorMessage(err, "Failed to create account"));
+            toast.error(errorMessage(err, t("auth.register.failed")));
             setPending(false);
         }
     }
 
     return (
-        <AuthLayout documentTitle="Create account | OpenAudioHub" title="Create your account" subtitle="Create the account you will use to sign in to this instance.">
+        <AuthLayout documentTitle={t("auth.register.documentTitle")} title={t("auth.register.title")} subtitle={t("auth.register.subtitle")}>
             <div className="space-y-6">
                 <form className="space-y-4" onSubmit={onSubmit}>
-                    <AuthField id="name" label="Name">
+                    <AuthField id="name" label={t("auth.register.name")}>
                         <AuthInput
                             id="name"
                             name="name"
@@ -67,7 +69,7 @@ export default function Page() {
                             onChange={(e) => setName(e.target.value)}
                         />
                     </AuthField>
-                    <AuthField id="email" label="Email">
+                    <AuthField id="email" label={t("auth.register.email")}>
                         <AuthInput
                             id="email"
                             name="email"
@@ -79,7 +81,7 @@ export default function Page() {
                             onChange={(e) => setEmail(e.target.value)}
                         />
                     </AuthField>
-                    <AuthField id="password" label="Password">
+                    <AuthField id="password" label={t("auth.register.password")}>
                         <AuthInput
                             id="password"
                             name="password"
@@ -92,7 +94,7 @@ export default function Page() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </AuthField>
-                    <AuthField id="confirmPassword" label="Confirm Password">
+                    <AuthField id="confirmPassword" label={t("auth.register.confirmPassword")}>
                         <AuthInput
                             id="confirmPassword"
                             name="confirmPassword"
@@ -105,13 +107,13 @@ export default function Page() {
                         />
                     </AuthField>
                     <Button type="submit" variant="primary" className="w-full sm:h-9" disabled={pending}>
-                        {pending ? "Creating account..." : "Create Account"}
+                        {pending ? t("auth.register.pending") : t("auth.register.submit")}
                     </Button>
                 </form>
                 <div className="text-center text-[13px]">
-                    <span className="text-muted-foreground">Already have an account? </span>
+                    <span className="text-muted-foreground">{t("auth.register.haveAccount")} </span>
                     <Link to="/login" className="text-link hover:underline">
-                        Sign in
+                        {t("auth.register.signIn")}
                     </Link>
                 </div>
             </div>

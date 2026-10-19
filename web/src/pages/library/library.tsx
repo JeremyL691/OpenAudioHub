@@ -21,6 +21,7 @@ import {
 } from "@/components/recordings/library-model";
 import { startUploads, useUploads } from "@/components/recordings/uploads";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 import { api, errorMessage } from "@/lib/api";
 import { downloadRecordings } from "@/lib/downloads";
 import { deleteRecording, type Recording } from "@/lib/recordings";
@@ -30,6 +31,7 @@ import { PreviewPane } from "./preview-pane";
 /** The Library page at /recordings: the list, the detail pane beside it, and the bulk and row actions. */
 export default function LibraryPage() {
     const [params, setParams] = useSearchParams();
+    const { t } = useI18n();
     const collection = parseCollection(params.get("collection"));
     const urlId = params.get("id");
     const qParam = params.get("q");
@@ -128,9 +130,9 @@ export default function LibraryPage() {
         setTranscribing((prev) => new Set(prev).add(recording.id));
         try {
             await api(`/api/recordings/${encodeURIComponent(recording.id)}/transcribe`, { method: "POST", json: {} });
-            toast.success("Transcription started");
+            toast.success(t("library.transcriptionStarted"));
         } catch (err) {
-            toast.error(errorMessage(err, "Transcription failed"));
+            toast.error(errorMessage(err, t("recording.transcribe.failed")));
         } finally {
             setTranscribing((prev) => {
                 const next = new Set(prev);
@@ -162,11 +164,11 @@ export default function LibraryPage() {
         try {
             await deleteRecording(target.id);
             lib.dropItems([target.id]);
-            toast.success("Recording deleted");
+            toast.success(t("library.deleted"));
             if (urlId === target.id) select(nextId);
             setDeleting(null);
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to delete recording"));
+            toast.error(errorMessage(err, t("library.deleteFailed")));
         } finally {
             setDeleteBusy(false);
         }
@@ -201,16 +203,16 @@ export default function LibraryPage() {
 
     let emptyText: string | null = null;
     if (visible.length === 0) {
-        if (needle) emptyText = "No recordings match your search.";
-        else if (filter !== "all") emptyText = "No recordings match this filter.";
-        else if (collection && inScope.length === 0) emptyText = "No recordings in this collection yet.";
+        if (needle) emptyText = t("library.noMatchSearch");
+        else if (filter !== "all") emptyText = t("library.noMatchFilter");
+        else if (collection && inScope.length === 0) emptyText = t("library.noCollection");
     }
 
     const libraryEmpty = lib.status === "ready" && lib.items.length === 0 && uploads.pending.length === 0;
 
     return (
         <div className="flex h-full min-h-0 w-full flex-col">
-            <h1 className="sr-only">Recordings</h1>
+            <h1 className="sr-only">{t("library.recordingsHeading")}</h1>
             <input ref={fileInput} type="file" accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.opus,.webm,.aac,.flac" multiple hidden onChange={onFilesChosen} />
 
             {libraryEmpty ? (

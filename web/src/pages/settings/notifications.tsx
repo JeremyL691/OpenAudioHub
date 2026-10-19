@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { useSettings, type BoolSettingKey, type SettingsPatch, type UserSettings } from "./shared";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * Notification fields. Email and Bark are read and written through the same user settings endpoint as the
@@ -68,6 +69,7 @@ function ToggleCard({
 }
 
 export function NotificationsSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving: isSavingField } = useSettings();
     const ids = useId();
     const fields = settings as unknown as typeof settings & NotificationFields;
@@ -81,8 +83,8 @@ export function NotificationsSection() {
             <ToggleCard
                 id={`${ids}-browser-notifications`}
                 icon={BellRing}
-                label="Browser notifications"
-                hint="Pop up a desktop notification whenever new recordings come in or a sync runs."
+                label={t("settings.notifications.browserLabel")}
+                hint={t("settings.notifications.browserHint")}
                 checked={Boolean(settings.browserNotifications)}
                 disabled={isSaving("browserNotifications")}
                 onChange={flag("browserNotifications")}
@@ -90,8 +92,8 @@ export function NotificationsSection() {
             <ToggleCard
                 id="email-notifications"
                 icon={Mail}
-                label="Email notifications"
-                hint="Send email notifications for new recordings."
+                label={t("settings.notifications.emailLabel")}
+                hint={t("settings.notifications.emailHint")}
                 checked={Boolean(fields.emailNotifications)}
                 disabled={isSaving("emailNotifications")}
                 onChange={flag("emailNotifications")}
@@ -106,8 +108,8 @@ export function NotificationsSection() {
             <ToggleCard
                 id="bark-notifications"
                 icon={Smartphone}
-                label="Bark push notifications"
-                hint="Push new recordings to your phone through Bark."
+                label={t("settings.notifications.barkLabel")}
+                hint={t("settings.notifications.barkHint")}
                 checked={Boolean(fields.barkNotifications)}
                 disabled={isSaving("barkNotifications")}
                 onChange={flag("barkNotifications")}
@@ -121,8 +123,8 @@ export function NotificationsSection() {
             <ToggleCard
                 id="notification-sound"
                 icon={Volume2}
-                label="Notification sound"
-                hint="Play a short chime as notifications come in."
+                label={t("settings.notifications.soundLabel")}
+                hint={t("settings.notifications.soundHint")}
                 checked={Boolean(settings.notificationSound)}
                 disabled={isSaving("notificationSound")}
                 onChange={flag("notificationSound")}
@@ -130,8 +132,8 @@ export function NotificationsSection() {
             <ToggleCard
                 id="marketing-email-consent"
                 icon={Megaphone}
-                label="Product updates"
-                hint="The occasional email about new features and releases. At most a few each year, and never more than one a month."
+                label={t("settings.notifications.marketingLabel")}
+                hint={t("settings.notifications.marketingHint")}
                 checked={Boolean(fields.marketingEmailConsent)}
                 disabled={isSaving("marketingEmailConsent")}
                 onChange={flag("marketingEmailConsent")}
@@ -152,6 +154,7 @@ function EmailPanel({
     disabled: boolean;
     onSave: (next: string | null) => void;
 }) {
+    const { t } = useI18n();
     const ids = useId();
     const shown = value ?? accountEmail;
     const [draft, setDraft] = useState(shown);
@@ -178,9 +181,9 @@ function EmailPanel({
         setSending(true);
         try {
             await api("/api/settings/test-email", { method: "POST", json: { email: draft.trim() } });
-            toast.success("Test email sent");
+            toast.success(t("settings.notifications.testSent"));
         } catch (error) {
-            toast.error(errorMessage(error, "The test email could not be sent"));
+            toast.error(errorMessage(error, t("settings.notifications.testFailed")));
         } finally {
             setSending(false);
         }
@@ -189,7 +192,7 @@ function EmailPanel({
     return (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
             <Label htmlFor={`${ids}-email`} className="text-[13px] font-medium">
-                Email address
+                {t("settings.notifications.emailAddress")}
             </Label>
             <Input
                 id={`${ids}-email`}
@@ -209,12 +212,12 @@ function EmailPanel({
                 }}
             />
             <p className="text-xs text-muted-foreground">
-                Using your account email. You can point this elsewhere if you prefer.
+                {t("settings.notifications.usingAccountEmail")}
             </p>
             <div className="flex items-center gap-2 pt-1">
                 <Button variant="secondary" disabled={sending || draft.trim() === ""} onClick={() => void sendTest()}>
-                    {sending ? <Spinner label="Sending test email" /> : <Send />}
-                    Send test email
+                    {sending ? <Spinner label={t("settings.notifications.sendingTest")} /> : <Send />}
+                    {t("settings.notifications.sendTest")}
                 </Button>
             </div>
         </div>
@@ -226,6 +229,7 @@ function EmailPanel({
  * field is masked until the user shows it.
  */
 function BarkPanel({ value, disabled, onSave }: { value: string | null; disabled: boolean; onSave: (next: string | null) => void }) {
+    const { t } = useI18n();
     const ids = useId();
     const [draft, setDraft] = useState(value ?? "");
     const [revealed, setRevealed] = useState(false);
@@ -248,7 +252,7 @@ function BarkPanel({ value, disabled, onSave }: { value: string | null; disabled
     return (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
             <Label htmlFor={`${ids}-bark`} className="text-[13px] font-medium">
-                Bark push URL
+                {t("settings.notifications.barkUrl")}
             </Label>
             <div className="flex items-center gap-2">
                 <Input
@@ -256,7 +260,7 @@ function BarkPanel({ value, disabled, onSave }: { value: string | null; disabled
                     type={revealed ? "text" : "password"}
                     autoComplete="off"
                     spellCheck={false}
-                    placeholder="https://api.day.app/your_key"
+                    placeholder={t("settings.notifications.barkPlaceholder")}
                     value={draft}
                     disabled={disabled}
                     className="min-w-0 flex-1"
@@ -275,14 +279,14 @@ function BarkPanel({ value, disabled, onSave }: { value: string | null; disabled
                     variant="secondary"
                     size="sm"
                     aria-controls={`${ids}-bark`}
-                    aria-label={revealed ? "Hide Bark push URL" : "Show Bark push URL"}
+                    aria-label={revealed ? t("settings.notifications.hideBark") : t("settings.notifications.showBark")}
                     onClick={() => setRevealed((shown) => !shown)}
                 >
                     {revealed ? <EyeOff /> : <Eye />}
-                    {revealed ? "Hide" : "Show"}
+                    {revealed ? t("settings.notifications.hide") : t("settings.notifications.show")}
                 </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Paste the full push URL from your Bark app (e.g., https://api.day.app/your_key).</p>
+            <p className="text-xs text-muted-foreground">{t("settings.notifications.barkHelp")}</p>
         </div>
     );
 }

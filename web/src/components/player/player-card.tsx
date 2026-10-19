@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { api } from "@/lib/api";
 import { downloadRecordings } from "@/lib/downloads";
 import { formatBytes, formatClock } from "@/lib/format";
+import { intlLocale, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { PLAYBACK_RATES, usePlayer } from "./player-context";
 
@@ -70,13 +71,14 @@ export function PlayerCard({ recording, onChanged, sectionRef, className, showHe
 function recordedRange(startIso: string, durationMs: number): string {
     const start = new Date(startIso);
     const end = new Date(start.getTime() + durationMs);
-    const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(start);
-    const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+    const date = new Intl.DateTimeFormat(intlLocale(), { month: "short", day: "numeric", year: "numeric" }).format(start);
+    const time = new Intl.DateTimeFormat(intlLocale(), { hour: "numeric", minute: "2-digit" });
     return `${date} · ${time.format(start)}–${time.format(end)}`;
 }
 
 /** Title, recorded range, length and size, with the audio download on the right. */
 function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
+    const { t } = useI18n();
     const { id, filename, duration, startTime, filesize } = recording;
     const facts: string[] = [formatClock(duration / 1000)];
     if (filesize) facts.push(formatBytes(filesize));
@@ -87,7 +89,7 @@ function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
                 <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
                     {startTime ? (
                         <span>
-                            Recorded <time dateTime={startTime}>{recordedRange(startTime, duration)}</time>
+                            {t("library.player.recorded")} <time dateTime={startTime}>{recordedRange(startTime, duration)}</time>
                         </span>
                     ) : null}
                     {facts.map((fact) => (
@@ -102,18 +104,18 @@ function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
             </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label="Download audio" title="Download audio">
+                    <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label={t("library.player.downloadAudio")} title={t("library.player.downloadAudio")}>
                         <Download aria-hidden="true" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuItem onSelect={() => void downloadRecordings([id])}>
                         <Download />
-                        Download MP3
+                        {t("library.player.downloadMp3")}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => void downloadRecordings([id], "original")} data-testid="download-original">
                         <Download />
-                        Download original
+                        {t("library.player.downloadOriginal")}
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -139,6 +141,7 @@ function WaveformStatus({
     const { id, duration, waveformPeaks } = recording;
     const [decoding, setDecoding] = useState(false);
     const [failed, setFailed] = useState(false);
+    const { t } = useI18n();
     const attempted = useRef(false);
     const autoDecode = duration <= AUTO_DECODE_LIMIT_MS;
     const hasPeaks = Boolean(waveformPeaks?.length || localPeaks?.length);
@@ -175,16 +178,16 @@ function WaveformStatus({
     if (decoding) {
         return (
             <p role="status" className="text-xs text-muted-foreground">
-                Analyzing audio…
+                {t("library.player.analyzing")}
             </p>
         );
     }
     if (failed) {
         return (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Waveform could not be made.</span>
+                <span>{t("library.player.waveformFailed")}</span>
                 <Button variant="link" size="sm" onClick={() => void decode()}>
-                    Retry waveform
+                    {t("library.player.retryWaveform")}
                 </Button>
             </div>
         );
@@ -192,9 +195,9 @@ function WaveformStatus({
     if (!autoDecode) {
         return (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>This recording is long, so its waveform is not made automatically.</span>
+                <span>{t("library.player.waveformTooLong")}</span>
                 <Button variant="link" size="sm" onClick={() => void decode()}>
-                    Generate waveform
+                    {t("library.player.generateWaveform")}
                 </Button>
             </div>
         );
@@ -237,6 +240,7 @@ function downsample(peaks: number[], bars: number): number[] {
 // ---------------------------------------------------------------------------
 
 function Scrubber({ recordingId, peaks }: { recordingId: string; peaks: number[] | null }) {
+    const { t } = useI18n();
     const player = usePlayer();
     const ref = useRef<HTMLDivElement>(null);
     const dragging = useRef(false);
@@ -247,7 +251,7 @@ function Scrubber({ recordingId, peaks }: { recordingId: string; peaks: number[]
     const bars = useMemo(() => (peaks?.length ? downsample(peaks, BARS) : []), [peaks]);
     const fraction = duration > 0 ? Math.min(1, time / duration) : 0;
     const playedBars = Math.round(fraction * bars.length);
-    const label = useWaveform ? "Audio waveform scrubber" : "Seek";
+    const label = useWaveform ? t("library.player.waveformScrubber") : t("library.player.seek");
 
     const seekToPointer = (clientX: number) => {
         const el = ref.current;
@@ -288,7 +292,7 @@ function Scrubber({ recordingId, peaks }: { recordingId: string; peaks: number[]
         "aria-valuemin": 0,
         "aria-valuemax": Math.round(duration),
         "aria-valuenow": Math.round(time),
-        "aria-valuetext": `${formatClock(time)} of ${formatClock(duration)}`,
+        "aria-valuetext": t("library.player.seekValue", { time: formatClock(time), duration: formatClock(duration) }),
         onPointerDown,
         onPointerMove,
         onPointerUp,
@@ -323,6 +327,7 @@ function Scrubber({ recordingId, peaks }: { recordingId: string; peaks: number[]
 // ---------------------------------------------------------------------------
 
 function Transport() {
+    const { t } = useI18n();
     const player = usePlayer();
     if (!player) return null;
     const { playing, ready, time, duration, rate, volume, muted, toggle, skip, setRate, setVolume, toggleMute } = player;
@@ -342,24 +347,24 @@ function Transport() {
                 <span>{formatClock(duration)}</span>
             </p>
             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label="Skip back 15 seconds" disabled={!ready} onClick={() => skip(-15)}>
+                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label={t("library.player.skipBack")} disabled={!ready} onClick={() => skip(-15)}>
                     <SkipBack />
                 </Button>
                 <button
                     type="button"
                     data-testid="player-play"
-                    aria-label={playing ? "Pause" : "Play"}
+                    aria-label={playing ? t("library.player.pause") : t("library.player.play")}
                     onClick={toggle}
                     className="inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors duration-150 ease-out hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none"
                 >
                     {playing ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5 translate-x-px" aria-hidden="true" />}
                 </button>
-                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label="Skip forward 15 seconds" disabled={!ready} onClick={() => skip(15)}>
+                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label={t("library.player.skipForward")} disabled={!ready} onClick={() => skip(15)}>
                     <SkipForward />
                 </Button>
             </div>
             <div className="flex items-center justify-self-end gap-1 sm:gap-2">
-                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"} onClick={toggleMute}>
+                <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground" aria-label={muted ? t("library.player.unmute") : t("library.player.mute")} title={muted ? t("library.player.unmute") : t("library.player.mute")} onClick={toggleMute}>
                     {muted || volume === 0 ? <VolumeX /> : <Volume2 />}
                 </Button>
                 <Slider.Root
@@ -374,15 +379,15 @@ function Transport() {
                         <Slider.Range className="absolute h-full rounded-full bg-primary" />
                     </Slider.Track>
                     <Slider.Thumb
-                        aria-label="Volume"
+                        aria-label={t("library.player.volume")}
                         className="block size-4 rounded-full border border-border bg-background shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50"
                     />
                 </Slider.Root>
                 <button
                     type="button"
                     data-testid="player-speed"
-                    aria-label={`Playback speed ${rateLabel}. Click to change.`}
-                    title="Click to cycle playback speed"
+                    aria-label={t("library.player.speedAria", { rate: rateLabel })}
+                    title={t("library.player.speedTitle")}
                     onClick={cycleRate}
                     className="inline-flex h-10 w-12 items-center justify-center rounded-lg bg-secondary px-0 text-sm font-medium tabular-nums text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-2 focus-visible:outline-ring sm:h-8"
                 >

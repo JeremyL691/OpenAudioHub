@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,55 +10,37 @@ import { api, errorMessage } from "@/lib/api";
 import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { Group, Row, StackedField, ToggleRow, SettingSelect, AUTO, fromOptionValue, toOptionValue, useSettings, type CustomPrompt, type Option, type OptionGroup, type SummaryPromptConfig, type UserSettings } from "./shared";
 import { SUMMARY_PROMPT_PLACEHOLDER } from "./prompt-texts";
+import { t as translate, useI18n, type MessageKey } from "@/lib/i18n";
 
 // ---------- transcription ----------
 
-const LANGUAGES: Option[] = [
-    ["en", "English"],
-    ["es", "Spanish"],
-    ["fr", "French"],
-    ["de", "German"],
-    ["it", "Italian"],
-    ["pt", "Portuguese"],
-    ["nl", "Dutch"],
-    ["sv", "Swedish"],
-    ["da", "Danish"],
-    ["no", "Norwegian"],
-    ["fi", "Finnish"],
-    ["pl", "Polish"],
-    ["cs", "Czech"],
-    ["uk", "Ukrainian"],
-    ["ru", "Russian"],
-    ["ro", "Romanian"],
-    ["hu", "Hungarian"],
-    ["el", "Greek"],
-    ["tr", "Turkish"],
-    ["ar", "Arabic"],
-    ["he", "Hebrew"],
-    ["hi", "Hindi"],
-    ["id", "Indonesian"],
-    ["vi", "Vietnamese"],
-    ["th", "Thai"],
-    ["zh", "Chinese"],
-    ["ja", "Japanese"],
-    ["ko", "Korean"],
-].map(([value, label]) => ({ value, label }));
+const LANGUAGE_CODES = ["en", "es", "fr", "de", "it", "pt", "nl", "sv", "da", "no", "fi", "pl", "cs", "uk", "ru", "ro", "hu", "el", "tr", "ar", "he", "hi", "id", "vi", "th", "zh", "ja", "ko"] as const;
 
-const SPEAKER_COUNTS: Option[] = [
-    { value: AUTO, label: "Auto" },
-    ...Array.from({ length: 32 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-];
+/** The transcription languages, each named in the interface language. */
+function languageOptions(): Option[] {
+    return LANGUAGE_CODES.map((code) => ({ value: code, label: translate(`settings.ai.languageNames.${code}` as MessageKey) }));
+}
 
-const QUALITY: Option[] = [
-    { value: "fast", label: "Fast", description: "Faster transcription, lower accuracy" },
-    { value: "balanced", label: "Balanced", description: "Good balance of speed and accuracy" },
-    { value: "accurate", label: "Accurate", description: "Highest accuracy, slower transcription" },
+function speakerCounts(autoLabel: string): Option[] {
+    return [
+        { value: AUTO, label: autoLabel },
+        ...Array.from({ length: 32 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+    ];
+}
+
+const QUALITY_KEYS: { value: "fast" | "balanced" | "accurate"; labelKey: MessageKey; descriptionKey: MessageKey }[] = [
+    { value: "fast", labelKey: "settings.ai.qualityFast", descriptionKey: "settings.ai.qualityFastHint" },
+    { value: "balanced", labelKey: "settings.ai.qualityBalanced", descriptionKey: "settings.ai.qualityBalancedHint" },
+    { value: "accurate", labelKey: "settings.ai.qualityAccurate", descriptionKey: "settings.ai.qualityAccurateHint" },
 ];
 
 export function TranscriptionSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const id = (name: string) => `${ids}-${name}`;
+    const languages = languageOptions();
+    const quality: Option[] = QUALITY_KEYS.map((q) => ({ value: q.value, label: t(q.labelKey), description: t(q.descriptionKey) }));
 
     return (
         <div className="grid gap-4">
@@ -66,16 +48,16 @@ export function TranscriptionSection() {
                 <ToggleRow
                     id="auto-transcribe"
                     field="autoTranscribe"
-                    label="Auto-transcribe new recordings"
-                    hint="Transcribe new recordings on their own as soon as they arrive from your Plaud device"
+                    label={t("settings.ai.autoTranscribe")}
+                    hint={t("settings.ai.autoTranscribeHint")}
                 />
                 <ToggleRow
                     id="import-plaud-content"
                     field="importPlaudContent"
-                    label="Import Plaud transcripts and summaries"
-                    hint="If Plaud already transcribed a recording, bring its transcript and summary over on the next sync instead of spending a provider call on it again."
+                    label={t("settings.ai.importPlaud")}
+                    hint={t("settings.ai.importPlaudHint")}
                 />
-                <Row htmlFor={id("transcript-mode")} label="When Plaud has a transcript">
+                <Row htmlFor={id("transcript-mode")} label={t("settings.ai.whenPlaud")}>
                     <SettingSelect
                         id={id("transcript-mode")}
                         testId="transcript-mode"
@@ -83,13 +65,13 @@ export function TranscriptionSection() {
                         disabled={isSaving("transcriptMode")}
                         onValueChange={(v) => void save({ transcriptMode: v as UserSettings["transcriptMode"] })}
                         options={[
-                            { value: "plaud_only", label: "Use Plaud only (saves AI credits)" },
-                            { value: "keep_both", label: "Keep both — also run my provider" },
+                            { value: "plaud_only", label: t("settings.ai.plaudOnly") },
+                            { value: "keep_both", label: t("settings.ai.keepBoth") },
                         ]}
                         className="w-72 max-w-[55%] shrink-0"
                     />
                 </Row>
-                <Row htmlFor={id("preferred-source")} label="Primary transcript">
+                <Row htmlFor={id("preferred-source")} label={t("settings.ai.primaryTranscript")}>
                     <SettingSelect
                         id={id("preferred-source")}
                         testId="preferred-transcript-source"
@@ -98,7 +80,7 @@ export function TranscriptionSection() {
                         onValueChange={(v) => void save({ preferredTranscriptSource: v as UserSettings["preferredTranscriptSource"] })}
                         options={[
                             { value: "plaud", label: "Plaud" },
-                            { value: "openaudiohub", label: "My provider" },
+                            { value: "openaudiohub", label: t("settings.ai.myProvider") },
                         ]}
                         className="w-48 max-w-[55%] shrink-0"
                     />
@@ -108,8 +90,8 @@ export function TranscriptionSection() {
             <Group>
                 <Row
                     htmlFor={id("language")}
-                    label="Default transcription language"
-                    hint="Language to use for transcription. Auto-detect will identify the language automatically."
+                    label={t("settings.ai.defaultLanguage")}
+                    hint={t("settings.ai.defaultLanguageHint")}
                 >
                     <SettingSelect
                         id={id("language")}
@@ -117,21 +99,21 @@ export function TranscriptionSection() {
                         value={toOptionValue(settings.defaultTranscriptionLanguage)}
                         disabled={isSaving("defaultTranscriptionLanguage")}
                         onValueChange={(v) => void save({ defaultTranscriptionLanguage: fromOptionValue(v) })}
-                        options={[{ value: AUTO, label: "Auto-detect" }, ...LANGUAGES]}
+                        options={[{ value: AUTO, label: t("settings.ai.autoDetect") }, ...languages]}
                         className="w-64 max-w-[55%] shrink-0"
                     />
                 </Row>
                 <ToggleRow
                     id="speaker-diarization"
                     field="speakerDiarization"
-                    label="Speaker labels"
-                    hint="Breaks the transcript down by speaker (Speaker 1:, Speaker 2:). Used by ElevenLabs Scribe and by diarizing OpenAI models; other providers ignore it."
+                    label={t("settings.ai.speakerLabels")}
+                    hint={t("settings.ai.speakerLabelsHint")}
                 />
                 {settings.speakerDiarization ? (
                     <Row
                         htmlFor={id("speaker-count")}
-                        label="Expected speakers"
-                        hint="A hint, not a hard limit. Auto works well for most recordings."
+                        label={t("settings.ai.expectedSpeakers")}
+                        hint={t("settings.ai.expectedSpeakersHint")}
                         className="border-l-2 border-primary/20 py-3 pl-4"
                     >
                         <SettingSelect
@@ -140,19 +122,19 @@ export function TranscriptionSection() {
                             value={settings.diarizationSpeakerCount === null ? AUTO : String(settings.diarizationSpeakerCount)}
                             disabled={isSaving("diarizationSpeakerCount")}
                             onValueChange={(v) => void save({ diarizationSpeakerCount: v === AUTO ? null : Number(v) })}
-                            options={SPEAKER_COUNTS}
+                            options={speakerCounts(t("settings.ai.auto"))}
                             className="w-64 max-w-[55%] shrink-0"
                         />
                     </Row>
                 ) : null}
-                <Row htmlFor={id("quality")} label="Transcription quality" hint="Balance between transcription speed and accuracy">
+                <Row htmlFor={id("quality")} label={t("settings.ai.quality")} hint={t("settings.ai.qualityHint")}>
                     <SettingSelect
                         id={id("quality")}
                         testId="transcription-quality"
                         value={settings.transcriptionQuality}
                         disabled={isSaving("transcriptionQuality")}
                         onValueChange={(v) => void save({ transcriptionQuality: v as UserSettings["transcriptionQuality"] })}
-                        options={QUALITY}
+                        options={quality}
                         className="w-64 max-w-[55%] shrink-0"
                     />
                 </Row>
@@ -163,48 +145,54 @@ export function TranscriptionSection() {
 
 // ---------- summary ----------
 
-const SUMMARY_PRESETS: Option[] = [
-    { value: "general", label: "General Summary", description: "Overview, key points, topics, and follow-ups for any recording" },
-    {
-        value: "meeting-notes",
-        label: "Meeting Minutes",
-        description: "Attendees, discussion, decisions, and an owner, task, and due date for each action item",
-    },
-    {
-        value: "interview",
-        label: "Interview and Research",
-        description: "Background, questions and answers, pain points, quotes with timestamps, and insights",
-    },
-    { value: "call", label: "Phone and Client Call", description: "Purpose, requests, commitments, agreed next steps, and open issues" },
-    { value: "lecture", label: "Lecture and Study Notes", description: "Outline, core concepts, examples, pitfalls, and review questions" },
-    { value: "brainstorm", label: "Brainstorm", description: "Ideas grouped by theme, trade-offs, ideas set aside, and next experiments" },
-    { value: "voice-memo", label: "Voice Memo and Podcast", description: "Main points, ideas, quotes, resources mentioned, and to-dos" },
-    { value: "key-points", label: "Key Points", description: "A one-sentence overview and five to fifteen key points" },
-    { value: "action-items", label: "Action Items", description: "Owner, task, due date, and status for every action item" },
+const SUMMARY_PRESET_KEYS: { value: string; labelKey: MessageKey; descriptionKey: MessageKey }[] = [
+    { value: "general", labelKey: "settings.ai.presets.general", descriptionKey: "settings.ai.presets.generalHint" },
+    { value: "meeting-notes", labelKey: "settings.ai.presets.meeting", descriptionKey: "settings.ai.presets.meetingHint" },
+    { value: "interview", labelKey: "settings.ai.presets.interview", descriptionKey: "settings.ai.presets.interviewHint" },
+    { value: "call", labelKey: "settings.ai.presets.call", descriptionKey: "settings.ai.presets.callHint" },
+    { value: "lecture", labelKey: "settings.ai.presets.lecture", descriptionKey: "settings.ai.presets.lectureHint" },
+    { value: "brainstorm", labelKey: "settings.ai.presets.brainstorm", descriptionKey: "settings.ai.presets.brainstormHint" },
+    { value: "voice-memo", labelKey: "settings.ai.presets.voiceMemo", descriptionKey: "settings.ai.presets.voiceMemoHint" },
+    { value: "key-points", labelKey: "settings.ai.presets.keyPoints", descriptionKey: "settings.ai.presets.keyPointsHint" },
+    { value: "action-items", labelKey: "settings.ai.presets.actionItems", descriptionKey: "settings.ai.presets.actionItemsHint" },
 ];
 
-const OUTPUT_LANGUAGES: Option[] = [
-    { value: AUTO, label: "Auto (match transcript)" },
-    { value: "zh", label: "Chinese (Simplified)" },
-    { value: "en", label: "English" },
-    { value: "ja", label: "Japanese" },
-    { value: "ko", label: "Korean" },
-];
+/** The built-in presets in the current language. */
+function summaryPresets(): Option[] {
+    return SUMMARY_PRESET_KEYS.map((p) => ({ value: p.value, label: translate(p.labelKey), description: translate(p.descriptionKey) }));
+}
+
+const OUTPUT_LANGUAGE_CODES = [AUTO, "zh", "en", "ja", "ko"] as const;
+
+/** Output languages: Auto plus the four languages summaries are offered in. */
+function outputLanguages(): Option[] {
+    return OUTPUT_LANGUAGE_CODES.map((code) => ({
+        value: code,
+        label: code === AUTO ? translate("settings.ai.autoMatch") : translate(`settings.ai.languageNames.${code}` as MessageKey),
+    }));
+}
 
 export const DEFAULT_PROMPT_CONFIG: SummaryPromptConfig = { selectedPrompt: "general", customPrompts: [] };
 
-export function presetGroups(customPrompts: CustomPrompt[], builtIn: Option[] = SUMMARY_PRESETS): OptionGroup[] {
-    const groups: OptionGroup[] = [{ label: "Built-in", options: builtIn }];
+export function presetGroups(customPrompts: CustomPrompt[], builtIn: Option[] = summaryPresets()): OptionGroup[] {
+    const groups: OptionGroup[] = [{ label: translate("settings.ai.builtIn"), options: builtIn }];
     if (customPrompts.length > 0) {
-        groups.push({ label: "Custom", options: customPrompts.map((p) => ({ value: p.id, label: p.name })) });
+        groups.push({ label: translate("settings.ai.custom"), options: customPrompts.map((p) => ({ value: p.id, label: p.name })) });
     }
     return groups;
 }
 
-export const PROMPT_SAVE_FAILED = "Failed to save prompt. Changes reverted.";
-export const PROMPT_DELETE_FAILED = "Failed to delete prompt. Changes reverted.";
+/** The toast when a prompt save fails: resolved in the current language at call time. */
+export function promptSaveFailed(): string {
+    return translate("settings.ai.promptSaveFailed");
+}
+/** The toast when a prompt delete fails: resolved in the current language at call time. */
+export function promptDeleteFailed(): string {
+    return translate("settings.ai.promptDeleteFailed");
+}
 
 export function SummarySection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const id = (name: string) => `${ids}-${name}`;
@@ -213,17 +201,17 @@ export function SummarySection() {
     const [viewing, setViewing] = useState<CustomPrompt | null>(null);
     const [deleting, setDeleting] = useState<CustomPrompt | null>(null);
 
-    const groups = presetGroups(config.customPrompts, SUMMARY_PRESETS);
+    const groups = presetGroups(config.customPrompts, summaryPresets());
 
-    const saveList = async (customPrompts: CustomPrompt[]): Promise<boolean> => save({ summaryPrompt: { ...config, customPrompts } }, PROMPT_SAVE_FAILED);
+    const saveList = async (customPrompts: CustomPrompt[]): Promise<boolean> => save({ summaryPrompt: { ...config, customPrompts } }, promptSaveFailed());
 
     const removePrompt = async (target: CustomPrompt) => {
         const next: SummaryPromptConfig = {
             selectedPrompt: config.selectedPrompt === target.id ? "general" : config.selectedPrompt,
             customPrompts: config.customPrompts.filter((p) => p.id !== target.id),
         };
-        const ok = await save({ summaryPrompt: next }, PROMPT_DELETE_FAILED);
-        if (ok) toast.success("Prompt deleted");
+        const ok = await save({ summaryPrompt: next }, promptDeleteFailed());
+        if (ok) toast.success(t("settings.ai.promptDeleted"));
     };
 
     return (
@@ -231,8 +219,8 @@ export function SummarySection() {
             <div className="grid gap-4">
                 <StackedField
                     htmlFor={id("preset")}
-                    label="Default summary prompt"
-                    hint="The prompt that new summaries start from. You can override this per-recording."
+                    label={t("settings.ai.defaultPrompt")}
+                    hint={t("settings.ai.defaultPromptHint")}
                 >
                     <SettingSelect
                         id={id("preset")}
@@ -246,8 +234,8 @@ export function SummarySection() {
                 </StackedField>
                 <StackedField
                     htmlFor={id("output-language")}
-                    label="AI output language"
-                    hint="Applies to AI-generated summaries and titles. Auto follows whatever language the transcript is in."
+                    label={t("settings.ai.outputLanguage")}
+                    hint={t("settings.ai.outputLanguageHint")}
                 >
                     <SettingSelect
                         id={id("output-language")}
@@ -255,18 +243,18 @@ export function SummarySection() {
                         value={toOptionValue(settings.aiOutputLanguage)}
                         disabled={isSaving("aiOutputLanguage")}
                         onValueChange={(v) => void save({ aiOutputLanguage: fromOptionValue(v) })}
-                        options={OUTPUT_LANGUAGES}
+                        options={outputLanguages()}
                         className="w-full"
                     />
                 </StackedField>
                 <ToggleRow
                     id="auto-summarize"
                     field="autoSummarize"
-                    label="Auto-generate summary after transcription"
-                    hint="Runs after every successful transcription — manual, auto-sync, or re-transcribe. Switch on Auto-transcribe to cover recordings that arrive through sync as well. Uses one extra AI provider call per summary."
+                    label={t("settings.ai.autoSummarize")}
+                    hint={t("settings.ai.autoSummarizeHint")}
                     className="border-t border-border py-3"
                 />
-                <StackedField htmlFor={id("auto-preset")} label="Preset for auto-summary">
+                <StackedField htmlFor={id("auto-preset")} label={t("settings.ai.autoPreset")}>
                     <SettingSelect
                         id={id("auto-preset")}
                         testId="auto-summarize-preset"
@@ -281,14 +269,14 @@ export function SummarySection() {
 
             <section className="grid gap-4 border-t border-border pt-4">
                 <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-[13px] font-semibold text-foreground">Custom Summary Prompts</h2>
+                    <h2 className="text-[13px] font-semibold text-foreground">{t("settings.ai.customPrompts")}</h2>
                     <Button variant="primary" className="px-3" onClick={() => setEditor({ prompt: null })}>
                         <Plus />
-                        Add Custom Prompt
+                        {t("settings.ai.addPrompt")}
                     </Button>
                 </div>
                 {config.customPrompts.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-muted-foreground">No custom prompts yet. Create one to get started.</p>
+                    <p className="py-4 text-center text-sm text-muted-foreground">{t("settings.ai.noPrompts")}</p>
                 ) : (
                     <div className="divide-y divide-border">
                         {config.customPrompts.map((p) => (
@@ -296,12 +284,12 @@ export function SummarySection() {
                                 <p className="min-w-0 truncate text-[13px] font-medium">{p.name}</p>
                                 <div className="flex shrink-0 items-center gap-2">
                                     <Button variant="secondary" className="px-3" onClick={() => setViewing(p)}>
-                                        View
+                                        {t("settings.ai.view")}
                                     </Button>
-                                    <Button variant="secondary" size="icon" className="sm:size-9" aria-label={`Edit prompt ${p.name}`} onClick={() => setEditor({ prompt: p })}>
+                                    <Button variant="secondary" size="icon" className="sm:size-9" aria-label={t("settings.ai.editPrompt", { name: p.name })} onClick={() => setEditor({ prompt: p })}>
                                         <Pencil />
                                     </Button>
-                                    <Button variant="secondary" size="icon" className="sm:size-9" aria-label={`Delete prompt ${p.name}`} onClick={() => setDeleting(p)}>
+                                    <Button variant="secondary" size="icon" className="sm:size-9" aria-label={t("settings.ai.deletePrompt", { name: p.name })} onClick={() => setDeleting(p)}>
                                         <Trash2 className="text-destructive" />
                                     </Button>
                                 </div>
@@ -324,7 +312,7 @@ export function SummarySection() {
                             ? config.customPrompts.map((p) => (p.id === item.id ? item : p))
                             : [...config.customPrompts, item];
                         const ok = await saveList(customPrompts);
-                        if (ok) toast.success("Prompt saved");
+                        if (ok) toast.success(t("settings.ai.promptSaved"));
                         return ok;
                     }}
                 />
@@ -346,30 +334,32 @@ export function SummarySection() {
 
 // ---------- shared prompt dialogs ----------
 
-const PLACEHOLDER_CODE = <code className="rounded bg-muted px-1 py-0.5">{"{transcription}"}</code>;
-
 const PROMPT_COPY = {
     summary: {
-        create: (
-            <>
-                Write your own prompt for generating summaries. Use {PLACEHOLDER_CODE} as a placeholder for the transcription text. Ask for a JSON
-                object with <code className="rounded bg-muted px-1 py-0.5">summary</code>,{" "}
-                <code className="rounded bg-muted px-1 py-0.5">keyPoints</code>, and <code className="rounded bg-muted px-1 py-0.5">actionItems</code> fields.
-            </>
-        ),
+        createKey: "settings.ai.createSummaryPrompt",
         placeholder: SUMMARY_PROMPT_PLACEHOLDER,
         testId: "custom-summary-prompt",
     },
     title: {
-        create: (
-            <>Create a custom prompt for title generation. Use {PLACEHOLDER_CODE} as a placeholder for the transcription text.</>
-        ),
+        createKey: "settings.ai.createTitlePrompt",
         placeholder: "",
         testId: "custom-title-prompt",
     },
 } as const;
 
 /** Create or edit one custom prompt. The save button stays disabled until the name and the prompt are filled. */
+/** A prompt dialog intro with the inline `{transcription}` placeholder shown as a code chip. */
+function promptIntro(key: MessageKey): ReactNode {
+    const pieces = translate(key).split("{placeholder}");
+    return (
+        <>
+            {pieces[0]}
+            {pieces.length > 1 ? <code className="rounded bg-muted px-1 py-0.5">{"{transcription}"}</code> : null}
+            {pieces.slice(1).join("{placeholder}")}
+        </>
+    );
+}
+
 export function PromptEditDialog({
     existing,
     kind,
@@ -384,6 +374,7 @@ export function PromptEditDialog({
     onSave: (item: CustomPrompt) => Promise<boolean>;
     placeholder?: string;
 }) {
+    const { t } = useI18n();
     const copy = PROMPT_COPY[kind];
     const ids = useId();
     const [name, setName] = useState(existing?.name ?? "");
@@ -393,7 +384,7 @@ export function PromptEditDialog({
 
     const submit = async () => {
         if (!ready) {
-            toast.error("Name and prompt are required");
+            toast.error(t("settings.ai.nameAndPromptRequired"));
             return;
         }
         setSaving(true);
@@ -408,20 +399,20 @@ export function PromptEditDialog({
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto">
-                <DialogTitle>{existing ? "Edit Custom Prompt" : "Create Custom Prompt"}</DialogTitle>
-                <DialogDescription>{copy.create}</DialogDescription>
+                <DialogTitle>{existing ? t("settings.ai.editCustomPrompt") : t("settings.ai.createCustomPrompt")}</DialogTitle>
+                <DialogDescription>{promptIntro(copy.createKey)}</DialogDescription>
                 <div className="grid gap-4">
-                    <StackedField htmlFor={`${ids}-name`} label="Name">
+                    <StackedField htmlFor={`${ids}-name`} label={t("settings.ai.nameLabel")}>
                         <Input
                             id={`${ids}-name`}
                             data-testid={`${copy.testId}-name`}
-                            placeholder="My Custom Prompt"
+                            placeholder={t("settings.ai.namePlaceholder")}
                             value={name}
                             className="h-9 sm:h-9"
                             onChange={(e) => setName(e.target.value)}
                         />
                     </StackedField>
-                    <StackedField htmlFor={`${ids}-text`} label="Prompt">
+                    <StackedField htmlFor={`${ids}-text`} label={t("settings.ai.promptLabel")}>
                         <Textarea
                             id={`${ids}-text`}
                             data-testid={`${copy.testId}-text`}
@@ -435,11 +426,11 @@ export function PromptEditDialog({
                 </div>
                 <div className="flex justify-end gap-2">
                     <Button variant="secondary" className="px-4" onClick={onClose}>
-                        Cancel
+                        {t("settings.ai.cancel")}
                     </Button>
                     <Button variant="primary" className="px-4" disabled={!ready || saving} onClick={() => void submit()}>
-                        {saving ? <Spinner label="Saving prompt" /> : null}
-                        {existing ? "Save" : "Create"}
+                        {saving ? <Spinner label={t("settings.ai.savingPrompt")} /> : null}
+                        {existing ? t("settings.ai.save") : t("settings.ai.create")}
                     </Button>
                 </div>
             </DialogContent>
@@ -449,11 +440,12 @@ export function PromptEditDialog({
 
 /** Read-only view of a built-in or custom prompt. */
 export function PromptViewDialog({ title, description, text, onClose }: { title: string; description?: string; text: string; onClose: () => void }) {
+    const { t } = useI18n();
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[80vh] overflow-y-auto">
                 <DialogTitle>{title}</DialogTitle>
-                <DialogDescription className={description ? undefined : "sr-only"}>{description ?? "Custom prompt"}</DialogDescription>
+                <DialogDescription className={description ? undefined : "sr-only"}>{description ?? t("settings.ai.customPromptFallback")}</DialogDescription>
                 <pre className="overflow-x-auto rounded-md bg-muted p-4 font-mono text-sm whitespace-pre-wrap">{text}</pre>
             </DialogContent>
         </Dialog>
@@ -462,19 +454,18 @@ export function PromptViewDialog({ title, description, text, onClose }: { title:
 
 /** Confirms removal of a custom prompt. */
 export function DeletePromptDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+    const { t } = useI18n();
     return (
         <Dialog open onOpenChange={(open) => !open && onCancel()}>
             <DialogContent>
-                <DialogTitle>Delete this custom prompt?</DialogTitle>
-                <DialogDescription>
-                    Recordings you already summarized with this prompt keep their summaries, but you won't be able to run it again.
-                </DialogDescription>
+                <DialogTitle>{t("settings.ai.deletePromptTitle")}</DialogTitle>
+                <DialogDescription>{t("settings.ai.deletePromptBody")}</DialogDescription>
                 <DialogFooter>
                     <Button variant="secondary" onClick={onCancel}>
-                        Cancel
+                        {t("settings.ai.cancel")}
                     </Button>
                     <Button variant="destructive" onClick={onConfirm}>
-                        Delete
+                        {t("settings.ai.delete")}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -484,15 +475,10 @@ export function DeletePromptDialog({ onCancel, onConfirm }: { onCancel: () => vo
 
 // ---------- recording names ----------
 
-const TITLE_MODES: { value: UserSettings["recordingTitleMode"]; label: string; hint: string; testId: string }[] = [
-    { value: "original", label: "Original name", hint: "Keep the name from Plaud or the uploaded file.", testId: "recording-title-mode-original" },
-    { value: "date", label: "Date", hint: "Name by recording date, e.g. 2026-10-12.", testId: "recording-title-mode-date" },
-    {
-        value: "ai",
-        label: "AI title",
-        hint: "Generate a title from the transcript after transcription finishes.",
-        testId: "recording-title-mode-ai",
-    },
+const TITLE_MODES: { value: UserSettings["recordingTitleMode"]; labelKey: MessageKey; hintKey: MessageKey; testId: string }[] = [
+    { value: "original", labelKey: "settings.ai.nameOriginal", hintKey: "settings.ai.nameOriginalHint", testId: "recording-title-mode-original" },
+    { value: "date", labelKey: "settings.ai.nameDate", hintKey: "settings.ai.nameDateHint", testId: "recording-title-mode-date" },
+    { value: "ai", labelKey: "settings.ai.nameAi", hintKey: "settings.ai.nameAiHint", testId: "recording-title-mode-ai" },
 ];
 
 interface TitleCandidate {
@@ -503,12 +489,13 @@ interface TitleCandidate {
 }
 
 export function NamingSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
 
     return (
         <div className="grid gap-4">
-            <div role="radiogroup" aria-label="Recording name" className="divide-y divide-border rounded-xl bg-muted px-4">
+            <div role="radiogroup" aria-label={t("settings.ai.recordingName")} className="divide-y divide-border rounded-xl bg-muted px-4">
                 {TITLE_MODES.map((mode) => {
                     const itemId = `${ids}-${mode.value}`;
                     return (
@@ -529,8 +516,8 @@ export function NamingSection() {
                                 className="mt-0.5 size-4 shrink-0 accent-primary"
                             />
                             <span className="min-w-0 flex-1 space-y-0.5">
-                                <span className="block text-[13px] font-medium">{mode.label}</span>
-                                <span className="block text-xs text-muted-foreground">{mode.hint}</span>
+                                <span className="block text-[13px] font-medium">{t(mode.labelKey)}</span>
+                                <span className="block text-xs text-muted-foreground">{t(mode.hintKey)}</span>
                             </span>
                         </label>
                     );
@@ -540,8 +527,8 @@ export function NamingSection() {
                 <ToggleRow
                     id="sync-title-plaud"
                     field="syncTitleToPlaud"
-                    label="Sync titles to Plaud"
-                    hint="Send generated titles back to the Plaud device and rename the file there"
+                    label={t("settings.ai.syncTitle")}
+                    hint={t("settings.ai.syncTitleHint")}
                 />
             </div>
             <DateTitleRepair />
@@ -556,6 +543,7 @@ export function NamingSection() {
  * generated rather than typed, so the user picks.
  */
 function DateTitleRepair() {
+    const { t } = useI18n();
     const ids = useId();
     const [candidates, setCandidates] = useState<TitleCandidate[] | null>(null);
     const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -602,15 +590,15 @@ function DateTitleRepair() {
                 { method: "POST", json: { picks } },
             );
             if (result.renamed.length > 0) {
-                toast.success(result.renamed.length === 1 ? "1 title updated" : `${result.renamed.length} titles updated`);
+                toast.success(result.renamed.length === 1 ? t("settings.ai.titleUpdated") : t("settings.ai.titlesUpdated", { count: result.renamed.length }));
             }
             if (result.skipped.length > 0) {
-                toast.message(result.skipped.length === 1 ? "1 title was skipped" : `${result.skipped.length} titles were skipped`);
+                toast.message(result.skipped.length === 1 ? t("settings.ai.titleSkipped") : t("settings.ai.titlesSkipped", { count: result.skipped.length }));
             }
             window.dispatchEvent(new Event(RECORDINGS_CHANGED));
             await check();
         } catch (err) {
-            toast.error(errorMessage(err, "Could not update the titles"));
+            toast.error(errorMessage(err, t("settings.ai.couldNotUpdateTitles")));
         } finally {
             setApplying(false);
         }
@@ -622,23 +610,21 @@ function DateTitleRepair() {
         <section className="grid gap-3 border-t border-border pt-4">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1 space-y-0.5">
-                    <h2 className="text-[13px] font-semibold text-foreground">Existing date titles</h2>
-                    <p className="text-xs text-muted-foreground">
-                        Earlier versions named date titles with the time added. Check the list, then choose which to shorten to the date.
-                    </p>
+                    <h2 className="text-[13px] font-semibold text-foreground">{t("settings.ai.dateTitles")}</h2>
+                    <p className="text-xs text-muted-foreground">{t("settings.ai.dateTitlesHint")}</p>
                 </div>
                 <Button variant="secondary" className="px-3" disabled={loading || applying} onClick={() => void check()}>
                     {loading ? <Spinner /> : null}
-                    Check titles
+                    {t("settings.ai.checkTitles")}
                 </Button>
             </div>
             {error ? (
                 <p role="alert" className="text-sm text-destructive">
-                    {errorMessage(error, "Could not read the titles")}
+                    {errorMessage(error, t("settings.ai.couldNotReadTitles"))}
                 </p>
             ) : null}
             {candidates === null ? null : !open ? (
-                <p className="text-sm text-muted-foreground">No titles need fixing.</p>
+                <p className="text-sm text-muted-foreground">{t("settings.ai.noTitlesToFix")}</p>
             ) : (
                 <>
                     <ul data-testid="title-repair-list" className="divide-y divide-border rounded-xl bg-muted px-4">
@@ -654,7 +640,7 @@ function DateTitleRepair() {
                                 />
                                 <label htmlFor={`${ids}-repair-${candidate.id}`} className="min-w-0 flex-1 text-[13px] font-normal">
                                     <span className="block truncate">{candidate.filename}</span>
-                                    <span className="block text-xs text-muted-foreground">Becomes {candidate.suggestedFilename}</span>
+                                    <span className="block text-xs text-muted-foreground">{t("settings.ai.becomes", { name: candidate.suggestedFilename })}</span>
                                 </label>
                             </li>
                         ))}
@@ -662,7 +648,7 @@ function DateTitleRepair() {
                     <div className="flex justify-end">
                         <Button variant="primary" className="px-3" disabled={picked.size === 0 || applying} onClick={() => void apply()}>
                             {applying ? <Spinner /> : null}
-                            Update selected
+                            {t("settings.ai.updateSelected")}
                         </Button>
                     </div>
                 </>

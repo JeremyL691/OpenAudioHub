@@ -10,26 +10,30 @@ import { cn } from "@/lib/cn";
 import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { downloadText, safeFileName, summaryMarkdown, summaryPlain } from "./exports";
 import type { CustomSummaryPrompt, SummaryData, UserSummarySettings } from "./types";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 
-/** Built-in summary templates (spec/ai.md, "Summary presets"). */
-export const SUMMARY_PRESETS: { id: string; name: string }[] = [
-    { id: "general", name: "General Summary" },
-    { id: "meeting-notes", name: "Meeting Minutes" },
-    { id: "interview", name: "Interview and Research" },
-    { id: "call", name: "Phone and Client Call" },
-    { id: "lecture", name: "Lecture and Study Notes" },
-    { id: "brainstorm", name: "Brainstorm" },
-    { id: "voice-memo", name: "Voice Memo and Podcast" },
-    { id: "key-points", name: "Key Points" },
-    { id: "action-items", name: "Action Items" },
+/**
+ * Built-in summary templates (spec/ai.md, "Summary presets"). The preset ids and their prompt
+ * bodies stay as they are; only the names shown in the picker are translated.
+ */
+export const SUMMARY_PRESETS: { id: string; nameKey: MessageKey }[] = [
+    { id: "general", nameKey: "recording.preset.general" },
+    { id: "meeting-notes", nameKey: "recording.preset.meetingNotes" },
+    { id: "interview", nameKey: "recording.preset.interview" },
+    { id: "call", nameKey: "recording.preset.call" },
+    { id: "lecture", nameKey: "recording.preset.lecture" },
+    { id: "brainstorm", nameKey: "recording.preset.brainstorm" },
+    { id: "voice-memo", nameKey: "recording.preset.voiceMemo" },
+    { id: "key-points", nameKey: "recording.preset.keyPoints" },
+    { id: "action-items", nameKey: "recording.preset.actionItems" },
 ];
 
-const LANGUAGES: SelectOption[] = [
-    { value: "auto", label: "Auto (match transcript)" },
-    { value: "en", label: "English" },
-    { value: "zh", label: "Chinese" },
-    { value: "ja", label: "Japanese" },
-    { value: "ko", label: "Korean" },
+const SUMMARY_LANGUAGES: { value: string; labelKey: MessageKey }[] = [
+    { value: "auto", labelKey: "recording.summary.languageAuto" },
+    { value: "en", labelKey: "recording.summary.languageEnglish" },
+    { value: "zh", labelKey: "recording.summary.languageChinese" },
+    { value: "ja", labelKey: "recording.summary.languageJapanese" },
+    { value: "ko", labelKey: "recording.summary.languageKorean" },
 ];
 
 const POLL_MS = 1500;
@@ -42,6 +46,8 @@ export interface SummaryPanelProps {
 
 /** Summary of a recording: template and language, generate, key points, action items, copy, export and delete. */
 export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: SummaryPanelProps) {
+    const { t } = useI18n();
+    const languages: SelectOption[] = SUMMARY_LANGUAGES.map((l) => ({ value: l.value, label: t(l.labelKey) }));
     const [summary, setSummary] = useState<SummaryData | null>(null);
     const [loaded, setLoaded] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -67,7 +73,7 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
             setSummary(data);
         } catch (err) {
             if (!alive.current) return;
-            toast.error(errorMessage(err, "Could not load the summary"));
+            toast.error(errorMessage(err, t("recording.summary.loadFailed")));
         } finally {
             if (alive.current) setLoaded(true);
         }
@@ -121,14 +127,14 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
     }, [serverGenerating]);
 
     const templateOptions: SelectOption[] = [
-        ...SUMMARY_PRESETS.map((p) => ({ value: p.id, label: p.name })),
+        ...SUMMARY_PRESETS.map((p) => ({ value: p.id, label: t(p.nameKey) })),
         ...customPrompts.map((p) => ({ value: p.id, label: p.name })),
     ];
     const chosenTemplate = template ?? savedTemplate;
     const templateName = templateOptions.find((o) => o.value === (summary?.promptId ?? chosenTemplate))?.label;
     const busy = generating || serverGenerating;
     const hasSummary = hasSummaryContent(summary);
-    const failed = status === "failed" ? summary?.error ?? "The summary could not be made." : null;
+    const failed = status === "failed" ? summary?.error ?? t("recording.summary.failed") : null;
 
     const generate = async () => {
         setGenerating(true);
@@ -141,7 +147,7 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
             });
             setSummary({ ...next, generating: false });
         } catch (err) {
-            toast.error(errorMessage(err, "Summary failed"));
+            toast.error(errorMessage(err, t("recording.summary.generateFailed")));
         } finally {
             setGenerating(false);
             // The run ended, one way or the other; the row badge follows.
@@ -153,21 +159,21 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
         try {
             await api(`/api/recordings/${encodeURIComponent(recordingId)}/summary`, { method: "DELETE" });
             setSummary({ summary: null, keyPoints: [], actionItems: [], generating: false });
-            toast.success("Summary deleted");
+            toast.success(t("recording.summary.deleted"));
             window.dispatchEvent(new Event(RECORDINGS_CHANGED));
         } catch (err) {
-            toast.error(errorMessage(err, "Could not delete the summary"));
+            toast.error(errorMessage(err, t("recording.summary.deleteFailed")));
         }
     };
 
     const exportInput = () => {
         const meta = [
             templateName,
-            LANGUAGES.find((l) => l.value === summary?.language)?.label,
+            languages.find((l) => l.value === summary?.language)?.label,
             summary?.model,
         ].filter((x): x is string => Boolean(x));
         return {
-            title: `${recordingTitle} summary`,
+            title: t("recording.summary.exportTitle", { title: recordingTitle }),
             summary: summary?.summary ?? "",
             keyPoints: summary?.keyPoints ?? [],
             actionItems: summary?.actionItems ?? [],
@@ -175,14 +181,14 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
         };
     };
 
-    const base = safeFileName(recordingTitle ? `${recordingTitle} summary` : "Summary", "Summary");
+    const base = safeFileName(t("recording.summary.exportTitle", { title: recordingTitle || t("recording.tabs.summary") }), t("recording.tabs.summary"));
 
     const selects = busy ? null : (
         <>
-            <Field label={<span className="sr-only">Summary language</span>} className="gap-0">
-                <Select value={language} onValueChange={setLanguage} options={LANGUAGES} className="w-44 max-w-full [&>span:first-child]:truncate" />
+            <Field label={<span className="sr-only">{t("recording.summary.language")}</span>} className="gap-0">
+                <Select value={language} onValueChange={setLanguage} options={languages} className="w-44 max-w-full [&>span:first-child]:truncate" />
             </Field>
-            <Field label={<span className="sr-only">Template</span>} className="gap-0">
+            <Field label={<span className="sr-only">{t("recording.summary.template")}</span>} className="gap-0">
                 <Select
                     value={chosenTemplate}
                     onValueChange={(next) => {
@@ -199,20 +205,20 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
     return (
         <Card className="content-start" data-testid="summary-panel">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-[17px] font-semibold tracking-tight">Summary</h2>
+                <h2 className="text-[17px] font-semibold tracking-tight">{t("recording.tabs.summary")}</h2>
                 {hasTranscript ? (
                     <div className="flex flex-wrap items-center gap-2">
                         {selects}
                         <Button variant="secondary" data-testid="summary-generate" disabled={busy || !loaded} onClick={() => void generate()}>
                             {busy ? null : hasSummary ? <RefreshCw aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
-                            {busy ? "Generating…" : hasSummary ? "Re-generate" : "Summarize"}
+                            {busy ? t("recording.summary.generating") : hasSummary ? t("recording.summary.regenerate") : t("recording.summary.generate")}
                         </Button>
                     </div>
                 ) : null}
             </div>
 
             {!hasTranscript ? (
-                <p className="mt-2 text-sm text-muted-foreground">A summary is available once the recording has a transcript.</p>
+                <p className="mt-2 text-sm text-muted-foreground">{t("recording.summary.needsTranscript")}</p>
             ) : (
                 <>
                     {failed && !busy ? (
@@ -223,33 +229,33 @@ export function SummaryPanel({ recordingId, recordingTitle, hasTranscript }: Sum
                     {hasSummary && summary ? (
                         <div data-testid="summary-content" className="mt-4 grid gap-4 text-sm leading-6 text-foreground">
                             {summary.summary?.trim() ? <Formatted text={summary.summary} /> : null}
-                            {summary.keyPoints?.length ? <ListSection title="Key Points" items={summary.keyPoints} /> : null}
+                            {summary.keyPoints?.length ? <ListSection title={t("recording.summary.keyPoints")} items={summary.keyPoints} /> : null}
                             {summary.actionItems?.length ? <ActionSection items={summary.actionItems} /> : null}
                         </div>
                     ) : loaded && !busy ? (
-                        <p className="mt-4 text-sm text-muted-foreground">No summary yet. Click "Summarize" to generate one.</p>
+                        <p className="mt-4 text-sm text-muted-foreground">{t("recording.summary.empty")}</p>
                     ) : null}
 
                     {hasSummary && summary ? (
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                 {templateName ? <Chip>{templateName}</Chip> : null}
-                                {summary.language ? <Chip>{LANGUAGES.find((l) => l.value === summary.language)?.label ?? summary.language}</Chip> : null}
+                                {summary.language ? <Chip>{languages.find((l) => l.value === summary.language)?.label ?? summary.language}</Chip> : null}
                                 {summary.provider ? <Chip>{summary.provider}</Chip> : null}
                                 {summary.model ? <Chip mono>{summary.model}</Chip> : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(summaryPlain(exportInput())).then(() => toast.success("Summary copied"), () => toast.error("Could not copy the summary"))}>
-                                    <Copy aria-hidden="true" /> Copy
+                                <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(summaryPlain(exportInput())).then(() => toast.success(t("recording.summary.copied")), () => toast.error(t("recording.summary.copyFailed")))}>
+                                    <Copy aria-hidden="true" /> {t("common.action.copy")}
                                 </Button>
-                                <Button variant="ghost" size="sm" aria-label="Download summary as Markdown" onClick={() => downloadText(`${base}.md`, "text/markdown", summaryMarkdown(exportInput()))}>
+                                <Button variant="ghost" size="sm" aria-label={t("recording.summary.downloadMarkdown")} onClick={() => downloadText(`${base}.md`, "text/markdown", summaryMarkdown(exportInput()))}>
                                     <Download aria-hidden="true" /> Markdown
                                 </Button>
-                                <Button variant="ghost" size="sm" aria-label="Download summary as TXT" onClick={() => downloadText(`${base}.txt`, "text/plain", summaryPlain(exportInput()))}>
+                                <Button variant="ghost" size="sm" aria-label={t("recording.summary.downloadTxt")} onClick={() => downloadText(`${base}.txt`, "text/plain", summaryPlain(exportInput()))}>
                                     <Download aria-hidden="true" /> TXT
                                 </Button>
-                                <Button variant="ghost" size="sm" className="text-destructive" aria-label="Delete summary" disabled={busy} onClick={() => void remove()}>
-                                    <Trash2 aria-hidden="true" /> Delete
+                                <Button variant="ghost" size="sm" className="text-destructive" aria-label={t("recording.summary.delete")} disabled={busy} onClick={() => void remove()}>
+                                    <Trash2 aria-hidden="true" /> {t("common.action.delete")}
                                 </Button>
                             </div>
                         </div>
@@ -326,9 +332,10 @@ function ListSection({ title, items }: { title: string; items: string[] }) {
 }
 
 function ActionSection({ items }: { items: string[] }) {
+    const { t } = useI18n();
     return (
         <div>
-            <h4 className="mb-2 text-[13px] font-semibold">Action Items</h4>
+            <h4 className="mb-2 text-[13px] font-semibold">{t("recording.summary.actionItems")}</h4>
             <ul className="space-y-1">
                 {items.map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm leading-6">

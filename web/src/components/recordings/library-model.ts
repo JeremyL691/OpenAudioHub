@@ -1,6 +1,7 @@
 import { recordingStage, RECORDING_STAGE_LABELS, type RecordingStage } from "@/components/recording/pipeline-labels";
 import { formatDate, formatDuration, formatTime } from "@/lib/format";
 import { sourceOf, type Recording } from "@/lib/recordings";
+import { t, tn, type MessageKey } from "@/lib/i18n";
 
 // Pure helpers for the library list: parsing URL and settings values, filtering,
 // sorting, day grouping and labels. No React here.
@@ -10,18 +11,24 @@ export type StatusFilter = "all" | "transcribed" | "processing" | "untranscribed
 export type SortOrder = "newest" | "oldest" | "name";
 export type Density = "comfortable" | "compact";
 
+/** The collection labels, as translation keys resolved when read. */
 export const COLLECTION_LABELS: Record<Collection, string> = {
-    starred: "Starred",
-    recent: "Last 7 days",
-    plaud: "From Plaud",
-    uploaded: "Uploaded",
+    starred: "library.collections.starred",
+    recent: "library.collections.recent",
+    plaud: "library.collections.plaud",
+    uploaded: "library.collections.uploaded",
 };
 
-export const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "transcribed", label: "Transcribed" },
-    { value: "processing", label: "Processing" },
-    { value: "untranscribed", label: "Untranscribed" },
+/** The collection name in the current language. */
+export function collectionLabel(collection: Collection): string {
+    return t(COLLECTION_LABELS[collection] as MessageKey);
+}
+
+export const STATUS_FILTERS: { value: StatusFilter; labelKey: MessageKey }[] = [
+    { value: "all", labelKey: "library.filterAll" },
+    { value: "transcribed", labelKey: "library.filterTranscribed" },
+    { value: "processing", labelKey: "library.filterProcessing" },
+    { value: "untranscribed", labelKey: "library.filterUntranscribed" },
 ];
 
 const COLLECTION_KEYS = Object.keys(COLLECTION_LABELS) as Collection[];
@@ -142,8 +149,8 @@ function dayLabel(d: Date, now: Date): string {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
     const key = localDayKey(d);
-    if (key === localDayKey(today)) return "Today";
-    if (key === localDayKey(yesterday)) return "Yesterday";
+    if (key === localDayKey(today)) return t("library.today");
+    if (key === localDayKey(yesterday)) return t("library.yesterday");
     return formatDate(d, {
         weekday: "long",
         month: "long",
@@ -160,7 +167,7 @@ export function formatClipDuration(ms: number): string {
 }
 
 export function sourceLabel(r: Recording): string {
-    return sourceOf(r) === "plaud" ? "Plaud" : "Upload";
+    return sourceOf(r) === "plaud" ? t("dashboard.sourcePlaud") : t("dashboard.sourceUpload");
 }
 
 export interface RowStatus {
@@ -170,7 +177,7 @@ export interface RowStatus {
 
 export function statusOf(r: Recording): RowStatus {
     const stage = recordingStage(r);
-    return { stage, label: RECORDING_STAGE_LABELS[stage] };
+    return { stage, label: t(RECORDING_STAGE_LABELS[stage]) };
 }
 
 /** Relative time in the row's meta line, for example "less than a minute ago" or "12 minutes ago". */
@@ -178,13 +185,13 @@ export function formatAgo(value: string, now: number = Date.now()): string {
     const time = Date.parse(value);
     if (Number.isNaN(time)) return "";
     const seconds = Math.max(0, (now - time) / 1000);
-    if (seconds < 60) return "less than a minute ago";
+    if (seconds < 60) return t("library.lessThanMinute");
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+    if (minutes < 60) return tn("library.minutesAgo", minutes);
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+    if (hours < 24) return tn("library.hoursAgo", hours);
     const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} ${days === 1 ? "day" : "days"} ago`;
+    if (days < 30) return tn("library.daysAgo", days);
     return formatDate(value, { dateStyle: "medium" });
 }
 
@@ -192,22 +199,20 @@ export function formatAgo(value: string, now: number = Date.now()): string {
 export function rowLabel(r: Recording): string {
     const status = statusOf(r);
     const when = `${formatDate(r.startTime, { month: "short", day: "numeric", year: "numeric" })}, ${formatTime(r.startTime)}`;
-    return [r.filename, r.starredAt ? "Starred" : null, `${formatClipDuration(r.duration)}`, when, sourceLabel(r), status.label]
+    return [r.filename, r.starredAt ? t("library.starred") : null, `${formatClipDuration(r.duration)}`, when, sourceLabel(r), status.label]
         .filter(Boolean)
         .join(", ");
 }
 
 /** "3 of 3 recordings" in the list header, or "1 matching of 3 recordings" while a search or filter narrows it. */
 export function countLabel(shown: number, total: number, narrowed = false): string {
-    const noun = total === 1 ? "recording" : "recordings";
-    return `${shown}${narrowed ? " matching" : ""} of ${total} ${noun}`;
+    return tn(narrowed ? "library.countMatching" : "library.countOf", total, { shown });
 }
 
 /** Day heading summary, for example "3 recordings · 0 min" or "2 recordings · 1 h 5 min". Whole minutes, rounded down. */
 export function groupSummary(count: number, totalMs: number): string {
-    const noun = count === 1 ? "recording" : "recordings";
     const minutes = Math.floor(totalMs / 60000);
     const hours = Math.floor(minutes / 60);
-    const span = hours > 0 ? `${hours} h ${minutes % 60} min` : `${minutes} min`;
-    return `${count} ${noun} · ${span}`;
+    const span = hours > 0 ? t("common.duration.hours", { hours, minutes: minutes % 60 }) : t("common.duration.minutes", { value: minutes });
+    return `${tn("library.groupRecordings", count, { count })} · ${span}`;
 }

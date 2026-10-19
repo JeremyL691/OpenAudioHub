@@ -1,0 +1,151 @@
+{
+    "detail": {
+        "loading": "녹음 불러오는 중",
+        "missingTitle": "녹음을 찾을 수 없습니다",
+        "missingBody": "삭제되었거나 링크가 잘못되었을 수 있습니다.",
+        "loadFailedTitle": "이 녹음을 불러오지 못했습니다",
+        "loadFailedBody": "잠시 후 다시 시도하세요.",
+        "sections": "녹음 섹션"
+    },
+    "tabs": {
+        "transcript": "스크립트",
+        "summary": "요약",
+        "details": "세부 정보"
+    },
+    "header": {
+        "backToRecordings": "녹음 목록으로 돌아가기",
+        "star": "별표 추가",
+        "unstar": "별표 해제",
+        "starFailed": "별표를 변경하지 못했습니다",
+        "actions": "녹음 작업",
+        "downloadAudio": "오디오 다운로드",
+        "exportTxt": "TXT 내보내기",
+        "exportSrt": "SRT 내보내기",
+        "exportVtt": "VTT 내보내기",
+        "exportJson": "JSON 내보내기",
+        "delete": "녹음 삭제",
+        "deleteTitle": "이 녹음을 삭제할까요?",
+        "deleteBody": "OpenAudioHub에서 오디오 파일, 스크립트, AI 요약이 영구적으로 삭제됩니다. Plaud 계정의 녹음은 영향을 받지 않지만 OpenAudioHub로 다시 동기화되지 않습니다.",
+        "deleting": "삭제 중…",
+        "deleted": "녹음을 삭제했습니다",
+        "deleteFailed": "녹음을 삭제하지 못했습니다"
+    },
+    "title": {
+        "name": "녹음 이름",
+        "renameAria": "{title} 이름 바꾸기",
+        "empty": "이름은 비워 둘 수 없습니다",
+        "tooLong": "이름은 200자 이하여야 합니다",
+        "renameFailed": "녹음 이름을 바꾸지 못했습니다."
+    },
+    "phase": {
+        "queued": "시작 대기 중",
+        "download": "원본 오디오 가져오는 중",
+        "decode": "오디오 준비 중",
+        "vad": "음성 찾는 중",
+        "chunking": "음성을 구간으로 나누는 중",
+        "transcribing": "오디오 스크립트 작성 중",
+        "completed": "스크립트 완료",
+        "needsAlignment": "타임스탬프 없이 저장됨",
+        "pausedDisk": "일시정지: 디스크 공간 대기 중",
+        "failed": "스크립트 작성 실패",
+        "cancelled": "스크립트 작성 취소됨",
+        "unknown": "스크립트 처리 중"
+    },
+    "stage": {
+        "untranscribed": "스크립트 없음",
+        "transcribed": "스크립트 준비됨",
+        "summarized": "요약 준비됨",
+        "transcribing": "스크립트 작성 중",
+        "summarizing": "요약 중"
+    },
+    "transcribe": {
+        "action": "스크립트 작성",
+        "retranscribe": "다시 스크립트 작성",
+        "inProgress": "스크립트 작성 중…",
+        "complete": "스크립트 작성 완료",
+        "failed": "스크립트 작성 실패",
+        "dialogTitle": "녹음 스크립트 작성",
+        "dialogRetitle": "녹음 다시 스크립트 작성",
+        "dialogBody": "현재 스크립트를 교체하며 요약도 함께 삭제됩니다.",
+        "provider": "제공자",
+        "model": "모델",
+        "modelHint": "비워 두면 {model}을 사용합니다.",
+        "defaultModel": "제공자의 기본 모델"
+    },
+    "browser": {
+        "action": "브라우저에서 스크립트 작성",
+        "title": "브라우저에서 바로 Whisper를 실행합니다. API 키가 필요 없고 오디오는 기기를 떠나지 않습니다."
+    },
+    "transcript": {
+        "source": "스크립트 출처",
+        "sourceProvider": "사용 중인 제공자",
+        "sourcePlaud": "Plaud",
+        "sourceMix": "혼합",
+        "followPlayback": "재생 따라가기",
+        "downloadTxt": "스크립트를 TXT로 다운로드",
+        "downloadJson": "스크립트를 JSON으로 다운로드",
+        "noTimestamps": "이 스크립트는 타임스탬프 없이 저장되어 타임라인과 SRT, VTT 내보내기를 사용할 수 없습니다.",
+        "empty": "아직 스크립트가 없습니다. 위의 스크립트 작성 버튼을 사용하세요.",
+        "deleteTitle": "이 스크립트를 삭제할까요?",
+        "deleteBody": "스크립트와 요약이 삭제됩니다. 나중에 다시 스크립트를 작성하고 요약할 수 있습니다.",
+        "deleted": "스크립트를 삭제했습니다",
+        "deleteFailed": "스크립트를 삭제하지 못했습니다",
+        "words": "{count}단어",
+        "characters": "{count}자",
+        "language": "언어: {language}"
+    },
+    "pipeline": {
+        "queueing": "스크립트 대기열에 추가 중…",
+        "pausedDisk": "디스크 공간을 기다리는 중입니다. 공간이 생기면 자동으로 다시 처리합니다.",
+        "progress": "오디오 전처리 진행률",
+        "cancelFailed": "취소하지 못했습니다",
+        "retryFailed": "다시 시도하지 못했습니다"
+    },
+    "details": {
+        "duration": "길이",
+        "fileSize": "파일 크기",
+        "device": "기기",
+        "date": "날짜",
+        "collapse": "접기",
+        "expand": "펼치기",
+        "fileSizeValue": "원본 {original} · MP3 약 {mp3}"
+    },
+    "preset": {
+        "general": "일반 요약",
+        "meetingNotes": "회의록",
+        "interview": "인터뷰 및 리서치",
+        "call": "전화 및 고객 통화",
+        "lecture": "강의 및 학습 노트",
+        "brainstorm": "브레인스토밍",
+        "voiceMemo": "음성 메모 및 팟캐스트",
+        "keyPoints": "핵심 포인트",
+        "actionItems": "할 일"
+    },
+    "summary": {
+        "language": "요약 언어",
+        "languageAuto": "자동 (스크립트 따름)",
+        "languageEnglish": "영어",
+        "languageChinese": "중국어",
+        "languageJapanese": "일본어",
+        "languageKorean": "한국어",
+        "template": "템플릿",
+        "generate": "요약",
+        "regenerate": "다시 생성",
+        "generating": "생성 중…",
+        "needsTranscript": "스크립트가 있으면 요약을 만들 수 있습니다.",
+        "failed": "요약을 만들지 못했습니다.",
+        "empty": "아직 요약이 없습니다. \"요약\"을 클릭하여 생성하세요.",
+        "keyPoints": "핵심 포인트",
+        "actionItems": "할 일",
+        "exportTitle": "{title} 요약",
+        "copied": "요약을 복사했습니다",
+        "copyFailed": "요약을 복사하지 못했습니다",
+        "downloadMarkdown": "요약을 Markdown으로 다운로드",
+        "downloadTxt": "요약을 TXT로 다운로드",
+        "delete": "요약 삭제",
+        "deleted": "요약을 삭제했습니다",
+        "deleteFailed": "요약을 삭제하지 못했습니다",
+        "loadFailed": "요약을 불러오지 못했습니다",
+        "generateFailed": "요약 생성 실패"
+    }
+}

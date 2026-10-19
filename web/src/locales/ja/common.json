@@ -1,0 +1,35 @@
+{
+    "action": {
+        "save": "保存",
+        "cancel": "キャンセル",
+        "delete": "削除",
+        "remove": "取り除く",
+        "retry": "再試行",
+        "close": "閉じる",
+        "copy": "コピー",
+        "copied": "コピーしました",
+        "done": "完了",
+        "edit": "編集",
+        "rename": "名前を変更",
+        "search": "検索",
+        "loading": "読み込み中",
+        "back": "戻る",
+        "next": "次へ",
+        "skip": "スキップ",
+        "download": "ダウンロード",
+        "upload": "アップロード",
+        "confirm": "確認",
+        "deleting": "削除中…"
+    },
+    "error": {
+        "generic": "問題が発生しました。",
+        "loadFailed": "読み込めませんでした。",
+        "saveFailed": "変更を保存できませんでした。"
+    },
+    "duration": {
+        "seconds": "{value} 秒",
+        "minutes": "{value} 分",
+        "hours": "{hours} 時間 {minutes} 分",
+        "recorded": "{value} 録音済み"
+    }
+}

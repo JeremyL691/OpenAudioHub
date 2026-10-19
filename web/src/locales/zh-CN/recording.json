@@ -1,0 +1,151 @@
+{
+    "detail": {
+        "loading": "正在加载录音",
+        "missingTitle": "找不到录音",
+        "missingBody": "它可能已被删除，或链接有误。",
+        "loadFailedTitle": "无法加载这条录音",
+        "loadFailedBody": "请稍后重试。",
+        "sections": "录音分区"
+    },
+    "tabs": {
+        "transcript": "转写",
+        "summary": "摘要",
+        "details": "详情"
+    },
+    "header": {
+        "backToRecordings": "返回录音列表",
+        "star": "加星标",
+        "unstar": "取消星标",
+        "starFailed": "无法更新星标",
+        "actions": "录音操作",
+        "downloadAudio": "下载音频",
+        "exportTxt": "导出 TXT",
+        "exportSrt": "导出 SRT",
+        "exportVtt": "导出 VTT",
+        "exportJson": "导出 JSON",
+        "delete": "删除录音",
+        "deleteTitle": "删除这条录音？",
+        "deleteBody": "这将从 OpenAudioHub 中永久删除音频文件、转写和 AI 摘要。Plaud 账户上的录音不受影响，但不会再同步回 OpenAudioHub。",
+        "deleting": "删除中…",
+        "deleted": "录音已删除",
+        "deleteFailed": "删除录音失败"
+    },
+    "title": {
+        "name": "录音名称",
+        "renameAria": "重命名 {title}",
+        "empty": "名称不能为空",
+        "tooLong": "名称不能超过 200 个字符",
+        "renameFailed": "无法重命名录音。"
+    },
+    "phase": {
+        "queued": "等待开始",
+        "download": "正在获取原始音频",
+        "decode": "正在准备音频",
+        "vad": "正在寻找语音",
+        "chunking": "正在切分语音片段",
+        "transcribing": "正在转写音频",
+        "completed": "转写完成",
+        "needsAlignment": "已保存，但没有时间戳",
+        "pausedDisk": "已暂停：等待磁盘空间",
+        "failed": "转写失败",
+        "cancelled": "转写已取消",
+        "unknown": "正在处理转写"
+    },
+    "stage": {
+        "untranscribed": "未转写",
+        "transcribed": "转写已就绪",
+        "summarized": "摘要已就绪",
+        "transcribing": "转写中",
+        "summarizing": "生成摘要中"
+    },
+    "transcribe": {
+        "action": "转写",
+        "retranscribe": "重新转写",
+        "inProgress": "转写中…",
+        "complete": "转写完成",
+        "failed": "转写失败",
+        "dialogTitle": "转写录音",
+        "dialogRetitle": "重新转写录音",
+        "dialogBody": "将替换当前转写，摘要也会一并移除。",
+        "provider": "服务商",
+        "model": "模型",
+        "modelHint": "留空则使用 {model}。",
+        "defaultModel": "服务商的默认模型"
+    },
+    "browser": {
+        "action": "在浏览器中转写",
+        "title": "直接在浏览器中运行 Whisper。无需 API 密钥，音频不会离开你的设备。"
+    },
+    "transcript": {
+        "source": "转写来源",
+        "sourceProvider": "你的服务商",
+        "sourcePlaud": "Plaud",
+        "sourceMix": "混合",
+        "followPlayback": "跟随播放",
+        "downloadTxt": "下载转写为 TXT",
+        "downloadJson": "下载转写为 JSON",
+        "noTimestamps": "这份转写保存时没有时间戳，因此时间轴以及 SRT、VTT 导出不可用。",
+        "empty": "还没有转写。请使用上方的转写按钮。",
+        "deleteTitle": "删除这份转写？",
+        "deleteBody": "转写及其摘要将被移除，之后可以重新转写和生成摘要。",
+        "deleted": "转写已删除",
+        "deleteFailed": "无法删除转写",
+        "words": "{count} 个词",
+        "characters": "{count} 个字符",
+        "language": "语言：{language}"
+    },
+    "pipeline": {
+        "queueing": "正在排队转写…",
+        "pausedDisk": "正在等待磁盘空间。空间释放后会自动继续处理。",
+        "progress": "音频预处理进度",
+        "cancelFailed": "无法取消",
+        "retryFailed": "无法重试"
+    },
+    "details": {
+        "duration": "时长",
+        "fileSize": "文件大小",
+        "device": "设备",
+        "date": "日期",
+        "collapse": "收起",
+        "expand": "展开",
+        "fileSizeValue": "原始 {original} · MP3 约 {mp3}"
+    },
+    "preset": {
+        "general": "通用摘要",
+        "meetingNotes": "会议纪要",
+        "interview": "访谈与研究",
+        "call": "电话与客户通话",
+        "lecture": "讲座与学习笔记",
+        "brainstorm": "头脑风暴",
+        "voiceMemo": "语音备忘与播客",
+        "keyPoints": "要点",
+        "actionItems": "行动项"
+    },
+    "summary": {
+        "language": "摘要语言",
+        "languageAuto": "自动（跟随转写）",
+        "languageEnglish": "英语",
+        "languageChinese": "中文",
+        "languageJapanese": "日语",
+        "languageKorean": "韩语",
+        "template": "模板",
+        "generate": "生成摘要",
+        "regenerate": "重新生成",
+        "generating": "生成中…",
+        "needsTranscript": "录音有转写之后即可生成摘要。",
+        "failed": "无法生成摘要。",
+        "empty": "还没有摘要。点击“生成摘要”来创建。",
+        "keyPoints": "要点",
+        "actionItems": "行动项",
+        "exportTitle": "{title} 摘要",
+        "copied": "摘要已复制",
+        "copyFailed": "无法复制摘要",
+        "downloadMarkdown": "下载摘要为 Markdown",
+        "downloadTxt": "下载摘要为 TXT",
+        "delete": "删除摘要",
+        "deleted": "摘要已删除",
+        "deleteFailed": "无法删除摘要",
+        "loadFailed": "无法加载摘要",
+        "generateFailed": "生成摘要失败"
+    }
+}

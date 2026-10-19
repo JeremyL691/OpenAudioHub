@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { usePlayer } from "./player-context";
+import { useI18n } from "@/lib/i18n";
 
 /** Window event the shortcut Ctrl/Cmd+K fires. The command palette listens for it. */
 export const OPEN_COMMAND_PALETTE_EVENT = "oah:open-command-palette";
@@ -11,32 +12,32 @@ export const OPEN_SHORTCUTS_EVENT = "oah:open-shortcuts";
 
 const SHORTCUT_GROUPS = [
     {
-        title: "Global",
+        title: "shell.shortcuts.groupGlobal",
         rows: [
-            { label: "Command palette", keys: ["⌘", "K"] },
-            { label: "Show this cheatsheet", keys: ["?"] },
-            { label: "Open settings", keys: [","] },
-            { label: "Focus search", keys: ["/"] },
+            { label: "shell.shortcuts.commandPalette", keys: ["⌘", "K"] },
+            { label: "shell.shortcuts.cheatsheet", keys: ["?"] },
+            { label: "shell.shortcuts.openSettings", keys: [","] },
+            { label: "shell.shortcuts.focusSearch", keys: ["/"] },
         ],
     },
     {
-        title: "Recording list",
+        title: "shell.shortcuts.groupList",
         rows: [
-            { label: "Next recording", keys: ["j"] },
-            { label: "Previous recording", keys: ["k"] },
+            { label: "shell.shortcuts.nextRecording", keys: ["j"] },
+            { label: "shell.shortcuts.previousRecording", keys: ["k"] },
         ],
     },
     {
-        title: "Player",
+        title: "shell.shortcuts.groupPlayer",
         rows: [
-            { label: "Play / pause", keys: ["Space"] },
-            { label: "Seek back 5s", keys: ["←"] },
-            { label: "Seek forward 5s", keys: ["→"] },
-            { label: "Volume up", keys: ["↑"] },
-            { label: "Volume down", keys: ["↓"] },
+            { label: "shell.shortcuts.playPause", keys: ["Space"] },
+            { label: "shell.shortcuts.seekBack", keys: ["←"] },
+            { label: "shell.shortcuts.seekForward", keys: ["→"] },
+            { label: "shell.shortcuts.volumeUp", keys: ["↑"] },
+            { label: "shell.shortcuts.volumeDown", keys: ["↓"] },
         ],
     },
-] as const;
+] as const satisfies readonly { title: string; rows: readonly { label: string; keys: readonly string[] }[] }[];
 
 const DETAIL_PATH = /^\/recordings\/[^/]+$/;
 const NON_SHORTCUT_CONTROLS = '[role="slider"],[role="menu"],[role="menuitem"],[role="listbox"],[role="option"],[role="tablist"],[role="radiogroup"]';
@@ -64,6 +65,7 @@ function modalOpen(): boolean {
  */
 export function KeyboardShortcuts() {
     const [open, setOpen] = useState(false);
+    const { t } = useI18n();
     const player = usePlayer();
     const navigate = useNavigate();
     const { pathname, search } = useLocation();
@@ -153,17 +155,17 @@ export function KeyboardShortcuts() {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>
                 <div className="flex flex-col gap-2 text-center sm:text-left">
-                    <DialogTitle>Keyboard shortcuts</DialogTitle>
-                    <DialogDescription>Power-user shortcuts available across the dashboard.</DialogDescription>
+                    <DialogTitle>{t("shell.shortcuts.title")}</DialogTitle>
+                    <DialogDescription>{t("shell.shortcuts.description")}</DialogDescription>
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2">
                     {SHORTCUT_GROUPS.map((group) => (
                         <section key={group.title}>
-                            <h3 className="mb-1.5 text-[13px] font-semibold text-foreground">{group.title}</h3>
+                            <h3 className="mb-1.5 text-[13px] font-semibold text-foreground">{t(group.title)}</h3>
                             <ul className="divide-y divide-border rounded-xl bg-muted">
                                 {group.rows.map((row) => (
                                     <li key={row.label} className="flex items-center justify-between gap-4 px-3 py-1.5 text-[13px]">
-                                        <span className="text-foreground">{row.label}</span>
+                                        <span className="text-foreground">{t(row.label)}</span>
                                         <span className="flex shrink-0 items-center gap-1">
                                             {row.keys.map((key) => (
                                                 <Kbd key={key}>{key}</Kbd>
