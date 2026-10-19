@@ -70,6 +70,10 @@ pub struct Saved<'a> {
     pub transcription_type: &'a str,
     /// Pipeline timeline JSON and its source; `None` for whole-file runs.
     pub timeline: Option<(serde_json::Value, &'a str)>,
+    /// The pipeline job that produced this transcript and the phase it ends in. The phase is
+    /// written in the same transaction as the transcript, so a cancel that arrived first wins
+    /// and a save that committed first is never overwritten (spec/audio-pipeline.md 13.1).
+    pub job: Option<(&'a str, &'a str)>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -109,6 +113,30 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         None => (None, None),
     };
     let mut tx = state.db.begin().await?;
+    // The terminal phase is written in the same transaction as the transcript. A cancel that
+    // committed first leaves the phase at `cancelled`, the guard misses, and the save rolls
+    // back. A save that committed first leaves `completed`/`needs_alignment`, which the cancel
+    // endpoint refuses to overwrite (spec/audio-pipeline.md section 13.1).
+    if let Some((job_id, phase)) = saved.job {
+        let moved = sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT (job_id) DO UPDATE SET phase = excluded.phase, updated_at = excluded.updated_at
+             WHERE pipeline_runs.phase <> 'cancelled'",
+        )
+        .bind(job_id)
+        .bind(phase)
+        .bind(now)
+        .execute(&mut *tx)
+        .await?;
+        if moved.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Err(AppError::new(
+                StatusCode::CONFLICT,
+                "JOB_CANCELLED",
+                "The job was cancelled",
+            ));
+        }
+    }
     let previous: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM transcriptions WHERE recording_id = ? AND user_id = ?",
     )
@@ -439,6 +467,7 @@ async fn run_once(
             model: options.model.as_str(),
             transcription_type: "server",
             timeline: None,
+            job: None,
         },
     )
     .await?;
@@ -452,6 +481,7 @@ async fn run_options(
     filename: String,
 ) -> ApiResult<Options> {
     let settings = routes::settings::effective(state, user_id).await?;
+    let (diarize, speaker_count) = speaker_settings_from(&settings);
     Ok(Options {
         filename,
         model,
@@ -461,15 +491,28 @@ async fn run_options(
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .map(str::to_owned),
-        diarize: settings
-            .get("speakerDiarization")
-            .and_then(Value::as_bool)
-            .unwrap_or(true),
-        speaker_count: settings
-            .get("diarizationSpeakerCount")
-            .and_then(Value::as_u64)
-            .and_then(|n| u32::try_from(n).ok()),
+        diarize,
+        speaker_count,
     })
+}
+
+/// The speaker settings of one run, read from a user's effective settings. Shared by the
+/// synchronous path and the pipeline worker (spec/transcription.md, spec/audio-pipeline.md).
+pub async fn speaker_settings(state: &AppState, user_id: &str) -> ApiResult<(bool, Option<u32>)> {
+    let settings = routes::settings::effective(state, user_id).await?;
+    Ok(speaker_settings_from(&settings))
+}
+
+fn speaker_settings_from(settings: &serde_json::Map<String, Value>) -> (bool, Option<u32>) {
+    let diarize = settings
+        .get("speakerDiarization")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let count = settings
+        .get("diarizationSpeakerCount")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok());
+    (diarize, count)
 }
 
 /// Creates the audio pipeline job. A forced run first cancels the recording's active pipeline job.
@@ -482,15 +525,7 @@ async fn queue_pipeline(
     manual: bool,
 ) -> ApiResult<String> {
     if manual {
-        let now = now_ms();
-        sqlx::query(
-            "UPDATE jobs SET state = 'cancelled', updated_at = ?, finished_at = ? WHERE kind = 'pipeline' AND recording_id = ? AND state IN ('queued', 'running')",
-        )
-        .bind(now)
-        .bind(now)
-        .bind(recording_id)
-        .execute(&state.db)
-        .await?;
+        crate::pipeline::supersede(state, recording_id).await?;
     }
     let payload = json!({
         "providerId": provider.id,
@@ -563,4 +598,140 @@ async fn needs_transcript(state: &AppState, user_id: &str, recording_id: &str) -
     .fetch_one(&state.db)
     .await?;
     Ok(found == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open_memory().await.unwrap(),
+        )
+    }
+
+    async fn seed_user_recording(state: &AppState) {
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn speaker_settings_follow_the_users_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        assert_eq!(speaker_settings(&state, "u").await.unwrap(), (true, None));
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', ?, 0)")
+            .bind(json!({"speakerDiarization": false, "diarizationSpeakerCount": 3}).to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(
+            speaker_settings(&state, "u").await.unwrap(),
+            (false, Some(3))
+        );
+    }
+
+    fn transcript(text: &str) -> Transcript {
+        Transcript {
+            text: text.into(),
+            language: None,
+            segments: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_job_never_saves_a_transcript() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'cancelled', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'cancelled', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("late words");
+        let err = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "JOB_CANCELLED");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+
+    #[tokio::test]
+    async fn a_save_writes_the_transcript_and_its_final_phase_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("words");
+        save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap();
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((stored, phase.as_str()), (1, "completed"));
+    }
 }

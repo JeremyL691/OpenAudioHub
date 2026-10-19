@@ -79,8 +79,8 @@ enabled, the request:
    If none is available, it gives `400 NO_TRANSCRIPTION_PROVIDER` and creates no job.
 3. Refuses a recording whose stored duration is over 24 hours with
    `413 TRANSCRIPTION_FAILED`, message `Recordings over 24 hours cannot be transcribed`.
-4. Marks the recording's queued or running pipeline job as cancelled. The work folder of
-   that job is not removed by this step.
+4. Marks the recording's queued or running pipeline job as cancelled and deletes its work
+   folder (section 13.3).
 5. Creates the new pipeline job and answers `202 { "jobId": "<id>", "status": "queued" }`.
 
 Concurrent identical manual requests for the same recording and provider share one run.
@@ -108,9 +108,9 @@ A pipeline job stores:
 | `language` | The `defaultTranscriptionLanguage` setting when the job was created, or null. |
 | `trigger` | `manual` or `auto`. |
 
-Speaker settings (`speakerDiarization`, `diarizationSpeakerCount`) are not stored and
-are not read by the pipeline. The pipeline always asks for speaker labels where the
-provider supports them, and never sends a speaker count (see section 10.3).
+Speaker settings (`speakerDiarization`, `diarizationSpeakerCount`) are not stored in the
+payload. The worker reads them from the user's effective settings when the job runs, the
+same way a synchronous run does (section 10.3).
 
 ### 3.4 Provider and model at run time
 
@@ -171,8 +171,8 @@ exists (reused decoded audio or speech probabilities) sets no progress.
   the claim number), capped at 1 hour, plus up to 20 % random extra.
 - After the third claim, a transient failure makes the job `failed` with code
   `PIPELINE_RETRY`.
-- A manual retry does not reset the claim counter. A job that already used its three
-  claims therefore fails at once on its next transient error.
+- A manual retry resets the claim counter to 0, so the retried job gets its three claims
+  again (section 13.2).
 - Terminal failures (section 12) are never retried by the queue.
 
 ---
@@ -370,13 +370,16 @@ A chunk's state is one of `queued`, `running`, `completed`, `failed`.
 
 ### 10.3 Provider routing
 
-The provider is called with the job's model and language. The speaker count is never
-sent. Routing depends on the provider's style:
+The provider is called with the job's model and language, and with the user's speaker
+settings read when the job runs. `speakerDiarization` off means no speaker labels are
+requested. `diarizationSpeakerCount` is sent as the speaker count hint when it is set and
+diarization is on; a style that has no such field ignores it. Routing depends on the
+provider's style:
 
 | Style | Request | What the pipeline gets back |
 |-------|---------|-----------------------------|
 | Google Gemini | Text transcription request with the WAV, 20 MB limit | Text only, no timings. The language is the job's language. |
-| ElevenLabs | Speech-to-text request with word timings and speaker labels (diarization on). The request itself retries up to 2 times on 429, 500, 502, 503, 504 and 524, waiting 1 s and then 2 s. | Segments from word timings. Speaker labels are `Speaker N`, numbered by first appearance in the chunk. Words without a speaker continue the previous speaker, or `Unknown speaker`. |
+| ElevenLabs | Speech-to-text request with word timings, speaker labels when diarization is on, and the speaker count hint when one is set. The request itself retries up to 2 times on 429, 500, 502, 503, 504 and 524, waiting 1 s and then 2 s. | Segments from word timings. With diarization on, speaker labels are `Speaker N`, numbered by first appearance in the chunk. Words without a speaker continue the previous speaker, or `Unknown speaker`. |
 | Chat-based transcription | Chat request with the audio as base64 (mp3 or wav) | Text only, no timings. |
 | Diarizing model (model name contains `diarize`) | Diarized JSON request | Segments with speaker labels `Speaker N`, numbered per chunk. |
 | Whisper-style (default) | Multipart request. `verbose_json` for most models, `json` for `gpt-4o` models | With `verbose_json`: text, language and segments. With `json`: text only. |
@@ -464,7 +467,9 @@ On a successful merge, the server stores one transcript row:
   (automatic title and summary, as set in the settings; see `ai.md` and `workers.md`).
 
 The job then becomes `needs_alignment` (no timeline) or `completed`, its progress is 1,
-and its work folder is deleted.
+and its work folder is deleted. The terminal phase is written in the same database
+transaction as the transcript, so a stored transcript and the phase shown to users always
+agree (section 13.1).
 
 ### 12.2 Terminal failures
 
@@ -506,16 +511,18 @@ the status is `queued`, `running` or `paused_disk`.
 - A running or paused job gets phase `cancelled`. The worker notices it at its next check
   and deletes the work folder. Checks happen before each chunk send, between retries,
   after each speech-detection block, and every second while paused.
-- A cancel requested after the last chunk has finished does not stop the save. The
-  transcript is stored, and the status still reads `cancelled`.
+- A cancel is checked again when the transcript is saved. If it committed before the
+  save, nothing is stored and the work folder is deleted. If the save committed first,
+  the cancel does nothing: the transcript stays and the status reads `completed` or
+  `needs_alignment`.
 - Cancelling a `failed` job is not allowed (`409`).
 
 ### 13.2 Retry
 
 `POST ... { "action": "retry" }` is allowed only when the status is `failed`.
 
-- The job becomes `queued` with progress 0, its error fields are cleared, and its
-  claim counter is not reset (section 5).
+- The job becomes `queued` with progress 0, its error fields are cleared, and its claim
+  counter is reset to 0 (section 5).
 - Chunks that are not completed go back to `queued` with 0 attempts. Completed chunks are
   kept and are not sent again.
 - The stored provider is cleared (section 3.4).
@@ -528,7 +535,8 @@ the status is `queued`, `running` or `paused_disk`.
 - A job whose provider call was in progress during a crash is sent again, with its attempt
   count restarting at 1. The provider may therefore receive the same chunk twice, and bill
   for it twice.
-- A forced manual run (section 3.1) leaves the superseded job's work folder in place.
+- A forced manual run (section 3.1) cancels the superseded job and deletes its work
+  folder before the new job is queued.
 
 ---
 
@@ -592,5 +600,7 @@ These responses have no `code` field. The `error` text is the only detail.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
+- Cancel and save against the same job, the speaker settings read by the pipeline, the
+  retry claim counter and the superseded work folder have unit tests in the server code.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.

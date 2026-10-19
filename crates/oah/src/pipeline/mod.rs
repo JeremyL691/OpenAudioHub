@@ -45,6 +45,78 @@ pub fn spawn(state: &AppState) {
     );
 }
 
+/// Replaces the recording's active pipeline job before a forced manual run: the job is
+/// cancelled, freed from the one-active-job index, and its work folder is deleted
+/// (spec/audio-pipeline.md sections 3.1 and 13.3).
+pub async fn supersede(state: &AppState, recording_id: &str) -> sqlx::Result<()> {
+    let now = now_ms();
+    let ids: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM jobs WHERE kind = 'pipeline' AND recording_id = ? AND state IN ('queued', 'running')",
+    )
+    .bind(recording_id)
+    .fetch_all(&state.db)
+    .await?;
+    for id in &ids {
+        let phase: Option<String> =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = ?")
+                .bind(id)
+                .fetch_optional(&state.db)
+                .await?;
+        match phase.as_deref() {
+            // The worker finished first. Its transcript stands until the new run replaces it.
+            Some("completed") | Some("needs_alignment") => {
+                sqlx::query(
+                    "UPDATE jobs SET state = 'done', progress = 1, finished_at = ?, lease_until = NULL, updated_at = ?
+                     WHERE id = ? AND state IN ('queued', 'running')",
+                )
+                .bind(now)
+                .bind(now)
+                .bind(id)
+                .execute(&state.db)
+                .await?;
+            }
+            Some("failed") => {
+                sqlx::query(
+                    "UPDATE jobs SET state = 'failed', finished_at = ?, lease_until = NULL, updated_at = ?
+                     WHERE id = ? AND state IN ('queued', 'running')",
+                )
+                .bind(now)
+                .bind(now)
+                .bind(id)
+                .execute(&state.db)
+                .await?;
+            }
+            Some("cancelled") => {
+                sqlx::query(
+                    "UPDATE jobs SET state = 'cancelled', finished_at = ?, lease_until = NULL, updated_at = ?
+                     WHERE id = ? AND state IN ('queued', 'running')",
+                )
+                .bind(now)
+                .bind(now)
+                .bind(id)
+                .execute(&state.db)
+                .await?;
+            }
+            _ => {
+                // The phase is what the worker checks, so this stops a running worker too.
+                if run::cancel(&state.db, id).await? {
+                    sqlx::query(
+                        "UPDATE jobs SET state = 'cancelled', finished_at = ?, lease_until = NULL, updated_at = ?
+                         WHERE id = ? AND state IN ('queued', 'running')",
+                    )
+                    .bind(now)
+                    .bind(now)
+                    .bind(id)
+                    .execute(&state.db)
+                    .await?;
+                }
+            }
+        }
+        let _ = tokio::fs::remove_dir_all(run::pipeline_dir(state, id)).await;
+    }
+    Ok(())
+}
+
 /// Text, language, timeline JSON and timeline source of a stored transcript.
 type TranscriptRow = (String, Option<String>, Option<String>, Option<String>);
 
@@ -217,11 +289,12 @@ async fn change(
         if status != "failed" {
             return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
         }
-        // Completed chunks are kept; failed or unfinished ones are sent again.
+        // Completed chunks are kept; failed or unfinished ones are sent again. The claim counter
+        // starts over so the explicit retry gets its full three claims (section 13.2).
         let mut tx = state.db.begin().await?;
         let moved = sqlx::query(
             "UPDATE jobs SET state = 'queued', run_after = ?, error_code = NULL, error_message = NULL, progress = 0,
-             finished_at = NULL, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'failed'",
+             attempts = 0, finished_at = NULL, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'failed'",
         )
         .bind(now)
         .bind(now)
@@ -260,8 +333,11 @@ async fn change(
     if !matches!(status, "queued" | "running" | "paused_disk") {
         return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
     }
-    // The worker sees the cancelled phase at its next check and removes the files itself.
-    run::set_phase(&state.db, &job.id, "cancelled").await?;
+    // The worker sees the cancelled phase at its next check and removes the files itself. A
+    // job that finished its save first cannot be cancelled any more (section 13.1).
+    if !run::cancel(&state.db, &job.id).await? {
+        return Ok(reply(StatusCode::CONFLICT, "Audio job cannot be changed"));
+    }
     sqlx::query("UPDATE jobs SET state = 'cancelled', finished_at = ?, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'queued'")
         .bind(now)
         .bind(now)
@@ -276,4 +352,132 @@ async fn change(
         Json(json!({ "jobId": job.id, "status": "cancelled" })),
     )
         .into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn state(dir: &std::path::Path) -> AppState {
+        AppState::new(
+            Config::for_tests(dir),
+            crate::db::open_memory().await.unwrap(),
+        )
+    }
+
+    async fn seed_user_recording(state: &AppState) {
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    async fn seed_job(state: &AppState, job_state: &str, phase: &str) {
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', ?, '{}', 0, 0, 0)")
+            .bind(job_state)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', ?, 0)")
+            .bind(phase)
+            .execute(&state.db)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_manual_retry_resets_the_claim_counter() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, attempts, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'failed', '{}', 3, 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'failed', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let response = change(&state, "u", "r", "retry").await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let (job_state, attempts): (String, i64) =
+            sqlx::query_as("SELECT state, attempts FROM jobs WHERE id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((job_state.as_str(), attempts), ("queued", 0));
+    }
+
+    #[tokio::test]
+    async fn a_forced_run_removes_the_superseded_work_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "transcribing").await;
+        let work = run::pipeline_dir(&state, "j");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("audio.pcm"), b"pcm").unwrap();
+        supersede(&state, "r").await.unwrap();
+        assert!(!work.exists(), "superseded work folder is removed");
+        let job_state: String = sqlx::query_scalar("SELECT state FROM jobs WHERE id = 'j'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(
+            (job_state.as_str(), phase.as_str()),
+            ("cancelled", "cancelled")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_forced_run_keeps_a_result_that_was_saved_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "completed").await;
+        supersede(&state, "r").await.unwrap();
+        let job_state: String = sqlx::query_scalar("SELECT state FROM jobs WHERE id = 'j'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!((job_state.as_str(), phase.as_str()), ("done", "completed"));
+    }
+
+    #[tokio::test]
+    async fn a_cancel_after_the_saved_result_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "completed").await;
+        let response = change(&state, "u", "r", "cancel").await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "completed");
+    }
 }

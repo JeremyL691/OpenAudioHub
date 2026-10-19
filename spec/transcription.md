@@ -87,8 +87,8 @@ A provider name that is not a preset uses the whisper style. A stored base URL o
 Settings that affect every run (from the user's settings):
 
 - `defaultTranscriptionLanguage`: when set, passed as the language hint to the provider. Not set means automatic detection.
-- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models.
-- `diarizationSpeakerCount`: optional speaker count hint, used only with diarization.
+- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models. A long recording reads it when its pipeline job runs.
+- `diarizationSpeakerCount`: optional speaker count hint, used only with diarization. A long recording reads it when its pipeline job runs.
 - `transcriptionQuality`: stored, but it does not change the request.
 
 ## Whisper style (OpenAI-compatible)
@@ -368,7 +368,7 @@ Active statuses (block delete, retry and cancel): `queued`, `running`, `paused_d
 
 Transitions:
 
-- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, and then queues the new one.
+- A new job starts as `queued`. Starting a manual run cancels the recording's active job first, which becomes `cancelled`, has its work folder deleted, and is replaced by the new one.
 - `queued` → `running` → `completed`, `needs_alignment`, or `failed`.
 - `running` ↔ `paused_disk`.
 - `queued`, `running`, or `paused_disk` → `cancelled` on cancel.
