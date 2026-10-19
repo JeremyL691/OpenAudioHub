@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Loading, SettingSelect, StackedField, useSettings, type Option, type SummaryPromptConfig, type CustomPrompt } from "./shared";
-import { DeletePromptDialog, PROMPT_SAVE_FAILED, PROMPT_DELETE_FAILED, PromptEditDialog, PromptViewDialog } from "./ai-sections";
+import { DeletePromptDialog, PromptEditDialog, PromptViewDialog, promptDeleteFailed, promptSaveFailed } from "./ai-sections";
 import { TITLE_PRESETS, TITLE_PROMPT_PLACEHOLDER } from "./prompt-texts";
+import { t, useI18n } from "@/lib/i18n";
 
 export interface ProviderRow {
     id: string;
@@ -169,13 +170,15 @@ interface TestAnswer {
 }
 
 function resultText(answer: TestAnswer): TestResult {
-    if (answer.ok) return { ok: true, text: `Connected · ${answer.latencyMs ?? 0} ms` };
-    return { ok: false, text: `Connection failed${answer.error ? `: ${answer.error}` : ""}` };
+    if (answer.ok) return { ok: true, text: t("settings.providers.connected", { ms: answer.latencyMs ?? 0 }) };
+    return {
+        ok: false,
+        text: answer.error ? t("settings.providers.connectionFailedReason", { reason: answer.error }) : t("settings.providers.connectionFailed"),
+    };
 }
 
-const PROVIDERS_INTRO = "Connect transcription and summary providers. Anything OpenAI-compatible works.";
-
 export function ProvidersSection() {
+    const { t } = useI18n();
     const [tab, setTab] = useState<"providers" | "prompts">("providers");
     const [rows, setRows] = useState<ProviderRow[] | null>(null);
     const [loadError, setLoadError] = useState<unknown>(null);
@@ -204,7 +207,7 @@ export function ProvidersSection() {
             const answer = await api<TestAnswer>("/api/settings/ai/providers/test", { method: "POST", json: { id: row.id } });
             setResults((r) => ({ ...r, [row.id]: resultText(answer) }));
         } catch (err) {
-            setResults((r) => ({ ...r, [row.id]: { ok: false, text: errorMessage(err, "Connection failed") } }));
+            setResults((r) => ({ ...r, [row.id]: { ok: false, text: errorMessage(err, t("settings.providers.connectionFailed")) } }));
         } finally {
             setBusy(null);
         }
@@ -213,7 +216,7 @@ export function ProvidersSection() {
     const remove = async (row: ProviderRow) => {
         try {
             await api(`/api/settings/ai/providers/${encodeURIComponent(row.id)}`, { method: "DELETE" });
-            toast.success("Provider deleted successfully");
+            toast.success(t("settings.providers.deleted"));
             setResults((r) => {
                 const next = { ...r };
                 delete next[row.id];
@@ -221,7 +224,7 @@ export function ProvidersSection() {
             });
             await load();
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to delete provider"));
+            toast.error(errorMessage(err, t("settings.providers.deleteFailed")));
         }
     };
 
@@ -233,23 +236,23 @@ export function ProvidersSection() {
                         <Bot className="size-5 text-primary-foreground" />
                     </span>
                     <div className="min-w-0">
-                        <h1 className="text-[22px] font-bold tracking-tight text-foreground">AI Providers</h1>
-                        <p className="mt-0.5 text-[13px] text-muted-foreground">{PROVIDERS_INTRO}</p>
+                        <h1 className="text-[22px] font-bold tracking-tight text-foreground">{t("settings.nav.providersTitle")}</h1>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">{t("settings.providers.providersIntro")}</p>
                     </div>
                 </div>
                 {tab === "providers" ? (
                     <Button variant="primary" className="px-3" onClick={() => setEditing("new")}>
                         <Plus />
-                        Add Provider
+                        {t("settings.providers.addProvider")}
                     </Button>
                 ) : null}
             </header>
 
-            <div role="tablist" aria-label="AI provider settings" className="flex gap-2 border-b border-border">
+            <div role="tablist" aria-label={t("settings.providers.tabsAria")} className="flex gap-2 border-b border-border">
                 {(
                     [
-                        ["providers", "Providers"],
-                        ["prompts", "Prompts"],
+                        ["providers", t("settings.providers.tabProviders")],
+                        ["prompts", t("settings.providers.tabPrompts")],
                     ] as const
                 ).map(([name, label]) => (
                     <button
@@ -273,21 +276,21 @@ export function ProvidersSection() {
                 <PromptsTab />
             ) : (
                 <>
-                    {rows === null && !loadError ? <Loading label="Loading providers" /> : null}
+                    {rows === null && !loadError ? <Loading label={t("settings.providers.loading")} /> : null}
                     {loadError ? (
                         <p role="alert" className="text-sm text-destructive">
-                            {errorMessage(loadError, "Providers could not be loaded.")}
+                            {errorMessage(loadError, t("settings.providers.providersLoadFailed"))}
                         </p>
                     ) : null}
 
                     {rows && rows.length === 0 ? (
                         <EmptyState
                             headingLevel={2}
-                            title="No AI providers yet"
-                            description="Add a provider to transcribe recordings and write summaries."
+                            title={t("settings.providers.emptyTitle")}
+                            description={t("settings.providers.emptyBody")}
                             action={
                                 <Button variant="primary" onClick={() => setEditing("new")}>
-                                    Add Provider
+                                    {t("settings.providers.addProvider")}
                                 </Button>
                             }
                             className="rounded-xl bg-muted"
@@ -307,14 +310,14 @@ export function ProvidersSection() {
                                             <div className="mb-1 flex flex-wrap items-center gap-2">
                                                 <h3 className="text-[13px] font-medium text-foreground">{row.provider}</h3>
                                                 {row.isDefaultTranscription ? (
-                                                    <span className="rounded bg-primary/10 px-2 py-0.5 text-xs text-link">Transcription</span>
+                                                    <span className="rounded bg-primary/10 px-2 py-0.5 text-xs text-link">{t("settings.providers.transcriptionBadge")}</span>
                                                 ) : null}
                                                 {row.isDefaultEnhancement ? (
-                                                    <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">Enhancement</span>
+                                                    <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">{t("settings.providers.enhancementBadge")}</span>
                                                 ) : null}
                                             </div>
-                                            <p className="text-xs text-muted-foreground">Model: {row.defaultModel || "No default model"}</p>
-                                            <p className="truncate font-mono text-xs text-muted-foreground">{row.baseUrl || "Default address"}</p>
+                                            <p className="text-xs text-muted-foreground">{t("settings.providers.modelLine", { model: row.defaultModel || t("settings.providers.noDefaultModel") })}</p>
+                                            <p className="truncate font-mono text-xs text-muted-foreground">{row.baseUrl || t("settings.providers.defaultAddress")}</p>
                                             {result ? (
                                                 <output
                                                     data-testid="provider-row-test-result"
@@ -329,18 +332,18 @@ export function ProvidersSection() {
                                                 size="icon"
                                                 variant="secondary"
                                                 className="sm:size-9"
-                                                aria-label="Test connection"
+                                                aria-label={t("settings.providers.testConnection")}
                                                 data-testid="provider-row-test"
                                                 disabled={busy === row.id}
                                                 onClick={() => void testRow(row)}
                                             >
-                                                {busy === row.id ? <Spinner label="Testing connection" /> : <PlugZap />}
+                                                {busy === row.id ? <Spinner label={t("settings.providers.testingConnection")} /> : <PlugZap />}
                                             </Button>
                                             <Button
                                                 size="icon"
                                                 variant="secondary"
                                                 className="sm:size-9"
-                                                aria-label="Edit provider"
+                                                aria-label={t("settings.providers.editProvider")}
                                                 onClick={() => setEditing(row)}
                                             >
                                                 <Pencil />
@@ -349,7 +352,7 @@ export function ProvidersSection() {
                                                 size="icon"
                                                 variant="secondary"
                                                 className="sm:size-9"
-                                                aria-label="Delete provider"
+                                                aria-label={t("settings.providers.deleteProvider")}
                                                 onClick={() => setDeleting(row)}
                                             >
                                                 <Trash2 className="text-destructive" />
@@ -375,14 +378,11 @@ export function ProvidersSection() {
 
                     <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
                         <AlertDialogContent>
-                            <AlertDialogTitle>Delete this provider?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This erases the stored API key for the provider. Recordings transcribed or summarized through it keep their data, but you&apos;ll need
-                                to re-add the provider to use it again.
-                            </AlertDialogDescription>
+                            <AlertDialogTitle>{t("settings.providers.deleteTitle")}</AlertDialogTitle>
+                            <AlertDialogDescription>{t("settings.providers.deleteBody")}</AlertDialogDescription>
                             <AlertDialogFooter>
                                 <AlertDialogCancel asChild>
-                                    <Button variant="secondary">Cancel</Button>
+                                    <Button variant="secondary">{t("common.action.cancel")}</Button>
                                 </AlertDialogCancel>
                                 <AlertDialogAction
                                     asChild
@@ -392,7 +392,7 @@ export function ProvidersSection() {
                                         if (target) void remove(target);
                                     }}
                                 >
-                                    <Button variant="destructive">Delete</Button>
+                                    <Button variant="destructive">{t("common.action.delete")}</Button>
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
@@ -410,6 +410,7 @@ interface ProviderDialogProps {
 }
 
 function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
+    const { t } = useI18n();
     const ids = useId();
     const [provider, setProvider] = useState(existing?.provider ?? "");
     const [apiKey, setApiKey] = useState("");
@@ -479,7 +480,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
             const answer = await api<TestAnswer>("/api/settings/ai/providers/test", { method: "POST", json: body });
             setResult(resultText(answer));
         } catch (err) {
-            setResult({ ok: false, text: errorMessage(err, "Connection failed") });
+            setResult({ ok: false, text: errorMessage(err, t("settings.providers.connectionFailed")) });
         } finally {
             setTesting(false);
         }
@@ -488,7 +489,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
     const save = async () => {
         if (!existing) {
             if (!provider || !keyText) {
-                toast.error("Provider and API key are required");
+                toast.error(t("settings.providers.providerRequired"));
                 return;
             }
         }
@@ -505,17 +506,17 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
                     method: "PUT",
                     json: keyText ? { ...flags, apiKey: keyText } : flags,
                 });
-                toast.success("Provider updated");
+                toast.success(t("settings.providers.updated"));
             } else {
                 await api("/api/settings/ai/providers", {
                     method: "POST",
                     json: { provider, apiKey: keyText, ...flags },
                 });
-                toast.success("Provider added");
+                toast.success(t("settings.providers.added"));
             }
             await onSaved();
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to save provider"));
+            toast.error(errorMessage(err, t("settings.providers.saveFailed")));
         } finally {
             setSaving(false);
         }
@@ -528,18 +529,18 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
         if (!customModel && dynamicLoaded) {
             const options: Option[] = fetched.map((m) => ({ value: m.id, label: m.name }));
             if (model && !options.some((o) => o.value === model)) options.unshift({ value: model, label: model });
-            return [...options, { value: CUSTOM_MODEL, label: "Custom (type model name)…" }];
+            return [...options, { value: CUSTOM_MODEL, label: t("settings.providers.customModelOption") }];
         }
         if (!customModel && listed) {
-            return [...listed.map((m) => ({ value: m, label: m })), { value: CUSTOM_MODEL, label: "Custom (type model name)…" }];
+            return [...listed.map((m) => ({ value: m, label: m })), { value: CUSTOM_MODEL, label: t("settings.providers.customModelOption") }];
         }
         return [];
     })();
     const showList = modelOptions.length > 0;
     const modelHint = listed
-        ? "Pick a transcription model. Choose Custom… to enter a model id that isn't listed."
+        ? t("settings.providers.modelHintList")
         : dynamic && canTranscribe
-          ? "Only audio-input models are shown. Transcription uses chat-completions; mp3/wav recordings only."
+          ? t("settings.providers.modelHintDynamic")
           : undefined;
     const pickModel = (value: string) => {
         if (value === CUSTOM_MODEL) {
@@ -553,15 +554,15 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto">
-                <DialogTitle>{existing ? "Edit AI Provider" : "Add AI Provider"}</DialogTitle>
-                <DialogDescription className="sr-only">{PROVIDERS_INTRO}</DialogDescription>
+                <DialogTitle>{existing ? t("settings.providers.editAiProvider") : t("settings.providers.addAiProvider")}</DialogTitle>
+                <DialogDescription className="sr-only">{t("settings.providers.providersIntro")}</DialogDescription>
 
                 <div className="grid gap-4">
-                    <StackedField htmlFor={`${ids}-provider`} label="Provider">
+                    <StackedField htmlFor={`${ids}-provider`} label={t("settings.providers.providerLabel")}>
                         <SettingSelect
                             id={`${ids}-provider`}
                             value={provider}
-                            placeholder="Select a provider"
+                            placeholder={t("settings.providers.selectProvider")}
                             disabled={existing !== null}
                             onValueChange={pickProvider}
                             options={PRESETS.map((p) => ({ value: p.name, label: p.name }))}
@@ -571,27 +572,27 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
 
                     <StackedField
                         htmlFor={`${ids}-api-key`}
-                        label="API Key"
-                        hint={existing ? "The saved key is hidden and cannot be read back. Leave it blank to keep the current key, or paste a new one to replace it." : undefined}
+                        label={t("settings.providers.apiKey")}
+                        hint={existing ? t("settings.providers.apiKeyHintExisting") : undefined}
                     >
                         <Input
                             id={`${ids}-api-key`}
                             type="password"
                             autoComplete="off"
                             spellCheck={false}
-                            placeholder={preset?.keyPlaceholder ?? "Your API key"}
+                            placeholder={preset?.keyPlaceholder ?? t("settings.providers.apiKeyPlaceholder")}
                             value={apiKey}
                             className="h-9 font-mono text-sm sm:h-9"
                             onChange={(e) => setApiKey(e.target.value)}
                         />
                     </StackedField>
 
-                    <StackedField htmlFor={`${ids}-base-url`} label="Base URL (Optional)">
+                    <StackedField htmlFor={`${ids}-base-url`} label={t("settings.providers.baseUrl")}>
                         <Input
                             id={`${ids}-base-url`}
                             type="text"
                             inputMode="url"
-                            placeholder="https://api.example.com/v1"
+                            placeholder={t("settings.providers.baseUrlPlaceholder")}
                             value={baseUrl}
                             className="h-9 font-mono text-sm sm:h-9"
                             onChange={(e) => setBaseUrl(e.target.value)}
@@ -600,17 +601,17 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
 
                     <StackedField
                         htmlFor={`${ids}-model`}
-                        label="Default Model"
+                        label={t("settings.providers.defaultModel")}
                         hint={
-                            showList ? modelHint : dynamic && !keyText ? "Enter your API key to load the model list." : customModel ? modelHint : undefined
+                            showList ? modelHint : dynamic && !keyText ? t("settings.providers.modelHintNeedKey") : customModel ? modelHint : undefined
                         }
                     >
                         {showList ? (
                             <SettingSelect
                                 id={`${ids}-model`}
-                                aria-label="Default model"
+                                aria-label={t("settings.providers.defaultModel")}
                                 value={model}
-                                placeholder="Pick a transcription model"
+                                placeholder={t("settings.providers.pickModel")}
                                 onValueChange={pickModel}
                                 options={modelOptions}
                                 className="w-fit"
@@ -626,7 +627,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
                                             setModel(preset?.model ?? "");
                                         }}
                                     >
-                                        Back to suggested models
+                                        {t("settings.providers.backToSuggested")}
                                     </button>
                                 ) : null}
                                 <Input
@@ -648,8 +649,8 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
                             disabled={testing || !provider || (!existing && !keyText)}
                             onClick={() => void test()}
                         >
-                            {testing ? <Spinner label="Testing connection" /> : null}
-                            Test connection
+                            {testing ? <Spinner label={t("settings.providers.testingConnection")} /> : null}
+                            {t("settings.providers.testConnection")}
                         </Button>
                         {result ? (
                             <output className={cn("text-sm", result.ok ? "text-success" : "text-destructive")}>{result.text}</output>
@@ -665,7 +666,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
                                     checked={transcription}
                                     onChange={(e) => setTranscription(e.target.checked)}
                                 />
-                                <span>Use for transcription</span>
+                                <span>{t("settings.providers.useForTranscription")}</span>
                             </label>
                         ) : null}
                         <label className={cn("flex items-center gap-2", canEnhance ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
@@ -676,7 +677,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
                                 disabled={!canEnhance}
                                 onChange={(e) => setEnhancement(e.target.checked)}
                             />
-                            <span>Use for AI enhancements</span>
+                            <span>{t("settings.providers.useForEnhancement")}</span>
                         </label>
                         {preset?.note ? <p className="text-xs text-muted-foreground">{preset.note}</p> : null}
                     </div>
@@ -684,11 +685,11 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
 
                 <div className="flex gap-2">
                     <Button variant="secondary" className="h-10 flex-1 sm:h-9" onClick={onClose}>
-                        Cancel
+                        {t("common.action.cancel")}
                     </Button>
                     <Button variant="primary" className="h-10 flex-1 sm:h-9" disabled={saving} onClick={() => void save()}>
-                        {saving ? <Spinner label="Saving provider" /> : null}
-                        {existing ? "Update Provider" : "Add Provider"}
+                        {saving ? <Spinner label={t("settings.providers.saving")} /> : null}
+                        {existing ? t("settings.providers.updateProvider") : t("settings.providers.addProvider")}
                     </Button>
                 </div>
             </DialogContent>
@@ -701,6 +702,7 @@ function ProviderDialog({ existing, onClose, onSaved }: ProviderDialogProps) {
 const DEFAULT_TITLE_CONFIG: SummaryPromptConfig = { selectedPrompt: "default", customPrompts: [] };
 
 function PromptsTab() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const config: SummaryPromptConfig = settings.titleGenerationPrompt ?? DEFAULT_TITLE_CONFIG;
@@ -709,8 +711,8 @@ function PromptsTab() {
     const [deleting, setDeleting] = useState<CustomPrompt | null>(null);
 
     const options: Option[] = [
-        ...TITLE_PRESETS.map((p) => ({ value: p.id, label: `${p.name} (Preset)` })),
-        ...config.customPrompts.map((p) => ({ value: p.id, label: `${p.name} (Custom)` })),
+        ...TITLE_PRESETS.map((p) => ({ value: p.id, label: t("settings.providers.presetSuffix", { name: p.name }) })),
+        ...config.customPrompts.map((p) => ({ value: p.id, label: t("settings.providers.customSuffix", { name: p.name }) })),
     ];
 
     const removePrompt = async (target: CustomPrompt) => {
@@ -718,16 +720,16 @@ function PromptsTab() {
             selectedPrompt: config.selectedPrompt === target.id ? "default" : config.selectedPrompt,
             customPrompts: config.customPrompts.filter((p) => p.id !== target.id),
         };
-        const ok = await save({ titleGenerationPrompt: next }, PROMPT_DELETE_FAILED);
-        if (ok) toast.success("Prompt deleted");
+        const ok = await save({ titleGenerationPrompt: next }, promptDeleteFailed());
+        if (ok) toast.success(t("settings.providers.promptDeleted"));
     };
 
     return (
         <div className="grid gap-6">
             <StackedField
                 htmlFor={`${ids}-selected`}
-                label="Active Prompt"
-                hint="Pick the prompt for generating titles"
+                label={t("settings.providers.activePrompt")}
+                hint={t("settings.providers.activePromptHint")}
             >
                 <SettingSelect
                     id={`${ids}-selected`}
@@ -735,13 +737,13 @@ function PromptsTab() {
                     value={config.selectedPrompt}
                     options={options}
                     disabled={isSaving("titleGenerationPrompt")}
-                    onValueChange={(v) => void save({ titleGenerationPrompt: { ...config, selectedPrompt: v } }, PROMPT_SAVE_FAILED)}
+                    onValueChange={(v) => void save({ titleGenerationPrompt: { ...config, selectedPrompt: v } }, promptSaveFailed())}
                     className="w-fit"
                 />
             </StackedField>
 
             <section className="grid gap-4">
-                <h2 className="text-[13px] font-semibold text-foreground">Preset Prompts</h2>
+                <h2 className="text-[13px] font-semibold text-foreground">{t("settings.providers.presetPrompts")}</h2>
                 <div className="divide-y divide-border">
                     {TITLE_PRESETS.map((p) => (
                         <div key={p.id} className="py-2.5">
@@ -750,13 +752,13 @@ function PromptsTab() {
                                     <div className="mb-1 flex items-center gap-2">
                                         <h3 className="text-[13px] font-medium">{p.name}</h3>
                                         {config.selectedPrompt === p.id ? (
-                                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-link">Active</span>
+                                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-link">{t("settings.providers.active")}</span>
                                         ) : null}
                                     </div>
                                     <p className="mb-2 text-xs text-muted-foreground">{p.description}</p>
                                 </div>
                                 <Button variant="secondary" className="px-3" onClick={() => setViewing({ title: p.name, description: p.description, text: p.text })}>
-                                    View Prompt
+                                    {t("settings.providers.viewPrompt")}
                                 </Button>
                             </div>
                         </div>
@@ -766,14 +768,14 @@ function PromptsTab() {
 
             <section className="grid gap-4 border-t border-border pt-4">
                 <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-[13px] font-semibold text-foreground">Custom Prompts</h2>
+                    <h2 className="text-[13px] font-semibold text-foreground">{t("settings.providers.customPrompts")}</h2>
                     <Button variant="primary" className="px-3" onClick={() => setEditor({ prompt: null })}>
                         <Plus />
-                        Add Custom Prompt
+                        {t("settings.providers.addCustomPrompt")}
                     </Button>
                 </div>
                 {config.customPrompts.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-muted-foreground">No custom prompts yet. Create one to get started.</p>
+                    <p className="py-4 text-center text-sm text-muted-foreground">{t("settings.providers.noCustomPrompts")}</p>
                 ) : (
                     <div className="divide-y divide-border">
                         {config.customPrompts.map((p) => (
@@ -786,12 +788,12 @@ function PromptsTab() {
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">
                                         <Button variant="secondary" className="px-3" onClick={() => setViewing({ title: p.name, text: p.prompt })}>
-                                            View
+                                            {t("settings.providers.view")}
                                         </Button>
-                                        <Button variant="secondary" size="icon" className="sm:size-9" aria-label={`Edit prompt ${p.name}`} onClick={() => setEditor({ prompt: p })}>
+                                        <Button variant="secondary" size="icon" className="sm:size-9" aria-label={t("settings.providers.editPrompt", { name: p.name })} onClick={() => setEditor({ prompt: p })}>
                                             <Pencil />
                                         </Button>
-                                        <Button variant="secondary" size="icon" className="sm:size-9" aria-label={`Delete prompt ${p.name}`} onClick={() => setDeleting(p)}>
+                                        <Button variant="secondary" size="icon" className="sm:size-9" aria-label={t("settings.providers.deletePrompt", { name: p.name })} onClick={() => setDeleting(p)}>
                                             <Trash2 className="text-destructive" />
                                         </Button>
                                     </div>
@@ -818,8 +820,8 @@ function PromptsTab() {
                         const customPrompts = target
                             ? config.customPrompts.map((p) => (p.id === item.id ? item : p))
                             : [...config.customPrompts, item];
-                        const ok = await save({ titleGenerationPrompt: { ...config, customPrompts } }, PROMPT_SAVE_FAILED);
-                        if (ok) toast.success("Prompt saved");
+                        const ok = await save({ titleGenerationPrompt: { ...config, customPrompts } }, promptSaveFailed());
+                        if (ok) toast.success(t("settings.providers.promptSaved"));
                         return ok;
                     }}
                 />

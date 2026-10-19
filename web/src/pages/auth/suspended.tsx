@@ -5,11 +5,13 @@ import { signOut, useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { AuthLayout, AuthNotice } from "./auth-layout";
+import { useI18n } from "@/lib/i18n";
 
 /** "checking" until the server answers; "suspended" when it refuses the session with ACCOUNT_SUSPENDED; "active" otherwise. */
 type Check = "checking" | "suspended" | "active";
 
 export default function Page() {
+    const { t } = useI18n();
     const { status } = useSession();
     const [check, setCheck] = useState<Check>("checking");
     const [pending, setPending] = useState(false);
@@ -32,7 +34,7 @@ export default function Page() {
     if (status === "loading" || (status === "authenticated" && check === "checking")) {
         return (
             <div className="flex min-h-svh items-center justify-center">
-                <Spinner label="Checking your session" />
+                <Spinner label={t("auth.suspended.checking")} />
             </div>
         );
     }
@@ -46,14 +48,14 @@ export default function Page() {
     }
 
     return (
-        <AuthLayout documentTitle="Account suspended | OpenAudioHub" title="Your account is suspended" noindex>
+        <AuthLayout documentTitle={t("auth.suspended.documentTitle")} title={t("auth.suspended.title")} noindex>
             <div className="space-y-6">
                 <AuthNotice className="text-muted-foreground">
-                    <p>While we review your account, recordings, sync, and transcription are on hold.</p>
-                    <p>Contact the administrator of this instance if you think this is a mistake.</p>
+                    <p>{t("auth.suspended.line1")}</p>
+                    <p>{t("auth.suspended.line2")}</p>
                 </AuthNotice>
                 <Button variant="primary" className="w-full sm:h-9" disabled={pending} onClick={onSignOut}>
-                    {pending ? "Signing out..." : "Sign out"}
+                    {pending ? t("auth.suspended.signingOut") : t("auth.suspended.signOut")}
                 </Button>
             </div>
         </AuthLayout>

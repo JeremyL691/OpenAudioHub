@@ -6,6 +6,7 @@ import type { Recording } from "@/lib/recordings";
 import type { PendingUpload } from "./uploads";
 import { groupSummary, type RowGroup } from "./library-model";
 import type { LoadStatus } from "./hooks";
+import { useI18n } from "@/lib/i18n";
 
 export interface RecordingListProps {
     /** The sticky header, rendered inside the scroll container. */
@@ -32,6 +33,7 @@ export interface RecordingListProps {
  * count, so a page keeps loading while the marker stays in view.
  */
 export function RecordingList(props: RecordingListProps) {
+    const { t } = useI18n();
     const { groups, hasMore } = props;
     const root = useRef<HTMLDivElement>(null);
     const marker = useRef<HTMLDivElement>(null);
@@ -70,24 +72,24 @@ export function RecordingList(props: RecordingListProps) {
             <div className="flex flex-col pb-6">
                 {props.status === "loading" ? (
                     <div className="flex justify-center py-8">
-                        <Spinner label="Loading recordings" />
+                        <Spinner label={t("library.loading")} />
                     </div>
                 ) : null}
 
                 {props.status === "error" ? (
                     <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
                         <p className="text-sm text-muted-foreground" role="alert">
-                            {props.error ?? "Could not load recordings"}
+                            {props.error ?? t("library.loadError")}
                         </p>
                         <Button variant="secondary" size="sm" onClick={props.onRetry}>
-                            Try again
+                            {t("library.tryAgain")}
                         </Button>
                     </div>
                 ) : null}
 
                 {props.pending.map((upload) => (
                     <div key={upload.key} className="mx-2 flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted-foreground">
-                        <Spinner label={`Uploading ${upload.name}`} />
+                        <Spinner label={t("library.uploadingProgress", { name: upload.name })} />
                         <span className="min-w-0 truncate">{upload.name}</span>
                     </div>
                 ))}

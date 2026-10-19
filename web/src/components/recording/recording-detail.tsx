@@ -16,6 +16,7 @@ import { RecordingHeader } from "./recording-header";
 import { SummaryPanel } from "./summary-panel";
 import { TranscribeDialog, TranscriptCard } from "./transcript-card";
 import type { TranscriptRecord } from "./types";
+import { useI18n } from "@/lib/i18n";
 
 export interface RecordingDetailProps {
     id: string;
@@ -33,6 +34,7 @@ export function RecordingDetail(props: RecordingDetailProps) {
 
 function RecordingDetailView({ id, variant }: RecordingDetailProps) {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const detail = useRecordingDetail(id);
     const { data, reload } = detail;
     // A settled job changes the row badge in the library list; announce it.
@@ -63,7 +65,7 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
     if (detail.status === "loading") {
         return (
             <div className="grid place-items-center p-10">
-                <Spinner label="Loading recording" />
+                <Spinner label={t("recording.detail.loading")} />
             </div>
         );
     }
@@ -71,11 +73,11 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
     if (detail.status === "missing") {
         return (
             <EmptyState
-                title="Recording not found"
-                description="It may have been deleted, or the link is wrong."
+                title={t("recording.detail.missingTitle")}
+                description={t("recording.detail.missingBody")}
                 action={
                     <Button variant="secondary" onClick={() => navigate("/recordings")}>
-                        Back to recordings
+                        {t("recording.header.backToRecordings")}
                     </Button>
                 }
             />
@@ -85,11 +87,11 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
     if (!data) {
         return (
             <EmptyState
-                title="Could not load this recording"
-                description={detail.message ?? "Try again in a moment."}
+                title={t("recording.detail.loadFailedTitle")}
+                description={detail.message ?? t("recording.detail.loadFailedBody")}
                 action={
                     <Button variant="secondary" onClick={() => void reload()}>
-                        Try again
+                        {t("common.action.retry")}
                     </Button>
                 }
             />
@@ -109,13 +111,13 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
             if (answer && typeof answer === "object" && "jobId" in answer) {
                 pipe.queue();
             } else {
-                toast.success("Transcription complete");
+                toast.success(t("recording.transcribe.complete"));
             }
             await reload();
             // The list row shows "Transcribing" (or the new result) right away.
             window.dispatchEvent(new Event(RECORDINGS_CHANGED));
         } catch (err) {
-            toast.error(errorMessage(err, "Transcription failed"));
+            toast.error(errorMessage(err, t("recording.transcribe.failed")));
         } finally {
             setTranscribing(false);
         }
@@ -127,7 +129,7 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
             if (action === "retry") pipe.queue();
             else await pipe.refresh();
         } catch (err) {
-            toast.error(errorMessage(err, action === "retry" ? "Could not retry" : "Could not cancel"));
+            toast.error(errorMessage(err, action === "retry" ? t("recording.pipeline.retryFailed") : t("recording.pipeline.cancelFailed")));
         }
     };
 
@@ -160,10 +162,10 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
                 className={cn("grid min-w-0 content-start gap-4", "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-8 lg:pt-4", page ? "lg:pb-8" : "lg:pb-6")}
             >
                 {/* The page shows its sections side by side only from 1440px; below that it uses tabs. */}
-                <TabsList className={cn("grid w-full grid-cols-3", page && "min-[1440px]:hidden")} aria-label="Recording sections">
-                    <TabsTrigger value="transcript" className="flex-1">Transcript</TabsTrigger>
-                    <TabsTrigger value="summary" className="flex-1">Summary</TabsTrigger>
-                    <TabsTrigger value="details" className="flex-1">Details</TabsTrigger>
+                <TabsList className={cn("grid w-full grid-cols-3", page && "min-[1440px]:hidden")} aria-label={t("recording.detail.sections")}>
+                    <TabsTrigger value="transcript" className="flex-1">{t("recording.tabs.transcript")}</TabsTrigger>
+                    <TabsTrigger value="summary" className="flex-1">{t("recording.tabs.summary")}</TabsTrigger>
+                    <TabsTrigger value="details" className="flex-1">{t("recording.tabs.details")}</TabsTrigger>
                 </TabsList>
 
                 <div className={cn("min-w-0", page && "min-[1440px]:flex min-[1440px]:items-start min-[1440px]:gap-6")}>

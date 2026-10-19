@@ -9,6 +9,7 @@ import { downloadRecordings } from "@/lib/downloads";
 import { formatClock } from "@/lib/format";
 import type { Recording } from "@/lib/recordings";
 import { formatAgo, rowLabel, sourceLabel } from "./library-model";
+import { useI18n } from "@/lib/i18n";
 
 export interface RowActions {
     onOpen(recording: Recording): void;
@@ -117,39 +118,40 @@ export function RecordingRow({ recording: r, selected, selectMode, checked, comp
 }
 
 function RowMenu({ recording, transcribing, actions }: { recording: Recording; transcribing: boolean; actions: RowActions }) {
+    const { t } = useI18n();
     const transcribeDisabled = transcribing || recording.processing !== null;
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Row actions">
+                <Button variant="ghost" size="icon" aria-label={t("library.rowActions")}>
                     <Ellipsis />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => actions.onOpen(recording)}>
                     <Play />
-                    Open
+                    {t("library.open")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => actions.onRename(recording)}>
                     <Pencil />
-                    Rename
+                    {t("library.rename")}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={transcribeDisabled} onSelect={() => actions.onTranscribe(recording)}>
                     <Sparkles />
-                    Transcribe
+                    {t("library.transcribe")}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={transcribeDisabled} onSelect={() => actions.onTranscribeInBrowser(recording)}>
                     <Cpu />
-                    Transcribe in browser
+                    {t("library.transcribeInBrowser")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void downloadRecordings([recording.id])}>
                     <Download />
-                    Download audio
+                    {t("library.downloadAudio")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onSelect={() => actions.onDelete(recording)}>
                     <Trash2 />
-                    Delete
+                    {t("library.delete")}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

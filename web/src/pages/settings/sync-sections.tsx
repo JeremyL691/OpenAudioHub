@@ -2,62 +2,61 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AudioWaveform, Keyboard } from "lucide-react";
 import { setTheme, type ThemeChoice } from "@/lib/theme";
 import { Group, ToggleRow, NumberField, Row, SettingSelect, useSettings, type Option, type UserSettings } from "./shared";
+import { useI18n } from "@/lib/i18n";
 
 // ---------- sync ----------
 
-const SYNC_INTERVALS: Option[] = [
-    { value: "60000", label: "1 minute" },
-    { value: "120000", label: "2 minutes" },
-    { value: "300000", label: "5 minutes" },
-    { value: "600000", label: "10 minutes" },
-    { value: "900000", label: "15 minutes" },
-    { value: "1800000", label: "30 minutes" },
-];
+const SYNC_INTERVAL_MINUTES = [1, 2, 5, 10, 15, 30];
 
 export function SyncSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
+    const intervals: Option[] = SYNC_INTERVAL_MINUTES.map((minutes) => ({
+        value: String(minutes * 60_000),
+        label: minutes === 1 ? t("settings.sync.minute") : t("settings.sync.minutes", { count: minutes }),
+    }));
 
     return (
         <div className="grid gap-4">
-            <Group label="Auto-sync">
+            <Group label={t("settings.sync.autoSyncGroup")}>
                 <ToggleRow
                     id={`${ids}-auto-sync`}
                     field="autoSyncEnabled"
-                    label="Enable auto-sync"
-                    hint="Pull new recordings from your Plaud device on a fixed schedule."
+                    label={t("settings.sync.enableAutoSync")}
+                    hint={t("settings.sync.enableAutoSyncHint")}
                 />
-                <Row htmlFor={`${ids}-interval`} label="Sync interval">
+                <Row htmlFor={`${ids}-interval`} label={t("settings.sync.syncInterval")}>
                     <SettingSelect
                         id={`${ids}-interval`}
                         testId="sync-interval"
                         value={String(settings.syncInterval)}
                         disabled={isSaving("syncInterval")}
                         onValueChange={(v) => void save({ syncInterval: Number(v) })}
-                        options={SYNC_INTERVALS}
+                        options={intervals}
                         className="w-40"
                     />
                 </Row>
                 <ToggleRow
                     id={`${ids}-on-mount`}
                     field="syncOnMount"
-                    label="Sync on app load"
-                    hint="Automatically sync when the app first loads."
+                    label={t("settings.sync.onMount")}
+                    hint={t("settings.sync.onMountHint")}
                 />
                 <ToggleRow
                     id={`${ids}-on-visibility`}
                     field="syncOnVisibilityChange"
-                    label="Sync on tab visibility"
-                    hint="Sync when you return to the app tab."
+                    label={t("settings.sync.onVisibility")}
+                    hint={t("settings.sync.onVisibilityHint")}
                 />
             </Group>
 
-            <Group label="Notifications">
+            <Group label={t("settings.sync.notificationsGroup")}>
                 <ToggleRow
                     id={`${ids}-sync-notifications`}
                     field="syncNotifications"
-                    label="Show sync notifications"
-                    hint="Display notifications when sync completes."
+                    label={t("settings.sync.showSync")}
+                    hint={t("settings.sync.showSyncHint")}
                 />
             </Group>
         </div>
@@ -77,15 +76,16 @@ const SPEEDS: Option[] = [
 
 const VOLUME_DELAY_MS = 500;
 
-const SHORTCUTS: { label: string; keys: string }[] = [
-    { label: "Play / pause", keys: "Space" },
-    { label: "Seek backward 5s", keys: "←" },
-    { label: "Seek forward 5s", keys: "→" },
-    { label: "Increase volume", keys: "↑" },
-    { label: "Decrease volume", keys: "↓" },
+const SHORTCUTS: { labelKey: "settings.playback.shortcutPlayPause" | "settings.playback.shortcutSeekBack" | "settings.playback.shortcutSeekForward" | "settings.playback.shortcutVolumeUp" | "settings.playback.shortcutVolumeDown"; keys: string }[] = [
+    { labelKey: "settings.playback.shortcutPlayPause", keys: "Space" },
+    { labelKey: "settings.playback.shortcutSeekBack", keys: "←" },
+    { labelKey: "settings.playback.shortcutSeekForward", keys: "→" },
+    { labelKey: "settings.playback.shortcutVolumeUp", keys: "↑" },
+    { labelKey: "settings.playback.shortcutVolumeDown", keys: "↓" },
 ];
 
 export function PlaybackSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const [volume, setVolume] = useState(settings.defaultVolume);
@@ -100,8 +100,8 @@ export function PlaybackSection() {
 
     return (
         <div className="grid gap-4">
-            <Group label="Audio defaults">
-                <Row htmlFor={`${ids}-speed`} label="Default playback speed">
+            <Group label={t("settings.playback.audioDefaults")}>
+                <Row htmlFor={`${ids}-speed`} label={t("settings.playback.defaultSpeed")}>
                     <SettingSelect
                         id={`${ids}-speed`}
                         testId="playback-speed"
@@ -115,7 +115,7 @@ export function PlaybackSection() {
                 <div className="grid gap-2 px-4 py-3">
                     <div className="flex items-center justify-between">
                         <label htmlFor={`${ids}-volume`} className="text-[13px] font-medium">
-                            Default volume
+                            {t("settings.playback.defaultVolume")}
                         </label>
                         <output aria-live="polite" className="font-mono text-xs tabular-nums text-muted-foreground">
                             {volume}%
@@ -124,7 +124,7 @@ export function PlaybackSection() {
                     <input
                         id={`${ids}-volume`}
                         data-testid="default-volume"
-                        aria-label="Default volume"
+                        aria-label={t("settings.playback.defaultVolume")}
                         type="range"
                         min={0}
                         max={100}
@@ -144,25 +144,25 @@ export function PlaybackSection() {
                 </div>
             </Group>
 
-            <Group label="Behavior">
+            <Group label={t("settings.playback.behavior")}>
                 <ToggleRow
                     id={`${ids}-autoplay`}
                     field="autoPlayNext"
-                    label="Auto-play next recording"
-                    hint="Start the next recording as soon as the current one ends."
+                    label={t("settings.playback.autoplay")}
+                    hint={t("settings.playback.autoplayHint")}
                 />
             </Group>
 
-            <Group label="Appearance">
+            <Group label={t("settings.playback.appearance")}>
                 <Row
                     htmlFor={`${ids}-scrubber`}
                     label={
                         <span className="inline-flex items-center gap-2">
                             <AudioWaveform className="size-4 text-muted-foreground" aria-hidden="true" />
-                            Scrubber style
+                            {t("settings.playback.scrubber")}
                         </span>
                     }
-                    hint="Waveform draws the audio amplitude and decodes in the browser on the first listen. Progress bar is a plain slider that needs no decoding."
+                    hint={t("settings.playback.scrubberHint")}
                 >
                     <SettingSelect
                         id={`${ids}-scrubber`}
@@ -171,8 +171,8 @@ export function PlaybackSection() {
                         disabled={isSaving("playerScrubber")}
                         onValueChange={(v) => void save({ playerScrubber: v as UserSettings["playerScrubber"] })}
                         options={[
-                            { value: "waveform", label: "Waveform (default)" },
-                            { value: "slider", label: "Progress bar" },
+                            { value: "waveform", label: t("settings.playback.waveform") },
+                            { value: "slider", label: t("settings.playback.progressBar") },
                         ]}
                         className="w-44"
                     />
@@ -183,14 +183,14 @@ export function PlaybackSection() {
                 <div className="px-1">
                     <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                         <Keyboard className="size-4 text-muted-foreground" aria-hidden="true" />
-                        Keyboard shortcuts
+                        {t("settings.playback.shortcutsTitle")}
                     </h2>
-                    <p className="text-xs text-muted-foreground">Available when the player has focus.</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.playback.shortcutsHint")}</p>
                 </div>
                 <ul className="divide-y divide-border overflow-hidden rounded-xl bg-muted px-4">
                     {SHORTCUTS.map((shortcut) => (
-                        <li key={shortcut.label} className="flex items-center justify-between py-3 text-[13px]">
-                            <span>{shortcut.label}</span>
+                        <li key={shortcut.labelKey} className="flex items-center justify-between py-3 text-[13px]">
+                            <span>{t(shortcut.labelKey)}</span>
                             <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-background px-1.5 font-mono text-xs">
                                 {shortcut.keys}
                             </kbd>
@@ -205,6 +205,7 @@ export function PlaybackSection() {
 // ---------- display ----------
 
 export function DisplaySection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
 
@@ -216,7 +217,7 @@ export function DisplaySection() {
 
     return (
         <div className="divide-y divide-border">
-            <Row htmlFor={`${ids}-date-format`} label="Date/time format" className="px-0">
+            <Row htmlFor={`${ids}-date-format`} label={t("settings.display.dateFormat")} className="px-0">
                 <SettingSelect
                     id={`${ids}-date-format`}
                     testId="date-time-format"
@@ -224,14 +225,14 @@ export function DisplaySection() {
                     disabled={isSaving("dateTimeFormat")}
                     onValueChange={(v) => void save({ dateTimeFormat: v as UserSettings["dateTimeFormat"] })}
                     options={[
-                        { value: "relative", label: "Relative" },
-                        { value: "absolute", label: "Absolute" },
-                        { value: "iso", label: "ISO" },
+                        { value: "relative", label: t("settings.display.relative") },
+                        { value: "absolute", label: t("settings.display.absolute") },
+                        { value: "iso", label: t("settings.display.iso") },
                     ]}
                     className="w-44"
                 />
             </Row>
-            <Row htmlFor={`${ids}-sort`} label="Recording list sort order" className="px-0">
+            <Row htmlFor={`${ids}-sort`} label={t("settings.display.sortOrder")} className="px-0">
                 <SettingSelect
                     id={`${ids}-sort`}
                     testId="sort-order"
@@ -239,16 +240,16 @@ export function DisplaySection() {
                     disabled={isSaving("recordingListSortOrder")}
                     onValueChange={(v) => void save({ recordingListSortOrder: v as UserSettings["recordingListSortOrder"] })}
                     options={[
-                        { value: "newest", label: "Newest first" },
-                        { value: "oldest", label: "Oldest first" },
-                        { value: "name", label: "By name" },
+                        { value: "newest", label: t("settings.display.sortNewest") },
+                        { value: "oldest", label: t("settings.display.sortOldest") },
+                        { value: "name", label: t("settings.display.sortName") },
                     ]}
                     className="w-44"
                 />
             </Row>
             <div className="grid gap-2 py-3">
                 <label htmlFor={`${ids}-items`} className="text-[13px] font-medium">
-                    Items per page
+                    {t("settings.display.itemsPerPage")}
                 </label>
                 <div className="[&>input]:w-full">
                     <NumberField
@@ -263,9 +264,9 @@ export function DisplaySection() {
                         }}
                     />
                 </div>
-                <p className="text-xs text-muted-foreground">How many recordings to show on each page (10-100)</p>
+                <p className="text-xs text-muted-foreground">{t("settings.display.itemsPerPageHint")}</p>
             </div>
-            <Row htmlFor={`${ids}-theme`} label="Theme" className="px-0">
+            <Row htmlFor={`${ids}-theme`} label={t("settings.display.theme")} className="px-0">
                 <SettingSelect
                     id={`${ids}-theme`}
                     testId="theme"
@@ -273,9 +274,9 @@ export function DisplaySection() {
                     disabled={isSaving("theme")}
                     onValueChange={(v) => void chooseTheme(v as ThemeChoice)}
                     options={[
-                        { value: "light", label: "Light" },
-                        { value: "dark", label: "Dark" },
-                        { value: "system", label: "System" },
+                        { value: "light", label: t("settings.display.themeLight") },
+                        { value: "dark", label: t("settings.display.themeDark") },
+                        { value: "system", label: t("settings.display.themeSystem") },
                     ]}
                     className="w-44"
                 />

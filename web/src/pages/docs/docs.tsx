@@ -9,6 +9,8 @@ import { useSession } from "@/lib/session";
 import { setTheme, useTheme } from "@/lib/theme";
 import { GitHubIcon, REPO_URL, useDocumentMeta } from "../public/brand";
 import { DOC_GROUPS, NAV_PAGES, editUrl, findDocPage, renderPage, searchIndex, type DocGroup, type DocPage, type SearchEntry } from "./content";
+import { useI18n, type MessageKey } from "@/lib/i18n";
+import { LanguagePicker } from "@/components/shell/language-picker";
 
 /** Typography for the rendered Markdown. Applied to the article element. */
 const ARTICLE =
@@ -28,7 +30,15 @@ const ARTICLE =
     "[&_blockquote]:my-6 [&_blockquote]:border-s-2 [&_blockquote]:ps-4 [&_blockquote]:text-muted-foreground " +
     "[&_hr]:my-10 [&_hr]:border-border";
 
-const DESCRIPTION_TITLE = "OpenAudioHub — Long recordings, intelligently transcribed";
+/** The translated page title: the title key for this page's URL, else its English title. */
+function docTitleKey(page: DocPage): MessageKey {
+    return `docs.pages.${page.url === "/docs" ? "index" : page.url.replace(/^\/docs\//, "").replace(/\//g, ".")}` as MessageKey;
+}
+
+/** The translated group heading. */
+function groupKey(group: DocGroup): MessageKey {
+    return `docs.groups.${group}` as MessageKey;
+}
 
 /** Decodes a URL fragment. A malformed escape (for example "%E0%A4%A") keeps the raw text instead of throwing. */
 function safeDecode(value: string): string {
@@ -43,11 +53,12 @@ function safeDecode(value: string): string {
 export default function Docs() {
     const { pathname, hash } = useLocation();
     const navigate = useNavigate();
+    const { t } = useI18n();
     const page = findDocPage(pathname);
     const [searchOpen, setSearchOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
 
-    useDocumentMeta(page ? (page.url === "/docs" ? "OpenAudioHub Docs · OpenAudioHub" : `${page.title} · OpenAudioHub`) : DESCRIPTION_TITLE, undefined, page ? undefined : "noindex");
+    useDocumentMeta(page ? (page.url === "/docs" ? t("docs.documentTitle") : `${t(docTitleKey(page))} · OpenAudioHub`) : t("docs.descriptionTitle"), undefined, page ? undefined : "noindex");
 
     // Ctrl or Cmd with K opens search from anywhere on the docs site.
     useEffect(() => {
@@ -102,13 +113,13 @@ export default function Docs() {
                 <header className="sticky top-0 z-10 flex h-12 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur md:hidden">
                     <Link to="/docs" className="inline-flex items-center gap-2 text-[15px] font-medium">
                         <img src="/icon.svg" alt="" aria-hidden="true" className="size-5 shrink-0" />
-                        OpenAudioHub Docs
+                        {t("docs.title")}
                     </Link>
                     <div className="flex items-center">
-                        <Button variant="ghost" size="icon" aria-label="Search" onClick={() => setSearchOpen(true)}>
+                        <Button variant="ghost" size="icon" aria-label={t("docs.search")} onClick={() => setSearchOpen(true)}>
                             <Search />
                         </Button>
-                        <Button variant="ghost" size="icon" aria-label="Open Sidebar" onClick={() => setMenuOpen(true)}>
+                        <Button variant="ghost" size="icon" aria-label={t("docs.openSidebar")} onClick={() => setMenuOpen(true)}>
                             <PanelLeft />
                         </Button>
                     </div>
@@ -121,13 +132,13 @@ export default function Docs() {
                         <Button asChild variant="secondary" size="sm" className="border border-border bg-background shadow-none hover:bg-accent">
                             <a href={editUrl(page)} target="_blank" rel="noopener noreferrer">
                                 <SquarePen />
-                                Edit on GitHub
+                                {t("docs.editOnGitHub")}
                             </a>
                         </Button>
                     </div>
 
                     {(prev || next) && (
-                        <nav aria-label="Pagination" className="mt-6 grid gap-3 sm:grid-cols-2">
+                        <nav aria-label={t("docs.pagination")} className="mt-6 grid gap-3 sm:grid-cols-2">
                             {prev ? <PagerLink page={prev} direction="previous" /> : <span />}
                             {next ? <PagerLink page={next} direction="next" /> : <span />}
                         </nav>
@@ -138,7 +149,7 @@ export default function Docs() {
             <aside className="hidden xl:sticky xl:top-0 xl:block xl:h-svh xl:overflow-y-auto xl:py-14 xl:pe-6">
                 {outline.length > 0 && (
                     <div className="text-sm">
-                        <p className="mb-3 flex items-center gap-2 font-medium text-foreground">On this page</p>
+                        <p className="mb-3 flex items-center gap-2 font-medium text-foreground">{t("docs.onThisPage")}</p>
                         <ul className="space-y-2 border-s ps-3">
                             {outline.map((s) => (
                                 <li key={s.id}>
@@ -154,7 +165,7 @@ export default function Docs() {
 
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
                 <SheetContent side="left" className="w-[268px] p-0">
-                    <SheetTitle className="sr-only">Docs navigation</SheetTitle>
+                    <SheetTitle className="sr-only">{t("docs.docsNavigation")}</SheetTitle>
                     <div className="flex h-full flex-col bg-card">
                         <DocsSidebar page={page} onNavigate={() => setMenuOpen(false)} onSearch={() => setSearchOpen(true)} />
                     </div>
@@ -168,6 +179,7 @@ export default function Docs() {
 
 /** Sidebar: the title, search, back link, the page list in groups, and the footer with GitHub and the theme. */
 function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate: () => void; onSearch: () => void }) {
+    const { t } = useI18n();
     const [openGroups, setOpenGroups] = useState<Partial<Record<DocGroup, boolean>>>({});
     const [theme] = useTheme();
     const index = NAV_PAGES.find((p) => !p.group);
@@ -177,7 +189,7 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
             <div className="flex flex-col gap-3 p-4 pb-2">
                 <Link to="/docs" onClick={onNavigate} className="inline-flex items-center gap-2.5 text-[0.9375rem] font-medium">
                     <img src="/icon.svg" alt="" aria-hidden="true" className="size-5 shrink-0" />
-                    OpenAudioHub Docs
+                    {t("docs.title")}
                 </Link>
                 <button
                     type="button"
@@ -185,7 +197,7 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
                     className="inline-flex w-full items-center gap-2 rounded-lg border bg-muted/50 p-1.5 ps-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 >
                     <Search className="size-4" aria-hidden="true" />
-                    Search
+                    {t("docs.search")}
                     <span className="ms-auto inline-flex gap-0.5">
                         <kbd className="rounded-md border bg-background px-1.5 font-mono text-[11px]">⌘</kbd>
                         <kbd className="rounded-md border bg-background px-1.5 font-mono text-[11px]">K</kbd>
@@ -197,11 +209,11 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
                     className="flex items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
                 >
                     <ArrowLeft className="size-4" aria-hidden="true" />
-                    Back to app
+                    {t("docs.backToApp")}
                 </Link>
             </div>
 
-            <nav aria-label="Docs" className="flex-1 space-y-0.5 overflow-y-auto p-4 pt-2 text-sm">
+            <nav aria-label={t("docs.docsNav")} className="flex-1 space-y-0.5 overflow-y-auto p-4 pt-2 text-sm">
                 {index && <NavItem page={index} active={page.url === index.url} onNavigate={onNavigate} />}
                 {DOC_GROUPS.map((group) => {
                     const members = NAV_PAGES.filter((p) => p.group === group);
@@ -215,7 +227,7 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
                                 onClick={() => setOpenGroups((s) => ({ ...s, [group]: !open }))}
                                 className="flex w-full items-center gap-2 rounded-lg p-2 text-start text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
                             >
-                                {group}
+                                {t(groupKey(group))}
                                 {open ? <ChevronDown className="ms-auto size-4" aria-hidden="true" /> : <ChevronRight className="ms-auto size-4" aria-hidden="true" />}
                             </button>
                             {open && (
@@ -240,9 +252,10 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
                 >
                     <GitHubIcon />
                 </a>
-                <div role="group" aria-label="Theme" className="inline-flex items-center gap-0.5 rounded-lg border bg-background p-0.5">
-                    <ThemeButton label="Light" value="light" current={theme} icon={<Sun className="size-3.5" />} />
-                    <ThemeButton label="Dark" value="dark" current={theme} icon={<Moon className="size-3.5" />} />
+                <LanguagePicker />
+                <div role="group" aria-label={t("docs.theme")} className="inline-flex items-center gap-0.5 rounded-lg border bg-background p-0.5">
+                    <ThemeButton label={t("docs.themeLight")} value="light" current={theme} icon={<Sun className="size-3.5" />} />
+                    <ThemeButton label={t("docs.themeDark")} value="dark" current={theme} icon={<Moon className="size-3.5" />} />
                 </div>
             </div>
         </>
@@ -250,6 +263,7 @@ function DocsSidebar({ page, onNavigate, onSearch }: { page: DocPage; onNavigate
 }
 
 function NavItem({ page, active, onNavigate }: { page: DocPage; active: boolean; onNavigate: () => void }) {
+    const { t } = useI18n();
     return (
         <Link
             to={page.url}
@@ -260,7 +274,7 @@ function NavItem({ page, active, onNavigate }: { page: DocPage; active: boolean;
                 active ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:text-foreground",
             )}
         >
-            {page.title}
+            {t(docTitleKey(page))}
         </Link>
     );
 }
@@ -284,6 +298,7 @@ function ThemeButton({ label, value, current, icon }: { label: string; value: "l
 }
 
 function PagerLink({ page, direction }: { page: DocPage; direction: "previous" | "next" }) {
+    const { t } = useI18n();
     return (
         <Link
             to={page.url}
@@ -292,14 +307,15 @@ function PagerLink({ page, direction }: { page: DocPage; direction: "previous" |
                 direction === "next" ? "items-end text-end sm:col-start-2" : "items-start text-start",
             )}
         >
-            <span className="text-xs text-muted-foreground">{direction === "previous" ? "Previous" : "Next"}</span>
-            <span className="font-medium">{page.title}</span>
+            <span className="text-xs text-muted-foreground">{direction === "previous" ? t("docs.previous") : t("docs.next")}</span>
+            <span className="font-medium">{t(docTitleKey(page))}</span>
         </Link>
     );
 }
 
 /** Search over every section of the docs. Results open the section they came from. */
 function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+    const { t } = useI18n();
     const [query, setQuery] = useState("");
     const navigate = useNavigate();
     const results = useMemo(() => (open ? searchResults(query) : []), [open, query]);
@@ -319,22 +335,22 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
             }}
         >
             <DialogContent className="top-[20%] max-w-xl translate-y-0 gap-0 p-0 sm:max-w-xl">
-                <DialogTitle className="sr-only">Search the docs</DialogTitle>
-                <DialogDescription className="sr-only">Search every page of the OpenAudioHub docs.</DialogDescription>
+                <DialogTitle className="sr-only">{t("docs.searchTitle")}</DialogTitle>
+                <DialogDescription className="sr-only">{t("docs.searchDescription")}</DialogDescription>
                 <div className="flex items-center gap-2 border-b px-4">
                     <Search className="size-4 text-muted-foreground" aria-hidden="true" />
                     <input
                         autoFocus
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search the docs"
-                        aria-label="Search the docs"
+                        placeholder={t("docs.searchPlaceholder")}
+                        aria-label={t("docs.searchTitle")}
                         className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                 </div>
                 <ul className="max-h-[360px] overflow-y-auto p-2 text-sm">
                     {query.trim() && results.length === 0 && (
-                        <li className="p-4 text-center text-muted-foreground">No results</li>
+                        <li className="p-4 text-center text-muted-foreground">{t("docs.searchEmpty")}</li>
                     )}
                     {results.map((entry) => (
                         <li key={entry.url}>
@@ -344,7 +360,6 @@ function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                                 className="flex w-full flex-col items-start gap-0.5 rounded-lg p-3 text-start transition-colors hover:bg-accent"
                             >
                                 <span className="text-xs text-muted-foreground">
-                                    {entry.pageTitle}
                                     {entry.heading !== entry.pageTitle && ` › ${entry.heading}`}
                                 </span>
                                 <span className="line-clamp-2 text-muted-foreground">{snippet(entry.text, query)}</span>
@@ -383,16 +398,17 @@ function snippet(text: string, query: string): string {
 
 /** Shown for any docs URL with no page. The copy matches the app's not-found page. */
 function DocsNotFound() {
+    const { t } = useI18n();
     const { status } = useSession();
-    useDocumentMeta("OpenAudioHub — Long recordings, intelligently transcribed", undefined, "noindex");
+    useDocumentMeta(t("docs.descriptionTitle"), undefined, "noindex");
     const signedIn = status === "authenticated";
     return (
         <div className="flex min-h-svh flex-col items-center justify-center gap-4 px-4 text-center">
             <p className="font-mono text-sm text-muted-foreground">404</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Page not found</h1>
-            <p className="max-w-md text-muted-foreground">The link may be out of date, or the page may have moved.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t("auth.notFound.title")}</h1>
+            <p className="max-w-md text-muted-foreground">{t("auth.notFound.body")}</p>
             <Button asChild variant="primary" className="mt-2 h-10 px-6">
-                <Link to={signedIn ? "/recordings" : "/"}>{signedIn ? "Go to recordings" : "Back to home"}</Link>
+                <Link to={signedIn ? "/recordings" : "/"}>{signedIn ? t("auth.notFound.toRecordings") : t("auth.notFound.toHome")}</Link>
             </Button>
         </div>
     );

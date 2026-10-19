@@ -1,3 +1,4 @@
+import type { MessageKey } from "@/lib/i18n";
 import {
     Bell,
     Bot,
@@ -32,13 +33,12 @@ export type NavGroupId = "ai" | "plaud-sync" | "playback-display" | "data" | "de
 
 export interface SectionDef {
     id: SectionId;
-    /** Short name used in the navigation and the section picker. */
-    name: string;
-    /** Page title (the section's h1). */
-    title: string;
-    description: string;
-    /** Extra words the search field matches. */
-    keywords: string[];
+    /** Translation key of the short name used in the navigation and the section picker. */
+    nameKey: MessageKey;
+    /** Translation key of the page title (the section's h1). */
+    titleKey: MessageKey;
+    /** Translation key of the one-line description. */
+    descriptionKey: MessageKey;
     icon: LucideIcon;
     /** Tailwind background class for the icon tile (a design token). */
     tile: string;
@@ -49,122 +49,111 @@ export interface SectionDef {
     hidden?: boolean;
 }
 
-export const NAV_GROUPS: Record<NavGroupId, string> = {
-    ai: "AI",
-    "plaud-sync": "Plaud & Sync",
-    "playback-display": "Playback & Display",
-    data: "Data",
-    desktop: "Desktop",
+export const NAV_GROUPS: Record<NavGroupId, MessageKey> = {
+    ai: "settings.nav.groupAi",
+    "plaud-sync": "settings.nav.groupPlaudSync",
+    "playback-display": "settings.nav.groupPlaybackDisplay",
+    data: "settings.nav.groupData",
+    desktop: "settings.nav.groupDesktop",
 };
 
 /** Every section the web build knows, in navigation order. Desktop and hidden sections come last. */
 export const SECTIONS: SectionDef[] = [
     {
         id: "providers",
-        name: "Providers",
-        title: "AI Providers",
-        description: "Connect transcription and summary providers. Anything OpenAI-compatible works.",
-        keywords: ["ai", "api", "key", "openai", "groq", "ollama", "model", "provider"],
+        nameKey: "settings.nav.providersName",
+        titleKey: "settings.nav.providersTitle",
+        descriptionKey: "settings.nav.providersDescription",
         icon: Bot,
         tile: "bg-tile-indigo",
         group: "ai",
     },
     {
         id: "transcription",
-        name: "Transcription",
-        title: "Transcription",
-        description: "Provider choice and default options for turning audio into text.",
-        keywords: ["transcribe", "language", "speaker", "diarization", "quality", "plaud", "transcript"],
+        nameKey: "settings.nav.transcriptionName",
+        titleKey: "settings.nav.transcriptionName",
+        descriptionKey: "settings.nav.transcriptionDescription",
         icon: FileText,
         tile: "bg-tile-blue",
         group: "ai",
     },
     {
         id: "summary",
-        name: "Summary",
-        title: "Summary",
-        description: "Which provider writes summaries, and the prompt presets it uses.",
-        keywords: ["summary", "summarize", "prompt", "preset", "output", "language"],
+        nameKey: "settings.nav.summaryName",
+        titleKey: "settings.nav.summaryName",
+        descriptionKey: "settings.nav.summaryDescription",
         icon: ListChecks,
         tile: "bg-tile-purple",
         group: "ai",
     },
     {
         id: "naming",
-        name: "Recording names",
-        title: "Recording names",
-        description: "Choose how new recordings are named. Existing recordings keep their names.",
-        keywords: ["title", "name", "date", "file", "rename"],
+        nameKey: "settings.nav.namingName",
+        titleKey: "settings.nav.namingName",
+        descriptionKey: "settings.nav.namingDescription",
         icon: Tag,
         tile: "bg-tile-pink",
         group: "ai",
     },
     {
         id: "plaud-account",
-        name: "Plaud Account",
-        title: "Plaud Account",
-        description: "The Plaud cloud account OpenAudioHub pulls recordings from.",
-        keywords: ["plaud", "account", "sign in", "login", "connect", "token", "reconnect"],
+        nameKey: "settings.nav.plaudName",
+        titleKey: "settings.nav.plaudName",
+        descriptionKey: "settings.nav.plaudDescription",
         icon: Mic,
         tile: "bg-tile-orange",
         group: "plaud-sync",
     },
     {
         id: "sync",
-        name: "Sync",
-        title: "Sync",
-        description: "When and how OpenAudioHub pulls new recordings from your Plaud device.",
-        keywords: ["sync", "interval", "auto", "plaud", "notifications", "refresh"],
+        nameKey: "settings.nav.syncName",
+        titleKey: "settings.nav.syncName",
+        descriptionKey: "settings.nav.syncDescription",
         icon: RefreshCw,
         tile: "bg-tile-green",
         group: "plaud-sync",
     },
     {
         id: "playback",
-        name: "Playback",
-        title: "Playback",
-        description: "Start-up settings the player applies to every recording.",
-        keywords: ["play", "speed", "volume", "audio", "scrubber", "waveform"],
+        nameKey: "settings.nav.playbackName",
+        titleKey: "settings.nav.playbackName",
+        descriptionKey: "settings.nav.playbackDescription",
         icon: Play,
         tile: "bg-tile-orange",
         group: "playback-display",
     },
     {
         id: "display",
-        name: "Display",
-        title: "Display",
-        description: "Date and time format, list order, theme, and other interface choices.",
-        keywords: ["theme", "dark", "light", "date", "time", "sort", "order", "list", "page"],
+        nameKey: "settings.nav.displayName",
+        titleKey: "settings.nav.displayName",
+        descriptionKey: "settings.nav.displayDescription",
         icon: Monitor,
         tile: "bg-tile-blue",
         group: "playback-display",
     },
     {
         id: "storage",
-        name: "Storage",
-        title: "Storage",
-        description: "Where OpenAudioHub keeps the audio files behind your recordings.",
-        keywords: ["storage", "disk", "space", "retention", "delete", "usage"],
+        nameKey: "settings.nav.storageName",
+        titleKey: "settings.nav.storageName",
+        descriptionKey: "settings.nav.storageDescription",
         icon: HardDrive,
         tile: "bg-tile-gray",
         group: "data",
     },
     {
         id: "export",
-        name: "Export",
-        title: "Export",
-        description: "Take your data with you: recordings, transcripts, and summaries.",
-        keywords: ["export", "download", "json", "srt", "vtt", "txt", "onboarding"],
+        nameKey: "settings.nav.exportName",
+        titleKey: "settings.nav.exportName",
+        descriptionKey: "settings.nav.exportDescription",
         icon: Download,
         tile: "bg-tile-teal",
         group: "data",
     },
     {
         id: "notifications",
-        name: "Notifications",
-        title: "Notifications",
-        description: "Choose how and when OpenAudioHub lets you know about new recordings and sync events.",
-        keywords: ["notification", "sound", "browser", "alert", "email", "bark", "push"],
+        nameKey: "settings.nav.notificationsName",
+        titleKey: "settings.nav.notificationsName",
+        descriptionKey: "settings.nav.notificationsDescription",
         icon: Bell,
         tile: "bg-tile-pink",
         group: "plaud-sync",
@@ -172,10 +161,9 @@ export const SECTIONS: SectionDef[] = [
     },
     {
         id: "desktop",
-        name: "Desktop",
-        title: "Desktop",
-        description: "Options that only the desktop app has.",
-        keywords: ["desktop", "tray", "menu bar", "close", "window"],
+        nameKey: "settings.nav.desktopName",
+        titleKey: "settings.nav.desktopName",
+        descriptionKey: "settings.nav.desktopDescription",
         icon: Laptop,
         tile: "bg-tile-gray",
         group: "desktop",

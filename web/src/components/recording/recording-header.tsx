@@ -18,6 +18,7 @@ import { cn } from "@/lib/cn";
 import { deleteRecording, type Recording, renameRecording, setStarred, sourceOf } from "@/lib/recordings";
 import { buildSrt, buildTranscriptJson, buildVtt, downloadText, safeFileName } from "./exports";
 import type { TranscriptRecord } from "./types";
+import { useI18n } from "@/lib/i18n";
 
 export interface RecordingHeaderProps {
     variant: "page" | "pane";
@@ -31,6 +32,7 @@ export interface RecordingHeaderProps {
 /** Header of the recording view: back, title (rename in place), meta line, star, and the actions menu. */
 export function RecordingHeader({ variant, recording, transcript, busy, onTranscribe }: RecordingHeaderProps) {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const starred = recording.starredAt !== null;
@@ -49,7 +51,7 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
             await setStarred(recording.id, next);
         } catch {
             setStarOverride(null);
-            toast.error("Could not update the star");
+            toast.error(t("recording.header.starFailed"));
         }
     };
 
@@ -66,10 +68,10 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
         setDeleting(true);
         try {
             await deleteRecording(recording.id);
-            toast.success("Recording deleted");
+            toast.success(t("recording.header.deleted"));
             navigate("/recordings");
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to delete recording"));
+            toast.error(errorMessage(err, t("recording.header.deleteFailed")));
             setDeleting(false);
         }
     };
@@ -79,14 +81,14 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
     const meta = [
         formatDateTime(recording.startTime),
         formatClock(recording.duration / 1000),
-        sourceOf(recording) === "upload" ? "Upload" : "Plaud",
+        sourceOf(recording) === "upload" ? t("dashboard.sourceUpload") : t("dashboard.sourcePlaud"),
     ];
 
     return (
         <header className={cn("flex items-start gap-3", variant === "page" ? "lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3" : "lg:px-8")}>
             {/* The pane variant gets its back control and "Open full view" link from the library's preview pane. */}
             {variant === "page" ? (
-                <Button variant="ghost" size="icon" aria-label="Back to recordings" onClick={() => navigate("/recordings")} className="-ml-2 shrink-0">
+                <Button variant="ghost" size="icon" aria-label={t("recording.header.backToRecordings")} onClick={() => navigate("/recordings")} className="-ml-2 shrink-0">
                     <ArrowLeft />
                 </Button>
             ) : null}
@@ -106,7 +108,7 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
                     variant="ghost"
                     size="icon"
                     data-testid="recording-star"
-                    aria-label={effectiveStarred ? "Unstar" : "Star"}
+                    aria-label={effectiveStarred ? t("recording.header.unstar") : t("recording.header.star")}
                     aria-pressed={effectiveStarred}
                     onClick={() => void toggleStar()}
                 >
@@ -118,7 +120,7 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Recording actions"
+                                aria-label={t("recording.header.actions")}
                                 className="border border-border bg-background text-muted-foreground shadow-none hover:bg-accent hover:text-foreground dark:bg-muted dark:hover:bg-accent"
                             >
                                 <Ellipsis />
@@ -127,26 +129,26 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
                         <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuItem onSelect={() => void downloadRecordings([recording.id])}>
                                 <Download />
-                                Download audio
+                                {t("recording.header.downloadAudio")}
                             </DropdownMenuItem>
                             <DropdownMenuItem data-testid="recording-star-toggle" onSelect={() => void toggleStar()}>
                                 <Star className={cn(effectiveStarred && "fill-current")} />
-                                {effectiveStarred ? "Unstar" : "Star"}
+                                {effectiveStarred ? t("recording.header.unstar") : t("recording.header.star")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <ExportItem label="Export TXT" disabled={!transcript} onSelect={() => exportTranscript("txt")} />
-                            <ExportItem label="Export SRT" disabled={!hasTimeline} onSelect={() => exportTranscript("srt")} />
-                            <ExportItem label="Export VTT" disabled={!hasTimeline} onSelect={() => exportTranscript("vtt")} />
-                            <ExportItem label="Export JSON" disabled={!transcript} onSelect={() => exportTranscript("json")} />
+                            <ExportItem label={t("recording.header.exportTxt")} disabled={!transcript} onSelect={() => exportTranscript("txt")} />
+                            <ExportItem label={t("recording.header.exportSrt")} disabled={!hasTimeline} onSelect={() => exportTranscript("srt")} />
+                            <ExportItem label={t("recording.header.exportVtt")} disabled={!hasTimeline} onSelect={() => exportTranscript("vtt")} />
+                            <ExportItem label={t("recording.header.exportJson")} disabled={!transcript} onSelect={() => exportTranscript("json")} />
                             <DropdownMenuSeparator />
                             <DropdownMenuItem disabled={busy} onSelect={onTranscribe}>
                                 <RefreshCw />
-                                {transcript ? "Re-transcribe" : "Transcribe"}
+                                {transcript ? t("recording.transcribe.retranscribe") : t("recording.transcribe.action")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
                                 <Trash2 />
-                                Delete recording
+                                {t("recording.header.delete")}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -155,17 +157,14 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
 
             <Dialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
                 <DialogContent>
-                    <DialogTitle>Delete this recording?</DialogTitle>
-                    <DialogDescription>
-                        This permanently removes the audio file, transcription, and AI summary from OpenAudioHub. The recording on your Plaud account is not affected, but it
-                        will not be re-synced to OpenAudioHub.
-                    </DialogDescription>
+                    <DialogTitle>{t("recording.header.deleteTitle")}</DialogTitle>
+                    <DialogDescription>{t("recording.header.deleteBody")}</DialogDescription>
                     <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <Button variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>
-                            Cancel
+                            {t("common.action.cancel")}
                         </Button>
                         <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
-                            {deleting ? "Deleting…" : "Delete recording"}
+                            {deleting ? t("recording.header.deleting") : t("recording.header.delete")}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -185,6 +184,7 @@ function ExportItem({ label, disabled, onSelect }: { label: string; disabled: bo
 
 /** The title: a button that turns into a text field for an inline rename (Enter saves, Escape cancels, blur saves). */
 function TitleEditor({ as: Tag, recording }: { as: "h1" | "h2"; recording: Recording }) {
+    const { t } = useI18n();
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState("");
     // Set once a rename has been decided, so the blur that follows Enter or Escape does nothing.
@@ -205,17 +205,17 @@ function TitleEditor({ as: Tag, recording }: { as: "h1" | "h2"; recording: Recor
         const name = draft.replace(/[\u0000-\u001f\u007f]/g, "").trim();
         if (name === recording.filename) return;
         if (!name) {
-            toast.error("Name cannot be empty");
+            toast.error(t("recording.title.empty"));
             return;
         }
         if (name.length > 200) {
-            toast.error("Name must be 200 characters or fewer");
+            toast.error(t("recording.title.tooLong"));
             return;
         }
         try {
             await renameRecording(recording.id, name);
         } catch (err) {
-            toast.error(errorMessage(err, "Could not rename the recording."));
+            toast.error(errorMessage(err, t("recording.title.renameFailed")));
         }
     };
 
@@ -233,7 +233,7 @@ function TitleEditor({ as: Tag, recording }: { as: "h1" | "h2"; recording: Recor
         return (
             <Tag className="text-[22px] font-bold leading-tight tracking-tight">
                 <input
-                    aria-label="Recording name"
+                    aria-label={t("recording.title.name")}
                     autoFocus
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
@@ -249,8 +249,8 @@ function TitleEditor({ as: Tag, recording }: { as: "h1" | "h2"; recording: Recor
         <Tag className="min-w-0 text-[22px] font-bold leading-tight tracking-tight text-foreground">
             <button
                 type="button"
-                title="Rename"
-                aria-label={`Rename ${recording.filename}`}
+                title={t("common.action.rename")}
+                aria-label={t("recording.title.renameAria", { title: recording.filename })}
                 onClick={start}
                 className="group/title inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg px-1 -mx-1 py-0.5 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >

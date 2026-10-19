@@ -16,12 +16,19 @@ import { downloadText, buildTranscriptJson, safeFileName, timecode } from "./exp
 import { isActiveStatus } from "./data";
 import { phaseLabel } from "./pipeline-labels";
 import type { PipelineState, ProviderRow, TimelineSegment, TranscriptRecord } from "./types";
+import { t, useI18n, type MessageKey } from "@/lib/i18n";
 
-const SOURCE_LABELS: Record<string, string> = {
-    openaudiohub: "Your provider",
-    plaud: "Plaud",
-    mixed: "Mix",
+const SOURCE_LABELS: Record<string, MessageKey> = {
+    openaudiohub: "recording.transcript.sourceProvider",
+    plaud: "recording.transcript.sourcePlaud",
+    mixed: "recording.transcript.sourceMix",
 };
+
+/** The source name in the current language; an unknown source shows its stored name. */
+function sourceLabel(source: string): string {
+    const key = SOURCE_LABELS[source];
+    return key ? t(key) : source;
+}
 
 export interface TranscriptCardProps {
     recordingId: string;
@@ -51,6 +58,7 @@ export function TranscriptCard(props: TranscriptCardProps) {
     const [follow, setFollow] = useState(true);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const { t: tr } = useI18n();
     const browser = useBrowserTranscription(props.recordingId, props.onChanged);
     const job = pipeline?.job ?? null;
     const timed = Boolean(transcript?.timeline?.length);
@@ -62,11 +70,11 @@ export function TranscriptCard(props: TranscriptCardProps) {
         try {
             const source = transcript.source || "openaudiohub";
             await api(`/api/recordings/${encodeURIComponent(props.recordingId)}/transcription?source=${encodeURIComponent(source)}`, { method: "DELETE" });
-            toast.success("Transcript deleted");
+            toast.success(tr("recording.transcript.deleted"));
             setDeleteOpen(false);
             props.onChanged();
         } catch (err) {
-            toast.error(errorMessage(err, "Could not delete the transcript"));
+            toast.error(errorMessage(err, tr("recording.transcript.deleteFailed")));
         } finally {
             setDeleting(false);
         }
@@ -82,29 +90,29 @@ export function TranscriptCard(props: TranscriptCardProps) {
     return (
         <Card className="grid content-start gap-4 rounded-none bg-transparent p-0 shadow-none" data-testid="transcript-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-[17px] font-semibold tracking-tight">Transcript</h2>
+                <h2 className="text-[17px] font-semibold tracking-tight">{tr("recording.tabs.transcript")}</h2>
                 <div className="flex flex-wrap items-center gap-3">
                     {timed ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Switch aria-label="Follow playback" checked={follow} onCheckedChange={setFollow} />
-                            <span aria-hidden="true">Follow playback</span>
+                            <Switch aria-label={tr("recording.transcript.followPlayback")} checked={follow} onCheckedChange={setFollow} />
+                            <span aria-hidden="true">{tr("recording.transcript.followPlayback")}</span>
                         </div>
                     ) : null}
                     {!transcript ? (
                         <>
                             <Button variant="primary" className="gap-1.5 px-3" disabled={busy || browser.running} onClick={onRequestTranscribe}>
                                 <Sparkles aria-hidden="true" />
-                                {transcribing ? "Transcribing…" : "Transcribe"}
+                                {transcribing ? tr("recording.transcribe.inProgress") : tr("recording.transcribe.action")}
                             </Button>
                             <Button
                                 variant="secondary"
                                 className="gap-1.5 px-3"
-                                title="Run Whisper right here in your browser. No API key needed, and the audio never leaves your device."
+                                title={tr("recording.browser.title")}
                                 disabled={busy || browser.running}
                                 onClick={browser.start}
                             >
                                 <Cpu aria-hidden="true" />
-                                {browser.label ?? "Transcribe in browser"}
+                                {browser.label ?? tr("recording.browser.action")}
                             </Button>
                         </>
                     ) : null}
@@ -112,9 +120,9 @@ export function TranscriptCard(props: TranscriptCardProps) {
             </div>
 
             {transcripts.length > 1 ? (
-                <div data-testid="source-switcher" role="group" aria-label="Transcript source" className="flex flex-wrap gap-1">
+                <div data-testid="source-switcher" role="group" aria-label={tr("recording.transcript.source")} className="flex flex-wrap gap-1">
                     {transcripts.map((t) => {
-                        const label = SOURCE_LABELS[t.source] ?? t.source;
+                        const label = sourceLabel(t.source);
                         const active = (selectedSource ?? transcript?.source) === t.source;
                         return (
                             <Button key={t.source} size="sm" variant={active ? "primary" : "secondary"} aria-pressed={active} onClick={() => onSelectSource(t.source)}>
@@ -136,19 +144,19 @@ export function TranscriptCard(props: TranscriptCardProps) {
             {transcript ? (
                 <>
                     <div data-testid="transcript-toolbar" className="flex flex-wrap items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" aria-label="Download transcript as TXT" onClick={() => exportText("txt")}>
+                        <Button variant="ghost" size="sm" aria-label={tr("recording.transcript.downloadTxt")} onClick={() => exportText("txt")}>
                             <Download aria-hidden="true" /> TXT
                         </Button>
-                        <Button variant="ghost" size="sm" aria-label="Download transcript as JSON" onClick={() => exportText("json")}>
+                        <Button variant="ghost" size="sm" aria-label={tr("recording.transcript.downloadJson")} onClick={() => exportText("json")}>
                             <Download aria-hidden="true" /> JSON
                         </Button>
                         <Button variant="ghost" size="sm" className="text-destructive" disabled={busy} onClick={() => setDeleteOpen(true)}>
-                            <Trash2 aria-hidden="true" /> Delete
+                            <Trash2 aria-hidden="true" /> {tr("common.action.delete")}
                         </Button>
                     </div>
                     {noTimestamps ? (
                         <p className="text-xs text-muted-foreground">
-                            This transcript was saved without timestamps. The timeline and the SRT and VTT exports are not available for it.
+                            {tr("recording.transcript.noTimestamps")}
                         </p>
                     ) : null}
                     {timed ? (
@@ -161,20 +169,20 @@ export function TranscriptCard(props: TranscriptCardProps) {
             ) : pipelineActive || job?.status === "failed" ? null : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                     <FileText aria-hidden="true" className="mb-3 size-10 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No transcription yet. Use the Transcribe button above.</p>
+                    <p className="text-sm text-muted-foreground">{tr("recording.transcript.empty")}</p>
                 </div>
             )}
 
             <Dialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
                 <DialogContent>
-                    <DialogTitle>Delete this transcript?</DialogTitle>
-                    <DialogDescription>The transcript and its summary will be removed. You can transcribe and summarize again later.</DialogDescription>
+                    <DialogTitle>{tr("recording.transcript.deleteTitle")}</DialogTitle>
+                    <DialogDescription>{tr("recording.transcript.deleteBody")}</DialogDescription>
                     <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <Button variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>
-                            Cancel
+                            {t("common.action.cancel")}
                         </Button>
                         <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
-                            {deleting ? "Deleting…" : "Delete"}
+                            {deleting ? tr("common.action.deleting") : tr("common.action.delete")}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -200,7 +208,7 @@ function PipelineBlock({
     if (queued && !job) {
         return (
             <div data-testid="pipeline-status" data-phase="queued" role="status" className="grid gap-2 rounded-lg bg-muted p-3 text-sm">
-                Queueing transcription…
+                {t("recording.pipeline.queueing")}
             </div>
         );
     }
@@ -209,11 +217,11 @@ function PipelineBlock({
     if (job.status === "failed") {
         return (
             <div data-testid="pipeline-status" data-phase={phase ?? "failed"} role="alert" className="grid gap-2 rounded-lg bg-muted p-3 text-sm">
-                <p className="font-medium text-destructive">Transcription failed</p>
+                <p className="font-medium text-destructive">{t("recording.transcribe.failed")}</p>
                 {job.error ? <p className="text-xs text-muted-foreground">{job.error}</p> : null}
                 <div>
                     <Button variant="secondary" size="sm" data-testid="pipeline-retry" onClick={onRetry}>
-                        Retry
+                        {t("common.action.retry")}
                     </Button>
                 </div>
             </div>
@@ -223,10 +231,10 @@ function PipelineBlock({
     if (job.status === "paused_disk") {
         return (
             <div data-testid="pipeline-status" data-phase="paused_disk" className="grid gap-2 rounded-lg bg-muted p-3 text-sm">
-                <p>Waiting for disk space. Processing picks up again on its own once room is free.</p>
+                <p>{t("recording.pipeline.pausedDisk")}</p>
                 <div>
                     <Button variant="secondary" size="sm" data-testid="pipeline-cancel" onClick={onCancel}>
-                        Cancel
+                        {t("common.action.cancel")}
                     </Button>
                 </div>
             </div>
@@ -243,7 +251,7 @@ function PipelineBlock({
             {running ? (
                 <div
                     role="progressbar"
-                    aria-label="Audio preprocessing progress"
+                    aria-label={t("recording.pipeline.progress")}
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={Math.round(job.progress * 100)}
@@ -254,7 +262,7 @@ function PipelineBlock({
             ) : null}
             <div>
                 <Button variant="secondary" size="sm" data-testid="pipeline-cancel" onClick={onCancel}>
-                    Cancel
+                    {t("common.action.cancel")}
                 </Button>
             </div>
         </div>
@@ -348,10 +356,10 @@ function SpeakerLabel({ name }: { name: string }) {
 function TranscriptMeta({ transcript }: { transcript: TranscriptRecord }) {
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-muted-foreground">
-            <span className="rounded bg-muted px-2 py-0.5">{SOURCE_LABELS[transcript.source] ?? transcript.source}</span>
-            {transcript.detectedLanguage ? <span className="inline-flex items-center gap-1"><Languages className="size-3" aria-hidden="true" />Language: {transcript.detectedLanguage}</span> : null}
-            <span>{transcript.text.trim().split(/\s+/u).filter(Boolean).length} words</span>
-            <span>{transcript.text.length} characters</span>
+            <span className="rounded bg-muted px-2 py-0.5">{sourceLabel(transcript.source)}</span>
+            {transcript.detectedLanguage ? <span className="inline-flex items-center gap-1"><Languages className="size-3" aria-hidden="true" />{t("recording.transcript.language", { language: transcript.detectedLanguage })}</span> : null}
+            <span>{t("recording.transcript.words", { count: transcript.text.trim().split(/\s+/u).filter(Boolean).length })}</span>
+            <span>{t("recording.transcript.characters", { count: transcript.text.length })}</span>
         </div>
     );
 }
@@ -369,6 +377,7 @@ export interface TranscribeDialogProps {
 
 /** Choice of provider and model for a transcription run. Empty choices use the defaults. */
 export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }: TranscribeDialogProps) {
+    const { t } = useI18n();
     const [providers, setProviders] = useState<ProviderRow[] | null>(null);
     const [providerId, setProviderId] = useState("default");
     const [model, setModel] = useState("");
@@ -397,8 +406,8 @@ export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
-                <DialogTitle>{hasTranscript ? "Re-transcribe recording" : "Transcribe recording"}</DialogTitle>
-                <DialogDescription>Replaces the current transcript. The summary is removed with it.</DialogDescription>
+                <DialogTitle>{hasTranscript ? t("recording.transcribe.dialogRetitle") : t("recording.transcribe.dialogTitle")}</DialogTitle>
+                <DialogDescription>{t("recording.transcribe.dialogBody")}</DialogDescription>
                 <form
                     className="grid gap-4"
                     onSubmit={(e) => {
@@ -409,18 +418,18 @@ export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }
                         });
                     }}
                 >
-                    <Field label="Provider">
+                    <Field label={t("recording.transcribe.provider")}>
                         <Select value={providerId} onValueChange={setProviderId} options={options} />
                     </Field>
-                    <Field label="Model" hint={`Leave empty to use ${chosen?.defaultModel ?? "the provider's default model"}.`}>
+                    <Field label={t("recording.transcribe.model")} hint={t("recording.transcribe.modelHint", { model: chosen?.defaultModel ?? t("recording.transcribe.defaultModel") })}>
                         <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder={chosen?.defaultModel ?? ""} autoComplete="off" />
                     </Field>
                     <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <Button variant="secondary" onClick={() => onOpenChange(false)}>
-                            Cancel
+                            {t("common.action.cancel")}
                         </Button>
                         <Button type="submit" variant="primary">
-                            {hasTranscript ? "Re-transcribe" : "Transcribe"}
+                            {hasTranscript ? t("recording.transcribe.retranscribe") : t("recording.transcribe.action")}
                         </Button>
                     </DialogFooter>
                 </form>
