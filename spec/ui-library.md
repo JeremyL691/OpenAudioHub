@@ -108,7 +108,7 @@ Row element (`data-testid="recording-row"`, attribute `data-id` = recording id):
 | "Rename" | Opens the rename dialog (section 1.06). |
 | "Transcribe" | Starts server transcription (`POST /api/recordings/{id}/transcribe`). Disabled while it runs. |
 | "Transcribe in browser" | Runs the browser transcription (section 2.5). Disabled while a transcription runs. |
-| "Download audio" | Navigates to `GET /api/recordings/{id}/audio?download=1`. |
+| "Download audio" | Saves the MP3 through the desktop app or the browser (desktop.md section 8). |
 | "Delete" (destructive) | Opens a confirmation (section 1.07). |
 
 Deleting or renaming from the row menu does not change the detail pane unless it
@@ -144,7 +144,7 @@ In select mode the toolbar shows, in this order:
 | testid | Name | Enabled when | Action |
 |---|---|---|---|
 | `recording-select-all` | "Select all" | always | Selects every row in the current filtered list. |
-| `recording-bulk-download` | "Download" | at least one selected | A link to `GET /api/recordings/download?ids=<id,id,...>` (ZIP of MP3 files). Disabled when none are selected. |
+| `recording-bulk-download` | "Download" | at least one selected | Saves one ZIP of MP3 files through the desktop app or the browser (desktop.md section 8). Disabled when none are selected, and while a download is in progress. |
 | `recording-bulk-merge` | "Merge" | two or more selected | Opens the merge dialog (section 1.06). |
 | `recording-select-cancel` | "Cancel" | always | Leaves select mode. |
 
@@ -297,7 +297,7 @@ Opened by "Recording actions". Items:
 
 | Item | Enabled | Action |
 |---|---|---|
-| "Download audio" | always | Navigates to `GET /api/recordings/{id}/audio?download=1`. |
+| "Download audio" | always | Saves the MP3 through the desktop app or the browser (desktop.md section 8). |
 | "Star" / "Unstar" (`recording-star-toggle`) | always | As in 1.11. |
 | "Export TXT", "Export SRT", "Export VTT", "Export JSON" | only when there is a transcript (SRT and VTT also need timestamps) | Builds the file in the browser from the transcript on the page and downloads it. |
 | "Transcribe" (or "Re-transcribe" when a transcript exists) | not while a transcription or pipeline job runs | `POST /api/recordings/{id}/transcribe`. |
@@ -327,7 +327,9 @@ The player card has `data-testid="player"`. It contains:
   if there is one).
 - Download menu (the download icon in the header on the library preview; hidden on the
   detail page, where the actions menu does this): "Download MP3" and "Download original"
-  (`download-original`, `GET /api/recordings/download?ids={id}&format=original`).
+  (`download-original`). "Download MP3" saves the converted file; "Download original"
+  saves the stored file unchanged. The desktop app shows its save dialog; the browser
+  downloads the file.
 - Waveform status line, under the header: "Analyzing audio…" while decoding,
   "Generate waveform" when auto-decode is skipped (long recordings), and "Retry
   waveform" after an error. Each is a button; the first two call the browser decode and

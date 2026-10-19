@@ -17,17 +17,19 @@ use crate::menu;
 
 /// Defines the bridge object the web app looks for. Version 3 adds native text-file saving;
 /// version 4 adds `reconnect`, which signs the window in again after its session ended;
-/// version 5 drops the in-app Plaud sign-in (`connectPlaud`).
+/// version 5 drops the in-app Plaud sign-in (`connectPlaud`);
+/// version 6 adds native audio downloads (`downloadRecordings`).
 pub const BRIDGE_SCRIPT: &str = r#"
 (() => {
   const invoke = (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {});
   window.__openaudiohubDesktop = {
-    version: 5,
+    version: 6,
     getPreferences: () => invoke("prefs_get"),
     setPreferences: (updates) => invoke("prefs_set", { updates }),
     openPlaudBrowser: (code) => invoke("open_plaud_browser", { code }),
     pickFolder: () => invoke("pick_folder"),
     saveTextFile: (filename, content) => invoke("save_text_file", { filename, content }),
+    downloadRecordings: (ids, format) => invoke("download_recordings", { ids, format }),
     reconnect: async () => {
       const secret = await invoke("desktop_secret");
       const res = await fetch("/api/desktop/session", {
@@ -43,10 +45,56 @@ pub const BRIDGE_SCRIPT: &str = r#"
 
 pub struct Shared {
     pub data_dir: PathBuf,
+    /// The port this launch's server bound.
+    pub port: u16,
     /// This launch's secret for `POST /api/desktop/session` (spec/auth.md).
     pub launch_secret: String,
+    /// The session cookie background calls reuse, until the server refuses it.
+    pub session: Mutex<Option<String>>,
     pub config: Mutex<AppConfig>,
     pub close_to_background: AtomicBool,
+}
+
+/// Exchanges the launch secret for a desktop session cookie. Background calls to the local
+/// server reuse this instead of the window's own session.
+pub(crate) async fn session_cookie(
+    client: &reqwest::Client,
+    port: u16,
+    launch_secret: &str,
+) -> Result<String, String> {
+    let response = client
+        .post(format!("http://127.0.0.1:{port}/api/desktop/session"))
+        .header("authorization", format!("Bearer {launch_secret}"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("the app answered {}", response.status().as_u16()));
+    }
+    response
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(cookie_pair)
+        .ok_or_else(|| "the app did not set a session cookie".to_owned())
+}
+
+/// The `name=value` part of a Set-Cookie header, unless it is only an attribute.
+pub(crate) fn cookie_pair(set_cookie: &str) -> Option<String> {
+    const ATTRIBUTES: [&str; 8] = [
+        "path", "expires", "max-age", "domain", "samesite", "httponly", "secure", "priority",
+    ];
+    let pair = set_cookie.split(';').next()?.trim();
+    let (name, value) = pair.split_once('=')?;
+    let name = name.trim();
+    if name.is_empty()
+        || value.is_empty()
+        || ATTRIBUTES.contains(&name.to_ascii_lowercase().as_str())
+    {
+        return None;
+    }
+    Some(pair.to_owned())
 }
 
 fn prefs_json(app: &AppHandle, config: &AppConfig) -> Value {
@@ -219,7 +267,7 @@ pub fn bare_token(stored: &str) -> Option<String> {
 }
 
 /// Decodes `%XX` escapes; `None` when the text has none or is malformed.
-fn percent_decode(input: &str) -> Option<String> {
+pub(crate) fn percent_decode(input: &str) -> Option<String> {
     if !input.contains('%') {
         return None;
     }
@@ -452,6 +500,16 @@ pub(crate) fn open_default_browser(url: &tauri::Url) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn session_cookie_pairs_are_read() {
+        assert_eq!(
+            super::cookie_pair("oah_session=abc123; Path=/; HttpOnly; SameSite=Lax").as_deref(),
+            Some("oah_session=abc123")
+        );
+        assert_eq!(super::cookie_pair("Path=/"), None);
+        assert_eq!(super::cookie_pair("=x"), None);
+    }
+
     #[test]
     fn plaud_token_forms() {
         let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl";

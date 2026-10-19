@@ -151,10 +151,10 @@ export const SECTIONS: SectionDef[] = [
     },
     {
         id: "export",
-        name: "Export/Backup",
-        title: "Export & Backup",
+        name: "Export",
+        title: "Export",
         description: "Take your data with you: recordings, transcripts, and summaries.",
-        keywords: ["export", "backup", "download", "json", "srt", "vtt", "txt", "archive", "onboarding"],
+        keywords: ["export", "download", "json", "srt", "vtt", "txt", "onboarding"],
         icon: Download,
         tile: "bg-tile-teal",
         group: "data",

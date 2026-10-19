@@ -211,13 +211,3 @@ export function groupSummary(count: number, totalMs: number): string {
     const span = hours > 0 ? `${hours} h ${minutes % 60} min` : `${minutes} min`;
     return `${count} ${noun} · ${span}`;
 }
-
-/** Direct download of one recording's audio (the browser saves it). */
-export function audioDownloadUrl(id: string): string {
-    return `/api/recordings/${encodeURIComponent(id)}/audio?download=1`;
-}
-
-/** ZIP of the given recordings, in the order given. */
-export function bulkDownloadUrl(ids: string[]): string {
-    return `/api/recordings/download?ids=${ids.map((id) => encodeURIComponent(id)).join(",")}`;
-}

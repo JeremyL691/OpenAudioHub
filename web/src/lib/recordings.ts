@@ -25,11 +25,6 @@ export function sourceOf(r: Pick<Recording, "deviceSn">): "plaud" | "upload" {
     return r.deviceSn === "local" ? "upload" : "plaud";
 }
 
-/** Download of one recording's stored file, unchanged (spec/recordings.md, GET /api/recordings/download). */
-export function originalDownloadUrl(id: string): string {
-    return `/api/recordings/download?ids=${encodeURIComponent(id)}&format=original`;
-}
-
 export async function listRecordings(): Promise<Recording[]> {
     const body = await api<{ recordings: Recording[] }>("/api/recordings");
     return body.recordings;

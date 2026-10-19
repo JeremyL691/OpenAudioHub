@@ -92,7 +92,7 @@ const SECTION_TITLES: [id: string, title: string][] = [
     ["playback", "Playback"],
     ["display", "Display"],
     ["storage", "Storage"],
-    ["export", "Export & Backup"],
+    ["export", "Export"],
 ];
 
 test.describe("shell: sidebar and top bar", () => {
@@ -412,7 +412,7 @@ test.describe("settings: navigation", () => {
             "Playback settings",
             "Display settings",
             "Storage settings",
-            "Export/Backup settings",
+            "Export settings",
         ]);
         await expect(nav.getByRole("link", { name: "API Keys settings" })).toHaveCount(0);
         await expect(nav.getByRole("link", { name: "Webhooks settings" })).toHaveCount(0);
@@ -635,18 +635,13 @@ test.describe("settings: saving controls (fresh account)", () => {
         }
     });
 
-    test("export: starting a backup reports it and offers a download", async ({ browser }) => {
+    test("export: the page offers text export and no backup action", async ({ browser }) => {
         const { page, close } = await freshPage(browser);
         try {
             await page.goto("/settings/export");
-            const response = page.waitForResponse(
-                (res) => res.url().endsWith("/api/backup") && res.request().method() === "POST",
-            );
-            await page.getByTestId("backup-start").click();
-            expect((await response).status()).toBeLessThan(300);
-            await expect(
-                page.getByText(/Backup (ready to download|started)/),
-            ).toBeVisible();
+            await expect(page.getByRole("button", { name: "Export text" })).toBeVisible();
+            await expect(page.getByTestId("backup-start")).toHaveCount(0);
+            await expect(page.getByText("Backup frequency")).toHaveCount(0);
         } finally {
             await close();
         }

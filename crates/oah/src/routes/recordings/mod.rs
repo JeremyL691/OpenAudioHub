@@ -925,7 +925,7 @@ async fn upload(
         upload_title(&stem, &id)
     };
     let title_source = if by_date { "date" } else { "original" };
-    let eligible = crate::backup::schedule::auto_export_eligible(&state, &user.id).await;
+    let eligible = crate::export::auto::auto_export_eligible(&state, &user.id).await;
     let plaud_file_id = format!("uploaded-{id}");
     let stored = format!("{}/{plaud_file_id}.{ext}", user.id);
     let storage_type = state.storage.active_type();
@@ -1564,7 +1564,7 @@ async fn merge(
     let plaud_file_id = format!("merged-{id}");
     // A merged recording is made here, so its title is the user's and sync never rewrites it.
     let title_source = "manual";
-    let eligible = crate::backup::schedule::auto_export_eligible(&state, &user.id).await;
+    let eligible = crate::export::auto::auto_export_eligible(&state, &user.id).await;
     let saved = insert(
         &state.db,
         key,

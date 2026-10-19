@@ -21,7 +21,7 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 | `crates/oah/src/pipeline/` | Audio pipeline for long recordings: decoding, speech detection, splitting, and joining the parts. |
 | `crates/oah/src/summary/` | Summaries and titles, and their prompts. |
 | `crates/oah/src/plaud/` | Plaud sign-in, sync and background sync. |
-| `crates/oah/src/backup/` | Export archives, full backups and the backup schedule. |
+| `crates/oah/src/export/` | Transcript export and the automatic export of new recordings. |
 | `crates/oah/src/config.rs` | Every environment variable the server reads. |
 | `crates/oah/src/ai.rs` | Provider presets, choosing a provider, and chat calls. |
 | `crates/oah/src/crypto.rs` | Field encryption and password hashing. |

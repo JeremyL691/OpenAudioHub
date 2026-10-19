@@ -214,42 +214,6 @@ pub fn test_email(app_url: &str) -> Email {
     }
 }
 
-/// The "export ready" email for a finished manual export (spec/workers.md section 10.3).
-pub fn export_ready_email(app_url: &str) -> Email {
-    let download = app_link(app_url, "/settings/export");
-    let sentence = "Your archive holds every recording's audio, transcript, and AI summary.";
-    Email {
-        subject: "Your OpenAudioHub export is ready".into(),
-        preview: "Your OpenAudioHub data export is ready to download.".into(),
-        heading: "Your export is ready".into(),
-        body_html: format!("<p style=\"margin:0;\">{}</p>", escape(sentence)),
-        text: format!("Your export is ready\n\n{sentence}\n\nDownload: {download}\n"),
-        button: Some(("Download export".into(), download.clone())),
-        footer: Some(("Download export".into(), download)),
-    }
-}
-
-/// Sends the "export ready" email to the account address. Never fails the caller.
-pub async fn export_ready(state: &AppState, user_id: &str) {
-    if !state.config.smtp.configured() {
-        return;
-    }
-    let email: Option<String> = sqlx::query_scalar("SELECT email FROM users WHERE id = ?")
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await
-        .ok()
-        .flatten();
-    if let Some(address) = email.filter(|a| is_plain_address(a)) {
-        send_soft(
-            &state.config,
-            &address,
-            &export_ready_email(&state.config.app_url),
-        )
-        .await;
-    }
-}
-
 /// The password reset email. The link is also printed as plain text under the button.
 pub fn reset_password_email(link: &str) -> Email {
     let sentence = "Use the button below to choose a new password. The link expires in 1 hour.";

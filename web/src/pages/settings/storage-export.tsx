@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
-import { formatBytes, formatDateTime } from "@/lib/format";
+import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { Spinner } from "@/components/ui/spinner";
-import { Group, Loading, LoadError, NumberField, SettingSelect, useSettings, type SettingsPatch, type UserSettings } from "./shared";
+import { downloadText } from "@/components/recording/exports";
+import { Loading, NumberField, SettingSelect, useSettings, type SettingsPatch, type UserSettings } from "./shared";
 import { desktopBridge } from "./desktop";
 
 // ---------- shared pieces ----------
@@ -259,16 +259,14 @@ function formatDuration(seconds: number): string {
     return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-// ---------- export and backup ----------
+// ---------- export ----------
 
-/** Fields the desktop app reads for auto export and scheduled backups (spec/export-backup.md). */
+/** Fields the desktop app reads for auto export (spec/export.md). */
 interface DesktopExportSettings {
     autoExport: boolean;
     autoExportFolder: string | null;
     autoExportFormat: "mp3" | "ogg" | "original";
     autoExportTitleMode: "original" | "date" | "ai";
-    backupFrequency: "daily" | "weekly" | "monthly" | "never" | null;
-    backupFolder: string | null;
 }
 
 const AUTO_EXPORT_FORMAT_OPTIONS = [
@@ -290,13 +288,6 @@ function autoExportSummary(format: DesktopExportSettings["autoExportFormat"]): s
     return "Save each new recording as an MP3 in a folder on this Mac.";
 }
 
-const BACKUP_FREQUENCY_OPTIONS = [
-    { value: "never", label: "Never" },
-    { value: "daily", label: "Daily" },
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-];
-
 const EXPORT_FORMATS = [
     { value: "json", label: "JSON" },
     { value: "txt", label: "TXT" },
@@ -304,49 +295,9 @@ const EXPORT_FORMATS = [
     { value: "vtt", label: "VTT" },
 ];
 
-interface BackupJob {
-    id: string;
-    status: "pending" | "processing" | "completed" | "failed" | "expired";
-    createdAt: string;
-    completedAt: string | null;
-    expiresAt: string | null;
-    recordingCount: number | null;
-    fileSize: number | null;
-    errorMessage: string | null;
-}
-
-const JOB_LABEL: Record<BackupJob["status"], string> = {
-    pending: "Queued",
-    processing: "Building",
-    completed: "Ready",
-    failed: "Failed",
-    expired: "Expired",
-};
-
-const JOB_TONE: Record<BackupJob["status"], StatusTone> = {
-    pending: "neutral",
-    processing: "info",
-    completed: "success",
-    failed: "warning",
-    expired: "neutral",
-};
-
-const POLL_MS = 3000;
-
 function filenameFrom(disposition: string | null, fallback: string): string {
     const match = disposition?.match(/filename="?([^";]+)"?/i);
     return match?.[1] ?? fallback;
-}
-
-function downloadBlob(blob: Blob, name: string): void {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function ExportSection() {
@@ -356,30 +307,6 @@ export function ExportSection() {
     const desktop = typeof bridge?.pickFolder === "function";
     const desktopSettings = settings as unknown as DesktopExportSettings;
     const [exporting, setExporting] = useState(false);
-    const [jobs, setJobs] = useState<BackupJob[] | null>(null);
-    const [jobsError, setJobsError] = useState(false);
-    const [starting, setStarting] = useState(false);
-
-    const loadJobs = useCallback(async () => {
-        try {
-            const data = await api<{ jobs: BackupJob[] }>("/api/backup");
-            setJobs(data.jobs);
-            setJobsError(false);
-        } catch {
-            setJobsError(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        void loadJobs();
-    }, [loadJobs]);
-
-    const active = jobs?.some((j) => j.status === "pending" || j.status === "processing") ?? false;
-    useEffect(() => {
-        if (!active) return;
-        const timer = window.setTimeout(() => void loadJobs(), POLL_MS);
-        return () => window.clearTimeout(timer);
-    }, [active, loadJobs]);
 
     const exportText = async () => {
         setExporting(true);
@@ -388,12 +315,17 @@ export function ExportSection() {
                 credentials: "same-origin",
             });
             if (!res.ok) throw new Error(`Export failed (${res.status})`);
-            const blob = await res.blob();
-            downloadBlob(
-                blob,
-                filenameFrom(res.headers.get("content-disposition"), `recordings.${settings.defaultExportFormat}`),
+            const text = await res.text();
+            const name = filenameFrom(
+                res.headers.get("content-disposition"),
+                `recordings.${settings.defaultExportFormat}`,
             );
-            toast.success("Export completed");
+            const saved = await downloadText(
+                name,
+                res.headers.get("content-type") ?? "text/plain",
+                text,
+            );
+            if (saved) toast.success("Export completed");
         } catch {
             toast.error("Could not export your recordings");
         } finally {
@@ -401,36 +333,16 @@ export function ExportSection() {
         }
     };
 
-    const startBackup = async () => {
-        setStarting(true);
-        try {
-            const data = await api<{ job: BackupJob }>("/api/backup", { method: "POST", json: {} });
-            toast.success(
-                data.job.status === "completed"
-                    ? "Backup ready to download"
-                    : "Backup started -- large libraries may take a few minutes",
-            );
-            await loadJobs();
-        } catch (err) {
-            toast.error(errorMessage(err, "Failed to start backup"));
-        } finally {
-            setStarting(false);
-        }
-    };
-
-    const chooseFolder = async (field: "autoExportFolder" | "backupFolder") => {
+    const chooseFolder = async () => {
         const pickFolder = bridge?.pickFolder;
         if (!pickFolder) return;
         try {
             const path = await pickFolder();
-            if (path) await save({ [field]: path } as SettingsPatch, "Could not save the folder.");
+            if (path) await save({ autoExportFolder: path } as SettingsPatch, "Could not save the folder.");
         } catch (err) {
             toast.error(errorMessage(err, "Could not open the folder picker."));
         }
     };
-
-    const latest = jobs?.[0];
-    const building = starting || active;
 
     return (
         <div className="grid gap-7">
@@ -480,7 +392,7 @@ export function ExportSection() {
                                 >
                                     {desktopSettings.autoExportFolder ?? "No folder chosen"}
                                 </span>
-                                <Button variant="secondary" data-testid="auto-export-folder-choose" onClick={() => void chooseFolder("autoExportFolder")}>
+                                <Button variant="secondary" data-testid="auto-export-folder-choose" onClick={() => void chooseFolder()}>
                                     Choose…
                                 </Button>
                             </div>
@@ -547,49 +459,6 @@ export function ExportSection() {
                         <Switch id={`${ids}-auto-export`} disabled checked={false} onCheckedChange={() => undefined} />
                     </PlainRow>
                 )}
-
-                {desktop ? (
-                    <>
-                        <PlainRow
-                            htmlFor={`${ids}-backup-frequency`}
-                            label="Backup frequency"
-                            hint="Scheduled backups are saved to the backup folder."
-                        >
-                            <SettingSelect
-                                id={`${ids}-backup-frequency`}
-                                testId="backup-frequency"
-                                value={desktopSettings.backupFrequency ?? "never"}
-                                onValueChange={(v) => void save({ backupFrequency: v } as SettingsPatch)}
-                                options={BACKUP_FREQUENCY_OPTIONS}
-                                className="w-36"
-                            />
-                        </PlainRow>
-                        <PlainRow label="Backup folder" hint={desktopSettings.backupFolder ?? "Default: Documents/OpenAudioHub Backups"}>
-                            <Button variant="secondary" data-testid="backup-folder-choose" onClick={() => void chooseFolder("backupFolder")}>
-                                Choose folder…
-                            </Button>
-                        </PlainRow>
-                    </>
-                ) : (
-                    <div className="space-y-2 py-3">
-                        <div className="flex items-center gap-2">
-                            <label htmlFor={`${ids}-backup-frequency`} className="text-[13px] font-medium">
-                                Backup frequency
-                            </label>
-                            <ComingSoon />
-                        </div>
-                        <SettingSelect
-                            id={`${ids}-backup-frequency`}
-                            testId="backup-frequency"
-                            value="never"
-                            disabled
-                            onValueChange={() => undefined}
-                            options={BACKUP_FREQUENCY_OPTIONS}
-                            className="w-36"
-                        />
-                        <p className="text-xs text-muted-foreground">Scheduled backups are available in the desktop app.</p>
-                    </div>
-                )}
             </div>
 
             <section className="grid gap-3 pt-4">
@@ -608,58 +477,10 @@ export function ExportSection() {
                         {exporting ? <Spinner label="Exporting" /> : <Download />}
                         {exporting ? "Exporting…" : "Export text"}
                     </Button>
-                    <Button
-                        variant="secondary"
-                        className="flex-1"
-                        data-testid="backup-start"
-                        disabled={building}
-                        onClick={() => void startBackup()}
-                    >
-                        {building ? <Spinner label="Building archive" /> : <Download />}
-                        {building ? "Building archive…" : "Create full backup"}
-                    </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    &quot;Export text&quot; downloads transcripts + summaries instantly. &quot;Create full backup&quot; also bundles the original
-                    audio into a zip archive; large libraries take a few minutes to build in the background, and you&apos;ll get an email when
-                    it&apos;s ready.
+                    &quot;Export text&quot; downloads your transcripts and summaries in the default format. It does not include audio.
                 </p>
-                {jobsError ? <LoadError message="Could not load backups." onRetry={() => void loadJobs()} /> : null}
-                <p data-testid="last-backup" className="text-xs text-muted-foreground">
-                    {jobs === null
-                        ? jobsError
-                            ? ""
-                            : "Loading backups…"
-                        : latest
-                          ? `Last backup: ${JOB_LABEL[latest.status]} · ${formatDateTime(latest.createdAt)}`
-                          : ""}
-                </p>
-                {jobs && jobs.length > 0 ? (
-                    <Group>
-                        {jobs.map((job) => (
-                            <div key={job.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                                <span className="flex items-center gap-2">
-                                    <StatusBadge tone={JOB_TONE[job.status]}>{JOB_LABEL[job.status]}</StatusBadge>
-                                    <span className="text-muted-foreground">{formatDateTime(job.createdAt)}</span>
-                                </span>
-                                <span className="flex items-center gap-3">
-                                    {job.fileSize !== null ? (
-                                        <span className="tabular-nums text-muted-foreground">{formatBytes(job.fileSize)}</span>
-                                    ) : null}
-                                    {job.status === "completed" ? (
-                                        <a
-                                            href={`/api/backup/${encodeURIComponent(job.id)}/download`}
-                                            download
-                                            className="font-medium text-link underline-offset-4 hover:underline"
-                                        >
-                                            Download backup
-                                        </a>
-                                    ) : null}
-                                </span>
-                            </div>
-                        ))}
-                    </Group>
-                ) : null}
             </section>
         </div>
     );

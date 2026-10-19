@@ -12,6 +12,7 @@
         "allow-open-plaud-browser",
         "allow-pick-folder",
         "allow-save-text-file",
+        "allow-download-recordings",
         "allow-desktop-secret",
         "allow-selftest-report"
     ]

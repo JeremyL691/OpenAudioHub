@@ -66,18 +66,18 @@ export function safeFileName(title: string, fallback = "recording"): string {
     return cleaned || fallback;
 }
 
-/** Saves text through the desktop save dialog or a temporary browser object URL. */
-export async function downloadText(fileName: string, mime: string, content: string): Promise<void> {
+/** Saves text through the desktop save dialog or a temporary browser object URL. Resolves false when the desktop save failed. */
+export async function downloadText(fileName: string, mime: string, content: string): Promise<boolean> {
     const desktop = (window as unknown as {
         __openaudiohubDesktop?: { saveTextFile?: (name: string, text: string) => Promise<boolean> };
     }).__openaudiohubDesktop;
     if (desktop?.saveTextFile) {
         try {
-            await desktop.saveTextFile(fileName, content);
+            return await desktop.saveTextFile(fileName, content);
         } catch {
             toast.error("Could not save the export");
+            return false;
         }
-        return;
     }
     const url = URL.createObjectURL(new Blob([content], { type: `${mime};charset=utf-8` }));
     const link = document.createElement("a");
@@ -87,6 +87,7 @@ export async function downloadText(fileName: string, mime: string, content: stri
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
 }
 
 export interface SummaryExportInput {

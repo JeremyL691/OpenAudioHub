@@ -214,7 +214,7 @@ Navigation groups, in order:
 | AI | Providers (`providers`), Transcription (`transcription`), Summary (`summary`), Recording names (`naming`) |
 | Plaud & Sync | Plaud Account (`plaud-account`), Sync (`sync`) |
 | Playback & Display | Playback (`playback`), Display (`display`) |
-| Data | Storage (`storage`), Export/Backup (`export`) |
+| Data | Storage (`storage`), Export (`export`) |
 | Desktop (desktop app only) | Desktop (`desktop`) |
 
 The section `notifications` is not in the navigation. Its page is still reachable by URL and by the hash.
@@ -232,7 +232,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 | `playback` | Playback | Start-up settings the player applies to every recording. |
 | `display` | Display | Date and time format, list order, theme, and other interface choices. |
 | `storage` | Storage | Where OpenAudioHub keeps the audio files behind your recordings. |
-| `export` | Export & Backup | Take your data with you: recordings, transcripts, and summaries. |
+| `export` | Export | Take your data with you: recordings, transcripts, and summaries. |
 | `notifications` | Notifications | Choose how and when OpenAudioHub lets you know about new recordings and sync events. |
 | `desktop` | Desktop | Options that only the desktop app has. |
 
@@ -313,13 +313,12 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 - "Retention period" (`retention-days`): whole days from 1 to 365. Empty text saves `retentionDays: null`. Other invalid values are ignored.
 - Storage usage comes from `GET /api/settings/storage` (see `settings.md`).
 
-### 4.12 Export & Backup (`export`)
+### 4.12 Export (`export`)
 
 - "Default export format" (`export-format`). Saves `defaultExportFormat`.
-- "Export text": downloads an export in the default format. The button shows "Exporting…" while it runs. Toasts "Export completed" or "Could not export your recordings".
-- "Create full backup" (`backup-start`): calls `POST /api/backup`, shows "Building archive…" while it runs, and then offers "Backup ready to download". A failure shows "Failed to start backup". The download comes from `GET /api/backup/<id>/download`. See `export-backup.md`.
+- "Export text": saves an export in the default format through the desktop save dialog, or downloads it in the browser. The button shows "Exporting…" while it runs. Toasts "Export completed" or "Could not export your recordings".
 - "Re-run Onboarding" opens the onboarding dialog (section 5).
-- The auto-export and backup-frequency controls, and the folder pickers ("Export folder", "Backup folder"), are shown with the text "Coming soon" and are disabled in the browser. The desktop app supports them.
+- The auto-export controls and the "Export folder" picker are shown with the text "Coming soon" and are disabled in the browser. The desktop app supports them. There is no backup action.
 
 ### 4.13 Desktop (`desktop`, desktop app only)
 

@@ -127,19 +127,15 @@ The check box is not available in development builds.
 
 ## Backups
 
-The app makes these backups. For what you can export, see [Backup and restore](backup-and-restore.md).
+The app makes one kind of backup itself. For what you can export, see [Backup and restore](backup-and-restore.md).
 
 **A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-1.1.0.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
 
-**A full backup from Settings.** Open **Settings**, then **Export/Backup**, then choose **Create full backup**. The app builds one zip file with your audio, transcripts, summaries and a `manifest.json` file. Download it while it is ready. It is kept for 7 days.
-
-**Scheduled backups.** In **Settings**, then **Export/Backup**, choose how often (daily, weekly or monthly) and a folder. The default folder is `Documents/OpenAudioHub Backups`. Each backup is saved there as `OpenAudioHub-backup-YYYY-MM-DD.zip`, and the app keeps the five newest. The app must be running for a backup to happen.
-
-**Auto export.** The same page can save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
+**Auto export.** In **Settings**, then **Export**, save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
 
 If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.
 
-A backup zip does not hold `secrets.json`. To move to another Mac, quit the app and copy the whole data folder. The copy includes `secrets.json`, so keep it private.
+The upgrade copy does not hold `secrets.json`. To move to another Mac, quit the app and copy the whole data folder. The copy includes `secrets.json`, so keep it private.
 
 ## Ports and network
 

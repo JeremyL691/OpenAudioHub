@@ -86,8 +86,6 @@ const RULES: &[(&str, Rule)] = &[
         "autoExportTitleMode",
         Rule::OneOf(&["original", "date", "ai"]),
     ),
-    ("backupFrequency", Rule::StringOrNull),
-    ("backupFolder", Rule::StringOrNull),
     ("defaultProviders", Rule::ObjectOrNull),
     ("onboardingCompleted", Rule::Bool),
     ("autoGenerateTitle", Rule::Bool),
@@ -140,8 +138,6 @@ const DEFAULTS_JSON: &str = r#"{
         "autoExportFolder": null,
         "autoExportFormat": "mp3",
         "autoExportTitleMode": "original",
-        "backupFrequency": null,
-        "backupFolder": null,
         "defaultProviders": null,
         "onboardingCompleted": false,
         "autoGenerateTitle": true,
@@ -323,6 +319,9 @@ async fn test_email(
     }
 }
 
+/// Settings that earlier versions stored. They are ignored and never returned again.
+const RETIRED: &[&str] = &["backupFrequency", "backupFolder"];
+
 /// A user's settings with defaults filled in and encrypted fields opened. Used by
 /// every module that acts on a user's preferences.
 pub async fn effective(state: &AppState, user_id: &str) -> ApiResult<Map<String, Value>> {
@@ -333,6 +332,9 @@ pub async fn effective(state: &AppState, user_id: &str) -> ApiResult<Map<String,
             .await?;
     let mut out = defaults();
     for (field, value) in parse_stored(data)? {
+        if RETIRED.contains(&field.as_str()) {
+            continue;
+        }
         let value = match field.as_str() {
             "summaryPrompt" | "titleGenerationPrompt" | "barkPushUrl" if !value.is_null() => state
                 .config
@@ -348,17 +350,10 @@ pub async fn effective(state: &AppState, user_id: &str) -> ApiResult<Map<String,
 
 async fn get_user(user: CurrentUser, State(state): State<AppState>) -> ApiResult<Json<Value>> {
     let mut out = effective(&state, &user.id).await?;
-    let last_backup: Option<i64> = sqlx::query_scalar(
-        "SELECT MAX(completed_at) FROM export_jobs WHERE user_id = ? AND kind = 'scheduled'",
-    )
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await?;
     let bark_url = out.entry("barkPushUrl").or_insert(Value::Null).clone();
     let bark_set = bark_url.as_str().is_some_and(|url| !url.is_empty());
     out.insert("barkPushUrlSet".into(), json!(bark_set));
     out.insert("userEmail".into(), user.email.into());
-    out.insert("lastScheduledBackupAt".into(), last_backup.map(iso).into());
     Ok(Json(Value::Object(out)))
 }
 
@@ -396,13 +391,10 @@ async fn put_user(
         stored.insert("autoGenerateTitle".into(), json!(ai));
     }
 
-    for field in ["autoExportFolder", "backupFolder"] {
-        let Some(path) = input.get(field).and_then(Value::as_str) else {
-            continue;
-        };
-        // Only the desktop app writes to these folders; a web user must not probe the server's disk.
+    if let Some(path) = input.get("autoExportFolder").and_then(Value::as_str) {
+        // Only the desktop app writes to this folder; a web user must not probe the server's disk.
         if state.config.desktop.is_none() || !writable_dir(path).await {
-            return Err(invalid(field));
+            return Err(invalid("autoExportFolder"));
         }
     }
 

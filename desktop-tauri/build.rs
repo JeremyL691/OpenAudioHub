@@ -6,6 +6,7 @@ fn main() {
         "open_plaud_browser",
         "pick_folder",
         "save_text_file",
+        "download_recordings",
         "desktop_secret",
         "selftest_report",
     ]);
