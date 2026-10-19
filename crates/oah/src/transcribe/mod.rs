@@ -749,6 +749,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_save_refuses_a_job_of_another_user() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('other', 'o@x.test', 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'other', NULL, 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES ('j', 'transcribing', 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let text = transcript("words");
+        let err = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", "completed")),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "JOB_CANCELLED");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+
+    #[tokio::test]
     async fn a_save_writes_the_transcript_and_its_final_phase_together() {
         let dir = tempfile::tempdir().unwrap();
         let state = state(dir.path()).await;
