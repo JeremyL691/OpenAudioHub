@@ -31,6 +31,9 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 | `desktop-tauri/` | The Mac app. `src/main.rs` starts it, `files.rs` handles the data folder and secrets, `bridge.rs` handles the window bridge and Plaud sign-in, `menu.rs` builds the menu bar item, and `backup.rs` makes the copy before an upgrade. |
 | `desktop-tauri/binaries/` | ffmpeg and ffprobe for the Mac app. |
 | `web/` | The web app: React, TypeScript, Tailwind and Vite. The pages are in `src/pages/`. |
+| `web/src/lib/i18n.ts` | The interface language: the four languages, detection, storage and `t()`. |
+| `web/src/locales/` | One folder per language, one JSON file per area. Every string a person sees lives here. |
+| `desktop-tauri/locales/` | The same four languages for the Mac app's menu-bar item and its own dialogs. |
 | `contract-tests/` | Playwright tests that call a running server over HTTP. |
 | `spec/` | The behavior specification. `spec/README.md` lists the files. |
 | `deploy/` | `Dockerfile` and `compose.yml`. |
@@ -165,6 +168,16 @@ docker build -f deploy/Dockerfile -t openaudiohub .
 The image builds in three stages: the web app with Node 22, the server with Rust, and a Debian slim image that holds the server and ffmpeg. The image needs no secrets to build. `ENCRYPTION_KEY` is set at run time.
 
 To try the image, run it with the same settings as `compose.yml`, or tag it with the name in `compose.yml` and use the compose file. See [Self-hosting](self-hosting.md).
+
+## Interface language
+
+The web app and the Mac app speak English, Simplified Chinese, Japanese and Korean. Strings live in `web/src/locales/{en,zh-CN,ja,ko}/`; components read them through `useI18n()` and `t()`, described in `web/src/lib/i18n.ts`.
+
+- A new string is added to all four language files at once, and the same English wording is written in `en`.
+- The catalog check runs with `pnpm --dir web typecheck` and `pnpm --dir web build`. It fails on a key missing from a language, an empty translation, a placeholder that differs from English, or a JSON file that does not parse. Run it alone with `pnpm --dir web check:i18n`.
+- The Mac app reads its own catalogs in `desktop-tauri/locales/`. A Rust test fails when a key is missing from a language or a placeholder differs.
+- Do not wrap user data in `t()`: recording names, transcripts, summaries and prompt text keep their own language.
+- To add a language, add its folder under both `locales/` directories, add it to `LOCALES` in `web/src/lib/i18n.ts` and to the language list in `desktop-tauri/src/i18n.rs`, then translate every key.
 
 ## Changing behavior
 

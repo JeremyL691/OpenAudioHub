@@ -36,7 +36,7 @@ Auto export runs only in the Mac app, and only while the app is running.
 
 Choose a folder in **Settings**, then **Export**, then turn on **Auto-export new recordings**. Each new recording is saved there once:
 
-- Format: **MP3** (converted), **OGG** (Ogg container with Opus audio), or the **original file**.
+- Format: **MP3** (converted), **OGG** (Ogg container with Opus audio), or the **original file**. An original Opus recording is saved with the `.ogg` extension, unchanged, because Opus audio lives in an Ogg container. Earlier automatic `.opus` files are renamed to `.ogg` on the next pass when they still match the recording.
 - File name: the **original name**, the **date** (`2026-10-12`), or the **AI title** once the recording has one.
 
 Only recordings that arrive while auto export is on are saved; recordings already in the library are not. A recording that was already exported is never written again. If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.

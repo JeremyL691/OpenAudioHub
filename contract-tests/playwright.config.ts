@@ -24,6 +24,9 @@ export default defineConfig({
             origin: baseURL,
             "x-forwarded-for": `10.0.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`,
         },
+        // The interface tests assert English text and English date formats. Pinning the locale
+        // keeps them independent of the machine the suite runs on.
+        locale: "en-US",
         storageState: storageStatePath,
         // Keep a trace for a failed run, so CI failures can be inspected afterwards.
         trace: "retain-on-failure",

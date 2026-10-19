@@ -2,6 +2,7 @@
 
 This page covers the dashboard, the library and its collections, starring, search, merging, and the recording page.
 
+- [Interface language](#interface-language)
 - [Dashboard](#dashboard)
 - [Library and collections](#library-and-collections)
 - [Filters and sorting](#filters-and-sorting)
@@ -13,6 +14,10 @@ This page covers the dashboard, the library and its collections, starring, searc
 - [A recording](#a-recording)
 - [Rename and delete](#rename-and-delete)
 - [Keyboard shortcuts](#keyboard-shortcuts)
+
+## Interface language
+
+The app speaks English, Simplified Chinese, Japanese and Korean. Choose the language in the account menu at the top right, under **Language**. The choice is remembered in this browser, and dates and relative times follow it. The interface language is separate from the transcription language and the AI output language.
 
 ## Dashboard
 
