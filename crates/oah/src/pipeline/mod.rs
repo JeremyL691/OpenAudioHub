@@ -539,6 +539,14 @@ mod tests {
         let state = state(dir.path()).await;
         seed_user_recording(&state).await;
         seed_job(&state, "running", "completed").await;
+        sqlx::query(
+            "INSERT INTO transcriptions (id, recording_id, user_id, text, transcription_type, provider, model, source, created_at)
+             VALUES ('t', 'r', 'u', ?, 'server', 'OpenAI', 'whisper-1', 'openaudiohub', 0)",
+        )
+        .bind(state.config.field_key.encrypt("stored"))
+        .execute(&state.db)
+        .await
+        .unwrap();
         let user = crate::auth::CurrentUser {
             id: "u".into(),
             email: "u@x.test".into(),
@@ -553,7 +561,10 @@ mod tests {
             view["job"]["status"], "running",
             "a save that has not recorded its outcome yet reads running"
         );
-        assert!(view["transcription"].is_null());
+        assert!(
+            view["transcription"].is_null(),
+            "a running job hides the stored transcript"
+        );
         sqlx::query("UPDATE jobs SET state = 'done' WHERE id = 'j'")
             .execute(&state.db)
             .await
@@ -563,6 +574,10 @@ mod tests {
             .unwrap()
             .0;
         assert_eq!(view["job"]["status"], "completed");
+        assert_eq!(
+            view["transcription"]["text"], "stored",
+            "a completed job shows the stored transcript"
+        );
     }
 
     #[tokio::test]
@@ -579,6 +594,34 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(phase, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn a_cancel_refuses_a_job_that_already_reached_a_final_phase() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        for phase in ["completed", "needs_alignment", "failed"] {
+            sqlx::query("DELETE FROM jobs")
+                .execute(&state.db)
+                .await
+                .unwrap();
+            sqlx::query("DELETE FROM pipeline_runs")
+                .execute(&state.db)
+                .await
+                .unwrap();
+            seed_job(&state, "running", phase).await;
+            assert!(
+                !run::cancel(&state.db, "j").await.unwrap(),
+                "cancel must refuse a {phase} job"
+            );
+            let kept: String =
+                sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                    .fetch_one(&state.db)
+                    .await
+                    .unwrap();
+            assert_eq!(kept, phase, "the final phase is not overwritten");
+        }
     }
 
     #[tokio::test]

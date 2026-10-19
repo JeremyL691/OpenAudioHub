@@ -112,7 +112,11 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         ),
         None => (None, None),
     };
-    let mut tx = state.db.begin().await?;
+    // BEGIN IMMEDIATE takes the write lock before the ownership read below, so a cancel that
+    // commits at the same moment waits here instead of invalidating this snapshot. Without it a
+    // concurrent cancel makes the phase write fail with SQLITE_BUSY_SNAPSHOT instead of the
+    // clean JOB_CANCELLED answer.
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
     // The terminal phase is written in the same transaction as the transcript. A cancel that
     // committed first leaves the phase at `cancelled`, the guard misses, and the save rolls
     // back. A save that committed first leaves `completed`/`needs_alignment`, which the cancel
