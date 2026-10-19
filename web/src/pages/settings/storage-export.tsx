@@ -265,7 +265,7 @@ function formatDuration(seconds: number): string {
 interface DesktopExportSettings {
     autoExport: boolean;
     autoExportFolder: string | null;
-    autoExportFormat: "mp3" | "original";
+    autoExportFormat: "mp3" | "ogg" | "original";
     autoExportTitleMode: "original" | "date" | "ai";
     backupFrequency: "daily" | "weekly" | "monthly" | "never" | null;
     backupFolder: string | null;
@@ -273,7 +273,8 @@ interface DesktopExportSettings {
 
 const AUTO_EXPORT_FORMAT_OPTIONS = [
     { value: "mp3", label: "MP3", description: "Converted to MP3 for easy playback." },
-    { value: "original", label: "Original file (.ogg)", description: "Saved exactly as recorded, no conversion." },
+    { value: "ogg", label: "OGG", description: "Ogg container with Opus audio. Smaller files than MP3." },
+    { value: "original", label: "Original format", description: "Saved exactly as recorded, with its own extension." },
 ];
 
 const AUTO_EXPORT_TITLE_OPTIONS: { value: "original" | "date" | "ai"; title: string; description: string }[] = [
@@ -281,6 +282,13 @@ const AUTO_EXPORT_TITLE_OPTIONS: { value: "original" | "date" | "ai"; title: str
     { value: "date", title: "Date", description: "Name by recording date, e.g. 2026-10-12." },
     { value: "ai", title: "AI title", description: "Renamed to the AI title once transcription finishes." },
 ];
+
+/** One line describing what auto export writes, for the switch's hint. */
+function autoExportSummary(format: DesktopExportSettings["autoExportFormat"]): string {
+    if (format === "original") return "Save each new recording as its original file in a folder on this Mac.";
+    if (format === "ogg") return "Save each new recording as an OGG (Opus) file in a folder on this Mac.";
+    return "Save each new recording as an MP3 in a folder on this Mac.";
+}
 
 const BACKUP_FREQUENCY_OPTIONS = [
     { value: "never", label: "Never" },
@@ -447,9 +455,7 @@ export function ExportSection() {
                             hint={
                                 !desktopSettings.autoExportFolder
                                     ? "Choose an export folder first."
-                                    : desktopSettings.autoExportFormat === "original"
-                                      ? "Save each new recording as its original file in a folder on this Mac."
-                                      : "Save each new recording as an MP3 in a folder on this Mac."
+                                    : autoExportSummary(desktopSettings.autoExportFormat)
                             }
                         >
                             <Switch

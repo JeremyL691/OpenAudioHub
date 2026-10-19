@@ -2,8 +2,8 @@
 //! Behavior is described in spec/export-backup.md.
 
 mod archive;
-mod export;
-mod schedule;
+pub(crate) mod export;
+pub(crate) mod schedule;
 
 use std::collections::HashMap;
 

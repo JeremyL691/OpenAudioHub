@@ -81,7 +81,7 @@ const RULES: &[(&str, Rule)] = &[
     ),
     ("autoExport", Rule::Bool),
     ("autoExportFolder", Rule::StringOrNull),
-    ("autoExportFormat", Rule::OneOf(&["mp3", "original"])),
+    ("autoExportFormat", Rule::OneOf(&["mp3", "ogg", "original"])),
     (
         "autoExportTitleMode",
         Rule::OneOf(&["original", "date", "ai"]),
@@ -427,15 +427,6 @@ async fn put_user(
         }
     }
 
-    // Turning auto export on starts the "new recordings from now" window at once, so a
-    // recording that arrives before the next maintenance tick is not skipped.
-    let auto_export_on = stored.get("autoExport") == Some(&Value::Bool(true))
-        && stored
-            .get("autoExportFolder")
-            .and_then(Value::as_str)
-            .is_some_and(|folder| !folder.is_empty())
-        && state.config.desktop.is_some();
-
     sqlx::query(
         "INSERT INTO user_settings (user_id, data, updated_at) VALUES (?, ?, ?)
          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
@@ -446,15 +437,13 @@ async fn put_user(
     .execute(&mut *tx)
     .await?;
 
-    if auto_export_on {
-        sqlx::query(
-            "INSERT INTO auto_export_state (user_id, since) VALUES (?, ?) ON CONFLICT DO NOTHING",
-        )
+    // The next export pass sees a new signature and clears the retry count of failed writes, so a
+    // folder or format change resumes them. Nothing is exported retroactively: that is decided per
+    // recording when it is added.
+    sqlx::query("DELETE FROM auto_export_run WHERE user_id = ?")
         .bind(&user.id)
-        .bind(now_ms())
         .execute(&mut *tx)
         .await?;
-    }
     tx.commit().await?;
     Ok(Json(json!({ "success": true })))
 }
