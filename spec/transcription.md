@@ -87,8 +87,8 @@ A provider name that is not a preset uses the whisper style. A stored base URL o
 Settings that affect every run (from the user's settings):
 
 - `defaultTranscriptionLanguage`: when set, passed as the language hint to the provider. Not set means automatic detection.
-- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models.
-- `diarizationSpeakerCount`: optional speaker count hint, used only with diarization.
+- `speakerDiarization` (default `true`): used only by ElevenLabs and by diarized OpenAI models. A long recording reads it when its pipeline job runs.
+- `diarizationSpeakerCount`: optional speaker count hint, used only with diarization. A long recording reads it when its pipeline job runs.
 - `transcriptionQuality`: stored, but it does not change the request.
 
 ## Whisper style (OpenAI-compatible)
