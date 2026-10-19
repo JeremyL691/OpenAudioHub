@@ -146,24 +146,6 @@ fn api_base_for(region_claim: Option<&str>, on_china_page: bool) -> &'static str
     }
 }
 
-/// `name=value` from a `Set-Cookie` header, or `None` when it has no cookie pair.
-/// Attribute names (`Path`, `Expires`, …) are never a cookie.
-fn cookie_pair(set_cookie: &str) -> Option<String> {
-    const ATTRIBUTES: [&str; 8] = [
-        "path", "expires", "max-age", "domain", "samesite", "httponly", "secure", "priority",
-    ];
-    let pair = set_cookie.split(';').next()?.trim();
-    let (name, value) = pair.split_once('=')?;
-    let name = name.trim();
-    if name.is_empty()
-        || value.is_empty()
-        || ATTRIBUTES.contains(&name.to_ascii_lowercase().as_str())
-    {
-        return None;
-    }
-    Some(pair.to_owned())
-}
-
 /// One check: read the connection, refresh when due, and post the new token.
 async fn check(
     app: &AppHandle,
@@ -295,25 +277,9 @@ async fn session_cookie(
     port: u16,
     launch_secret: &str,
 ) -> Result<String, Failure> {
-    let response = client
-        .post(format!("http://127.0.0.1:{port}/api/desktop/session"))
-        .header("authorization", format!("Bearer {launch_secret}"))
-        .send()
+    bridge::session_cookie(client, port, launch_secret)
         .await
-        .map_err(|e| Failure::Other(e.to_string()))?;
-    if !response.status().is_success() {
-        return Err(Failure::Other(format!(
-            "the app answered {}",
-            response.status().as_u16()
-        )));
-    }
-    response
-        .headers()
-        .get_all(reqwest::header::SET_COOKIE)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .find_map(cookie_pair)
-        .ok_or_else(|| Failure::Other("the app did not set a session cookie".to_owned()))
+        .map_err(Failure::Other)
 }
 
 async fn get_json(
@@ -429,15 +395,5 @@ mod tests {
         );
         assert_eq!(api_base_for(None, true), "https://api.plaud.cn");
         assert_eq!(api_base_for(Some("other"), false), "https://api.plaud.ai");
-    }
-
-    #[test]
-    fn session_cookie_pairs_are_read() {
-        assert_eq!(
-            super::cookie_pair("oah_session=abc123; Path=/; HttpOnly; SameSite=Lax").as_deref(),
-            Some("oah_session=abc123")
-        );
-        assert_eq!(super::cookie_pair("Path=/"), None);
-        assert_eq!(super::cookie_pair("=x"), None);
     }
 }

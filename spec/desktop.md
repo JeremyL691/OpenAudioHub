@@ -1,6 +1,6 @@
 # Desktop app
 
-This file specifies the macOS desktop app: what it does at start and quit, what it writes to disk, and what the user sees. The app is a Tauri 2 shell (`desktop-tauri/`) that runs the server (`crates/oah`) in its own process, on the loopback address, and shows the web app in a window. HTTP behavior of the server is in [auth.md](auth.md), [plaud.md](plaud.md) and [export-backup.md](export-backup.md).
+This file specifies the macOS desktop app: what it does at start and quit, what it writes to disk, and what the user sees. The app is a Tauri 2 shell (`desktop-tauri/`) that runs the server (`crates/oah`) in its own process, on the loopback address, and shows the web app in a window. HTTP behavior of the server is in [auth.md](auth.md), [plaud.md](plaud.md) and [export.md](export.md).
 
 ## 1. Scope
 
@@ -20,7 +20,7 @@ This file specifies the macOS desktop app: what it does at start and quit, what 
 - The log is in the data folder (section 2.6). There is no separate logs folder.
 - Every JSON file the shell writes, and the copies it makes of the database and of user data, go through a temporary file in the same folder and then a rename. The temporary name is `.<file name>.<12 hex characters>.tmp`. A failed write leaves no temporary file.
 - Files that hold keys or user data are created with mode 0600: `config.json`, `secrets.json`, `openaudiohub.env`, the key export, database copies, and downloads and saved text files.
-- The `.pending-downloads` folder is created with mode 0700. The data folder itself is created with the default mode.
+- The data folder itself is created with the default mode.
 
 ### 2.2 Contents of the data folder
 
@@ -30,11 +30,10 @@ This file specifies the macOS desktop app: what it does at start and quit, what 
 | `secrets.json` | The field encryption key (section 2.4). |
 | `openaudiohub.env` | Optional user settings (section 2.5). |
 | `openaudiohub.sqlite`, `-wal`, `-shm` | The SQLite database. The `-wal` and `-shm` files exist while the app runs. |
-| `storage/` | Audio files and other stored media. Export archives are in `storage/backups/`. Pipeline working folders are in `storage/.pipeline/<job id>/`. |
+| `storage/` | Audio files and other stored media. Pipeline working folders are in `storage/.pipeline/<job id>/`. |
 | `backups/` | Database copies made before an upgrade, named `<stamp>-before-<version>.sqlite` (section 3.5). |
 | `main.log`, `main.log.1` | The app log and its previous copy (section 2.6). |
 | `.instance.lock` | Lock file that holds the single-copy lock (section 3.3). |
-| `.pending-downloads/` | Temporary files for downloads in progress. Removed at each start (section 8). |
 
 The window's browser data (cookies, local storage) is kept by the framework's default webview store, outside the data folder.
 
@@ -130,7 +129,7 @@ The window's browser data (cookies, local storage) is kept by the framework's de
 9. Bind the server to 127.0.0.1 (section 3.2). Save the port to `config.json` if it changed.
 10. If an upgrade copy is due, write it (section 3.5). A failure stops the start.
 11. Open the database. The file is created if missing, opened in WAL mode with `synchronous=FULL`, foreign keys on and a 5-second busy timeout, and the pending migrations are applied. A failure stops the start with "cannot open the database: <reason>".
-12. Start the server's background workers (transcription, audio pipeline, summaries, webhooks, Plaud sync, scheduled backups and maintenance) and serve HTTP on the bound port.
+12. Start the server's background workers (transcription, audio pipeline, summaries, webhooks, Plaud sync, automatic export) and serve HTTP on the bound port.
 13. Save `config.json` with `lastVersion` set to this version.
 14. Create the window, the menu-bar item (visible if `showTray` is true) and the Plaud refresh loop (section 10.3). Log `window opened on port <port>`. The window is created hidden when `--background` is given (section 11).
 
@@ -246,7 +245,7 @@ There is no command-line form of Export Keys.
 
 ### 7.2 Bridge
 
-The main window's pages get one object, `window.__openaudiohubDesktop`, with a `version` field of 5. It is defined by an initialization script on every page of the main window. Its methods call Tauri commands. Only the app's own origin (section 7.3) is granted these commands. The launch-time capability adds the origin `http://127.0.0.1:<port>/*` to the commands in `desktop-tauri/capabilities/default.json`.
+The main window's pages get one object, `window.__openaudiohubDesktop`, with a `version` field of 6. It is defined by an initialization script on every page of the main window. Its methods call Tauri commands. Only the app's own origin (section 7.3) is granted these commands. The launch-time capability adds the origin `http://127.0.0.1:<port>/*` to the commands in `desktop-tauri/capabilities/default.json`.
 
 | Method | Command | Result |
 |--------|---------|--------|
@@ -255,6 +254,7 @@ The main window's pages get one object, `window.__openaudiohubDesktop`, with a `
 | `openPlaudBrowser(code)` | `open_plaud_browser` | Opens `http://127.0.0.1:<port>/connect/plaud?code=<code>` in the default browser (section 10.1). |
 | `pickFolder()` | `pick_folder` | A folder path, or null on cancel. The dialog is titled "Choose the export folder". |
 | `saveTextFile(name, text)` | `save_text_file` | Saves text with a save dialog; resolves true when saved, false on cancel (section 8). |
+| `downloadRecordings(ids, format)` | `download_recordings` | Shows a save dialog, then writes one recording's audio or one archive of several. Resolves with the saved path, or null on cancel (section 8). |
 | `reconnect()` | `desktop_secret`, then `POST /api/desktop/session` | Signs the window in again (section 4). Resolves true when the server accepts it. |
 
 - Failures from the commands reach the page as errors: "Could not open the folder picker.", "Could not open the save dialog.", "Invalid Plaud browser handoff" and the preference messages in section 7.1.
@@ -262,19 +262,22 @@ The main window's pages get one object, `window.__openaudiohubDesktop`, with a `
 ### 7.3 Navigation rules
 
 - The main window loads only `http://127.0.0.1:<port>` (scheme `http`, this launch's port). Any other `http` or `https` address is not loaded and is opened in the default browser with the system `open` command.
+- An address under `/api/` on the app's own origin never loads as a page. The session link `/api/desktop/session` is the one exception; files are saved through the bridge instead.
 - Other schemes, `about:blank` included, are not loaded and are dropped.
 - The Plaud refresh window (section 10.2) has its own rules.
 
 ## 8. Downloads and file saves
 
-- Each download the window starts is first written to `.pending-downloads/download-<id><extension>` in the data folder.
-- A save dialog opens for each download. It starts in the user's Downloads folder with the suggested name. The name is made safe: the last part of any path is kept, control characters and leading dots are removed, it is cut to 200 characters, and an empty result becomes `download`.
-- If the user cancels, the temporary file is removed and nothing is saved.
-- If the download completes and a destination was chosen, the file is copied to the destination through a temporary file and then renamed. The result has mode 0600. The temporary file is then removed.
-- If the download did not complete and a destination was chosen, the temporary file is removed and the dialog "The download could not be saved: the webview download did not complete" is shown. Without a destination, nothing is shown.
-- If the copy fails, the dialog "The download could not be saved: <reason>" is shown and the destination is left unchanged.
+Audio and text are saved by the shell, not by the webview.
+
+- `downloadRecordings(ids, format)` accepts 1 to 100 recording ids (letters, digits, `_` and `-`, at most 64 characters) and `format` `mp3` or `original`. Anything else fails before a dialog opens.
+- One `mp3` id uses `/api/recordings/<id>/audio?download=1`. One `original` id and any set of several ids use `/api/recordings/download` with the same ids and format. The server answers with the file or the archive.
+- The command signs in through `POST /api/desktop/session` with the launch secret, reusing the session cookie until the server answers `401`.
+- A save dialog opens attached to the main window, starting in the user's Downloads folder with the name from the server's `Content-Disposition`. The name is made safe: the last part of any path is kept, control characters and leading dots are removed, it is cut to 200 characters, and an empty result becomes `download`.
+- Only one download runs at a time. A second request while one is in progress fails with "A download is already in progress".
+- The response streams into a temporary file in the destination folder with mode 0600. Only a complete transfer is renamed to the chosen name; a cancelled dialog, a refused response, a stalled transfer or a write error removes the temporary file and leaves any existing destination unchanged.
+- A transfer with no bytes for 60 seconds is stopped. The server is given up to 15 minutes to start answering.
 - `saveTextFile` uses the same name rules, opens the save dialog in the Downloads folder, and writes the text through a temporary file with mode 0600. A cancelled dialog returns false.
-- `.pending-downloads/` is removed at each start.
 
 ## 9. Start at login
 
@@ -366,5 +369,5 @@ Stated so that these are not added by accident:
 - No system sleep or wake handling.
 - No Dock icon hiding, no quarantine removal and no move to the Applications folder.
 - No Plaud sign-in window. Plaud sign-in is the browser handoff; the token capture window (section 10.2) is used only for the refresh.
-- No restore action for upgrade copies, and no backup or export action in the shell. Scheduled backups and automatic export run inside the server in desktop mode, to a folder the user chooses (default `Documents/OpenAudioHub Backups`); see [export-backup.md](export-backup.md).
+- No restore action for upgrade copies, and no backup action in the shell. Automatic export runs inside the server in desktop mode, to a folder the user chooses; see [export.md](export.md).
 - No application menu or keyboard shortcut in the shell, apart from Command+Q on the Quit item.

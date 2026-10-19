@@ -943,9 +943,10 @@ test.describe.serial("library on a new account", () => {
         await page.getByTestId("recording-select-all").click();
         await expect(page.getByText("3 selected")).toBeVisible();
         await expect(merge).toBeEnabled();
-        await expect(page.getByTestId("recording-bulk-download")).toHaveAttribute(
-            "href",
-            /\/api\/recordings\/download\?ids=/,
+        const download = page.waitForEvent("download");
+        await page.getByTestId("recording-bulk-download").click();
+        expect((await download).suggestedFilename()).toMatch(
+            /^OpenAudioHub-.*\.zip$/,
         );
 
         await page.getByTestId("recording-select-cancel").click();

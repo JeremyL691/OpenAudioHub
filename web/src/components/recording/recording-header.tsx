@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { errorMessage } from "@/lib/api";
+import { downloadRecordings } from "@/lib/downloads";
 import { formatClock, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { deleteRecording, type Recording, renameRecording, setStarred, sourceOf } from "@/lib/recordings";
@@ -124,11 +125,9 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem asChild>
-                                <a href={`/api/recordings/${encodeURIComponent(recording.id)}/audio?download=1`} download>
-                                    <Download />
-                                    Download audio
-                                </a>
+                            <DropdownMenuItem onSelect={() => void downloadRecordings([recording.id])}>
+                                <Download />
+                                Download audio
                             </DropdownMenuItem>
                             <DropdownMenuItem data-testid="recording-star-toggle" onSelect={() => void toggleStar()}>
                                 <Star className={cn(effectiveStarred && "fill-current")} />
