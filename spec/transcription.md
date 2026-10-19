@@ -362,7 +362,7 @@ Job status values:
 | `failed` | Stopped with `errorType` and `error`. |
 | `cancelled` | Stopped by the user, or replaced by a manual run. |
 
-Active statuses (block delete, retry and cancel): `queued`, `running`, `paused_disk`. Cancel is refused for any other status.
+Active statuses (block delete, retry and cancel): `queued`, `running`, `paused_disk`. Cancel is refused for any other status, and also for a job whose transcript was already saved but has not recorded its outcome yet.
 
 Transitions:
 
@@ -389,7 +389,7 @@ Errors (these responses carry only `error`, without `code`):
 | --- | --- | --- |
 | 400 | `{ "error": "Invalid action" }` | `action` is not `retry` or `cancel`. |
 | 404 | `{ "error": "Audio job not found" }` | The recording has no job. |
-| 409 | `{ "error": "Audio job cannot be changed" }` | Retry on a job that is not `failed`, or cancel on a job that is not active. |
+| 409 | `{ "error": "Audio job cannot be changed" }` | Retry on a job that is not `failed`, or cancel on a job that is not active, including a job whose transcript was already saved. |
 
 Retry requeues the job with its completed chunk results kept. Cancel stops the job.
 

@@ -514,9 +514,10 @@ the status is `queued`, `running` or `paused_disk`.
   and deletes the work folder. Checks happen before each chunk send, between retries,
   after each speech-detection block, and every second while paused.
 - A cancel is checked again when the transcript is saved. If it committed before the
-  save, nothing is stored and the work folder is deleted. If the save committed first,
-  the cancel does nothing: the transcript stays and the status reads `completed` or
-  `needs_alignment`.
+  save, nothing is stored, the work folder is deleted, and the status is `cancelled`. If
+  the save committed first, the cancel is refused with `409` and the transcript stays.
+  The status then reads `running` until the worker records the outcome, and `completed`
+  or `needs_alignment` after that (section 4).
 - Cancelling a `failed` job is not allowed (`409`).
 
 ### 13.2 Retry
@@ -589,7 +590,7 @@ Auth: session. Body: `{ "action": "retry" | "cancel" }`.
 | Cancel accepted | `200` | `{ "jobId": "<id>", "status": "cancelled" }` |
 | Action other than `retry` or `cancel`, or body not JSON | `400` | `{ "error": "Invalid action" }` |
 | No pipeline job for the recording | `404` | `{ "error": "Audio job not found" }` |
-| Status does not allow the action | `409` | `{ "error": "Audio job cannot be changed" }` |
+| Status does not allow the action | `409` | `{ "error": "Audio job cannot be changed" }`. A cancel after the transcript was saved is refused the same way. |
 
 These responses have no `code` field. The `error` text is the only detail.
 
