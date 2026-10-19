@@ -53,52 +53,47 @@ pub fn spawn(state: &AppState) {
 /// same moment cannot leave the job holding the one-active-job slot.
 pub async fn supersede(state: &AppState, user_id: &str, recording_id: &str) -> sqlx::Result<()> {
     let now = now_ms();
-    let mut tx = state.db.begin().await?;
-    let ids: Vec<String> = sqlx::query_scalar(
-        "SELECT id FROM jobs WHERE kind = 'pipeline' AND recording_id = ? AND user_id = ?
-         AND state IN ('queued', 'running')",
+    // BEGIN IMMEDIATE takes the write lock up front. A save that commits while this runs then
+    // waits instead of failing the write with SQLITE_BUSY_SNAPSHOT.
+    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    // A job claimed before its first run row existed has no phase yet, so insert one: without it
+    // the worker's own `queued` write would start the run again after the cancel.
+    sqlx::query(
+        "INSERT INTO pipeline_runs (job_id, phase, updated_at)
+         SELECT id, 'cancelled', ? FROM jobs
+         WHERE kind = 'pipeline' AND recording_id = ? AND user_id = ? AND state IN ('queued', 'running')
+         ON CONFLICT (job_id) DO UPDATE SET phase = 'cancelled', updated_at = excluded.updated_at
+         WHERE pipeline_runs.phase NOT IN ('cancelled', 'completed', 'needs_alignment', 'failed')",
     )
+    .bind(now)
+    .bind(recording_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+    // Settle the queue state from the phase that won, so the superseded job always leaves the
+    // one-active-job index whatever the order was.
+    let ids: Vec<String> = sqlx::query_scalar(
+        "UPDATE jobs SET
+           state = CASE
+             WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) IN ('completed', 'needs_alignment') THEN 'done'
+             WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) = 'failed' THEN 'failed'
+             ELSE 'cancelled'
+           END,
+           progress = CASE
+             WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) IN ('completed', 'needs_alignment') THEN 1
+             ELSE progress
+           END,
+           finished_at = ?, lease_until = NULL, updated_at = ?
+         WHERE kind = 'pipeline' AND recording_id = ? AND user_id = ?
+         AND state IN ('queued', 'running')
+         RETURNING id",
+    )
+    .bind(now)
+    .bind(now)
     .bind(recording_id)
     .bind(user_id)
     .fetch_all(&mut *tx)
     .await?;
-    if !ids.is_empty() {
-        // A job that already reached a final phase keeps it; anything else becomes cancelled.
-        sqlx::query(
-            "UPDATE pipeline_runs SET phase = 'cancelled', updated_at = ?
-             WHERE job_id IN (SELECT id FROM jobs WHERE kind = 'pipeline' AND recording_id = ? AND user_id = ?
-                              AND state IN ('queued', 'running'))
-             AND phase NOT IN ('cancelled', 'completed', 'needs_alignment', 'failed')",
-        )
-        .bind(now)
-        .bind(recording_id)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-        // Settle the queue state from the phase that won, so the job always leaves the
-        // one-active-job index whatever the order was.
-        sqlx::query(
-            "UPDATE jobs SET
-               state = CASE
-                 WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) IN ('completed', 'needs_alignment') THEN 'done'
-                 WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) = 'failed' THEN 'failed'
-                 ELSE 'cancelled'
-               END,
-               progress = CASE
-                 WHEN (SELECT phase FROM pipeline_runs WHERE job_id = jobs.id) IN ('completed', 'needs_alignment') THEN 1
-                 ELSE progress
-               END,
-               finished_at = ?, lease_until = NULL, updated_at = ?
-             WHERE kind = 'pipeline' AND recording_id = ? AND user_id = ?
-             AND state IN ('queued', 'running')",
-        )
-        .bind(now)
-        .bind(now)
-        .bind(recording_id)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    }
     tx.commit().await?;
     for id in &ids {
         let _ = tokio::fs::remove_dir_all(run::pipeline_dir(state, id)).await;
@@ -441,7 +436,16 @@ mod tests {
         let state = state(dir.path()).await;
         seed_user_recording(&state).await;
         seed_job(&state, "running", "completed").await;
+        sqlx::query("INSERT INTO transcriptions (id, recording_id, user_id, text, transcription_type, provider, model, source, created_at) VALUES ('t', 'r', 'u', 'stored', 'server', 'OpenAI', 'whisper-1', 'openaudiohub', 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
         supersede(&state, "u", "r").await.unwrap();
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions WHERE id = 't'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 1, "the saved transcript is kept");
         let job_state: String = sqlx::query_scalar("SELECT state FROM jobs WHERE id = 'j'")
             .fetch_one(&state.db)
             .await
@@ -469,6 +473,33 @@ mod tests {
         assert_eq!(status_of("running", "completed"), "running");
         assert_eq!(status_of("running", "needs_alignment"), "running");
         assert_eq!(status_of("running", "transcribing"), "running");
+    }
+
+    #[tokio::test]
+    async fn a_superseded_job_without_a_phase_row_cannot_start_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        // Claimed, but the worker has not written its first phase yet.
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        supersede(&state, "u", "r").await.unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "cancelled");
+        // The worker's own first phase write must not restart a cancelled job.
+        run::set_phase(&state.db, "j", "queued").await.unwrap();
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "cancelled");
     }
 
     #[tokio::test]
@@ -500,6 +531,54 @@ mod tests {
         .await
         .unwrap();
         assert_ne!(next, "j", "the forced run creates a new job");
+    }
+
+    #[tokio::test]
+    async fn the_status_route_follows_the_spec_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "completed").await;
+        let user = crate::auth::CurrentUser {
+            id: "u".into(),
+            email: "u@x.test".into(),
+            name: None,
+            session_id: "s".into(),
+        };
+        let view = status(State(state.clone()), user.clone(), UrlPath("r".into()))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(
+            view["job"]["status"], "running",
+            "a save that has not recorded its outcome yet reads running"
+        );
+        assert!(view["transcription"].is_null());
+        sqlx::query("UPDATE jobs SET state = 'done' WHERE id = 'j'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let view = status(State(state), user, UrlPath("r".into()))
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(view["job"]["status"], "completed");
+    }
+
+    #[tokio::test]
+    async fn a_cancel_of_an_active_job_stops_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        seed_job(&state, "running", "transcribing").await;
+        let response = change(&state, "u", "r", "cancel").await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let phase: String =
+            sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(phase, "cancelled");
     }
 
     #[tokio::test]
