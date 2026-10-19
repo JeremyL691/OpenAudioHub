@@ -135,7 +135,9 @@ The app makes these backups. For what you can export, see [Backup and restore](b
 
 **Scheduled backups.** In **Settings**, then **Export/Backup**, choose how often (daily, weekly or monthly) and a folder. The default folder is `Documents/OpenAudioHub Backups`. Each backup is saved there as `OpenAudioHub-backup-YYYY-MM-DD.zip`, and the app keeps the five newest. The app must be running for a backup to happen.
 
-**Auto export.** The same page can save each new recording into a folder of your choice, once, as MP3 or as the original file. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists.
+**Auto export.** The same page can save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
+
+If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.
 
 A backup zip does not hold `secrets.json`. To move to another Mac, quit the app and copy the whole data folder. The copy includes `secrets.json`, so keep it private.
 

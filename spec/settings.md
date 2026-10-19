@@ -113,7 +113,7 @@ as sent, without a check.
 | `defaultExportFormat` | string | `"json"` | `json`, `txt`, `srt`, `vtt` |
 | `autoExport` | boolean | `false` | `true` only in the desktop app, and only when `autoExportFolder` is set |
 | `autoExportFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
-| `autoExportFormat` | string | `"mp3"` | `mp3`, `original` |
+| `autoExportFormat` | string | `"mp3"` | `mp3`, `ogg`, `original` |
 | `autoExportTitleMode` | string | `"original"` | `original`, `date`, `ai` |
 | `backupFrequency` | string or null | `null` | any string or null; values not checked |
 | `backupFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |

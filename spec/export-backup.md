@@ -267,11 +267,13 @@ Test coverage: one test, `@desktop-only`. It runs only against a desktop-mode se
 
 When the desktop build has auto export on and a folder set:
 - Each new recording is written into the folder, once. The file is never exported twice; the
-  stored export path (`recordings.auto_export_path`, encrypted at rest) is the marker. The window
-  opens at the settings save that turns auto export on, so a recording that arrives before the
-  next maintenance pass is still exported. A state row that is missing falls back to the settings
-  row's timestamp.
-- Format: `mp3` (transcoded) or `original` (the stored audio file as is, keeping its extension).
+  stored export path (`recordings.auto_export_path`, encrypted at rest) is the marker.
+- Which recordings qualify is decided when a recording is first added: the row is marked eligible
+  only when auto export is on and a folder is set at that moment. Recordings that existed before
+  it was switched on are never exported, and switching it off and on again does not mark them.
+- Format: `mp3` (transcoded), `ogg` (Ogg container with Opus audio), or `original` (the stored
+  audio file as is, keeping its real extension). An existing MP3 or Ogg/Opus file is copied
+  without re-encoding when it already is the chosen format; a conversion failure leaves no file.
 - Name: `original` (the recording's filename), `date` (`YYYY-MM-DD`, the recording's start in
   local time), or `ai` (starts as the date name and is renamed to the AI title once one exists).
 - Names: control characters are dropped, `/ \ : * ? " < > |` become `-`, whitespace runs collapse
@@ -280,7 +282,15 @@ When the desktop build has auto export on and a folder set:
   the recording id is used. A title already ending in the export extension loses it first, so a
   name never reads `x.mp3.mp3`.
 - Name clashes never overwrite: `name.mp3`, `name (2).mp3`, and so on.
-- Written under a temporary name first, then renamed, so a partial file never looks finished.
+- Written under a temporary name first, then renamed, so a partial file never looks finished. The
+  target path is reserved in `recordings.auto_export_target` before the write, so a restart adopts
+  that file instead of writing a second copy.
+- A failed write is retried on the next pass. After three failures the recording is left alone until
+  the folder or format changes, which resets the count.
+- A file this app exported in a format that no longer matches the setting is re-exported in the
+  current format: the new file is written first, then the old one is removed. Only files still at
+  the recorded path and still under the automatic name are replaced, so a name the user chose is
+  never touched.
 - With `ai` titles, a file still named by its date is renamed once the title exists; a rename
   the user made themselves stays.
 - Failures are logged and the same recording is retried on the next pass.

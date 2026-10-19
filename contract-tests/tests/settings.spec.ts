@@ -323,6 +323,14 @@ test("user settings: barkPushUrl is stored, reported as set, and cleared by an e
     await api.dispose();
 });
 
+test("user settings: auto export format accepts ogg", async () => {
+    const api = await newUserContext("settings-ogg");
+    const res = await api.put("/api/settings/user", { data: { autoExportFormat: "ogg" } });
+    expect(res.status()).toBe(200);
+    const body = await (await api.get("/api/settings/user")).json();
+    expect(body.autoExportFormat).toBe("ogg");
+});
+
 test("user settings: recordingTitleMode sets autoGenerateTitle", async () => {
     const api = await newUserContext("settings-title-mode");
     await api.put("/api/settings/user", { data: { recordingTitleMode: "date" } });
