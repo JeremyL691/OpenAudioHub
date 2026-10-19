@@ -21,7 +21,7 @@ These guides cover the day-to-day features.
 - [AI providers](providers.md): add providers, choose the one used for transcription and for summaries, and use local models.
 - [Notifications](notifications.md): email and Bark push when new recordings sync.
 - [Automation API and webhooks](automation-and-webhooks.md): personal API keys, and signed webhook deliveries.
-- [Backup and restore](backup-and-restore.md): full backups, transcript exports, audio downloads, and how to protect the server.
+- [Backup and restore](backup-and-restore.md): transcript exports, audio downloads, auto export, and how to protect the server.
 
 ## Self-hosting
 

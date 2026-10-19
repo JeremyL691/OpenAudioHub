@@ -93,7 +93,7 @@ If you switch back to `local`, keep the S3 settings in place while any recording
 
 - **In the app.** Audio streams through the server, so the player can seek. The server asks the bucket only for the part you need.
 - **Through the public API.** The audio route answers with a redirect to a link that the bucket signs. The link works for 5 minutes. See [Public API](public-api.md#recording-audio).
-- **Processing and zip files.** When a step needs a local file, such as the audio pipeline or a backup zip, the server copies the object to a temporary file on its disk and removes the copy afterwards. Make sure the server disk has room for the longest recording.
+- **Processing and zip files.** When a step needs a local file, such as the audio pipeline or a bulk download zip, the server copies the object to a temporary file on its disk and removes the copy afterwards. Make sure the server disk has room for the longest recording.
 
 Deleting a recording in OpenAudioHub deletes its audio object in the bucket.
 

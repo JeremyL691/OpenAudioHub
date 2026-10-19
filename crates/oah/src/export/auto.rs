@@ -1,206 +1,35 @@
-//! Desktop-only scheduled backups and auto export, plus the 30 s maintenance loop.
-//! Rules are in spec/export-backup.md.
+//! Desktop-only auto export of new recordings and its 30 second check.
+//! Rules are in spec/export.md.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use serde_json::{Map, Value};
 
 use crate::AppState;
-use crate::db::now_ms;
 use crate::error::ApiResult;
 use crate::ids;
 use crate::routes::recordings::media;
 use crate::routes::settings::effective;
 
-const DAY_MS: i64 = 86_400_000;
 const TICK: Duration = Duration::from_secs(30);
-/// Backup copies kept in the backup folder.
-const KEEP: usize = 5;
 /// Failed auto-export writes before a recording is left alone until the folder or format changes.
 const MAX_ATTEMPTS: i64 = 3;
 
-/// Starts the maintenance loop: expired archives are removed on every build;
-/// scheduled backups and auto export run on the desktop build only.
-pub(super) fn spawn(state: &AppState) {
+/// Starts the auto export check. Other builds have nothing to do.
+pub(crate) fn spawn(state: &AppState) {
+    if state.config.desktop.is_none() {
+        return;
+    }
     let state = state.clone();
     tokio::spawn(async move {
         loop {
-            if let Err(e) = super::archive::cleanup(&state).await {
-                tracing::warn!(error = %e, "backup cleanup failed");
-            }
-            if state.config.desktop.is_some() {
-                if let Err(e) = scheduled(&state).await {
-                    tracing::warn!(error = %e.message, "scheduled backup check failed");
-                }
-                if let Err(e) = auto_export(&state).await {
-                    tracing::warn!(error = %e.message, "auto export check failed");
-                }
+            if let Err(e) = auto_export(&state).await {
+                tracing::warn!(error = %e.message, "auto export check failed");
             }
             tokio::time::sleep(TICK).await;
         }
     });
-}
-
-fn interval_ms(frequency: &str) -> Option<i64> {
-    match frequency {
-        "daily" => Some(DAY_MS),
-        "weekly" => Some(7 * DAY_MS),
-        "monthly" => Some(30 * DAY_MS),
-        _ => None,
-    }
-}
-
-/// The user's backup folder, or `Documents/OpenAudioHub Backups` in the home folder.
-fn backup_folder(settings: &Map<String, Value>) -> PathBuf {
-    match settings
-        .get("backupFolder")
-        .and_then(Value::as_str)
-        .filter(|p| !p.is_empty())
-    {
-        Some(path) => PathBuf::from(path),
-        None => {
-            let home = std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_default();
-            home.join("Documents").join("OpenAudioHub Backups")
-        }
-    }
-}
-
-/// `OpenAudioHub-backup-YYYY-MM-DD.zip`, with an optional `-N` suffix for later copies on the same day.
-fn is_backup_name(name: &str) -> bool {
-    let Some(rest) = name
-        .strip_prefix("OpenAudioHub-backup-")
-        .and_then(|r| r.strip_suffix(".zip"))
-    else {
-        return false;
-    };
-    let Some(date) = rest.get(..10) else {
-        return false;
-    };
-    let date_ok = date.bytes().enumerate().all(|(i, b)| {
-        if i == 4 || i == 7 {
-            b == b'-'
-        } else {
-            b.is_ascii_digit()
-        }
-    });
-    let suffix = &rest[10..];
-    let suffix_ok = suffix.is_empty()
-        || suffix
-            .strip_prefix('-')
-            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
-    date_ok && suffix_ok
-}
-
-/// The newest backup copy's modification time, in Unix milliseconds.
-fn newest_copy(folder: &Path) -> Option<i64> {
-    std::fs::read_dir(folder)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter(|e| is_backup_name(&e.file_name().to_string_lossy()))
-        .filter_map(|e| e.metadata().ok()?.modified().ok())
-        .max()
-        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as i64)
-}
-
-/// Queues a scheduled backup for each user whose schedule is due.
-async fn scheduled(state: &AppState) -> ApiResult<()> {
-    let users: Vec<String> = sqlx::query_scalar(
-        "SELECT user_id FROM user_settings WHERE json_extract(data, '$.backupFrequency') IN ('daily', 'weekly', 'monthly')",
-    )
-    .fetch_all(&state.db)
-    .await?;
-    for user_id in users {
-        let settings = effective(state, &user_id).await?;
-        let Some(interval) = settings
-            .get("backupFrequency")
-            .and_then(Value::as_str)
-            .and_then(interval_ms)
-        else {
-            continue;
-        };
-        let last_job: Option<i64> = sqlx::query_scalar(
-            "SELECT MAX(created_at) FROM export_jobs WHERE user_id = ? AND kind = 'scheduled'",
-        )
-        .bind(&user_id)
-        .fetch_one(&state.db)
-        .await?;
-        let last = last_job
-            .into_iter()
-            .chain(newest_copy(&backup_folder(&settings)))
-            .max();
-        if last.is_some_and(|t| now_ms() - t <= interval) {
-            continue;
-        }
-        // A user with an active job is skipped; the next tick checks again.
-        super::queue(state, &user_id, "scheduled").await?;
-    }
-    Ok(())
-}
-
-/// Copies a finished archive into the backup folder and keeps only the newest copies.
-pub(super) async fn copy_to_folder(
-    state: &AppState,
-    user_id: &str,
-    archive: &Path,
-) -> Result<(), String> {
-    let settings = effective(state, user_id).await.map_err(|e| e.message)?;
-    let folder = backup_folder(&settings);
-    tokio::fs::create_dir_all(&folder)
-        .await
-        .map_err(|e| e.to_string())?;
-    let date = crate::routes::recordings::local_date().await;
-    let name = free_name(&folder, &date).await;
-    let tmp = folder.join(format!(".copy-{}.partial", ids::new_id()));
-    tokio::fs::copy(archive, &tmp)
-        .await
-        .map_err(|e| e.to_string())?;
-    if let Err(e) = tokio::fs::rename(&tmp, folder.join(&name)).await {
-        let _ = tokio::fs::remove_file(&tmp).await;
-        return Err(e.to_string());
-    }
-    prune(&folder);
-    Ok(())
-}
-
-async fn free_name(folder: &Path, date: &str) -> String {
-    let base = format!("OpenAudioHub-backup-{date}");
-    let mut n = 1;
-    loop {
-        let name = if n == 1 {
-            format!("{base}.zip")
-        } else {
-            format!("{base}-{n}.zip")
-        };
-        if !tokio::fs::try_exists(folder.join(&name))
-            .await
-            .unwrap_or(false)
-        {
-            return name;
-        }
-        n += 1;
-    }
-}
-
-/// Deletes backup copies beyond the newest `KEEP`. Other files are never touched.
-fn prune(folder: &Path) {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return;
-    };
-    let mut copies: Vec<(SystemTime, PathBuf)> = entries
-        .filter_map(Result::ok)
-        .filter(|e| is_backup_name(&e.file_name().to_string_lossy()))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .collect();
-    copies.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    for (_, path) in copies.into_iter().skip(KEEP) {
-        if let Err(e) = std::fs::remove_file(&path) {
-            tracing::warn!(error = %e, "could not prune old backup copy");
-        }
-    }
 }
 
 /// The export format a user's settings ask for, or `mp3` when the value is not one of them.
@@ -478,8 +307,8 @@ async fn reexport_outdated(
     if format == "original" {
         return Ok(());
     }
-    let exported: Vec<(String, i64, String, String, i64)> = sqlx::query_as(
-        "SELECT id, start_time, auto_export_path, filename, auto_export_attempts FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
+    let exported: Vec<(String, i64, String, String, String, i64)> = sqlx::query_as(
+        "SELECT id, start_time, auto_export_path, filename, title_source, auto_export_attempts FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
          AND auto_export_path IS NOT NULL AND auto_export_attempts < ?",
     )
     .bind(user_id)
@@ -487,7 +316,7 @@ async fn reexport_outdated(
     .fetch_all(&state.db)
     .await
     .map_err(|e| e.to_string())?;
-    for (id, start, encrypted_path, encrypted_title, _) in exported {
+    for (id, start, encrypted_path, encrypted_title, title_source, _) in exported {
         let Some(stored_path) = decrypt_path(state, &encrypted_path) else {
             continue;
         };
@@ -503,10 +332,13 @@ async fn reexport_outdated(
         };
         // Only a file still under the automatic name is replaced.
         let automatic = match mode {
-            "date" | "ai" => {
-                stem == date_stem(start).await || stem == auto_title(state, &encrypted_title, &id)
+            "date" => is_numbered(&stem, &date_stem(start).await),
+            "ai" => {
+                is_numbered(&stem, &date_stem(start).await)
+                    || (title_source == "ai"
+                        && is_numbered(&stem, &safe_name(&title_of(state, &encrypted_title), &id)))
             }
-            _ => stem == safe_name(&title_of(state, &encrypted_title), &id),
+            _ => is_numbered(&stem, &safe_name(&title_of(state, &encrypted_title), &id)),
         };
         if !automatic {
             continue;
@@ -547,9 +379,12 @@ async fn reexport_outdated(
     Ok(())
 }
 
-/// Whether `stem` is the date stem with the ` (2)`-style suffix a name clash adds.
-fn is_numbered_date(stem: &str, day: &str) -> bool {
-    let Some(rest) = stem.strip_prefix(day) else {
+/// Whether `stem` is `base` or `base (2)` and so on, the automatic names a clash adds.
+fn is_numbered(stem: &str, base: &str) -> bool {
+    if stem == base {
+        return true;
+    }
+    let Some(rest) = stem.strip_prefix(base) else {
         return false;
     };
     rest.strip_prefix(" (")
@@ -557,22 +392,21 @@ fn is_numbered_date(stem: &str, day: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// The name the AI title mode would give a file, when a title exists.
-fn auto_title(state: &AppState, encrypted_title: &str, id: &str) -> String {
-    safe_name(&title_of(state, encrypted_title), id)
-}
-
-/// With AI titles on, an export still named by its date gets renamed to the title once one exists.
+/// With AI titles on, an export still named by its date gets renamed once the title comes from AI.
 async fn rename_ai_titles(state: &AppState, user_id: &str, folder: &Path) -> Result<(), String> {
-    let exported: Vec<(String, i64, String, String)> = sqlx::query_as(
-        "SELECT id, start_time, auto_export_path, filename FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
+    let exported: Vec<(String, i64, String, String, String)> = sqlx::query_as(
+        "SELECT id, start_time, auto_export_path, filename, title_source FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
          AND auto_export_path IS NOT NULL",
     )
     .bind(user_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| e.to_string())?;
-    for (id, start, encrypted_path, encrypted_title) in exported {
+    for (id, start, encrypted_path, encrypted_title, title_source) in exported {
+        // A title the user typed, kept from the upload, or still waiting for the AI keeps the date name.
+        if title_source != "ai" {
+            continue;
+        }
         // The stored path is encrypted; a plain value passes through.
         let Some(stored_path) = decrypt_path(state, &encrypted_path) else {
             continue;
@@ -584,7 +418,7 @@ async fn rename_ai_titles(state: &AppState, user_id: &str, folder: &Path) -> Res
         // Only a file still named by its date is renamed; a user's own rename stays.
         // A "date (2)" file is still the automatic name.
         let day = date_stem(start).await;
-        if stem != day && !is_numbered_date(&stem, &day) {
+        if !is_numbered(&stem, &day) {
             continue;
         }
         let ext = ext_of(&path.to_string_lossy());
@@ -729,25 +563,8 @@ async fn unique_path(folder: &Path, stem: &str, ext: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::now_ms;
     use serde_json::json;
-
-    #[test]
-    fn backup_names_match_the_pattern() {
-        assert!(is_backup_name("OpenAudioHub-backup-2026-10-16.zip"));
-        assert!(is_backup_name("OpenAudioHub-backup-2026-10-16-2.zip"));
-        assert!(!is_backup_name("OpenAudioHub-backup-2026-10-16-x.zip"));
-        assert!(!is_backup_name("notes.zip"));
-        assert!(!is_backup_name(
-            "OpenAudioHub-backup-2026-10-16.zip.partial"
-        ));
-    }
-
-    #[test]
-    fn interval_for_each_frequency() {
-        assert_eq!(interval_ms("daily"), Some(DAY_MS));
-        assert_eq!(interval_ms("weekly"), Some(7 * DAY_MS));
-        assert_eq!(interval_ms("never"), None);
-    }
 
     #[test]
     fn names_are_sanitised_like_1x() {
@@ -792,12 +609,14 @@ mod tests {
     }
 
     #[test]
-    fn a_numbered_date_name_is_still_the_automatic_one() {
+    fn a_numbered_automatic_name_is_recognised() {
         let day = "2026-10-18";
-        assert!(is_numbered_date("2026-10-18 (2)", day));
-        assert!(!is_numbered_date("2026-10-18 (x)", day));
-        assert!(!is_numbered_date("2026-10-18 notes", day));
-        assert!(!is_numbered_date("Team sync", day));
+        assert!(is_numbered(day, day));
+        assert!(is_numbered("2026-10-18 (2)", day));
+        assert!(!is_numbered("2026-10-18 (x)", day));
+        assert!(!is_numbered("2026-10-18 notes", day));
+        assert!(!is_numbered("Team sync", day));
+        assert!(is_numbered("Team sync (3)", "Team sync"));
     }
 
     /// A desktop test server with one user and the given settings.
@@ -1060,6 +879,67 @@ mod tests {
 
         auto_export(&state).await.unwrap();
         assert!(renamed.exists(), "a name the user chose is left alone");
+    }
+
+    #[tokio::test]
+    async fn an_original_title_does_not_rename_the_date_file() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        let settings = json!({
+            "autoExport": true,
+            "autoExportFolder": folder.to_string_lossy(),
+            "autoExportFormat": "mp3",
+            "autoExportTitleMode": "ai",
+        });
+        sqlx::query("UPDATE user_settings SET data = ? WHERE user_id = 'u'")
+            .bind(settings.to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        store_audio(&state, "u/a.mp3", &fixture()).await;
+        add_recording(&state, "a", "u/a.mp3", true).await;
+
+        auto_export(&state).await.unwrap();
+        auto_export(&state).await.unwrap();
+        let day = date_stem(1_792_305_000_000).await;
+        assert!(
+            folder.join(format!("{day}.mp3")).exists(),
+            "the date name stays while the title is not from AI"
+        );
+        assert!(
+            !folder.join("Team sync.mp3").exists(),
+            "an original title must not rename the file"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_ai_title_renames_the_date_file() {
+        let (state, dir) = desktop_state(json!({})).await;
+        let folder = dir.path().join("out");
+        let settings = json!({
+            "autoExport": true,
+            "autoExportFolder": folder.to_string_lossy(),
+            "autoExportFormat": "mp3",
+            "autoExportTitleMode": "ai",
+        });
+        sqlx::query("UPDATE user_settings SET data = ? WHERE user_id = 'u'")
+            .bind(settings.to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        store_audio(&state, "u/a.mp3", &fixture()).await;
+        add_recording(&state, "a", "u/a.mp3", true).await;
+        auto_export(&state).await.unwrap();
+        let day = date_stem(1_792_305_000_000).await;
+        assert!(folder.join(format!("{day}.mp3")).exists());
+
+        sqlx::query("UPDATE recordings SET title_source = 'ai' WHERE id = 'a'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        auto_export(&state).await.unwrap();
+        assert!(!folder.join(format!("{day}.mp3")).exists());
+        assert!(folder.join("Team sync.mp3").exists());
     }
 
     #[test]

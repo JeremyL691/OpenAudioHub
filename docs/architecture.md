@@ -43,7 +43,6 @@ The web app is a React single-page app. It is built into the server binary, so o
 
 - **Database.** One SQLite file in WAL mode, with full synchronous writes and foreign keys on. The schema is migrated when the server starts. Text fields for titles, transcripts, summaries, provider keys and the Plaud token are encrypted with `ENCRYPTION_KEY`. See [Encryption at rest](encryption-at-rest.md).
 - **Audio.** Stored either in a folder on disk, or in an S3-compatible bucket. Each recording records where its audio is, so both can be used at once. See [S3-compatible storage](storage-s3.md).
-- **Backup archives.** Full backup zips are written to the storage folder, and they expire after 7 days.
 
 ## Background work
 
@@ -54,7 +53,7 @@ Work that takes time runs in the background, not in the request:
 - **Audio pipeline.** Splits long audio and transcribes the parts. See [Long recordings](#long-recordings).
 - **Summaries and titles.** A queue of summary jobs. Titles are generated after a transcript is saved, and summaries run after that when turned on.
 - **Webhook delivery.** Stores each event with its deliveries, and sends them with retries. See [Automation API and webhooks](automation-and-webhooks.md).
-- **Backups.** Builds full backup zips, cleans up expired ones, and on the Mac app runs scheduled backups and auto export.
+- **Exports.** On the Mac app, saves each new recording into the user's export folder.
 
 Jobs are stored in the database. A worker takes a job with a lease and renews it while it works. If the process stops, the lease runs out and another worker takes the job. So a job can run twice after a crash, and each job is written to be safe to repeat.
 
@@ -104,7 +103,7 @@ Differences from the self-hosted server:
 - Audio is always stored on disk.
 - Sign-up is off, and the local account signs in for you.
 - The server listens only on the Mac.
-- Scheduled backups and auto export are available.
+- Auto export is available.
 
 ## Command-line tools
 

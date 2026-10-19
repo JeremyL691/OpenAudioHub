@@ -9,7 +9,7 @@ import { errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useShellData } from "./shell-data";
 
-/** Dispatched by Export & Backup to open the onboarding again. Then the dialog can be dismissed. */
+/** Dispatched by the Export settings page to open the onboarding again. Then the dialog can be dismissed. */
 export const OPEN_ONBOARDING_EVENT = "oah:open-onboarding";
 
 const STEPS = ["Welcome", "Plaud", "AI provider", "Finish"] as const;

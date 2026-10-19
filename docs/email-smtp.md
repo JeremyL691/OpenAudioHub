@@ -15,7 +15,6 @@ OpenAudioHub sends email through an SMTP mail server that you choose. Email is o
 |---|---|---|
 | New recording synced | The notification address, or the account address | A sync adds new recordings, and the user turned on **Email notifications**. See [Notifications](notifications.md). |
 | Reset your password | The account address | Someone asks for a reset on the sign-in page. The link expires in 1 hour and works once. |
-| Export ready | The account address | A full backup zip is ready to download. See [Backup and restore](backup-and-restore.md). |
 | Test email | The address you enter in the notification settings | You choose **Send test email**. |
 
 If you did not ask for a password reset, the email says you can ignore it. The sign-in page answers the same way whether or not the address has an account.

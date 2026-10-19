@@ -91,8 +91,6 @@ const DEFAULTS: Record<string, unknown> = {
     autoExportFolder: null,
     autoExportFormat: "mp3",
     autoExportTitleMode: "original",
-    backupFrequency: null,
-    backupFolder: null,
     defaultProviders: null,
     onboardingCompleted: false,
     autoGenerateTitle: true,
@@ -102,7 +100,6 @@ const DEFAULTS: Record<string, unknown> = {
     importPlaudContent: false,
     transcriptMode: "plaud_only",
     preferredTranscriptSource: "plaud",
-    lastScheduledBackupAt: null,
 };
 
 // ---------- user settings ----------
@@ -279,7 +276,7 @@ test("user settings: autoExport cannot be turned on in the web app", async () =>
     await api.dispose();
 });
 
-test("user settings: export and backup folders must exist", async () => {
+test("user settings: the export folder must exist, and retired backup keys are ignored", async () => {
     const api = await newUserContext("settings-folders");
     const missing = "/nonexistent-oah-contract-folder-zzz";
     const exp = await api.put("/api/settings/user", {
@@ -288,11 +285,14 @@ test("user settings: export and backup folders must exist", async () => {
     expect(exp.status()).toBe(400);
     expect((await exp.json()).details.field).toBe("autoExportFolder");
 
-    const backup = await api.put("/api/settings/user", {
-        data: { backupFolder: missing },
+    const retired = await api.put("/api/settings/user", {
+        data: { backupFrequency: "daily", backupFolder: missing },
     });
-    expect(backup.status()).toBe(400);
-    expect((await backup.json()).details.field).toBe("backupFolder");
+    expect(retired.status()).toBe(200);
+    const settings = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
+    expect(settings).not.toHaveProperty("backupFrequency");
+    expect(settings).not.toHaveProperty("backupFolder");
+    expect(settings).not.toHaveProperty("lastScheduledBackupAt");
     await api.dispose();
 });
 
