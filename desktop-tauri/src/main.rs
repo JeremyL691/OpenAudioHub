@@ -4,7 +4,7 @@
 
 mod backup;
 mod bridge;
-mod downloads;
+mod download;
 mod files;
 mod menu;
 mod plaud_refresh;
@@ -116,7 +116,9 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
     let launch_at_login = config.launch_at_login.unwrap_or(false);
     let shared = bridge::Shared {
         data_dir: data_dir.clone(),
+        port,
         launch_secret: launch_code.clone(),
+        session: std::sync::Mutex::new(None),
         close_to_background: std::sync::atomic::AtomicBool::new(
             config.close_action.as_deref() != Some("quit"),
         ),
@@ -124,14 +126,12 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
     };
     let start_url = format!("http://127.0.0.1:{port}/api/desktop/session?code={launch_code}");
     let log_dir = data_dir.clone();
-    let downloads = downloads::DownloadManager::default();
     tauri::Builder::default()
         .manage(shared)
         .invoke_handler(handlers())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--background"])))
         .setup(move |app| {
-            downloads::clear_stale(&app.state::<bridge::Shared>().data_dir);
             // The commands go to this launch's page only; the port is known only now.
             app.add_capability(app_capability(port))?;
             let url = tauri::Url::parse(&start_url)?;
@@ -144,7 +144,9 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
                 .initialization_script(bridge::BRIDGE_SCRIPT)
                 .on_navigation(move |target| {
                     if is_app_page(target, port) {
-                        return true;
+                        // Files are saved through the bridge. An API address never becomes a page.
+                        let path = target.path();
+                        return !(path.starts_with("/api/") && path != "/api/desktop/session");
                     }
                     // Anything else never loads in this window. Web addresses open in the browser.
                     if matches!(target.scheme(), "http" | "https") {
@@ -152,7 +154,6 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
                     }
                     false
                 })
-                .on_download(move |webview, event| downloads::handle(webview, event, downloads.clone()))
                 .build()?;
             menu::install_tray(app, show_tray, launch_at_login)?;
             plaud_refresh::spawn(
@@ -206,6 +207,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         bridge::open_plaud_browser,
         bridge::pick_folder,
         bridge::save_text_file,
+        download::download_recordings,
         bridge::desktop_secret,
         bridge::selftest_report
     ];
@@ -216,6 +218,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         bridge::open_plaud_browser,
         bridge::pick_folder,
         bridge::save_text_file,
+        download::download_recordings,
         bridge::desktop_secret
     ];
 }

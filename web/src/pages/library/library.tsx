@@ -22,6 +22,7 @@ import {
 import { startUploads, useUploads } from "@/components/recordings/uploads";
 import { cn } from "@/lib/cn";
 import { api, errorMessage } from "@/lib/api";
+import { downloadRecordings } from "@/lib/downloads";
 import { deleteRecording, type Recording } from "@/lib/recordings";
 import { transcribeInBrowser as runBrowserTranscription } from "@/components/recording/browser-transcribe";
 import { PreviewPane } from "./preview-pane";
@@ -49,6 +50,7 @@ export default function LibraryPage() {
     const [deleting, setDeleting] = useState<Recording | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const [merging, setMerging] = useState<Recording[] | null>(null);
+    const [downloading, setDownloading] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
 
     // Address changes (sidebar collections, top-bar search, chip links) reach the controls.
@@ -185,6 +187,16 @@ export default function LibraryPage() {
     };
 
     const selectedIds = lib.items.filter((r) => selected.has(r.id)).map((r) => r.id);
+
+    async function downloadSelected() {
+        setDownloading(true);
+        try {
+            await downloadRecordings(selectedIds);
+        } finally {
+            setDownloading(false);
+        }
+    }
+
     const countText = countLabel(visible.length, inScope.length, needle.length > 0 || filter !== "all");
 
     let emptyText: string | null = null;
@@ -229,6 +241,8 @@ export default function LibraryPage() {
                                 }}
                                 selectedIds={selectedIds}
                                 onSelectAll={() => setSelected(new Set(visible.map((r) => r.id)))}
+                                onBulkDownload={() => void downloadSelected()}
+                                bulkDownloading={downloading}
                                 onMerge={() => setMerging(lib.items.filter((r) => selected.has(r.id)))}
                             />
                         }

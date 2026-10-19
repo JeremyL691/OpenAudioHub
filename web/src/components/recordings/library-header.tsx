@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
-import { bulkDownloadUrl, COLLECTION_LABELS, parseDensity, parseSort, STATUS_FILTERS, type Collection, type Density, type SortOrder, type StatusFilter } from "./library-model";
+import { COLLECTION_LABELS, parseDensity, parseSort, STATUS_FILTERS, type Collection, type Density, type SortOrder, type StatusFilter } from "./library-model";
 
 export interface LibraryHeaderProps {
     collection: Collection | null;
@@ -28,6 +28,8 @@ export interface LibraryHeaderProps {
     /** Selected ids in list order. */
     selectedIds: string[];
     onSelectAll(): void;
+    onBulkDownload(): void;
+    bulkDownloading: boolean;
     onMerge(): void;
 }
 
@@ -117,11 +119,15 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                                     Select all
                                 </Button>
                                 {selectedIds.length > 0 ? (
-                                    <Button asChild variant="primary" size="sm" data-testid="recording-bulk-download">
-                                        <a href={bulkDownloadUrl(selectedIds)}>
-                                            <Download />
-                                            Download
-                                        </a>
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        data-testid="recording-bulk-download"
+                                        disabled={props.bulkDownloading}
+                                        onClick={props.onBulkDownload}
+                                    >
+                                        <Download />
+                                        Download
                                     </Button>
                                 ) : (
                                     <Button variant="primary" size="sm" data-testid="recording-bulk-download" disabled>

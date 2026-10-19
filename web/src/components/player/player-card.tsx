@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
+import { downloadRecordings } from "@/lib/downloads";
 import { formatBytes, formatClock } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { originalDownloadUrl } from "@/lib/recordings";
 import { PLAYBACK_RATES, usePlayer } from "./player-context";
 
 /** Recordings longer than this are not decoded automatically (the user starts it with a button). */
@@ -107,17 +107,13 @@ function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem asChild>
-                        <a href={`/api/recordings/${encodeURIComponent(id)}/audio?download=1`} download>
-                            <Download />
-                            Download MP3
-                        </a>
+                    <DropdownMenuItem onSelect={() => void downloadRecordings([id])}>
+                        <Download />
+                        Download MP3
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                        <a href={originalDownloadUrl(id)} download data-testid="download-original">
-                            <Download />
-                            Download original
-                        </a>
+                    <DropdownMenuItem onSelect={() => void downloadRecordings([id], "original")} data-testid="download-original">
+                        <Download />
+                        Download original
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>

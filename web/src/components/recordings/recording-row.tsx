@@ -5,9 +5,10 @@ import { MiniWaveform } from "@/components/ui/mini-waveform";
 import { RecordingStatusBadge } from "@/components/ui/status-badge";
 import { recordingStage } from "@/components/recording/pipeline-labels";
 import { cn } from "@/lib/cn";
+import { downloadRecordings } from "@/lib/downloads";
 import { formatClock } from "@/lib/format";
 import type { Recording } from "@/lib/recordings";
-import { audioDownloadUrl, formatAgo, rowLabel, sourceLabel } from "./library-model";
+import { formatAgo, rowLabel, sourceLabel } from "./library-model";
 
 export interface RowActions {
     onOpen(recording: Recording): void;
@@ -141,7 +142,7 @@ function RowMenu({ recording, transcribing, actions }: { recording: Recording; t
                     <Cpu />
                     Transcribe in browser
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.location.assign(audioDownloadUrl(recording.id))}>
+                <DropdownMenuItem onSelect={() => void downloadRecordings([recording.id])}>
                     <Download />
                     Download audio
                 </DropdownMenuItem>
