@@ -1,0 +1,35 @@
+{
+    "action": {
+        "save": "저장",
+        "cancel": "취소",
+        "delete": "삭제",
+        "remove": "제거",
+        "retry": "다시 시도",
+        "close": "닫기",
+        "copy": "복사",
+        "copied": "복사됨",
+        "done": "완료",
+        "edit": "편집",
+        "rename": "이름 바꾸기",
+        "search": "검색",
+        "loading": "불러오는 중",
+        "back": "뒤로",
+        "next": "다음",
+        "skip": "건너뛰기",
+        "download": "다운로드",
+        "upload": "업로드",
+        "confirm": "확인",
+        "deleting": "삭제 중…"
+    },
+    "error": {
+        "generic": "문제가 발생했습니다.",
+        "loadFailed": "불러오지 못했습니다.",
+        "saveFailed": "변경 사항을 저장하지 못했습니다."
+    },
+    "duration": {
+        "seconds": "{value}초",
+        "minutes": "{value}분",
+        "hours": "{hours}시간 {minutes}분",
+        "recorded": "{value} 녹음됨"
+    }
+}

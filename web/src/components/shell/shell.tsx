@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Outlet } from "react-router";
 import { RequireSession } from "@/lib/session";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 import { MiniPlayer } from "@/components/player/mini-player";
 import { KeyboardShortcuts } from "@/components/player/shortcuts";
 import { PlayerProvider } from "@/components/player/player-context";
@@ -47,6 +48,7 @@ export default function Shell() {
 }
 
 function ShellFrame() {
+    const { t } = useI18n();
     // 768 px and up (md): the sidebar is docked. Below it, the sidebar is a sheet.
     const docked = useMediaQuery("(min-width: 768px)");
     const [expanded, setExpanded] = useState(readSidebarCookie);
@@ -92,7 +94,7 @@ function ShellFrame() {
             {!docked ? (
                 <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
                     <SheetContent side="left" className="gap-0 p-0">
-                        <SheetTitle className="sr-only">Sidebar</SheetTitle>
+                        <SheetTitle className="sr-only">{t("shell.nav.sidebar")}</SheetTitle>
                         <div className="h-full">
                             <SidebarNav onNavigate={() => setSheetOpen(false)} />
                         </div>

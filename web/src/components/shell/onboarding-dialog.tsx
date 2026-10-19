@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 import { useShellData } from "./shell-data";
 
 /** Dispatched by the Export settings page to open the onboarding again. Then the dialog can be dismissed. */
 export const OPEN_ONBOARDING_EVENT = "oah:open-onboarding";
 
-const STEPS = ["Welcome", "Plaud", "AI provider", "Finish"] as const;
+const STEPS: MessageKey[] = ["shell.onboarding.stepWelcome", "shell.onboarding.stepPlaud", "shell.onboarding.stepProvider", "shell.onboarding.stepFinish"];
 
 /**
  * The first-run dialog (spec/ui-app.md 5). While onboarding is not completed it cannot be
@@ -20,6 +21,7 @@ const STEPS = ["Welcome", "Plaud", "AI provider", "Finish"] as const;
  */
 export function OnboardingDialog() {
     const { settings, connection, providerCount, updateSettings, reload } = useShellData();
+    const { t } = useI18n();
     const required = settings?.onboardingCompleted === false;
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState(1);
@@ -50,7 +52,7 @@ export function OnboardingDialog() {
             setOpen(false);
             await reload();
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to complete onboarding"));
+            toast.error(errorMessage(err, t("shell.onboarding.completeFailed")));
         } finally {
             setSaving(false);
         }
@@ -79,11 +81,11 @@ export function OnboardingDialog() {
                     <div className="grid gap-2">
                         <div
                             role="progressbar"
-                            aria-label="Onboarding progress"
+                            aria-label={t("shell.onboarding.progress")}
                             aria-valuemin={1}
                             aria-valuemax={STEPS.length}
                             aria-valuenow={step}
-                            aria-valuetext={`Step ${step} of ${STEPS.length}`}
+                            aria-valuetext={t("shell.onboarding.stepOf", { step, total: STEPS.length })}
                             className="h-1.5 w-full overflow-hidden rounded-full bg-secondary"
                         >
                             <div className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out motion-reduce:transition-none" style={{ width: `${(step / STEPS.length) * 100}%` }} />
@@ -91,38 +93,38 @@ export function OnboardingDialog() {
                         <ol className="flex flex-wrap gap-x-3 text-xs text-muted-foreground" aria-hidden="true">
                             {STEPS.map((label, i) => (
                                 <li key={label} className={cn(i + 1 === step && "font-semibold text-foreground")}>
-                                    {label}
+                                    {t(label)}
                                 </li>
                             ))}
                         </ol>
                     </div>
 
                     {step === 1 ? (
-                        <StepBody title="Welcome to OpenAudioHub">
-                            Your recordings, transcripts and summaries live in one library. Setup takes about a minute.
+                        <StepBody title={t("shell.onboarding.welcomeTitle")}>
+                            {t("shell.onboarding.welcomeBody")}
                         </StepBody>
                     ) : null}
                     {step === 2 ? (
-                        <StepBody title="Connect Plaud">
-                            Connect your Plaud account to sync recordings automatically, or upload audio files at any time.
-                            <StepStatus done={plaudDone} doneText="Plaud is connected." todoText="Plaud is not connected yet." />
+                        <StepBody title={t("shell.onboarding.plaudTitle")}>
+                            {t("shell.onboarding.plaudBody")}
+                            <StepStatus done={plaudDone} doneText={t("shell.onboarding.plaudDone")} todoText={t("shell.onboarding.plaudTodo")} />
                             <Link to="/settings/plaud-account" className="text-sm font-medium text-link hover:underline">
-                                Open Plaud Account
+                                {t("shell.onboarding.openPlaud")}
                             </Link>
                         </StepBody>
                     ) : null}
                     {step === 3 ? (
-                        <StepBody title="Add an AI provider">
-                            A provider transcribes and summarizes your recordings.
-                            <StepStatus done={providerDone} doneText="An AI provider is set up." todoText="No AI provider yet." />
+                        <StepBody title={t("shell.onboarding.providerTitle")}>
+                            {t("shell.onboarding.providerBody")}
+                            <StepStatus done={providerDone} doneText={t("shell.onboarding.providerDone")} todoText={t("shell.onboarding.providerTodo")} />
                             <Link to="/settings/providers" className="text-sm font-medium text-link hover:underline">
-                                Open AI Providers
+                                {t("shell.onboarding.openProviders")}
                             </Link>
                         </StepBody>
                     ) : null}
                     {step === 4 ? (
-                        <StepBody title="You are ready">
-                            Upload a recording or sync from Plaud to see it on the Dashboard. You can change any of this later in Settings.
+                        <StepBody title={t("shell.onboarding.finishTitle")}>
+                            {t("shell.onboarding.finishBody")}
                         </StepBody>
                     ) : null}
 
@@ -130,23 +132,23 @@ export function OnboardingDialog() {
                         <div>
                             {step > 1 ? (
                                 <Button variant="secondary" disabled={saving} onClick={() => setStep((s) => s - 1)}>
-                                    Back
+                                    {t("common.action.back")}
                                 </Button>
                             ) : null}
                         </div>
                         <div className="flex items-center gap-2">
                             {step === 2 || step === 3 ? (
                                 <Button variant="ghost" disabled={saving} onClick={() => setStep((s) => s + 1)}>
-                                    Skip
+                                    {t("common.action.skip")}
                                 </Button>
                             ) : null}
                             {step < STEPS.length ? (
                                 <Button variant="primary" disabled={saving} onClick={() => setStep((s) => s + 1)}>
-                                    Next
+                                    {t("common.action.next")}
                                 </Button>
                             ) : (
                                 <Button variant="primary" disabled={saving} onClick={() => void finish()}>
-                                    Get Started
+                                    {t("shell.onboarding.getStarted")}
                                 </Button>
                             )}
                         </div>

@@ -1,6 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { CircleCheck, CircleDashed, LoaderCircle, Sparkles, type LucideIcon } from "lucide-react";
-import { RECORDING_STAGE_LABELS, type RecordingStage } from "@/components/recording/pipeline-labels";
+import { type RecordingStage } from "@/components/recording/pipeline-labels";
+import { stageLabel } from "@/components/recording/pipeline-labels";
 import { cn } from "@/lib/cn";
 
 export type StatusTone = "success" | "info" | "warning" | "neutral" | "muted";
@@ -48,7 +49,7 @@ export function RecordingStatusBadge({ stage, inverted = false, className }: { s
     return (
         <StatusBadge tone={view.tone} inverted={inverted} className={className}>
             <Icon aria-hidden="true" className={cn(view.busy && "animate-spin motion-reduce:animate-none")} />
-            {RECORDING_STAGE_LABELS[stage]}
+            {stageLabel(stage)}
         </StatusBadge>
     );
 }

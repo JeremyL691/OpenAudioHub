@@ -1,0 +1,45 @@
+{
+    "menu": {
+        "open": "打开 OpenAudioHub",
+        "data": "打开数据文件夹",
+        "logs": "打开日志文件夹",
+        "config": "编辑配置…",
+        "keys": "导出密钥…",
+        "login": "登录时启动",
+        "language": "语言",
+        "quit": "退出 OpenAudioHub"
+    },
+    "dialog": {
+        "exportKeysTitle": "导出加密密钥？",
+        "exportKeysBody": "该文件包含保护你数据的密钥。请妥善保存，切勿分享。",
+        "exportKeysConfirm": "导出…",
+        "cancel": "取消",
+        "exportKeysSaveTitle": "导出加密密钥",
+        "exportKeysFailedTitle": "无法导出密钥",
+        "chooseFolderTitle": "选择导出文件夹",
+        "saveDownloadTitle": "保存下载",
+        "freeSpaceTitle": "OpenAudioHub 需要更多磁盘空间",
+        "freeSpaceBody": "数据所在的磁盘（{folder}）只剩 {free} MB 可用空间。请至少释放 200 MB 后重新打开 OpenAudioHub。",
+        "startFailedTitle": "OpenAudioHub 无法启动"
+    },
+    "error": {
+        "downloadInProgress": "已有下载正在进行",
+        "formatInvalid": "format 必须是 mp3 或 original",
+        "idsInvalid": "ids 必须是 1 到 100 个录音 ID",
+        "serverNoAnswer": "服务器未响应下载请求。",
+        "downloadCouldNotStart": "无法开始下载：{reason}",
+        "downloadRefused": "服务器拒绝了下载（HTTP {status}）。",
+        "saveDialogFailed": "无法打开保存对话框。",
+        "downloadStalled": "下载停滞，已停止。",
+        "downloadFailed": "下载失败：{reason}",
+        "downloadSaveFailed": "无法保存下载：{reason}",
+        "folderPickerFailed": "无法打开文件夹选择器。",
+        "keysUnreadable": "无法读取密钥文件：{reason}",
+        "keysUnwritable": "无法写入 {path}：{reason}",
+        "closeActionInvalid": "closeAction 必须是 background 或 quit",
+        "launchAtLoginFailed": "无法更改登录时启动：{reason}",
+        "databaseOpenFailed": "无法打开数据库：{reason}",
+        "databaseBackupFailed": "升级前无法备份数据库，因此 OpenAudioHub 未启动：{reason}",
+        "noFreePort": "应用没有可用的本地端口"
+    }
+}

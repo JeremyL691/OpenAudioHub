@@ -37,7 +37,7 @@ Unless a row says otherwise, a page path returns the same result signed in or ou
 
 ## Common response rules
 
-- Pages are HTML with `charset=utf-8`. The app shell declares `lang="en"`.
+- Pages are HTML with `charset=utf-8`. The app shell declares `lang="en"`; once the app starts, it sets `lang` to the interface language in use (spec/ui-app.md, "Interface language").
 - Trailing slashes on page paths are accepted without a redirect: `/install/` gives the same
   200 as `/install`.
 - Paths are case-sensitive.

@@ -11,31 +11,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Kbd } from "@/components/ui/kbd";
-import { Keyboard, LogOut, Monitor, Moon, Plug, RefreshCw, Settings, Sun } from "lucide-react";
+import { Keyboard, Languages, LogOut, Monitor, Moon, Plug, RefreshCw, Settings, Sun } from "lucide-react";
 import { formatRelative } from "@/lib/format";
 import { signOut, useSession } from "@/lib/session";
 import { setTheme, useTheme, type ThemeChoice } from "@/lib/theme";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { desktopApp } from "@/lib/desktop-app";
 import { useShellData } from "./shell-data";
+import { LANGUAGE_ITEMS, chooseLocale } from "./language-picker";
 
 /** Opened by the keyboard shortcut dialog (spec/ui-library.md 5). */
 export const OPEN_SHORTCUTS_EVENT = "oah:open-shortcuts";
 
-const THEME_ITEMS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
-    { value: "light", label: "Light", icon: Sun },
-    { value: "dark", label: "Dark", icon: Moon },
-    { value: "system", label: "Auto", icon: Monitor },
-];
-
 type SyncTone = "ok" | "failed" | "syncing" | "idle";
-
-const SUFFIX: Record<SyncTone, string> = {
-    ok: ", synced",
-    failed: ", sync failed",
-    syncing: ", syncing",
-    idle: ", not synced yet",
-};
 
 const RING: Record<SyncTone, string> = {
     ok: "border-success",
@@ -44,12 +33,26 @@ const RING: Record<SyncTone, string> = {
     idle: "border-border",
 };
 
-/** The account button at the right of the top bar: sync state, theme, Settings, log out. */
+/** The account button at the right of the top bar: sync state, theme, language, Settings, log out. */
 export function AccountMenu() {
     const { connection, sync, syncNow, updateSettings } = useShellData();
     const session = useSession();
     const [theme] = useTheme();
+    const { locale, setLocale, t } = useI18n();
     const navigate = useNavigate();
+
+    const THEME_ITEMS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
+        { value: "light", label: t("shell.account.themeLight"), icon: Sun },
+        { value: "dark", label: t("shell.account.themeDark"), icon: Moon },
+        { value: "system", label: t("shell.account.themeAuto"), icon: Monitor },
+    ];
+
+    const SUFFIX: Record<SyncTone, string> = {
+        ok: t("shell.account.suffixOk"),
+        failed: t("shell.account.suffixFailed"),
+        syncing: t("shell.account.suffixSyncing"),
+        idle: t("shell.account.suffixIdle"),
+    };
 
     const email = session.data?.user.email ?? "";
     // The desktop app has one local account and no sign-out (spec/ui-app.md section 9).
@@ -59,11 +62,11 @@ export function AccountMenu() {
     const needsReconnect = Boolean(connection?.needsReconnect);
 
     let tooltip: string;
-    if (needsReconnect) tooltip = "Plaud needs reconnecting";
-    else if (tone === "syncing") tooltip = "Syncing…";
-    else if (tone === "failed") tooltip = `Sync failed: ${sync.error ?? "unknown error"}`;
-    else if (tone === "ok" && sync.lastSyncAt) tooltip = `Last synced ${formatRelative(sync.lastSyncAt)}`;
-    else tooltip = "Not synced yet";
+    if (needsReconnect) tooltip = t("shell.account.reconnectTooltip");
+    else if (tone === "syncing") tooltip = t("shell.account.syncingTooltip");
+    else if (tone === "failed") tooltip = t("shell.account.failedTooltip", { reason: sync.error ?? t("shell.account.unknownError") });
+    else if (tone === "ok" && sync.lastSyncAt) tooltip = t("shell.account.lastSyncedTooltip", { time: formatRelative(sync.lastSyncAt) });
+    else tooltip = t("shell.account.idleTooltip");
 
     const chooseTheme = (choice: ThemeChoice) => {
         setTheme(choice);
@@ -79,7 +82,7 @@ export function AccountMenu() {
                         type="button"
                         data-testid="user-menu"
                         data-sync-state={tone}
-                        aria-label={`Account menu${SUFFIX[tone]}`}
+                        aria-label={`${t("shell.account.aria")}${SUFFIX[tone]}`}
                         className="relative grid size-10 shrink-0 place-items-center rounded-full border border-border bg-muted text-sm font-semibold text-foreground transition-colors duration-150 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
                     >
                         <span aria-hidden="true">{initial}</span>
@@ -94,35 +97,35 @@ export function AccountMenu() {
                         {initial}
                     </span>
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{desktop ? "OpenAudioHub" : email || "Signed in"}</p>
-                        <p className="text-xs text-muted-foreground">{desktop ? "Local account" : "Signed in"}</p>
+                        <p className="truncate text-sm font-medium">{desktop ? "OpenAudioHub" : email || t("shell.account.signedIn")}</p>
+                        <p className="text-xs text-muted-foreground">{desktop ? t("shell.account.localAccount") : t("shell.account.signedIn")}</p>
                     </div>
                 </div>
 
                 <div className="p-1">
                     <DropdownMenuItem disabled={tone === "syncing"} onSelect={() => void syncNow()}>
                         <RefreshCw />
-                        <span className="flex-1">Sync now</span>
+                        <span className="flex-1">{t("shell.account.syncNow")}</span>
                     </DropdownMenuItem>
                     {needsReconnect ? (
                         <DropdownMenuItem onSelect={() => navigate("/settings/plaud-account")}>
                             <Plug />
-                            <span className="flex-1">Reconnect Plaud</span>
+                            <span className="flex-1">{t("shell.account.reconnectPlaud")}</span>
                         </DropdownMenuItem>
                     ) : null}
                     <DropdownMenuItem onSelect={() => navigate("/settings")}>
                         <Settings />
-                        <span className="flex-1">Settings</span>
+                        <span className="flex-1">{t("shell.account.settings")}</span>
                         <Kbd className="h-5 px-1 text-[10px]">,</Kbd>
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT))}>
                         <Keyboard />
-                        <span className="flex-1">Keyboard shortcuts</span>
+                        <span className="flex-1">{t("shell.account.keyboardShortcuts")}</span>
                         <Kbd className="h-5 px-1 text-[10px]">?</Kbd>
                     </DropdownMenuItem>
                 </div>
 
-                <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("shell.account.theme")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={theme} onValueChange={(value) => chooseTheme(value as ThemeChoice)}>
                     {THEME_ITEMS.map((item) => {
                         const Icon = item.icon;
@@ -139,6 +142,23 @@ export function AccountMenu() {
                     })}
                 </DropdownMenuRadioGroup>
 
+                <DropdownMenuLabel className="flex items-center gap-2">
+                    <Languages className="size-3.5" aria-hidden="true" />
+                    {t("shell.account.language")}
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={locale} onValueChange={(value) => chooseLocale(value as typeof locale, setLocale)}>
+                    {LANGUAGE_ITEMS.map((item) => (
+                        <DropdownMenuRadioItem
+                            key={item.value}
+                            value={item.value}
+                            data-testid={`language-option-${item.value}`}
+                            onSelect={(event) => event.preventDefault()}
+                        >
+                            {item.label}
+                        </DropdownMenuRadioItem>
+                    ))}
+                </DropdownMenuRadioGroup>
+
                 {desktop ? null : (
                     <>
                         <DropdownMenuSeparator className="my-0" />
@@ -151,7 +171,7 @@ export function AccountMenu() {
                                 }}
                             >
                                 <LogOut />
-                                <span className="flex-1">Log out</span>
+                                <span className="flex-1">{t("shell.account.logOut")}</span>
                             </DropdownMenuItem>
                         </div>
                     </>

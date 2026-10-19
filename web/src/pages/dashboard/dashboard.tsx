@@ -11,6 +11,7 @@ import { isRecent, useShellData } from "@/components/shell/shell-data";
 import { useUploads } from "@/components/recordings/uploads";
 import { formatClock, formatDate, formatDateTime, formatRelative } from "@/lib/format";
 import { sourceOf, type Recording } from "@/lib/recordings";
+import { intlLocale, t, useI18n, type MessageKey } from "@/lib/i18n";
 
 /** Settings sections that a ?settings=<section> link may forward to (spec/ui-app.md 3). */
 const SETTINGS_SECTIONS = [
@@ -28,22 +29,22 @@ const SETTINGS_SECTIONS = [
 
 const RECENT_LIMIT = 8;
 
-const PROCESSING_LABEL: Record<NonNullable<Recording["processing"]>["kind"], string> = {
-    transcribe: "Transcribing",
-    pipeline: "Processing audio",
-    summary: "Writing summary",
+const PROCESSING_LABEL: Record<NonNullable<Recording["processing"]>["kind"], MessageKey> = {
+    transcribe: "dashboard.stageTranscribing",
+    pipeline: "dashboard.stageProcessingAudio",
+    summary: "dashboard.stageWritingSummary",
 };
 
 function sourceLabel(recording: Recording): string {
-    return sourceOf(recording) === "plaud" ? "Plaud" : "Upload";
+    return sourceOf(recording) === "plaud" ? t("dashboard.sourcePlaud") : t("dashboard.sourceUpload");
 }
 
 /** Recorded time for the "Last 7 days" tile, in whole minutes, for example "0 min" or "2 h 5 min". */
 function formatRecordedMinutes(totalSeconds: number): string {
     const minutes = Math.max(0, Math.round(totalSeconds / 60));
     const hours = Math.floor(minutes / 60);
-    if (hours > 0) return `${hours} h ${minutes % 60} min`;
-    return `${minutes} min`;
+    if (hours > 0) return t("common.duration.hours", { hours: new Intl.NumberFormat(intlLocale()).format(hours), minutes: new Intl.NumberFormat(intlLocale()).format(minutes % 60) });
+    return t("common.duration.minutes", { value: new Intl.NumberFormat(intlLocale()).format(minutes) });
 }
 
 function newestFirst(recordings: Recording[]): Recording[] {
@@ -59,25 +60,26 @@ export default function Dashboard() {
 }
 
 function DashboardContent() {
+    const { t: tr } = useI18n();
     const { recordings, connection, providerCount, sync, syncNow, openUploadPicker } = useShellData();
     const { busy: uploading } = useUploads();
     const connected = Boolean(connection?.connected);
     const needsReconnect = Boolean(connection?.needsReconnect);
     const syncing = sync.status === "syncing";
-    const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    const today = new Date().toLocaleDateString(intlLocale(), { weekday: "long", month: "long", day: "numeric" });
 
     return (
         <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-7 px-4 py-7 sm:px-8">
             <header className="space-y-1">
-                <h1 className="text-[28px] font-bold tracking-tight">Dashboard</h1>
+                <h1 className="text-[28px] font-bold tracking-tight">{tr("dashboard.title")}</h1>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                     <span>{today}</span>
                     <span aria-hidden="true">·</span>
-                    <section aria-label="Plaud sync" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <section aria-label={tr("dashboard.plaudSync")} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span>{plaudStatusText(connection, sync.lastSyncAt)}</span>
                         {connected && !needsReconnect ? (
                             <Button data-testid="overview-sync-now" variant="secondary" size="sm" disabled={syncing} onClick={() => void syncNow()}>
-                                {syncing ? "Syncing…" : "Sync now"}
+                                {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
                             </Button>
                         ) : null}
                     </section>
@@ -86,33 +88,33 @@ function DashboardContent() {
 
             {needsReconnect ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/15 px-4 py-3 text-sm text-foreground">
-                    <span>Reconnect Plaud to keep recordings syncing.</span>
+                    <span>{tr("dashboard.reconnectStrip")}</span>
                     <Link to="/settings/plaud-account" className="font-medium text-link hover:underline">
-                        Reconnect
+                        {tr("dashboard.reconnect")}
                     </Link>
                 </div>
             ) : null}
 
             {recordings === null ? (
                 <div className="flex justify-center py-12">
-                    <Spinner label="Loading recordings" />
+                    <Spinner label={tr("dashboard.loadingRecordings")} />
                 </div>
             ) : recordings.length === 0 ? (
                 <div className="flex flex-col gap-7">
                     <EmptyState
-                        title="No recordings yet"
-                        description="Sync from your Plaud account, or upload an audio file to start your library."
+                        title={tr("dashboard.emptyTitle")}
+                        description={tr("dashboard.emptyBody")}
                         action={
                             <>
                                 <Button data-testid="overview-upload" variant="primary" disabled={uploading} onClick={openUploadPicker}>
-                                    Upload audio
+                                    {tr("dashboard.uploadAudio")}
                                 </Button>
                                 <Button data-testid="overview-sync" variant="secondary" disabled={syncing} onClick={() => void syncNow()}>
-                                    {syncing ? "Syncing…" : "Sync now"}
+                                    {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
                                 </Button>
                                 {providerCount === 0 ? (
                                     <Link to="/settings/providers" className="inline-flex h-10 items-center text-sm font-medium text-link hover:underline sm:h-8">
-                                        Add an AI provider
+                                        {tr("dashboard.addProvider")}
                                     </Link>
                                 ) : null}
                             </>
@@ -133,10 +135,10 @@ function DashboardContent() {
 }
 
 function plaudStatusText(connection: { connected: boolean; needsReconnect?: boolean } | null, lastSyncAt: number | null): string {
-    if (!connection) return "Checking Plaud…";
-    if (!connection.connected) return "Plaud not connected";
-    if (connection.needsReconnect) return "Plaud sign-in expired";
-    return lastSyncAt ? `Last synced ${formatRelative(lastSyncAt)}` : "Not synced yet";
+    if (!connection) return t("dashboard.statusChecking");
+    if (!connection.connected) return t("dashboard.statusNotConnected");
+    if (connection.needsReconnect) return t("dashboard.statusExpired");
+    return lastSyncAt ? t("dashboard.statusLastSynced", { time: formatRelative(lastSyncAt) }) : t("dashboard.statusNotSynced");
 }
 
 function AtAGlance({ recordings }: { recordings: Recording[] }) {
@@ -149,24 +151,24 @@ function AtAGlance({ recordings }: { recordings: Recording[] }) {
     const first = processing[0];
 
     return (
-        <section aria-label="At a glance" className="grid gap-3 sm:grid-cols-3">
+        <section aria-label={t("dashboard.atAGlance")} className="grid gap-3 sm:grid-cols-3">
             <Tile
                 to="/recordings?collection=recent"
-                label="Last 7 days"
+                label={t("dashboard.last7Days")}
                 value={recent.length}
-                hint={recent.length === 0 ? "Nothing recorded" : `${formatRecordedMinutes(recentSeconds)} recorded`}
+                hint={recent.length === 0 ? t("dashboard.nothingRecorded") : t("dashboard.recordedSuffix", { value: formatRecordedMinutes(recentSeconds) })}
             />
             <Tile
                 to="/recordings?filter=untranscribed"
-                label="Not transcribed"
+                label={t("dashboard.notTranscribed")}
                 value={untranscribed}
-                hint={untranscribed > 0 ? "Review" : "All transcribed"}
+                hint={untranscribed > 0 ? t("dashboard.review") : t("dashboard.allTranscribed")}
             />
             <Tile
                 to="/recordings?filter=processing"
-                label="Processing"
+                label={t("dashboard.processing")}
                 value={processing.length}
-                hint={first && first.processing ? `${first.filename}, ${PROCESSING_LABEL[first.processing.kind]}` : "Nothing running"}
+                hint={first && first.processing ? `${first.filename}, ${t(PROCESSING_LABEL[first.processing.kind])}` : t("dashboard.nothingRunning")}
             />
         </section>
     );
@@ -191,7 +193,7 @@ function LatestRecording({ recording }: { recording: Recording }) {
             <div className="flex min-w-0 items-start justify-between gap-4">
                 <div className="min-w-0 space-y-1">
                     <h2 id="latest-recording-heading" className="text-xs font-medium text-muted-foreground">
-                        Latest recording
+                        {t("dashboard.latestRecording")}
                     </h2>
                     <p className="truncate text-[17px] font-semibold">{recording.filename}</p>
                     <p className="text-xs text-muted-foreground tabular-nums">
@@ -200,7 +202,7 @@ function LatestRecording({ recording }: { recording: Recording }) {
                     </p>
                 </div>
                 <Button asChild variant="primary" size="icon" className="shrink-0 rounded-full sm:size-9">
-                    <Link to={`/recordings/${recording.id}`} aria-label={`Open ${recording.filename}`}>
+                    <Link to={`/recordings/${recording.id}`} aria-label={t("dashboard.openRecording", { title: recording.filename })}>
                         <ArrowRight />
                     </Link>
                 </Button>
@@ -214,11 +216,11 @@ function LatestRecording({ recording }: { recording: Recording }) {
 
 function RecentRecordings({ recordings }: { recordings: Recording[] }) {
     return (
-        <section aria-label="Recent recordings" className="flex min-w-0 flex-col gap-2.5">
+        <section aria-label={t("dashboard.recentRecordings")} className="flex min-w-0 flex-col gap-2.5">
             <div className="flex items-end justify-between gap-2">
-                <h2 className="text-[17px] font-semibold">Recent</h2>
+                <h2 className="text-[17px] font-semibold">{t("dashboard.recent")}</h2>
                 <Link to="/recordings" className="inline-flex h-10 items-center text-sm font-medium text-link hover:underline sm:h-8">
-                    Show all
+                    {t("dashboard.showAll")}
                 </Link>
             </div>
             <ul className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
@@ -254,11 +256,11 @@ function SetUp({ plaudDone, providerDone }: { plaudDone: boolean; providerDone: 
     return (
         <section aria-labelledby="set-up-heading" className="flex flex-col gap-2.5">
             <h2 id="set-up-heading" className="text-[17px] font-semibold">
-                Set up
+                {t("dashboard.setUp")}
             </h2>
             <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-card shadow-card">
-                <SetUpRow done={plaudDone} title="Connect Plaud" to="/settings/plaud-account" />
-                <SetUpRow done={providerDone} title="Add an AI provider" to="/settings/providers" />
+                <SetUpRow done={plaudDone} title={t("dashboard.connectPlaud")} to="/settings/plaud-account" />
+                <SetUpRow done={providerDone} title={t("dashboard.addAiProvider")} to="/settings/providers" />
             </ul>
         </section>
     );
@@ -269,7 +271,7 @@ function SetUpRow({ done, title, to }: { done: boolean; title: string; to: strin
         <>
             <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />
             <span className="flex-1">{title}</span>
-            <span className="sr-only">Done</span>
+            <span className="sr-only">{t("dashboard.done")}</span>
         </>
     ) : (
         <>

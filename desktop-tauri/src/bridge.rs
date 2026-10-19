@@ -18,12 +18,21 @@ use crate::menu;
 /// Defines the bridge object the web app looks for. Version 3 adds native text-file saving;
 /// version 4 adds `reconnect`, which signs the window in again after its session ended;
 /// version 5 drops the in-app Plaud sign-in (`connectPlaud`);
-/// version 6 adds native audio downloads (`downloadRecordings`).
-pub const BRIDGE_SCRIPT: &str = r#"
+/// version 6 adds native audio downloads (`downloadRecordings`);
+/// version 7 adds the interface language: `initialLocale`, `setLocale`, and the event the shell
+/// sends when the language is chosen in its own menu.
+const BRIDGE_TEMPLATE: &str = r#"
 (() => {
   const invoke = (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {});
   window.__openaudiohubDesktop = {
-    version: 6,
+    version: 7,
+    initialLocale: __INITIAL_LOCALE__,
+    setLocale: (locale) => invoke("set_locale", { locale }),
+    onLocaleChange: (listener) => {
+      const handler = (event) => listener(String(event.detail || ""));
+      window.addEventListener("oah:locale", handler);
+      return () => window.removeEventListener("oah:locale", handler);
+    },
     getPreferences: () => invoke("prefs_get"),
     setPreferences: (updates) => invoke("prefs_set", { updates }),
     openPlaudBrowser: (code) => invoke("open_plaud_browser", { code }),
@@ -42,6 +51,11 @@ pub const BRIDGE_SCRIPT: &str = r#"
   };
 })();
 "#;
+
+/// The bridge script with this launch's settling language filled in.
+pub fn bridge_script(locale: &str) -> String {
+    BRIDGE_TEMPLATE.replace("__INITIAL_LOCALE__", &format!("{locale:?}"))
+}
 
 pub struct Shared {
     pub data_dir: PathBuf,
@@ -102,7 +116,32 @@ fn prefs_json(app: &AppHandle, config: &AppConfig) -> Value {
         "closeAction": config.close_action.as_deref().unwrap_or("background"),
         "showTray": config.show_tray.unwrap_or(true),
         "launchAtLogin": app.autolaunch().is_enabled().unwrap_or(false),
+        "locale": crate::i18n::current(),
     })
+}
+
+/// The language chosen in the page. Saves it, rebuilds the tray labels, and leaves the page as is.
+#[tauri::command]
+pub fn set_locale(
+    app: AppHandle,
+    shared: State<'_, Shared>,
+    locale: String,
+) -> Result<String, String> {
+    let chosen =
+        crate::i18n::normalize(&locale).ok_or_else(|| "unknown interface language".to_owned())?;
+    {
+        let mut config = shared.config.lock().unwrap_or_else(|e| e.into_inner());
+        config.locale = Some(chosen.to_owned());
+        config.save(&shared.data_dir);
+    }
+    crate::i18n::set(chosen);
+    if let Err(e) = menu::relabel_public(&app, chosen) {
+        files::log(
+            &shared.data_dir,
+            &format!("could not rebuild the menu: {e}"),
+        );
+    }
+    Ok(crate::i18n::current().to_owned())
 }
 
 /// The launch secret, for the page's own sign-in exchange. Only the app's local page has IPC.
@@ -131,6 +170,10 @@ pub fn prefs_set(
         return Err("closeAction must be background or quit".into());
     }
     let launch_at_login = updates.get("launchAtLogin").and_then(Value::as_bool);
+    let locale = updates
+        .get("locale")
+        .and_then(Value::as_str)
+        .and_then(crate::i18n::normalize);
     // The one step that can fail goes first: if it fails, no other preference has changed yet.
     if let Some(on) = launch_at_login {
         let auto = app.autolaunch();
@@ -153,7 +196,22 @@ pub fn prefs_set(
         config.launch_at_login = Some(on);
         menu::set_login_checked(&app, on);
     }
+    if let Some(chosen) = locale {
+        config.locale = Some(chosen.to_owned());
+    }
     config.save(&shared.data_dir);
+    if let Some(chosen) = locale
+        && chosen != crate::i18n::current()
+    {
+        // The page made the choice; the tray menu follows, without echoing the event back.
+        crate::i18n::set(chosen);
+        if let Err(e) = menu::relabel_public(&app, chosen) {
+            files::log(
+                &shared.data_dir,
+                &format!("could not rebuild the menu: {e}"),
+            );
+        }
+    }
     Ok(prefs_json(&app, &config))
 }
 
@@ -164,7 +222,7 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .set_title("Choose the export folder")
+        .set_title(crate::i18n::t("dialog.chooseFolderTitle"))
         .pick_folder(move |picked| {
             let _ = tx.send(picked);
         });
@@ -173,10 +231,10 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
         Ok(Some(picked)) => {
             let path = picked
                 .into_path()
-                .map_err(|_| "Could not open the folder picker.".to_owned())?;
+                .map_err(|_| crate::i18n::t("error.folderPickerFailed"))?;
             Ok(Some(path.to_string_lossy().into_owned()))
         }
-        Err(_) => Err("Could not open the folder picker.".into()),
+        Err(_) => Err(crate::i18n::t("error.folderPickerFailed")),
     }
 }
 
@@ -614,4 +672,38 @@ mod tests {
 #[tauri::command]
 pub fn selftest_report(shared: State<'_, Shared>, value: String) {
     files::log(&shared.data_dir, &format!("selftest: {value}"));
+}
+
+#[cfg(test)]
+mod bridge_script_tests {
+    use super::*;
+
+    #[test]
+    fn the_script_carries_the_settling_language() {
+        let script = bridge_script("ja");
+        assert!(script.contains("initialLocale: \"ja\""), "{script}");
+        assert!(script.contains("version: 7"));
+        assert!(script.contains("setLocale"));
+        assert!(script.contains("onLocaleChange"));
+    }
+
+    #[test]
+    fn every_bridge_method_the_page_uses_is_defined() {
+        let script = bridge_script("en");
+        for method in [
+            "getPreferences",
+            "setPreferences",
+            "pickFolder",
+            "saveTextFile",
+            "downloadRecordings",
+            "reconnect",
+            "setLocale",
+            "onLocaleChange",
+        ] {
+            assert!(
+                script.contains(&format!("{method}:")),
+                "{method} is missing"
+            );
+        }
+    }
 }

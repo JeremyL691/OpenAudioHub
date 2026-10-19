@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api";
 import { uploadRecordings } from "@/lib/recordings";
+import { t } from "@/lib/i18n";
 
 // Uploads run one after another. The library shows them as pending rows, and the
 // top-bar upload button can use the same store: call startUploads with the picked
@@ -39,9 +40,9 @@ export function startUploads(files: File[]): void {
         queue = queue.then(async () => {
             try {
                 await uploadRecordings([file]);
-                toast.success(`"${file.name}" uploaded`);
+                toast.success(t("library.uploadedToast", { name: file.name }));
             } catch (err) {
-                toast.error(errorMessage(err, "Upload failed"));
+                toast.error(errorMessage(err, t("library.uploadFailed")));
             } finally {
                 setState({ pending: state.pending.filter((p) => p.key !== key) });
             }

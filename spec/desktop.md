@@ -200,7 +200,7 @@ A start that fails at any step logs `could not start: <reason>` (or `not started
 
 ### 6.2 Menu items
 
-In this order, with these exact labels:
+In this order. The labels are shown here in English; they follow the interface language (section 7.4).
 
 1. **Open OpenAudioHub**: shows the window (section 5).
 2. Separator.
@@ -210,8 +210,9 @@ In this order, with these exact labels:
 6. **Export Keys…**: section 6.4.
 7. Separator.
 8. **Launch at Login** (check item): section 9. Enabled only in a release build; it is disabled in a debug build.
-9. Separator.
-10. **Quit OpenAudioHub** (Command+Q): quits (section 3.6).
+9. **Language**: a submenu with one check item per interface language, in the order English, 简体中文, 日本語, 한국어, each written in its own language. The checked item is the current language. Choosing one switches the interface language (section 7.4).
+10. Separator.
+11. **Quit OpenAudioHub** (Command+Q): quits (section 3.6).
 
 ### 6.3 Dock
 
@@ -236,16 +237,18 @@ There is no command-line form of Export Keys.
 | `closeAction` | `background`, `quit` | `background` | `config.json` | What closing the window does (section 5). |
 | `showTray` | true, false | true | `config.json` | Shows or hides the menu-bar item (section 6.1). |
 | `launchAtLogin` | true, false | false | `config.json` mirror; the system setting is the source | Start at login (section 9). |
+| `locale` | `en`, `zh-CN`, `ja`, `ko` | the system language, else `en` | `config.json` and the page's own storage | The interface language (section 7.4). |
 
 - `getPreferences` reads `launchAtLogin` from the system's login item, not from the saved value.
 - A key that is not in the table cannot be changed by preferences. Ports, `boundUserId` and the launch code are not settable.
+- `locale` is also readable through `getPreferences`. A value that names no supported language is ignored.
 - Setting `closeAction` to any value other than `background` or `quit` fails with "closeAction must be background or quit", and nothing is changed.
 - Setting `launchAtLogin` changes the login item first. If that fails, the reply is "could not change launch at login: <reason>" and no other key changes.
 - Each successful change is saved to `config.json` at once. The menu check mark follows `launchAtLogin`.
 
 ### 7.2 Bridge
 
-The main window's pages get one object, `window.__openaudiohubDesktop`, with a `version` field of 6. It is defined by an initialization script on every page of the main window. Its methods call Tauri commands. Only the app's own origin (section 7.3) is granted these commands. The launch-time capability adds the origin `http://127.0.0.1:<port>/*` to the commands in `desktop-tauri/capabilities/default.json`.
+The main window's pages get one object, `window.__openaudiohubDesktop`, with a `version` field of 7. It is defined by an initialization script on every page of the main window. Its methods call Tauri commands. Only the app's own origin (section 7.3) is granted these commands. The launch-time capability adds the origin `http://127.0.0.1:<port>/*` to the commands in `desktop-tauri/capabilities/default.json`.
 
 | Method | Command | Result |
 |--------|---------|--------|
@@ -256,6 +259,10 @@ The main window's pages get one object, `window.__openaudiohubDesktop`, with a `
 | `saveTextFile(name, text)` | `save_text_file` | Saves text with a save dialog; resolves true when saved, false on cancel (section 8). |
 | `downloadRecordings(ids, format)` | `download_recordings` | Shows a save dialog, then writes one recording's audio or one archive of several. Resolves with the saved path, or null on cancel (section 8). |
 | `reconnect()` | `desktop_secret`, then `POST /api/desktop/session` | Signs the window in again (section 4). Resolves true when the server accepts it. |
+| `initialLocale` (property) | none | The interface language settled at start (section 7.4). |
+| `locale` (in preferences) | `prefs_get`, `prefs_set` | The interface language. Setting it saves the choice, rebuilds the menu, and does not tell the page again. |
+| `setLocale(locale)` | `set_locale` | Saves the language chosen in the page, rebuilds the menu, and resolves with the language in use. |
+| `onLocaleChange(listener)` | none | Runs `listener(locale)` when the language is changed from the menu-bar item. Returns a function that stops listening. |
 
 - Failures from the commands reach the page as errors: "Could not open the folder picker.", "Could not open the save dialog.", "Invalid Plaud browser handoff" and the preference messages in section 7.1.
 
@@ -278,6 +285,15 @@ Audio and text are saved by the shell, not by the webview.
 - The response streams into a temporary file in the destination folder with mode 0600. Only a complete transfer is renamed to the chosen name; a cancelled dialog, a refused response, a stalled transfer or a write error removes the temporary file and leaves any existing destination unchanged.
 - A transfer with no bytes for 60 seconds is stopped. The server is given up to 15 minutes to start answering.
 - `saveTextFile` uses the same name rules, opens the save dialog in the Downloads folder, and writes the text through a temporary file with mode 0600. A cancelled dialog returns false.
+
+### 7.4 Interface language
+
+- The desktop app speaks the same four languages as the page (spec/ui-app.md, "Interface language"): English, Simplified Chinese, Japanese and Korean.
+- At start the language is the one saved in `config.json`, else the system language, else English. A saved value that names no supported language is ignored.
+- Choosing a language in the page (`setLocale`) or in the menu-bar item saves it in `config.json` and switches the menu labels at once. Choosing it in the menu-bar item also tells the window's page, which applies it without writing the choice back.
+- The menu-bar labels and the shell's own dialogs and messages use the language: "Export Keys…" (section 6.4), "Choose the export folder" (section 7.2), "Save download" (section 8), and the start-up disk-space and start-failure dialogs.
+- The buttons the system adds to a dialog (for example "Cancel" on a save dialog) follow the system language, not this setting.
+- A language change never changes stored recordings, transcripts or summaries.
 
 ## 9. Start at login
 

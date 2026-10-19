@@ -6,8 +6,10 @@ import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { AuthField, AuthInput, AuthLayout, AuthLink, AuthNotice } from "./auth-layout";
 import { usePasswordResetAvailability } from "./reset-availability";
+import { useI18n } from "@/lib/i18n";
 
 export default function Page() {
+    const { t } = useI18n();
     const session = useSession();
     const [email, setEmail] = useState("");
     const [pending, setPending] = useState(false);
@@ -19,15 +21,15 @@ export default function Page() {
 
     if (availability.error) {
         return (
-            <AuthLayout documentTitle="Reset password | OpenAudioHub" title="Reset password" subtitle="We could not check whether password reset is available.">
+            <AuthLayout documentTitle={t("auth.forgot.documentTitle")} title={t("auth.forgot.title")} subtitle={t("auth.forgot.unavailableSubtitle")}>
                 <div className="space-y-6">
                     <AuthNotice className="text-muted-foreground">
-                        <p>The server did not answer. Try again in a moment.</p>
+                        <p>{t("auth.forgot.noAnswer")}</p>
                     </AuthNotice>
                     <Button type="button" variant="primary" className="w-full sm:h-9" onClick={availability.retry}>
-                        Retry
+                        {t("auth.forgot.retry")}
                     </Button>
-                    <AuthLink to="/login">Back to sign in</AuthLink>
+                    <AuthLink to="/login">{t("auth.forgot.backToSignIn")}</AuthLink>
                 </div>
             </AuthLayout>
         );
@@ -36,19 +38,13 @@ export default function Page() {
     if (resetByEmail === null) return null;
     if (!resetByEmail) {
         return (
-            <AuthLayout documentTitle="Reset password | OpenAudioHub" title="Reset password" subtitle="Password reset needs a mail server to be set up.">
+            <AuthLayout documentTitle={t("auth.forgot.documentTitle")} title={t("auth.forgot.title")} subtitle={t("auth.forgot.smtpSubtitle")}>
                 <div className="space-y-6">
                     <AuthNotice>
-                        <p className="font-medium">Reset emails are turned off on this server.</p>
-                        <p className="text-muted-foreground">
-                            The administrator hasn&apos;t configured SMTP, so reset emails can&apos;t be delivered. Set{" "}
-                            <code className="font-mono text-xs">SMTP_HOST</code>,{" "}
-                            <code className="font-mono text-xs">SMTP_USER</code>, and{" "}
-                            <code className="font-mono text-xs">SMTP_PASSWORD</code> in the server environment to enable it.
-                            Until then, an administrator can reset it for you directly in the database.
-                        </p>
+                        <p className="font-medium">{t("auth.forgot.smtpTitle")}</p>
+                        <p className="text-muted-foreground">{t("auth.forgot.smtpBody")}</p>
                     </AuthNotice>
-                    <AuthLink to="/login">Back to sign in</AuthLink>
+                    <AuthLink to="/login">{t("auth.forgot.backToSignIn")}</AuthLink>
                 </div>
             </AuthLayout>
         );
@@ -64,7 +60,7 @@ export default function Page() {
             });
             setSent(true);
         } catch (err) {
-            toast.error(errorMessage(err, "Could not send the reset email. Try again."));
+            toast.error(errorMessage(err, t("auth.forgot.failed")));
         } finally {
             setPending(false);
         }
@@ -72,19 +68,19 @@ export default function Page() {
 
     if (sent) {
         return (
-            <AuthLayout documentTitle="Check your email | OpenAudioHub" title="Check your email" subtitle="If an account exists for that email, a reset link is on its way.">
+            <AuthLayout documentTitle={t("auth.forgot.checkDocumentTitle")} title={t("auth.forgot.checkTitle")} subtitle={t("auth.forgot.checkSubtitle")}>
                 <div className="space-y-6">
-                    <AuthLink to="/login">Back to sign in</AuthLink>
+                    <AuthLink to="/login">{t("auth.forgot.backToSignIn")}</AuthLink>
                 </div>
             </AuthLayout>
         );
     }
 
     return (
-        <AuthLayout documentTitle="Reset password | OpenAudioHub" title="Reset password" subtitle="Enter your email and we'll send a link to choose a new password.">
+        <AuthLayout documentTitle={t("auth.forgot.documentTitle")} title={t("auth.forgot.title")} subtitle={t("auth.forgot.subtitle")}>
             <div className="space-y-6">
                 <form className="space-y-4" onSubmit={onSubmit}>
-                    <AuthField id="email" label="Email">
+                    <AuthField id="email" label={t("auth.login.email")}>
                         <AuthInput
                             id="email"
                             name="email"
@@ -97,10 +93,10 @@ export default function Page() {
                         />
                     </AuthField>
                     <Button type="submit" variant="primary" className="w-full sm:h-9" disabled={pending}>
-                        {pending ? "Sending..." : "Send reset link"}
+                        {pending ? t("auth.forgot.pending") : t("auth.forgot.submit")}
                     </Button>
                 </form>
-                <AuthLink to="/login">Back to sign in</AuthLink>
+                <AuthLink to="/login">{t("auth.forgot.backToSignIn")}</AuthLink>
             </div>
         </AuthLayout>
     );

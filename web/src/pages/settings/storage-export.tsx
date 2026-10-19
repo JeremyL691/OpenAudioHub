@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { downloadText } from "@/components/recording/exports";
 import { Loading, NumberField, SettingSelect, useSettings, type SettingsPatch, type UserSettings } from "./shared";
+import { t, useI18n } from "@/lib/i18n";
 import { desktopBridge } from "./desktop";
 
 // ---------- shared pieces ----------
@@ -49,7 +50,8 @@ function PlainRow({
 }
 
 function ComingSoon() {
-    return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Coming soon</span>;
+    const { t } = useI18n();
+    return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t("settings.export.comingSoon")}</span>;
 }
 
 // ---------- storage ----------
@@ -97,6 +99,7 @@ function UsageRing({ percent, label }: { percent: number; label: ReactNode }) {
 }
 
 export function StorageSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const [usage, setUsage] = useState<StorageUsage | null>(null);
@@ -119,10 +122,10 @@ export function StorageSection() {
 
     return (
         <div className="grid gap-7">
-            {usage === null && !loadError ? <Loading label="Loading storage usage" /> : null}
+            {usage === null && !loadError ? <Loading label={t("settings.storage.loading")} /> : null}
             {loadError ? (
                 <p role="alert" className="text-sm text-destructive">
-                    {errorMessage(loadError, "Storage usage could not be loaded.")}
+                    {errorMessage(loadError, t("settings.storage.loadFailed"))}
                 </p>
             ) : null}
 
@@ -134,18 +137,21 @@ export function StorageSection() {
                             label={
                                 <>
                                     <div className="text-xl font-semibold leading-tight tabular-nums">{formatBytes(usage.usedBytes)}</div>
-                                    <div className="text-[11px] text-muted-foreground tabular-nums">{usedPercent(usage)}% used</div>
+                                    <div className="text-[11px] text-muted-foreground tabular-nums">{t("settings.storage.percentUsed", { percent: usedPercent(usage) })}</div>
                                 </>
                             }
                         />
                         <div className="min-w-0 space-y-1">
-                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Storage used</div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t("settings.storage.used")}</div>
                             <div className="text-sm text-muted-foreground tabular-nums">
-                                {usage.recordingCount} recordings · {Math.round(usage.totalDurationMs / 60000)} min total ·{" "}
-                                {formatBytes(usage.recordingCount > 0 ? usage.usedBytes / usage.recordingCount : 0)} avg
+                                {t("settings.storage.summary", {
+                                    count: usage.recordingCount,
+                                    minutes: Math.round(usage.totalDurationMs / 60000),
+                                    average: formatBytes(usage.recordingCount > 0 ? usage.usedBytes / usage.recordingCount : 0),
+                                })}
                             </div>
                             {usage.diskFreeBytes !== null ? (
-                                <div className="text-xs text-muted-foreground tabular-nums">{formatBytes(usage.diskFreeBytes)} free on disk</div>
+                                <div className="text-xs text-muted-foreground tabular-nums">{t("settings.storage.freeOnDisk", { size: formatBytes(usage.diskFreeBytes) })}</div>
                             ) : null}
                         </div>
                     </section>
@@ -153,13 +159,13 @@ export function StorageSection() {
                     {top3.length > 0 ? (
                         <section className="grid gap-3">
                             <div className="flex items-baseline justify-between gap-3">
-                                <h2 className="text-sm font-medium">Storage breakdown</h2>
+                                <h2 className="text-sm font-medium">{t("settings.storage.breakdown")}</h2>
                                 <p className="text-xs text-muted-foreground tabular-nums">
-                                    Top {top3.length} = <span className="font-medium text-foreground">{usage.usedBytes > 0 ? Math.round((top3Bytes / usage.usedBytes) * 100) : 0}%</span>{" "}
-                                    of {formatBytes(usage.usedBytes)}
+                                    {t("settings.storage.topShare", { count: top3.length })}<span className="font-medium text-foreground">{usage.usedBytes > 0 ? Math.round((top3Bytes / usage.usedBytes) * 100) : 0}%</span>
+                                    {t("settings.storage.ofTotal", { size: formatBytes(usage.usedBytes) })}
                                 </p>
                             </div>
-                            <div role="img" aria-label={`Top ${top3.length} recordings account for ${usage.usedBytes > 0 ? Math.round((top3Bytes / usage.usedBytes) * 100) : 0} percent of storage`} className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                            <div role="img" aria-label={t("settings.storage.shareAria", { count: top3.length, percent: usage.usedBytes > 0 ? Math.round((top3Bytes / usage.usedBytes) * 100) : 0 })} className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
                                 {top3.map((r, index) => (
                                     <div
                                         key={r.id}
@@ -170,8 +176,8 @@ export function StorageSection() {
                             </div>
                             <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
                                 <div className="px-4 pb-2 pt-3">
-                                    <h3 className="text-sm font-medium">Largest recordings</h3>
-                                    <p className="text-xs text-muted-foreground">Play a recording before you decide to delete it</p>
+                                    <h3 className="text-sm font-medium">{t("settings.storage.largest")}</h3>
+                                    <p className="text-xs text-muted-foreground">{t("settings.storage.largestHint")}</p>
                                 </div>
                                 <ul className="divide-y divide-border">
                                     {top3.map((r, index) => (
@@ -196,14 +202,12 @@ export function StorageSection() {
 
                     <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted">
                         <div className="flex items-center justify-between gap-4 px-4 py-3">
-                            <span className="text-[13px]">Backend</span>
+                            <span className="text-[13px]">{t("settings.storage.backend")}</span>
                             <span className="text-[13px] capitalize tabular-nums text-muted-foreground">
-                                {usage.storageType === "s3" ? "S3" : "Local"}
+                                {usage.storageType === "s3" ? t("settings.storage.backendS3") : t("settings.storage.backendLocal")}
                             </span>
                         </div>
-                        <p className="px-4 py-3 text-xs text-muted-foreground">
-                            The storage backend is set for the whole instance through environment variables.
-                        </p>
+                        <p className="px-4 py-3 text-xs text-muted-foreground">{t("settings.storage.backendFixed")}</p>
                     </div>
                 </>
             ) : null}
@@ -212,13 +216,13 @@ export function StorageSection() {
                 <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
                         <label htmlFor={`${ids}-auto-delete`} className="text-[13px] font-semibold">
-                            Auto-delete old recordings
+                            {t("settings.storage.autoDelete")}
                         </label>
-                        <p className="mt-0.5 text-xs text-muted-foreground">Delete recordings automatically once they pass the retention period.</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.storage.autoDeleteHint")}</p>
                     </div>
                     <Switch
                         id={`${ids}-auto-delete`}
-                        aria-label="Auto-delete old recordings"
+                        aria-label={t("settings.storage.autoDelete")}
                         checked={settings.autoDeleteRecordings}
                         disabled={isSaving("autoDeleteRecordings")}
                         onCheckedChange={toggleAutoDelete}
@@ -228,7 +232,7 @@ export function StorageSection() {
                     <div className="grid gap-2 divide-y divide-border rounded-xl bg-muted px-4">
                         <div className="grid gap-2 py-3">
                             <label htmlFor={`${ids}-retention`} className="text-[13px] font-medium">
-                                Retention period (days)
+                                {t("settings.storage.retention")}
                             </label>
                             <div className="[&>input]:w-full">
                                 <NumberField
@@ -243,7 +247,7 @@ export function StorageSection() {
                                     onCommit={(v) => void save({ retentionDays: v })}
                                 />
                             </div>
-                            <p className="text-xs text-muted-foreground">Anything older than this gets deleted automatically (1-365 days)</p>
+                            <p className="text-xs text-muted-foreground">{t("settings.storage.retentionHint")}</p>
                         </div>
                     </div>
                 ) : null}
@@ -269,23 +273,23 @@ interface DesktopExportSettings {
     autoExportTitleMode: "original" | "date" | "ai";
 }
 
-const AUTO_EXPORT_FORMAT_OPTIONS = [
-    { value: "mp3", label: "MP3", description: "Converted to MP3 for easy playback." },
-    { value: "ogg", label: "OGG", description: "Ogg container with Opus audio. Smaller files than MP3." },
-    { value: "original", label: "Original format", description: "Saved exactly as recorded, with its own extension." },
+const AUTO_EXPORT_FORMAT_KEYS: { value: DesktopExportSettings["autoExportFormat"]; labelKey: "settings.export.formatMp3" | "settings.export.formatOgg" | "settings.export.formatOriginal"; descriptionKey: "settings.export.formatMp3Description" | "settings.export.formatOggDescription" | "settings.export.formatOriginalDescription" }[] = [
+    { value: "mp3", labelKey: "settings.export.formatMp3", descriptionKey: "settings.export.formatMp3Description" },
+    { value: "ogg", labelKey: "settings.export.formatOgg", descriptionKey: "settings.export.formatOggDescription" },
+    { value: "original", labelKey: "settings.export.formatOriginal", descriptionKey: "settings.export.formatOriginalDescription" },
 ];
 
-const AUTO_EXPORT_TITLE_OPTIONS: { value: "original" | "date" | "ai"; title: string; description: string }[] = [
-    { value: "original", title: "Original name", description: "Keep the name from Plaud or the uploaded file." },
-    { value: "date", title: "Date", description: "Name by recording date, e.g. 2026-10-12." },
-    { value: "ai", title: "AI title", description: "Renamed to the AI title once transcription finishes." },
+const AUTO_EXPORT_TITLE_KEYS: { value: "original" | "date" | "ai"; titleKey: "settings.export.nameOriginal" | "settings.export.nameDate" | "settings.export.nameAi"; descriptionKey: "settings.export.nameOriginalDescription" | "settings.export.nameDateDescription" | "settings.export.nameAiDescription" }[] = [
+    { value: "original", titleKey: "settings.export.nameOriginal", descriptionKey: "settings.export.nameOriginalDescription" },
+    { value: "date", titleKey: "settings.export.nameDate", descriptionKey: "settings.export.nameDateDescription" },
+    { value: "ai", titleKey: "settings.export.nameAi", descriptionKey: "settings.export.nameAiDescription" },
 ];
 
 /** One line describing what auto export writes, for the switch's hint. */
 function autoExportSummary(format: DesktopExportSettings["autoExportFormat"]): string {
-    if (format === "original") return "Save each new recording as its original file in a folder on this Mac.";
-    if (format === "ogg") return "Save each new recording as an OGG (Opus) file in a folder on this Mac.";
-    return "Save each new recording as an MP3 in a folder on this Mac.";
+    if (format === "original") return t("settings.export.summaryOriginal");
+    if (format === "ogg") return t("settings.export.summaryOgg");
+    return t("settings.export.summaryMp3");
 }
 
 const EXPORT_FORMATS = [
@@ -301,6 +305,7 @@ function filenameFrom(disposition: string | null, fallback: string): string {
 }
 
 export function ExportSection() {
+    const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
     const bridge = desktopBridge();
@@ -325,9 +330,9 @@ export function ExportSection() {
                 res.headers.get("content-type") ?? "text/plain",
                 text,
             );
-            if (saved) toast.success("Export completed");
+            if (saved) toast.success(t("settings.export.exportCompleted"));
         } catch {
-            toast.error("Could not export your recordings");
+            toast.error(t("settings.export.exportError"));
         } finally {
             setExporting(false);
         }
@@ -338,16 +343,16 @@ export function ExportSection() {
         if (!pickFolder) return;
         try {
             const path = await pickFolder();
-            if (path) await save({ autoExportFolder: path } as SettingsPatch, "Could not save the folder.");
+            if (path) await save({ autoExportFolder: path } as SettingsPatch, t("settings.export.folderSaveFailed"));
         } catch (err) {
-            toast.error(errorMessage(err, "Could not open the folder picker."));
+            toast.error(errorMessage(err, t("settings.export.folderPickerFailed")));
         }
     };
 
     return (
         <div className="grid gap-7">
             <div className="divide-y divide-border">
-                <PlainRow htmlFor={`${ids}-format`} label="Default export format">
+                <PlainRow htmlFor={`${ids}-format`} label={t("settings.export.defaultFormat")}>
                     <SettingSelect
                         id={`${ids}-format`}
                         testId="export-format"
@@ -363,10 +368,10 @@ export function ExportSection() {
                     <>
                         <PlainRow
                             htmlFor={`${ids}-auto-export`}
-                            label="Auto-export new recordings"
+                            label={t("settings.export.autoExportTitle")}
                             hint={
                                 !desktopSettings.autoExportFolder
-                                    ? "Choose an export folder first."
+                                    ? t("settings.export.chooseFolderFirst")
                                     : autoExportSummary(desktopSettings.autoExportFormat)
                             }
                         >
@@ -379,8 +384,8 @@ export function ExportSection() {
                             />
                         </PlainRow>
                         <PlainRow
-                            label="Export folder"
-                            hint="Each new recording is written to this folder once, when it arrives."
+                            label={t("settings.export.exportFolder")}
+                            hint={t("settings.export.exportFolderHint")}
                         >
                             <div className="flex min-w-0 items-center gap-3">
                                 <span
@@ -390,30 +395,30 @@ export function ExportSection() {
                                     )}
                                     title={desktopSettings.autoExportFolder ?? undefined}
                                 >
-                                    {desktopSettings.autoExportFolder ?? "No folder chosen"}
+                                    {desktopSettings.autoExportFolder ?? t("settings.export.noFolder")}
                                 </span>
                                 <Button variant="secondary" data-testid="auto-export-folder-choose" onClick={() => void chooseFolder()}>
-                                    Choose…
+                                    {t("settings.export.choose")}
                                 </Button>
                             </div>
                         </PlainRow>
                         <PlainRow
                             htmlFor={`${ids}-auto-export-format`}
-                            label="Auto-export format"
-                            hint={AUTO_EXPORT_FORMAT_OPTIONS.find((o) => o.value === desktopSettings.autoExportFormat)?.description}
+                            label={t("settings.export.autoExportFormat")}
+                            hint={t(AUTO_EXPORT_FORMAT_KEYS.find((o) => o.value === desktopSettings.autoExportFormat)?.descriptionKey ?? "settings.export.formatOriginalDescription")}
                         >
                             <SettingSelect
                                 id={`${ids}-auto-export-format`}
                                 testId="auto-export-format"
                                 value={desktopSettings.autoExportFormat}
                                 onValueChange={(v) => void save({ autoExportFormat: v } as SettingsPatch)}
-                                options={AUTO_EXPORT_FORMAT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                                options={AUTO_EXPORT_FORMAT_KEYS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
                                 className="w-44 max-w-full"
                             />
                         </PlainRow>
                         <div className="space-y-2 py-3">
                             <span id={`${ids}-auto-export-file-name`} className="block text-[13px] font-medium">
-                                File name
+                                {t("settings.export.fileName")}
                             </span>
                             <div
                                 role="radiogroup"
@@ -421,7 +426,7 @@ export function ExportSection() {
                                 data-testid="auto-export-title-mode"
                                 className="divide-y divide-border rounded-xl bg-muted px-4"
                             >
-                                {AUTO_EXPORT_TITLE_OPTIONS.map((option) => {
+                                {AUTO_EXPORT_TITLE_KEYS.map((option) => {
                                     const inputId = `${ids}-auto-export-title-mode-${option.value}`;
                                     return (
                                         <label
@@ -440,8 +445,8 @@ export function ExportSection() {
                                                 className="mt-0.5 size-4 shrink-0 accent-primary"
                                             />
                                             <span className="min-w-0 flex-1 space-y-0.5">
-                                                <span className="block text-[13px] font-medium">{option.title}</span>
-                                                <span className="block text-xs text-muted-foreground">{option.description}</span>
+                                                <span className="block text-[13px] font-medium">{t(option.titleKey)}</span>
+                                                <span className="block text-xs text-muted-foreground">{t(option.descriptionKey)}</span>
                                             </span>
                                         </label>
                                     );
@@ -452,9 +457,9 @@ export function ExportSection() {
                 ) : (
                     <PlainRow
                         htmlFor={`${ids}-auto-export`}
-                        label="Auto-export new recordings"
+                        label={t("settings.export.autoExportLabel")}
                         badge={<ComingSoon />}
-                        hint="Export new recordings on their own as they are synced"
+                        hint={t("settings.export.autoExportDesktopHint")}
                     >
                         <Switch id={`${ids}-auto-export`} disabled checked={false} onCheckedChange={() => undefined} />
                     </PlainRow>
@@ -463,24 +468,22 @@ export function ExportSection() {
 
             <section className="grid gap-3 pt-4">
                 <div className="space-y-2">
-                    <span className="text-[13px] font-semibold">Manual Actions</span>
+                    <span className="text-[13px] font-semibold">{t("settings.export.manualActions")}</span>
                     <div>
                         <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent("oah:open-onboarding"))}>
                             <RefreshCw />
-                            Re-run Onboarding
+                            {t("settings.export.rerunOnboarding")}
                         </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">Start onboarding over and see it again the next time you visit</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.export.onboardingRestartHint")}</p>
                 </div>
                 <div className="flex gap-2 pt-2">
                     <Button variant="secondary" className="flex-1" disabled={exporting} onClick={() => void exportText()}>
-                        {exporting ? <Spinner label="Exporting" /> : <Download />}
-                        {exporting ? "Exporting…" : "Export text"}
+                        {exporting ? <Spinner label={t("settings.export.exporting")} /> : <Download />}
+                        {exporting ? t("settings.export.downloading") : t("settings.export.exportText")}
                     </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    &quot;Export text&quot; downloads your transcripts and summaries in the default format. It does not include audio.
-                </p>
+                <p className="text-xs text-muted-foreground">{t("settings.export.exportHint")}</p>
             </section>
         </div>
     );

@@ -2,6 +2,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { Check } from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
+import { LanguagePicker } from "@/components/shell/language-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDocumentMeta } from "../public/brand";
@@ -24,32 +26,32 @@ export function AuthLayout({
     noindex?: boolean;
     children: ReactNode;
 }) {
+    const { t } = useI18n();
     useDocumentMeta(documentTitle, undefined, noindex ? "noindex" : undefined);
     return (
         <>
             <div className="flex min-h-svh flex-col bg-muted/50 dark:bg-background">
                 <div className="grid flex-1 bg-muted lg:grid-cols-2">
                     <aside
-                        aria-label="About OpenAudioHub"
+                        aria-label={t("auth.layout.about")}
                         className="hidden flex-col justify-between border-r border-border bg-transparent p-10 lg:flex xl:p-14"
                     >
-                        <a aria-label="OpenAudioHub home" className="w-fit" href="/">
+                        <a aria-label={t("auth.layout.home")} className="w-fit" href="/">
                             <Wordmark className="text-base" />
                         </a>
                         <div className="max-w-md space-y-6">
                             <img src="/icon.svg" alt="" aria-hidden="true" className="size-14" />
-                            <p className="text-2xl leading-snug font-semibold tracking-tight">
-                                Long recordings, intelligently transcribed.
-                            </p>
+                            <p className="text-2xl leading-snug font-semibold tracking-tight">{t("auth.layout.tagline")}</p>
                             <ul className="space-y-3 text-[13px] text-muted-foreground">
-                                <Point>Transcribes your Plaud recordings on infrastructure you control.</Point>
-                                <Point>Long recordings are split at natural pauses and resume after an interruption.</Point>
-                                <Point>Open source under AGPL-3.0. Read the code or contribute on GitHub.</Point>
+                                <Point>{t("auth.layout.point1")}</Point>
+                                <Point>{t("auth.layout.point2")}</Point>
+                                <Point>{t("auth.layout.point3")}</Point>
                             </ul>
                         </div>
-                        <p className="font-mono text-xs text-muted-foreground">
-                            © OpenAudioHub contributors · Licensed under AGPL-3.0
-                        </p>
+                        <div className="space-y-3">
+                            <LanguagePicker testIdPrefix="auth-panel-language" />
+                            <p className="font-mono text-xs text-muted-foreground">{t("auth.layout.license")}</p>
+                        </div>
                     </aside>
                     <div className="flex flex-col items-center justify-center gap-6 px-4 py-12 sm:px-8">
                         <a aria-label="OpenAudioHub" className="lg:hidden" href="/">
@@ -64,10 +66,11 @@ export function AuthLayout({
                                 {children}
                             </div>
                         </div>
-                        <div className="flex justify-center font-mono text-xs text-muted-foreground">
-                            <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-center gap-3">
+                            <LanguagePicker testIdPrefix="auth-language" />
+                            <div className="flex items-center gap-4 font-mono text-xs text-muted-foreground">
                                 <a target="_blank" rel="noopener noreferrer" className="hover:text-foreground" href="/docs">
-                                    Docs
+                                    {t("auth.layout.docs")}
                                 </a>
                                 <span aria-hidden="true" className="text-muted-foreground/40">
                                     ·

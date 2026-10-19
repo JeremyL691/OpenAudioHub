@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
-import { COLLECTION_LABELS, parseDensity, parseSort, STATUS_FILTERS, type Collection, type Density, type SortOrder, type StatusFilter } from "./library-model";
+import { collectionLabel, parseDensity, parseSort, STATUS_FILTERS, type Collection, type Density, type SortOrder, type StatusFilter } from "./library-model";
+import { useI18n } from "@/lib/i18n";
 
 export interface LibraryHeaderProps {
     collection: Collection | null;
@@ -37,8 +38,9 @@ const ICON_BUTTON = "text-muted-foreground hover:text-foreground sm:size-7";
 
 /** The list header: title and count, search, the status segmented control, the count line with the icon toolbar, and the select toolbar. */
 export function LibraryHeader(props: LibraryHeaderProps) {
+    const { t } = useI18n();
     const { collection, total, countText, filter, query, sort, density, selectMode, selectedIds } = props;
-    const title = collection ? COLLECTION_LABELS[collection] : "All recordings";
+    const title = collection ? collectionLabel(collection) : t("library.allRecordings");
 
     function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
         if (event.key === "Enter") {
@@ -55,7 +57,7 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                     <span>{total}</span>
                     {collection ? (
                         <Link to="/recordings" className="text-link hover:underline">
-                            Clear
+                            {t("library.clear")}
                         </Link>
                     ) : null}
                 </div>
@@ -67,8 +69,8 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                     <Input
                         data-testid="recording-search"
                         type="text"
-                        aria-label="Search recordings"
-                        placeholder="Search recordings, transcripts..."
+                        aria-label={t("library.searchRecordings")}
+                        placeholder={t("library.searchRecordingsPlaceholder")}
                         autoComplete="off"
                         value={query}
                         onChange={(event) => props.onQueryChange(event.target.value)}
@@ -79,7 +81,7 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Clear search"
+                            aria-label={t("library.clearSearch")}
                             className="absolute right-1 top-1/2 size-8 -translate-y-1/2 sm:size-7"
                             onClick={() => props.onQueryChange("")}
                         >
@@ -89,7 +91,7 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                 </div>
 
                 <fieldset className="m-0 flex w-full gap-0 rounded-lg border-0 bg-secondary p-0.5">
-                    <legend className="sr-only">Filter recordings</legend>
+                    <legend className="sr-only">{t("library.filterRecordings")}</legend>
                     {STATUS_FILTERS.map((item) => {
                         const active = filter === item.value;
                         return (
@@ -104,19 +106,19 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                                     active ? "bg-background font-medium text-foreground shadow-sm dark:bg-accent" : "text-muted-foreground hover:text-foreground",
                                 )}
                             >
-                                {item.label}
+                                {t(item.labelKey)}
                             </button>
                         );
                     })}
                 </fieldset>
 
                 <div className="flex flex-wrap items-center justify-between gap-y-1 text-xs tabular-nums text-muted-foreground">
-                    <span aria-live="polite">{selectMode ? `${selectedIds.length} selected` : countText}</span>
+                    <span aria-live="polite">{selectMode ? t("library.selectedCount", { count: selectedIds.length }) : countText}</span>
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
                         {selectMode ? (
-                            <div role="toolbar" aria-label="Selection" className="flex flex-wrap items-center justify-end gap-1">
+                            <div role="toolbar" aria-label={t("library.selection")} className="flex flex-wrap items-center justify-end gap-1">
                                 <Button variant="ghost" size="sm" data-testid="recording-select-all" onClick={props.onSelectAll}>
-                                    Select all
+                                    {t("library.selectAll")}
                                 </Button>
                                 {selectedIds.length > 0 ? (
                                     <Button
@@ -127,12 +129,12 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                                         onClick={props.onBulkDownload}
                                     >
                                         <Download />
-                                        Download
+                                        {t("library.download")}
                                     </Button>
                                 ) : (
                                     <Button variant="primary" size="sm" data-testid="recording-bulk-download" disabled>
                                         <Download />
-                                        Download
+                                        {t("library.download")}
                                     </Button>
                                 )}
                                 <Button
@@ -143,46 +145,46 @@ export function LibraryHeader(props: LibraryHeaderProps) {
                                     onClick={props.onMerge}
                                 >
                                     <GitMerge />
-                                    Merge
+                                    {t("library.merge")}
                                 </Button>
                                 <Button variant="ghost" size="sm" data-testid="recording-select-cancel" onClick={props.onCancelSelectMode}>
-                                    Cancel
+                                    {t("library.cancel")}
                                 </Button>
                             </div>
                         ) : (
-                            <Tooltip content="Select">
+                            <Tooltip content={t("library.select")}>
                                 <Button variant="ghost" size="icon" data-testid="recording-select-mode" className={ICON_BUTTON} onClick={props.onEnterSelectMode}>
                                     <ListChecks />
-                                    <span className="sr-only">Select</span>
+                                    <span className="sr-only">{t("library.select")}</span>
                                 </Button>
                             </Tooltip>
                         )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label="Sort" data-testid="recording-sort" className={ICON_BUTTON}>
+                                <Button variant="ghost" size="icon" aria-label={t("library.sort")} data-testid="recording-sort" className={ICON_BUTTON}>
                                     <ArrowDownAZ />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                                <DropdownMenuLabel>{t("library.sortBy")}</DropdownMenuLabel>
                                 <DropdownMenuRadioGroup value={sort} onValueChange={(value) => props.onSortChange(parseSort(value))}>
-                                    <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="newest">{t("library.newest")}</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="oldest">{t("library.oldest")}</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="name">{t("library.name")}</DropdownMenuRadioItem>
                                 </DropdownMenuRadioGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label="Density" className={ICON_BUTTON}>
+                                <Button variant="ghost" size="icon" aria-label={t("library.density")} className={ICON_BUTTON}>
                                     <Rows3 />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Density</DropdownMenuLabel>
+                                <DropdownMenuLabel>{t("library.density")}</DropdownMenuLabel>
                                 <DropdownMenuRadioGroup value={density} onValueChange={(value) => props.onDensityChange(parseDensity(value))}>
-                                    <DropdownMenuRadioItem value="comfortable">Comfortable</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="compact">Compact</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="comfortable">{t("library.comfortable")}</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="compact">{t("library.compact")}</DropdownMenuRadioItem>
                                 </DropdownMenuRadioGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>

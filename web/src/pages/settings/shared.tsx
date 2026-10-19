@@ -19,6 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { type ThemeChoice } from "@/lib/theme";
 import { type SectionDef } from "./nav";
+import { t, useI18n } from "@/lib/i18n";
 
 // ---------- settings record ----------
 
@@ -100,7 +101,10 @@ export interface SettingsContextValue {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
-export const SAVE_FAILED = "Failed to save settings. Changes reverted.";
+/** The toast shown when a save fails: resolved in the current language at call time. */
+export function saveFailed(): string {
+    return t("settings.page.saveFailed");
+}
 
 /** Loads the account's settings once and gives the sections a save function. */
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -125,7 +129,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    const save = useCallback(async (patch: SettingsPatch, failure: string | null = SAVE_FAILED, keepOnFailure = false): Promise<boolean> => {
+    const save = useCallback(async (patch: SettingsPatch, failure: string | null = saveFailed(), keepOnFailure = false): Promise<boolean> => {
         const base = current.current;
         if (!base) return false;
         const keys = Object.keys(patch) as (keyof UserSettings)[];
@@ -171,14 +175,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (failed) {
         return (
             <p role="alert" className="text-sm text-destructive">
-                Settings could not be loaded. Reload the page to try again.
+                {t("settings.page.loadFailed")}
             </p>
         );
     }
     if (!value) {
         return (
             <div className="flex justify-center py-12">
-                <Spinner label="Loading settings" />
+                <Spinner label={t("settings.page.loading")} />
             </div>
         );
     }
@@ -195,6 +199,7 @@ export function useSettings(): SettingsContextValue {
 
 /** The page of one section: a tile, the title and a one-line description. `action` sits at the right of the header. */
 export function SectionFrame({ section, action, children }: { section: SectionDef; action?: ReactNode; children: ReactNode }) {
+    const { t } = useI18n();
     const Icon: LucideIcon = section.icon;
     return (
         <div data-testid={`settings-section-${section.id}`} className="mx-auto flex w-full min-w-0 max-w-3xl animate-in flex-col gap-7 fade-in-0 duration-200">
@@ -205,8 +210,8 @@ export function SectionFrame({ section, action, children }: { section: SectionDe
                             <Icon className="size-5 text-primary-foreground" />
                         </span>
                         <div className="min-w-0">
-                            <h1 className="text-[22px] font-bold tracking-tight text-foreground">{section.title}</h1>
-                            <p className="mt-0.5 text-[13px] text-muted-foreground">{section.description}</p>
+                            <h1 className="text-[22px] font-bold tracking-tight text-foreground">{t(section.titleKey)}</h1>
+                            <p className="mt-0.5 text-[13px] text-muted-foreground">{t(section.descriptionKey)}</p>
                         </div>
                     </div>
                     {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
@@ -538,7 +543,7 @@ export function LoadError({ message, onRetry }: { message: string; onRetry: () =
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted px-4 py-3">
             <p className="text-sm text-destructive">{message}</p>
             <Button variant="outline" size="sm" onClick={onRetry}>
-                Retry
+                {t("common.action.retry")}
             </Button>
         </div>
     );

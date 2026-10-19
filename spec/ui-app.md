@@ -1,6 +1,18 @@
 # ui-app: signed-in shell, Dashboard, Settings, onboarding, theme
 
-This file describes the signed-in app outside the library. It covers the shell (sidebar, top bar, account menu), keyboard shortcuts, the Dashboard, the Settings pages, the onboarding dialog, theme, toasts, and the not-found page. It does not cover the library and recording pages (`ui-library.md`), the sign-in and sign-up pages (`auth.md`), or the public docs site (`pages.md`).
+This file describes the signed-in app outside the library. It covers the shell (sidebar, top bar, account menu), keyboard shortcuts, the Dashboard, the Settings pages, the onboarding dialog, theme, interface language, toasts, and the not-found page. It does not cover the library and recording pages (`ui-library.md`), the sign-in and sign-up pages (`auth.md`), or the public docs site (`pages.md`).
+
+## Interface language
+
+The interface is available in English, Simplified Chinese, Japanese and Korean.
+
+- The language is chosen from the account menu, in a "Language" group after the theme group, and from the same group on the signed-out and public pages. Each choice is shown in its own language: English, 简体中文, 日本語, 한국어.
+- Choosing a language applies it at once and keeps the menu open. The choice is stored in the browser; the desktop app also saves it in its configuration, and its menu-bar item follows. A reload keeps the choice.
+- With no stored choice, the language follows the browser's languages, or the desktop app's configuration. `zh` and any `zh-` tag use Simplified Chinese; `ja` and `ko` tags use Japanese and Korean; anything else uses English.
+- Changing the language changes interface text, the accessible names it produces, and the locale used for dates, times, numbers and relative time. The player clock and export timestamps do not change.
+- The interface language is separate from the default transcription language and from the AI output language. Changing it never changes recordings, transcripts, summaries, or the language of the stored data.
+- Every interface string exists in all four languages. A missing translation falls back to English.
+- Names, titles, transcripts, summaries, provider names, prompt text and other user data keep their own language and are never translated.
 
 Element test ids and accessible names are part of the contract. Names are shown in quotes and are case-sensitive. The contract tests are in `contract-tests/tests/ui-app.spec.ts`.
 
@@ -123,7 +135,7 @@ Redirect: `/dashboard?settings=<section>` goes to `/settings/<section>` when `<s
 ### 3.1 Header
 
 - A level 1 heading "Dashboard".
-- Today's date, written in the viewer's locale as weekday, month and day.
+- Today's date, written in the interface language as weekday, month and day.
 - A region named "Plaud sync" with the status text:
   - "Plaud not connected" when no Plaud account is connected;
   - "Plaud sign-in expired" when the stored Plaud sign-in was rejected;

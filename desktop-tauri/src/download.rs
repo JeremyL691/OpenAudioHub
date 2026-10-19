@@ -12,6 +12,7 @@ use tauri_plugin_dialog::DialogExt;
 use tokio::io::AsyncWriteExt;
 
 use crate::bridge::{self, Shared};
+use crate::i18n;
 
 const MAX_IDS: usize = 100;
 const ID_MAX_LEN: usize = 64;
@@ -30,7 +31,7 @@ struct Busy;
 impl Busy {
     fn acquire() -> Result<Busy, String> {
         if BUSY.swap(true, Ordering::SeqCst) {
-            return Err("A download is already in progress".into());
+            return Err(i18n::t("error.downloadInProgress"));
         }
         Ok(Busy)
     }
@@ -45,10 +46,10 @@ impl Drop for Busy {
 /// The server path for one page download request.
 fn endpoint(ids: &[String], format: &str) -> Result<String, String> {
     if !matches!(format, "mp3" | "original") {
-        return Err("format must be mp3 or original".into());
+        return Err(i18n::t("error.formatInvalid"));
     }
     if ids.is_empty() || ids.len() > MAX_IDS {
-        return Err("ids must be 1 to 100 recording ids".into());
+        return Err(i18n::t("error.idsInvalid"));
     }
     for id in ids {
         let valid = !id.is_empty()
@@ -57,7 +58,7 @@ fn endpoint(ids: &[String], format: &str) -> Result<String, String> {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
         if !valid {
-            return Err("ids must be 1 to 100 recording ids".into());
+            return Err(i18n::t("error.idsInvalid"));
         }
     }
     Ok(if ids.len() == 1 && format == "mp3" {
@@ -137,8 +138,8 @@ async fn send(
             .send(),
     )
     .await
-    .map_err(|_| "The server did not answer the download request.".to_owned())?
-    .map_err(|e| format!("The download could not start: {e}"))
+    .map_err(|_| i18n::t("error.serverNoAnswer"))?
+    .map_err(|e| i18n::tf("error.downloadCouldNotStart", &[("reason", &e.to_string())]))
 }
 
 /// The message the server sent with a refused download, or a generic one.
@@ -158,9 +159,9 @@ async fn refusal(response: reqwest::Response) -> String {
                 .map(str::to_owned)
         })
         .unwrap_or_else(|| {
-            format!(
-                "The server refused the download (HTTP {}).",
-                status.as_u16()
+            i18n::tf(
+                "error.downloadRefused",
+                &[("status", &status.as_u16().to_string())],
             )
         })
 }
@@ -195,7 +196,7 @@ async fn ask_where(app: &AppHandle, name: String) -> Result<Option<PathBuf>, Str
     let mut dialog = app
         .dialog()
         .file()
-        .set_title("Save download")
+        .set_title(i18n::t("dialog.saveDownloadTitle"))
         .set_file_name(name);
     if let Some(window) = app.get_webview_window("main") {
         dialog = dialog.set_parent(&window);
@@ -206,15 +207,13 @@ async fn ask_where(app: &AppHandle, name: String) -> Result<Option<PathBuf>, Str
     dialog.save_file(move |picked| {
         let _ = tx.send(picked);
     });
-    let picked = rx
-        .await
-        .map_err(|_| "Could not open the save dialog.".to_owned())?;
+    let picked = rx.await.map_err(|_| i18n::t("error.saveDialogFailed"))?;
     let Some(picked) = picked else {
         return Ok(None);
     };
     let path = picked
         .into_path()
-        .map_err(|_| "Could not open the save dialog.".to_owned())?;
+        .map_err(|_| i18n::t("error.saveDialogFailed"))?;
     Ok(Some(path))
 }
 
@@ -235,26 +234,26 @@ async fn copy_to(response: &mut reqwest::Response, destination: &Path) -> Result
     let mut file = options
         .open(&temp)
         .await
-        .map_err(|e| format!("The download could not be saved: {e}"))?;
+        .map_err(|e| i18n::tf("error.downloadSaveFailed", &[("reason", &e.to_string())]))?;
     let result = async {
         loop {
             let chunk = tokio::time::timeout(READ_TIMEOUT, response.chunk())
                 .await
-                .map_err(|_| "The download stalled and was stopped.".to_owned())?
-                .map_err(|e| format!("The download failed: {e}"))?;
+                .map_err(|_| i18n::t("error.downloadStalled"))?
+                .map_err(|e| i18n::tf("error.downloadFailed", &[("reason", &e.to_string())]))?;
             let Some(chunk) = chunk else {
                 break;
             };
             file.write_all(&chunk)
                 .await
-                .map_err(|e| format!("The download could not be saved: {e}"))?;
+                .map_err(|e| i18n::tf("error.downloadSaveFailed", &[("reason", &e.to_string())]))?;
         }
         file.flush()
             .await
-            .map_err(|e| format!("The download could not be saved: {e}"))?;
+            .map_err(|e| i18n::tf("error.downloadSaveFailed", &[("reason", &e.to_string())]))?;
         file.sync_all()
             .await
-            .map_err(|e| format!("The download could not be saved: {e}"))
+            .map_err(|e| i18n::tf("error.downloadSaveFailed", &[("reason", &e.to_string())]))
     }
     .await;
     drop(file);
@@ -264,7 +263,10 @@ async fn copy_to(response: &mut reqwest::Response, destination: &Path) -> Result
     }
     if let Err(error) = tokio::fs::rename(&temp, destination).await {
         let _ = tokio::fs::remove_file(&temp).await;
-        return Err(format!("The download could not be saved: {error}"));
+        return Err(i18n::tf(
+            "error.downloadSaveFailed",
+            &[("reason", &error.to_string())],
+        ));
     }
     Ok(())
 }

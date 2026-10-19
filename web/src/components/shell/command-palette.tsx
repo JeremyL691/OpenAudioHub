@@ -8,6 +8,7 @@ import { setTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { OPEN_SHORTCUTS_EVENT } from "./account-menu";
 import { OPEN_COMMAND_PALETTE_EVENT } from "./top-bar";
 import { useShellData } from "./shell-data";
+import { useI18n } from "@/lib/i18n";
 
 const RECENT_LIMIT = 5;
 
@@ -19,6 +20,7 @@ export function CommandPalette() {
     const { recordings, syncNow, updateSettings, openUploadPicker } = useShellData();
     const selectedId = params.get("id");
     const [themeNow] = useTheme();
+    const { t } = useI18n();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const onLibrary = pathname === "/recordings";
@@ -54,22 +56,22 @@ export function CommandPalette() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent aria-describedby={undefined} hideClose className="top-[20%] translate-y-0 gap-0 overflow-hidden p-0">
-                <DialogTitle className="sr-only">Command palette</DialogTitle>
-                <DialogDescription className="sr-only">Search recordings or run an action.</DialogDescription>
-                <Command label="Command palette" loop className="flex flex-col">
+                <DialogTitle className="sr-only">{t("shell.palette.title")}</DialogTitle>
+                <DialogDescription className="sr-only">{t("shell.palette.description")}</DialogDescription>
+                <Command label={t("shell.palette.title")} loop className="flex flex-col">
                     <div className="flex h-9 items-center gap-2 border-b border-border px-3">
                         <Search aria-hidden="true" className="size-4 shrink-0 opacity-50" />
                         <Command.Input
                             value={query}
                             onValueChange={setQuery}
-                            placeholder="Search recordings, transcripts, or actions..."
+                            placeholder={t("shell.palette.placeholder")}
                             className="flex w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
                         />
                     </div>
                     <Command.List className="max-h-[60vh] overflow-y-auto p-2">
-                        <Command.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">No results.</Command.Empty>
+                        <Command.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">{t("shell.palette.empty")}</Command.Empty>
 
-                        <Command.Group heading="Recent" className={GROUP}>
+                        <Command.Group heading={t("shell.palette.recent")} className={GROUP}>
                             {recent.map((r) => (
                                 <PaletteItem
                                     key={r.id}
@@ -80,7 +82,7 @@ export function CommandPalette() {
                                         r.id === selectedId ? (
                                             <span className="ml-auto flex shrink-0 items-center gap-1 text-[11px] text-primary">
                                                 <Circle className="size-2 fill-current" aria-hidden="true" />
-                                                Selected
+                                                {t("shell.palette.selected")}
                                             </span>
                                         ) : null
                                     }
@@ -90,12 +92,12 @@ export function CommandPalette() {
                             ))}
                         </Command.Group>
 
-                        <Command.Group heading="Actions" className={GROUP}>
+                        <Command.Group heading={t("shell.palette.actions")} className={GROUP}>
                             <PaletteItem icon={Upload} value="upload audio" onSelect={() => run(openUploadPicker)}>
-                                Upload audio
+                                {t("shell.palette.uploadAudio")}
                             </PaletteItem>
                             <PaletteItem icon={RefreshCw} value="sync device" onSelect={() => run(() => void syncNow())}>
-                                Sync device
+                                {t("shell.palette.syncDevice")}
                             </PaletteItem>
                             <PaletteItem
                                 icon={Settings}
@@ -103,7 +105,7 @@ export function CommandPalette() {
                                 onSelect={() => run(() => navigate("/settings"))}
                                 trailing={<Kbd className="ml-auto h-5 px-1 text-[10px]">,</Kbd>}
                             >
-                                Open settings
+                                {t("shell.palette.openSettings")}
                             </PaletteItem>
                             <PaletteItem
                                 icon={Keyboard}
@@ -111,11 +113,11 @@ export function CommandPalette() {
                                 onSelect={() => run(() => window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT)))}
                                 trailing={<Kbd className="ml-auto h-5 px-1 text-[10px]">?</Kbd>}
                             >
-                                Keyboard shortcuts
+                                {t("shell.palette.keyboardShortcuts")}
                             </PaletteItem>
                         </Command.Group>
 
-                        <Command.Group heading="Theme" className={GROUP}>
+                        <Command.Group heading={t("shell.palette.theme")} className={GROUP}>
                             {THEME_CHOICES.map((item) => (
                                 <PaletteItem
                                     key={item.value}
@@ -124,11 +126,11 @@ export function CommandPalette() {
                                     onSelect={() => run(() => chooseTheme(item.value))}
                                     trailing={
                                         themeNow === item.value ? (
-                                            <span className="ml-auto shrink-0 rounded-full border border-border px-2 py-px text-[11px] text-muted-foreground">Active</span>
+                                            <span className="ml-auto shrink-0 rounded-full border border-border px-2 py-px text-[11px] text-muted-foreground">{t("shell.palette.active")}</span>
                                         ) : null
                                     }
                                 >
-                                    {item.label}
+                                    {t(item.labelKey)}
                                 </PaletteItem>
                             ))}
                         </Command.Group>
@@ -139,20 +141,20 @@ export function CommandPalette() {
                             <span className="inline-flex items-center gap-1">
                                 <Kbd>↑</Kbd>
                                 <Kbd>↓</Kbd>
-                                navigate
+                                {t("shell.palette.navigate")}
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <Kbd>↵</Kbd>
-                                select
+                                {t("shell.palette.select")}
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <Kbd>esc</Kbd>
-                                close
+                                {t("shell.palette.close")}
                             </span>
                         </div>
                         <span className="inline-flex items-center gap-1">
                             <Kbd>⌘K</Kbd>
-                            toggle
+                            {t("shell.palette.toggle")}
                         </span>
                     </div>
                 </Command>
@@ -163,10 +165,10 @@ export function CommandPalette() {
 
 const GROUP = "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted-foreground";
 
-const THEME_CHOICES: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
-    { value: "light", label: "Light", icon: Sun },
-    { value: "dark", label: "Dark", icon: Moon },
-    { value: "system", label: "Auto", icon: Monitor },
+const THEME_CHOICES: { value: ThemeChoice; labelKey: "shell.account.themeLight" | "shell.account.themeDark" | "shell.account.themeAuto"; icon: LucideIcon }[] = [
+    { value: "light", labelKey: "shell.account.themeLight", icon: Sun },
+    { value: "dark", labelKey: "shell.account.themeDark", icon: Moon },
+    { value: "system", labelKey: "shell.account.themeAuto", icon: Monitor },
 ];
 
 function PaletteItem({

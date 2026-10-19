@@ -6,6 +6,7 @@ mod backup;
 mod bridge;
 mod download;
 mod files;
+mod i18n;
 mod menu;
 mod plaud_refresh;
 
@@ -22,9 +23,14 @@ const DEFAULT_PORT: u16 = 38400;
 
 fn main() -> ExitCode {
     let data_dir = files::data_dir();
+    // The language comes first: every message after this point uses it.
+    let saved_locale = AppConfig::load(&data_dir)
+        .ok()
+        .and_then(|config| config.locale);
+    i18n::init(saved_locale.as_deref());
     if let Err(text) = files::check_free_space(&data_dir) {
         files::log(&data_dir, &format!("not started: {text}"));
-        files::fatal_dialog("OpenAudioHub needs more free disk space", &text);
+        files::fatal_dialog(&i18n::t("dialog.freeSpaceTitle"), &text);
         return ExitCode::from(1);
     }
     if let Err(e) = std::fs::create_dir_all(&data_dir) {
@@ -42,7 +48,7 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             files::log(&data_dir, &format!("could not start: {e}"));
-            files::fatal_dialog("OpenAudioHub could not start", &e);
+            files::fatal_dialog(&i18n::t("dialog.startFailedTitle"), &e);
             ExitCode::FAILURE
         }
     }
@@ -95,11 +101,15 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     // Before the database is opened (and migrated) by this version.
     runtime
-        .block_on(backup::before_upgrade(&data_dir, &server.database_path, config.last_version.as_deref()))
-        .map_err(|e| format!("could not back up the database before the upgrade, so OpenAudioHub did not start: {e}"))?;
+        .block_on(backup::before_upgrade(
+            &data_dir,
+            &server.database_path,
+            config.last_version.as_deref(),
+        ))
+        .map_err(|e| i18n::tf("error.databaseBackupFailed", &[("reason", &e.to_string())]))?;
     let pool = runtime
         .block_on(oah::db::open(&server.database_path))
-        .map_err(|e| format!("cannot open the database: {e}"))?;
+        .map_err(|e| i18n::tf("error.databaseOpenFailed", &[("reason", &e.to_string())]))?;
     let state = oah::AppState::new(server, pool);
     runtime.block_on(async { oah::start_workers(&state) });
     let app = oah::app(state);
@@ -114,6 +124,7 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
 
     let show_tray = config.show_tray.unwrap_or(true);
     let launch_at_login = config.launch_at_login.unwrap_or(false);
+    let locale = i18n::current();
     let shared = bridge::Shared {
         data_dir: data_dir.clone(),
         port,
@@ -141,7 +152,7 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(720.0, 480.0)
                 .visible(!silent)
-                .initialization_script(bridge::BRIDGE_SCRIPT)
+                .initialization_script(bridge::bridge_script(locale))
                 .on_navigation(move |target| {
                     if is_app_page(target, port) {
                         // Files are saved through the bridge. An API address never becomes a page.
@@ -155,7 +166,7 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
                     false
                 })
                 .build()?;
-            menu::install_tray(app, show_tray, launch_at_login)?;
+            menu::install_tray(app, show_tray, launch_at_login, locale)?;
             plaud_refresh::spawn(
                 app.handle().clone(),
                 port,
@@ -204,6 +215,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     return tauri::generate_handler![
         bridge::prefs_get,
         bridge::prefs_set,
+        bridge::set_locale,
         bridge::open_plaud_browser,
         bridge::pick_folder,
         bridge::save_text_file,
@@ -215,6 +227,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     return tauri::generate_handler![
         bridge::prefs_get,
         bridge::prefs_set,
+        bridge::set_locale,
         bridge::open_plaud_browser,
         bridge::pick_folder,
         bridge::save_text_file,
@@ -247,6 +260,18 @@ fn is_app_page(url: &tauri::Url, port: u16) -> bool {
         && url.port_or_known_default() == Some(port)
 }
 
+/// Tells the window's page that the tray menu changed the language. The page applies it
+/// without writing the choice back, so the two never loop.
+pub fn apply_locale(app: &tauri::AppHandle, locale: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let script = format!(
+            "window.dispatchEvent(new CustomEvent('oah:locale', {{ detail: {} }}))",
+            serde_json::to_string(locale).unwrap_or_else(|_| "\"en\"".to_owned())
+        );
+        let _ = window.eval(&script);
+    }
+}
+
 fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -268,7 +293,7 @@ async fn bind(preferred: u16) -> Result<tokio::net::TcpListener, String> {
             return Ok(listener);
         }
     }
-    Err("no free local port for the app".into())
+    Err(i18n::t("error.noFreePort"))
 }
 
 async fn axum_serve(listener: tokio::net::TcpListener, app: axum::Router) -> std::io::Result<()> {

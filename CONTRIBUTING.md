@@ -44,6 +44,20 @@ contract-tests/run.sh server
 
 `contract-tests/run.sh server` builds the server and the web app, starts the server on a new data folder, runs the contract suite and stops the server. It needs `openssl` and `curl`.
 
+## Interface text and translations
+
+The interface is translated into English, Simplified Chinese, Japanese and Korean. Every string a person can see in the app lives in `web/src/locales/{en,zh-CN,ja,ko}/`, one file per area.
+
+When you add or change a button, menu item, dialog, empty state, hint, error message or accessible name, add the text in all four languages in the same pull request. Do not leave a key out of a language: `pnpm --dir web typecheck` runs the catalog check and fails on a missing key, an empty translation, or a placeholder that differs from English.
+
+Rules for the catalogs:
+
+- Keys name a place and a meaning, not the English words, and nested objects group one area (for example `settings.export.originalHint`).
+- Write whole sentences. Never build a sentence by joining translated fragments.
+- Values that change inside a sentence use named placeholders, such as `{count}` or `{title}`. The placeholders must be identical in all four languages.
+- Do not translate product names (OpenAudioHub, Plaud), provider names, model names, file formats, API fields or user data.
+- The interface language is separate from the transcription language and the AI output language; do not tie them together.
+
 ## Behavior changes
 
 The specification in [`spec/`](spec/README.md) describes how the product behaves. If your change alters behavior, update the matching spec file and the contract tests in the same pull request. Mark anything you are unsure about with `UNVERIFIED:` and say why.

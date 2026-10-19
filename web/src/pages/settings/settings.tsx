@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { cn } from "@/lib/cn";
+import { useI18n } from "@/lib/i18n";
 import NotFound from "../not-found";
 import {
     DEFAULT_SECTION,
@@ -68,6 +69,7 @@ export default function SettingsPage() {
 }
 
 function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: boolean }) {
+    const { t } = useI18n();
     const navigate = useNavigate();
     const [query, setQuery] = useState("");
 
@@ -82,18 +84,21 @@ function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: bo
     const visible = navSections(desktop);
     const needle = query.trim().toLowerCase();
     const matches = (s: SectionDef) =>
-        needle === "" || s.name.toLowerCase().includes(needle) || s.keywords.some((k) => k.includes(needle));
+        needle === "" ||
+        t(s.nameKey).toLowerCase().includes(needle) ||
+        t(s.titleKey).toLowerCase().includes(needle) ||
+        t(s.descriptionKey).toLowerCase().includes(needle);
     const filtered = visible.filter(matches);
 
     const groups: OptionGroup[] = (Object.keys(NAV_GROUPS) as (keyof typeof NAV_GROUPS)[])
         .map((key) => ({
-            label: NAV_GROUPS[key],
-            options: visible.filter((s) => s.group === key).map((s) => ({ value: s.id, label: s.name })),
+            label: t(NAV_GROUPS[key]),
+            options: visible.filter((s) => s.group === key).map((s) => ({ value: s.id, label: t(s.nameKey) })),
         }))
         .filter((g) => g.options.length > 0);
 
     const navGroups = (Object.keys(NAV_GROUPS) as (keyof typeof NAV_GROUPS)[])
-        .map((key) => ({ key, label: NAV_GROUPS[key], items: filtered.filter((s) => s.group === key) }))
+        .map((key) => ({ key, label: t(NAV_GROUPS[key]), items: filtered.filter((s) => s.group === key) }))
         .filter((g) => g.items.length > 0);
 
     const Body = BODIES[section.id];
@@ -102,14 +107,14 @@ function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: bo
         <div className="flex min-h-full min-w-0 flex-1 flex-col lg:flex-row">
             <nav
                 data-testid="settings-nav"
-                aria-label="Settings sections"
+                aria-label={t("settings.page.settingsSections")}
                 className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar p-3 lg:flex"
             >
                 <input
                     data-testid="settings-search"
                     type="search"
-                    aria-label="Search settings"
-                    placeholder="Search settings"
+                    aria-label={t("settings.page.searchSettings")}
+                    placeholder={t("settings.page.searchPlaceholder")}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     className="h-8 w-full rounded-lg bg-secondary px-2.5 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -123,7 +128,7 @@ function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: bo
                                 <Link
                                     key={item.id}
                                     to={`/settings/${item.id}`}
-                                    aria-label={`${item.name} settings`}
+                                    aria-label={t("settings.nav.settingsSectionAria", { name: t(item.nameKey) })}
                                     aria-current={active ? "page" : undefined}
                                     className={cn(
                                         "flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] text-foreground transition-colors duration-150 ease-out hover:bg-accent",
@@ -133,19 +138,19 @@ function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: bo
                                     <span className={cn("flex size-[22px] shrink-0 items-center justify-center rounded-md", item.tile)} aria-hidden="true">
                                         <Icon className="size-3.5 text-white" />
                                     </span>
-                                    <span className="truncate">{item.name}</span>
+                                    <span className="truncate">{t(item.nameKey)}</span>
                                 </Link>
                             );
                         })}
                     </div>
                 ))}
-                {filtered.length === 0 ? <p className="px-2 pt-3 text-sm text-muted-foreground">No results</p> : null}
+                {filtered.length === 0 ? <p className="px-2 pt-3 text-sm text-muted-foreground">{t("settings.page.noResults")}</p> : null}
             </nav>
 
             <div className="flex min-w-0 flex-1 flex-col">
                 <div className="flex h-13 shrink-0 items-center justify-end border-b border-border px-4 lg:hidden">
                     <SettingSelect
-                        aria-label="Select settings section"
+                        aria-label={t("settings.page.selectSection")}
                         value={section.id}
                         groups={groups}
                         onValueChange={(id) => navigate(`/settings/${id}`)}
@@ -153,7 +158,7 @@ function SettingsLayout({ section, desktop }: { section: SectionDef; desktop: bo
                     />
                 </div>
                 <div className="flex-1 px-4 py-6 md:px-8 md:py-8">
-                    <h1 className="sr-only">Settings</h1>
+                    <h1 className="sr-only">{t("settings.page.settingsHeading")}</h1>
                     <SectionFrame section={section}>
                         <SettingsProvider>
                             <Body />

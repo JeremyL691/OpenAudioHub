@@ -1,0 +1,151 @@
+{
+    "detail": {
+        "loading": "Loading recording",
+        "missingTitle": "Recording not found",
+        "missingBody": "It may have been deleted, or the link is wrong.",
+        "loadFailedTitle": "Could not load this recording",
+        "loadFailedBody": "Try again in a moment.",
+        "sections": "Recording sections"
+    },
+    "tabs": {
+        "transcript": "Transcript",
+        "summary": "Summary",
+        "details": "Details"
+    },
+    "header": {
+        "backToRecordings": "Back to recordings",
+        "star": "Star",
+        "unstar": "Unstar",
+        "starFailed": "Could not update the star",
+        "actions": "Recording actions",
+        "downloadAudio": "Download audio",
+        "exportTxt": "Export TXT",
+        "exportSrt": "Export SRT",
+        "exportVtt": "Export VTT",
+        "exportJson": "Export JSON",
+        "delete": "Delete recording",
+        "deleteTitle": "Delete this recording?",
+        "deleteBody": "This permanently removes the audio file, transcription, and AI summary from OpenAudioHub. The recording on your Plaud account is not affected, but it will not be re-synced to OpenAudioHub.",
+        "deleting": "Deleting…",
+        "deleted": "Recording deleted",
+        "deleteFailed": "Failed to delete recording"
+    },
+    "title": {
+        "name": "Recording name",
+        "renameAria": "Rename {title}",
+        "empty": "Name cannot be empty",
+        "tooLong": "Name must be 200 characters or fewer",
+        "renameFailed": "Could not rename the recording."
+    },
+    "phase": {
+        "queued": "Waiting to start",
+        "download": "Fetching the original audio",
+        "decode": "Preparing the audio",
+        "vad": "Looking for speech",
+        "chunking": "Splitting speech into segments",
+        "transcribing": "Transcribing the audio",
+        "completed": "Transcription done",
+        "needsAlignment": "Saved without timestamps",
+        "pausedDisk": "Paused: waiting for free disk space",
+        "failed": "Transcription failed",
+        "cancelled": "Transcription cancelled",
+        "unknown": "Processing transcription"
+    },
+    "stage": {
+        "untranscribed": "Not transcribed",
+        "transcribed": "Transcript ready",
+        "summarized": "Summary ready",
+        "transcribing": "Transcribing",
+        "summarizing": "Summarizing"
+    },
+    "transcribe": {
+        "action": "Transcribe",
+        "retranscribe": "Re-transcribe",
+        "inProgress": "Transcribing…",
+        "complete": "Transcription complete",
+        "failed": "Transcription failed",
+        "dialogTitle": "Transcribe recording",
+        "dialogRetitle": "Re-transcribe recording",
+        "dialogBody": "Replaces the current transcript. The summary is removed with it.",
+        "provider": "Provider",
+        "model": "Model",
+        "modelHint": "Leave empty to use {model}.",
+        "defaultModel": "the provider's default model"
+    },
+    "browser": {
+        "action": "Transcribe in browser",
+        "title": "Run Whisper right here in your browser. No API key needed, and the audio never leaves your device."
+    },
+    "transcript": {
+        "source": "Transcript source",
+        "sourceProvider": "Your provider",
+        "sourcePlaud": "Plaud",
+        "sourceMix": "Mix",
+        "followPlayback": "Follow playback",
+        "downloadTxt": "Download transcript as TXT",
+        "downloadJson": "Download transcript as JSON",
+        "noTimestamps": "This transcript was saved without timestamps. The timeline and the SRT and VTT exports are not available for it.",
+        "empty": "No transcription yet. Use the Transcribe button above.",
+        "deleteTitle": "Delete this transcript?",
+        "deleteBody": "The transcript and its summary will be removed. You can transcribe and summarize again later.",
+        "deleted": "Transcript deleted",
+        "deleteFailed": "Could not delete the transcript",
+        "words": "{count} words",
+        "characters": "{count} characters",
+        "language": "Language: {language}"
+    },
+    "pipeline": {
+        "queueing": "Queueing transcription…",
+        "pausedDisk": "Waiting for disk space. Processing picks up again on its own once room is free.",
+        "progress": "Audio preprocessing progress",
+        "cancelFailed": "Could not cancel",
+        "retryFailed": "Could not retry"
+    },
+    "details": {
+        "duration": "Duration",
+        "fileSize": "File Size",
+        "device": "Device",
+        "date": "Date",
+        "collapse": "Collapse",
+        "expand": "Expand",
+        "fileSizeValue": "{original} original · MP3 ≈ {mp3}"
+    },
+    "preset": {
+        "general": "General Summary",
+        "meetingNotes": "Meeting Minutes",
+        "interview": "Interview and Research",
+        "call": "Phone and Client Call",
+        "lecture": "Lecture and Study Notes",
+        "brainstorm": "Brainstorm",
+        "voiceMemo": "Voice Memo and Podcast",
+        "keyPoints": "Key Points",
+        "actionItems": "Action Items"
+    },
+    "summary": {
+        "language": "Summary language",
+        "languageAuto": "Auto (match transcript)",
+        "languageEnglish": "English",
+        "languageChinese": "Chinese",
+        "languageJapanese": "Japanese",
+        "languageKorean": "Korean",
+        "template": "Template",
+        "generate": "Summarize",
+        "regenerate": "Re-generate",
+        "generating": "Generating…",
+        "needsTranscript": "A summary is available once the recording has a transcript.",
+        "failed": "The summary could not be made.",
+        "empty": "No summary yet. Click \"Summarize\" to generate one.",
+        "keyPoints": "Key Points",
+        "actionItems": "Action Items",
+        "exportTitle": "{title} summary",
+        "copied": "Summary copied",
+        "copyFailed": "Could not copy the summary",
+        "downloadMarkdown": "Download summary as Markdown",
+        "downloadTxt": "Download summary as TXT",
+        "delete": "Delete summary",
+        "deleted": "Summary deleted",
+        "deleteFailed": "Could not delete the summary",
+        "loadFailed": "Could not load the summary",
+        "generateFailed": "Summary failed"
+    }
+}

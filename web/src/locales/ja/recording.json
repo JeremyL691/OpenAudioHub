@@ -1,0 +1,151 @@
+{
+    "detail": {
+        "loading": "録音を読み込み中",
+        "missingTitle": "録音が見つかりません",
+        "missingBody": "削除されたか、リンクが正しくない可能性があります。",
+        "loadFailedTitle": "この録音を読み込めませんでした",
+        "loadFailedBody": "しばらくしてからもう一度お試しください。",
+        "sections": "録音のセクション"
+    },
+    "tabs": {
+        "transcript": "文字起こし",
+        "summary": "要約",
+        "details": "詳細"
+    },
+    "header": {
+        "backToRecordings": "録音一覧に戻る",
+        "star": "スターを付ける",
+        "unstar": "スターを外す",
+        "starFailed": "スターを更新できませんでした",
+        "actions": "録音の操作",
+        "downloadAudio": "音声をダウンロード",
+        "exportTxt": "TXT を書き出す",
+        "exportSrt": "SRT を書き出す",
+        "exportVtt": "VTT を書き出す",
+        "exportJson": "JSON を書き出す",
+        "delete": "録音を削除",
+        "deleteTitle": "この録音を削除しますか？",
+        "deleteBody": "OpenAudioHub から音声ファイル、文字起こし、AI 要約が完全に削除されます。Plaud アカウント上の録音は影響を受けませんが、OpenAudioHub に再同期されることはありません。",
+        "deleting": "削除中…",
+        "deleted": "録音を削除しました",
+        "deleteFailed": "録音を削除できませんでした"
+    },
+    "title": {
+        "name": "録音名",
+        "renameAria": "{title} の名前を変更",
+        "empty": "名前を空にすることはできません",
+        "tooLong": "名前は 200 文字以下にしてください",
+        "renameFailed": "録音の名前を変更できませんでした。"
+    },
+    "phase": {
+        "queued": "開始待ち",
+        "download": "元の音声を取得中",
+        "decode": "音声を準備中",
+        "vad": "音声を検出中",
+        "chunking": "音声をセグメントに分割中",
+        "transcribing": "音声を文字起こし中",
+        "completed": "文字起こし完了",
+        "needsAlignment": "タイムスタンプなしで保存されました",
+        "pausedDisk": "一時停止中: 空き容量を待っています",
+        "failed": "文字起こしに失敗しました",
+        "cancelled": "文字起こしはキャンセルされました",
+        "unknown": "文字起こしを処理中"
+    },
+    "stage": {
+        "untranscribed": "未文字起こし",
+        "transcribed": "文字起こし準備完了",
+        "summarized": "要約準備完了",
+        "transcribing": "文字起こし中",
+        "summarizing": "要約中"
+    },
+    "transcribe": {
+        "action": "文字起こし",
+        "retranscribe": "再文字起こし",
+        "inProgress": "文字起こし中…",
+        "complete": "文字起こしが完了しました",
+        "failed": "文字起こしに失敗しました",
+        "dialogTitle": "録音を文字起こし",
+        "dialogRetitle": "録音を再文字起こし",
+        "dialogBody": "現在の文字起こしを置き換えます。要約も一緒に削除されます。",
+        "provider": "プロバイダー",
+        "model": "モデル",
+        "modelHint": "空欄の場合は {model} を使用します。",
+        "defaultModel": "プロバイダーの既定モデル"
+    },
+    "browser": {
+        "action": "ブラウザーで文字起こし",
+        "title": "ブラウザー上で Whisper を実行します。API キーは不要で、音声がデバイスの外に出ることはありません。"
+    },
+    "transcript": {
+        "source": "文字起こしのソース",
+        "sourceProvider": "使用中のプロバイダー",
+        "sourcePlaud": "Plaud",
+        "sourceMix": "ミックス",
+        "followPlayback": "再生に追従",
+        "downloadTxt": "文字起こしを TXT でダウンロード",
+        "downloadJson": "文字起こしを JSON でダウンロード",
+        "noTimestamps": "この文字起こしはタイムスタンプなしで保存されたため、タイムラインと SRT・VTT の書き出しは利用できません。",
+        "empty": "まだ文字起こしがありません。上の文字起こしボタンを使用してください。",
+        "deleteTitle": "この文字起こしを削除しますか？",
+        "deleteBody": "文字起こしとその要約が削除されます。あとで再度文字起こしと要約ができます。",
+        "deleted": "文字起こしを削除しました",
+        "deleteFailed": "文字起こしを削除できませんでした",
+        "words": "{count} 語",
+        "characters": "{count} 文字",
+        "language": "言語: {language}"
+    },
+    "pipeline": {
+        "queueing": "文字起こしを待機列に追加中…",
+        "pausedDisk": "空き容量を待っています。空きができ次第、自動的に処理を再開します。",
+        "progress": "音声前処理の進捗",
+        "cancelFailed": "キャンセルできませんでした",
+        "retryFailed": "再試行できませんでした"
+    },
+    "details": {
+        "duration": "長さ",
+        "fileSize": "ファイルサイズ",
+        "device": "デバイス",
+        "date": "日付",
+        "collapse": "折りたたむ",
+        "expand": "展開",
+        "fileSizeValue": "元ファイル {original} · MP3 約 {mp3}"
+    },
+    "preset": {
+        "general": "一般的な要約",
+        "meetingNotes": "議事録",
+        "interview": "インタビューと調査",
+        "call": "電話・顧客との通話",
+        "lecture": "講義と学習ノート",
+        "brainstorm": "ブレインストーム",
+        "voiceMemo": "ボイスメモとポッドキャスト",
+        "keyPoints": "要点",
+        "actionItems": "アクション項目"
+    },
+    "summary": {
+        "language": "要約の言語",
+        "languageAuto": "自動（文字起こしに合わせる）",
+        "languageEnglish": "英語",
+        "languageChinese": "中国語",
+        "languageJapanese": "日本語",
+        "languageKorean": "韓国語",
+        "template": "テンプレート",
+        "generate": "要約する",
+        "regenerate": "再生成",
+        "generating": "生成中…",
+        "needsTranscript": "文字起こしがあると要約を生成できます。",
+        "failed": "要約を生成できませんでした。",
+        "empty": "まだ要約がありません。「要約する」をクリックして生成してください。",
+        "keyPoints": "要点",
+        "actionItems": "アクション項目",
+        "exportTitle": "{title} の要約",
+        "copied": "要約をコピーしました",
+        "copyFailed": "要約をコピーできませんでした",
+        "downloadMarkdown": "要約を Markdown でダウンロード",
+        "downloadTxt": "要約を TXT でダウンロード",
+        "delete": "要約を削除",
+        "deleted": "要約を削除しました",
+        "deleteFailed": "要約を削除できませんでした",
+        "loadFailed": "要約を読み込めませんでした",
+        "generateFailed": "要約の生成に失敗しました"
+    }
+}

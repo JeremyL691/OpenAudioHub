@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import { Loading } from "./shared";
+import { useI18n } from "@/lib/i18n";
 
 export interface PlaudConnection {
     connected: boolean;
@@ -23,12 +24,12 @@ export interface PlaudConnection {
     createdAt?: string;
 }
 
-const REGION_LABELS: Record<string, string> = {
-    global: "Global",
-    eu: "EU, Frankfurt",
-    apse1: "Asia Pacific, Singapore",
-    cn: "China mainland",
-    custom: "Custom",
+const REGION_KEYS: Record<string, "settings.plaud.regionGlobal" | "settings.plaud.regionEu" | "settings.plaud.regionApse1" | "settings.plaud.regionCn" | "settings.plaud.regionCustom"> = {
+    global: "settings.plaud.regionGlobal",
+    eu: "settings.plaud.regionEu",
+    apse1: "settings.plaud.regionApse1",
+    cn: "settings.plaud.regionCn",
+    custom: "settings.plaud.regionCustom",
 };
 
 interface SendCodeAnswer {
@@ -48,6 +49,7 @@ interface HandoffStatus {
 
 /** Loads the connection state and offers the sign-in and disconnect actions. */
 export function PlaudAccountSection() {
+    const { t } = useI18n();
     const [conn, setConn] = useState<PlaudConnection | null>(null);
     const [loadError, setLoadError] = useState<unknown>(null);
     const [signIn, setSignIn] = useState(false);
@@ -71,11 +73,11 @@ export function PlaudAccountSection() {
         setBusy(true);
         try {
             await api("/api/plaud/connection", { method: "DELETE" });
-            if (!thenSignIn) toast.success("Plaud account disconnected");
+            if (!thenSignIn) toast.success(t("settings.plaud.disconnected"));
             await load();
             if (thenSignIn) setSignIn(true);
         } catch (err) {
-            toast.error(errorMessage(err, "Failed to disconnect the Plaud account"));
+            toast.error(errorMessage(err, t("settings.plaud.disconnectFailed")));
         } finally {
             setBusy(false);
         }
@@ -83,7 +85,7 @@ export function PlaudAccountSection() {
 
     const connectedNow = async () => {
         setSignIn(false);
-        toast.success("Plaud account connected");
+        toast.success(t("settings.plaud.connectedToast"));
         await load();
     };
 
@@ -91,20 +93,17 @@ export function PlaudAccountSection() {
 
     return (
         <div className="grid gap-4">
-            <p className="text-xs text-muted-foreground">
-                The Plaud account OpenAudioHub pulls recordings from. Your library stays as it is when you switch accounts. Only later syncs
-                follow the new account.
-            </p>
-            {conn === null && !loadError ? <Loading label="Loading Plaud account" /> : null}
+            <p className="text-xs text-muted-foreground">{t("settings.plaud.intro")}</p>
+            {conn === null && !loadError ? <Loading label={t("settings.plaud.loading")} /> : null}
             {loadError ? (
                 <p role="alert" className="text-sm text-destructive">
-                    {errorMessage(loadError, "The Plaud connection could not be loaded.")}
+                    {errorMessage(loadError, t("settings.plaud.loadFailed"))}
                 </p>
             ) : null}
 
             {conn && !connected ? (
                 <div className="grid gap-3 rounded-xl bg-muted px-4 py-3">
-                    <p className="text-xs text-muted-foreground">No Plaud account connected. Sign in below to start syncing recordings.</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.plaud.notConnected")}</p>
                     <PlaudSignInPanel onConnected={connectedNow} />
                 </div>
             ) : null}
@@ -113,22 +112,22 @@ export function PlaudAccountSection() {
                 <div className="divide-y divide-border rounded-xl bg-muted px-4">
                     <div className="flex flex-wrap items-start justify-between gap-3 py-3">
                         <div className="min-w-0 space-y-0.5">
-                            <p className="text-xs text-muted-foreground">Connected account</p>
-                            <p className="truncate text-[13px] font-medium">{conn.plaudEmail ?? "Email not available"}</p>
+                            <p className="text-xs text-muted-foreground">{t("settings.plaud.connectedAccount")}</p>
+                            <p className="truncate text-[13px] font-medium">{conn.plaudEmail ?? t("settings.plaud.emailUnavailable")}</p>
                             <p className="text-xs text-muted-foreground">
-                                Region: {REGION_LABELS[conn.server ?? "global"] ?? "Global"}
-                                {conn.tokenExpiresAt ? ` · Token valid until ${formatDate(conn.tokenExpiresAt)}` : ""}
+                                {t("settings.plaud.regionLine", { region: t(REGION_KEYS[conn.server ?? "global"] ?? "settings.plaud.regionGlobal") })}
+                                {conn.tokenExpiresAt ? t("settings.plaud.tokenValidUntil", { date: formatDate(conn.tokenExpiresAt) }) : ""}
                             </p>
                         </div>
-                        {conn.needsReconnect ? <StatusBadge tone="warning">Sign-in expired</StatusBadge> : <StatusBadge tone="success">Connected</StatusBadge>}
+                        {conn.needsReconnect ? <StatusBadge tone="warning">{t("settings.plaud.signInExpired")}</StatusBadge> : <StatusBadge tone="success">{t("settings.plaud.connected")}</StatusBadge>}
                     </div>
 
                     {conn.needsReconnect ? (
                         <div className="grid gap-2 py-3">
-                            <p className="text-sm">Reconnect Plaud to keep recordings syncing.</p>
+                            <p className="text-sm">{t("settings.plaud.reconnectBody")}</p>
                             <div>
                                 <Button variant="primary" onClick={() => setSignIn(true)}>
-                                    Reconnect
+                                    {t("settings.plaud.reconnect")}
                                 </Button>
                             </div>
                         </div>
@@ -136,10 +135,10 @@ export function PlaudAccountSection() {
 
                     <div className="flex flex-wrap gap-2 py-3">
                         <Button variant="secondary" disabled={busy} onClick={() => setConfirm("switch")}>
-                            Switch account
+                            {t("settings.plaud.switchAccount")}
                         </Button>
                         <Button variant="destructive" disabled={busy} onClick={() => setConfirm("disconnect")}>
-                            Disconnect
+                            {t("settings.plaud.disconnect")}
                         </Button>
                     </div>
                 </div>
@@ -149,13 +148,11 @@ export function PlaudAccountSection() {
 
             <AlertDialog open={confirm === "switch"} onOpenChange={(open) => !open && setConfirm(null)}>
                 <AlertDialogContent>
-                    <AlertDialogTitle>Switch Plaud account?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        The current connection is removed first. Recordings already synced stay in your library.
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t("settings.plaud.switchTitle")}</AlertDialogTitle>
+                    <AlertDialogDescription>{t("settings.plaud.switchBody")}</AlertDialogDescription>
                     <AlertDialogFooter>
                         <AlertDialogCancel asChild>
-                            <Button variant="secondary">Cancel</Button>
+                            <Button variant="secondary">{t("settings.plaud.cancel")}</Button>
                         </AlertDialogCancel>
                         <AlertDialogAction
                             asChild
@@ -164,7 +161,7 @@ export function PlaudAccountSection() {
                                 void disconnect(true);
                             }}
                         >
-                            <Button variant="primary">Switch account</Button>
+                            <Button variant="primary">{t("settings.plaud.switchAccount")}</Button>
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -172,13 +169,11 @@ export function PlaudAccountSection() {
 
             <AlertDialog open={confirm === "disconnect"} onOpenChange={(open) => !open && setConfirm(null)}>
                 <AlertDialogContent>
-                    <AlertDialogTitle>Disconnect Plaud?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Recordings stop syncing until you connect again. Recordings already synced stay in your library.
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{t("settings.plaud.disconnectTitle")}</AlertDialogTitle>
+                    <AlertDialogDescription>{t("settings.plaud.disconnectBody")}</AlertDialogDescription>
                     <AlertDialogFooter>
                         <AlertDialogCancel asChild>
-                            <Button variant="secondary">Cancel</Button>
+                            <Button variant="secondary">{t("settings.plaud.cancel")}</Button>
                         </AlertDialogCancel>
                         <AlertDialogAction
                             asChild
@@ -187,7 +182,7 @@ export function PlaudAccountSection() {
                                 void disconnect(false);
                             }}
                         >
-                            <Button variant="destructive">Disconnect</Button>
+                            <Button variant="destructive">{t("settings.plaud.disconnect")}</Button>
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -198,6 +193,7 @@ export function PlaudAccountSection() {
 
 /** The Plaud sign-in tabs, shown inline when no account is connected and in the dialog on reconnect. */
 export function PlaudSignInPanel({ onConnected }: { onConnected: () => void | Promise<void> }) {
+    const { t } = useI18n();
     const [tab, setTab] = useState("browser");
     const [handoffCode, setHandoffCode] = useState<string | null>(null);
     const connectedRef = useRef(onConnected);
@@ -221,13 +217,13 @@ export function PlaudSignInPanel({ onConnected }: { onConnected: () => void | Pr
         <Tabs value={tab} onValueChange={setTab} className="grid gap-3">
             <TabsList className="grid w-full grid-cols-3 gap-0.5 rounded-lg bg-secondary p-0.5">
                 <TabsTrigger value="browser" className="h-8 min-w-0 px-2 text-[13px]">
-                    Sign in with Plaud
+                    {t("settings.plaud.tabBrowser")}
                 </TabsTrigger>
                 <TabsTrigger value="email" className="h-8 min-w-0 px-2 text-[13px]">
-                    Email code
+                    {t("settings.plaud.tabEmail")}
                 </TabsTrigger>
                 <TabsTrigger value="paste" className="h-8 min-w-0 px-2 text-[13px]">
-                    Paste token
+                    {t("settings.plaud.tabPaste")}
                 </TabsTrigger>
             </TabsList>
             <TabsContent value="browser">
@@ -253,15 +249,16 @@ export function PlaudSignInDialog({
     onClose: () => void;
     onConnected: () => void | Promise<void>;
 }) {
+    const { t } = useI18n();
     return (
         <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto">
-                <DialogTitle>Connect Plaud account</DialogTitle>
-                <DialogDescription>Choose how to sign in to Plaud.</DialogDescription>
+                <DialogTitle>{t("settings.plaud.connectTitle")}</DialogTitle>
+                <DialogDescription>{t("settings.plaud.connectBody")}</DialogDescription>
                 {open ? <PlaudSignInPanel onConnected={onConnected} /> : null}
                 <DialogFooter>
                     <Button variant="secondary" onClick={onClose}>
-                        Close
+                        {t("settings.plaud.close")}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -270,6 +267,7 @@ export function PlaudSignInDialog({
 }
 
 function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void> }) {
+    const { t } = useI18n();
     const [email, setEmail] = useState("");
     const [sent, setSent] = useState<(SendCodeAnswer & { email: string }) | null>(null);
     const [code, setCode] = useState("");
@@ -286,7 +284,7 @@ function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void>
             });
             setSent({ ...answer, email: email.trim() });
         } catch (err) {
-            setError(errorMessage(err, "The code could not be sent."));
+            setError(errorMessage(err, t("settings.plaud.codeSendFailed")));
         } finally {
             setBusy(false);
         }
@@ -303,7 +301,7 @@ function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void>
             });
             await onConnected();
         } catch (err) {
-            setError(errorMessage(err, "The code could not be verified."));
+            setError(errorMessage(err, t("settings.plaud.codeVerifyFailed")));
         } finally {
             setBusy(false);
         }
@@ -311,7 +309,7 @@ function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void>
 
     return (
         <div className="grid gap-4">
-            <Field label="Plaud email">
+            <Field label={t("settings.plaud.plaudEmail")}>
                 <Input
                     type="email"
                     autoComplete="email"
@@ -321,7 +319,7 @@ function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void>
                 />
             </Field>
             {sent ? (
-                <Field label="Verification code" hint="Enter the code Plaud emailed to you.">
+                <Field label={t("settings.plaud.verificationCode")} hint={t("settings.plaud.verificationHint")}>
                     <Input
                         inputMode="numeric"
                         autoComplete="one-time-code"
@@ -338,18 +336,18 @@ function EmailCodeTab({ onConnected }: { onConnected: () => void | Promise<void>
             <div className="flex justify-end gap-2">
                 {sent ? (
                     <Button variant="secondary" disabled={busy} onClick={() => setSent(null)}>
-                        Use another email
+                        {t("settings.plaud.useAnotherEmail")}
                     </Button>
                 ) : null}
                 {sent ? (
                     <Button variant="primary" disabled={busy || code.trim() === ""} onClick={() => void verify()}>
-                        {busy ? <Spinner label="Connecting" /> : null}
-                        Verify and connect
+                        {busy ? <Spinner label={t("settings.plaud.connecting")} /> : null}
+                        {t("settings.plaud.verifyAndConnect")}
                     </Button>
                 ) : (
                     <Button variant="primary" disabled={busy || email.trim() === ""} onClick={() => void sendCode()}>
-                        {busy ? <Spinner label="Sending code" /> : null}
-                        Send code
+                        {busy ? <Spinner label={t("settings.plaud.sendingCode")} /> : null}
+                        {t("settings.plaud.sendCode")}
                     </Button>
                 )}
             </div>
@@ -365,6 +363,7 @@ function desktopOpenBrowser(): DesktopOpenBrowser | null {
 }
 
 function PasteTokenTab({ onConnected }: { onConnected: () => void | Promise<void> }) {
+    const { t } = useI18n();
     const [token, setToken] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -379,7 +378,7 @@ function PasteTokenTab({ onConnected }: { onConnected: () => void | Promise<void
             });
             await onConnected();
         } catch (err) {
-            setError(errorMessage(err, "The token could not be connected."));
+            setError(errorMessage(err, t("settings.plaud.tokenConnectFailed")));
         } finally {
             setBusy(false);
         }
@@ -387,10 +386,8 @@ function PasteTokenTab({ onConnected }: { onConnected: () => void | Promise<void
 
     return (
         <div className="grid gap-4">
-            <p className="text-sm text-muted-foreground">
-                Copy your account token from the Plaud web app and paste it here. Workspace tokens are refused.
-            </p>
-            <Field label="Account token">
+            <p className="text-sm text-muted-foreground">{t("settings.plaud.pasteIntro")}</p>
+            <Field label={t("settings.plaud.accountToken")}>
                 <Textarea
                     rows={4}
                     spellCheck={false}
@@ -407,8 +404,8 @@ function PasteTokenTab({ onConnected }: { onConnected: () => void | Promise<void
             ) : null}
             <div className="flex justify-end">
                 <Button variant="primary" disabled={busy || token.trim() === ""} onClick={() => void connect()}>
-                    {busy ? <Spinner label="Connecting" /> : null}
-                    Connect
+                    {busy ? <Spinner label={t("settings.plaud.connecting")} /> : null}
+                    {t("settings.plaud.connect")}
                 </Button>
             </div>
         </div>
@@ -428,6 +425,7 @@ function BrowserTab({
     onConnected: () => void | Promise<void>;
     onSwitch: (tab: string) => void;
 }) {
+    const { t } = useI18n();
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const connectedRef = useRef(onConnected);
@@ -448,7 +446,7 @@ function BrowserTab({
                 } else if (status.status === "expired") {
                     alive = false;
                     setCode(null);
-                    setMessage(status.error ?? "This sign-in link has expired. Start again.");
+                    setMessage(status.error ?? t("settings.plaud.expiredLink"));
                 } else if (status.error) {
                     setMessage(status.error);
                 }
@@ -472,7 +470,7 @@ function BrowserTab({
         // suppress the browser tab on ordinary web installs.
         const popup = openInSystemBrowser ? null : window.open("about:blank", "_blank");
         if (!openInSystemBrowser && !popup) {
-            setMessage("Allow pop-ups to open Plaud sign-in in a new browser tab.");
+            setMessage(t("settings.plaud.allowPopups"));
             setBusy(false);
             return;
         }
@@ -492,7 +490,7 @@ function BrowserTab({
             if (code) {
                 await api(`/api/plaud/auth/handoff?code=${encodeURIComponent(code)}`, { method: "DELETE" }).catch(() => undefined);
             }
-            setMessage(errorMessage(err, "The sign-in window could not be started."));
+            setMessage(errorMessage(err, t("settings.plaud.signInStartFailed")));
         } finally {
             setBusy(false);
         }
@@ -509,21 +507,20 @@ function BrowserTab({
     return (
         <div className="grid gap-4">
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-                Sign in with your Plaud account in this browser, including Google and Apple sign-in. This needs the OpenAudioHub browser
-                extension.{" "}
+                {t("settings.plaud.browserIntro")}{" "}
                 <a
                     className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80"
                     href="/docs/guides/browser-extension"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    Get the extension
+                    {t("settings.plaud.getExtension")}
                 </a>
             </p>
             {code ? (
                 <p role="status" className="flex items-center gap-2 text-sm">
-                    <Spinner label="Waiting for Plaud sign-in" />
-                    Waiting for Plaud sign-in…
+                    <Spinner label={t("settings.plaud.waitingSignInLabel")} />
+                    {t("settings.plaud.waitingSignIn")}
                 </p>
             ) : null}
             {message ? (
@@ -534,24 +531,24 @@ function BrowserTab({
             <div className="flex justify-end gap-2">
                 {code ? (
                     <Button variant="secondary" onClick={() => void cancel()}>
-                        Cancel
+                        {t("settings.plaud.cancel")}
                     </Button>
                 ) : null}
                 <Button variant="primary" className="w-full" disabled={busy || code !== null} onClick={() => void start()}>
-                    {busy ? <Spinner label="Opening Plaud sign-in" /> : null}
-                    Open Plaud sign-in
+                    {busy ? <Spinner label={t("settings.plaud.openingSignIn")} /> : null}
+                    {t("settings.plaud.openSignIn")}
                 </Button>
             </div>
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-                After the sign-in page opens, click the OpenAudioHub icon in your browser toolbar. Or use the{" "}
+                {t("settings.plaud.browserFollowUp")}{" "}
                 <button type="button" className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80" onClick={() => onSwitch("email")}>
-                    email code
+                    {t("settings.plaud.emailCode")}
                 </button>{" "}
-                /{" "}
+                {t("settings.plaud.or")}{" "}
                 <button type="button" className="text-link underline decoration-dotted underline-offset-2 hover:opacity-80" onClick={() => onSwitch("paste")}>
-                    paste token
+                    {t("settings.plaud.pasteToken")}
                 </button>{" "}
-                methods instead.
+                {t("settings.plaud.methodsInstead")}
             </p>
         </div>
     );
