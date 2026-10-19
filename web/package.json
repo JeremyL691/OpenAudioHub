@@ -1,12 +1,13 @@
 {
     "name": "openaudiohub-web",
-    "version": "1.1.2",
+    "version": "1.2.0",
     "private": true,
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "tsc -b && vite build",
-        "typecheck": "tsc -b"
+        "build": "node scripts/check-i18n.mjs && tsc -b && vite build",
+        "typecheck": "node scripts/check-i18n.mjs && tsc -b",
+        "check:i18n": "node scripts/check-i18n.mjs"
     },
     "dependencies": {
         "@huggingface/transformers": "^3.8.1",

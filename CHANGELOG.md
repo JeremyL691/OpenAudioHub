@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-19
+
+### Added
+
+- The interface speaks English, Simplified Chinese, Japanese and Korean. The language is chosen from the account menu and from the signed-out and public pages, is remembered, and follows the browser language until a choice is made. The Mac app's menu-bar item and its own dialogs follow the same choice.
+- Every new interface string must be added in all four languages. The web build checks the catalogs, so a missing translation fails the build.
+
+### Changed
+
+- Auto export in the original format saves an Opus file as `.ogg`, the name of its container, without re-encoding it. A previous automatic export of the same recording is renamed from `.opus` to `.ogg` when it still matches the stored audio and still carries an automatic name.
+
 ## [1.1.2] - 2026-10-19
 
 ### Fixed
@@ -68,7 +79,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.2.0
 [1.1.2]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.2
 [1.1.1]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.1
 [1.1.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.0

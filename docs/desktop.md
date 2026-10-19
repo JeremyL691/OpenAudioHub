@@ -74,9 +74,19 @@ The menu bar icon has these items, in this order:
 4. **Edit Configuration…**: opens `openaudiohub.env`. The app creates the file first if it is missing.
 5. **Export Keys…**: saves a copy of `secrets.json`.
 6. **Launch at Login**: a check box. See [Launch at login](#launch-at-login).
-7. **Quit OpenAudioHub**: stops the app and the server. Shortcut: Command-Q.
+7. **Language**: one check item for each interface language: English, 简体中文, 日本語, 한국어. See [Interface language](#interface-language).
+8. **Quit OpenAudioHub**: stops the app and the server. Shortcut: Command-Q.
 
 Closing the window does not quit the app by default. The server keeps syncing in the background, and the icon stays in the menu bar. To quit, choose **Quit OpenAudioHub**, or change the close action in the preferences below.
+
+## Interface language
+
+The Mac app speaks English, Simplified Chinese, Japanese and Korean. Change the language in either place:
+
+- **Settings**, then the language group in the account menu.
+- **Language** in the menu bar item.
+
+Both save the same choice, and the menu bar item and the app's own dialogs follow it at once. The buttons macOS adds to a dialog, such as Cancel, stay in the system language. Changing the interface language does not change recordings, transcripts or summaries.
 
 ## Preferences
 
@@ -131,7 +141,7 @@ The app makes one kind of backup itself. For what you can export, see [Backup an
 
 **A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-1.1.0.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
 
-**Auto export.** In **Settings**, then **Export**, save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
+**Auto export.** In **Settings**, then **Export**, save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. An original Opus recording keeps its bytes and is saved as `.ogg`. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
 
 If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.
 
