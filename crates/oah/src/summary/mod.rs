@@ -81,6 +81,8 @@ pub async fn queue_auto(state: &AppState, user_id: &str, recording_id: &str) -> 
     if has_content(state, recording_id).await? {
         return Ok(false);
     }
+    // A queued or running run already covers this recording; enqueue returns that job.
+
     let preset = settings
         .get("autoSummarizePreset")
         .and_then(Value::as_str)

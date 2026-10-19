@@ -372,7 +372,7 @@ Not stored: `keywords`, `filetag_id_list`, `edit_time`, `ori_ready`, `version`, 
 
 The audio is downloaded in its original form (`is_opus=0`, see the Plaud web API section). The file extension and content type come from sniffing the bytes. Plaud often labels Ogg/Opus files as `.mp3`, so the sniffed type wins.
 
-The audio is downloaded once, when the recording is first added. A later Plaud version only refreshes metadata: the stored audio object, its path, `downloadedAt` and the waveform are kept, so a rename or an edit in Plaud never re-downloads or replaces the file.
+The audio is downloaded when the recording is first added. A later Plaud version only refreshes metadata: the stored audio object, its path, `downloadedAt` and the waveform are kept, so a rename or an edit in Plaud never re-downloads or replaces the file. The one exception is a stored object that is gone: the audio is downloaded again, because otherwise the recording stays unplayable.
 
 The object key is `<userId>/<plaudFileId>.<ext>`. If another recording of the same user already holds that key, ` (2)`, ` (3)`, and so on are added before the extension, up to 100 tries.
 
