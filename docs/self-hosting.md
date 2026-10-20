@@ -54,7 +54,7 @@ Keep `.env` safe. It holds `ENCRYPTION_KEY`. Without that key, the encrypted tit
 - The image is `ghcr.io/jeremyl691/openaudiohub`. The tag is set by `OPENAUDIOHUB_VERSION` in `.env`. If you do not set it, the tag is `latest`. Pin a version number for production.
 - The port is published as `127.0.0.1:3000:3000`. Only programs on the same machine can reach it. Your reverse proxy must run on that machine.
 - The volume `data` is mounted at `/data`. The compose project is named `openaudiohub`, so Docker names the volume `openaudiohub_data`. Run `docker volume ls` to check the name.
-- `compose.yml` passes four variables into the container: `ENCRYPTION_KEY`, `APP_URL`, `RATE_LIMIT_TRUST_PROXY_HEADERS` and `DISABLE_REGISTRATION`. To set any other variable, add it under `environment:` in `compose.yml`, or set it on the image. The full list is in [Environment variables](environment-variables.md).
+- `compose.yml` passes five variables into the container: `ENCRYPTION_KEY`, `APP_URL`, `RATE_LIMIT_TRUST_PROXY_HEADERS`, `DISABLE_REGISTRATION` and `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`. To set any other variable, add it under `environment:` in `compose.yml`, or set it on the image. The full list is in [Environment variables](environment-variables.md).
 
 To build the image yourself, run this from the repository root:
 
@@ -101,7 +101,8 @@ server {
 Keep these points in mind:
 
 - **APP_URL.** It must match the address in the browser. While you are signed in, the server checks the origin of every change you make. If the addresses differ, saving fails with an origin error.
-- **Client addresses.** The server counts sign-in attempts per client address. Without a proxy setting, every user behind the proxy shares one count. Set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` only when the proxy sets `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for`. If the server can be reached without the proxy, a client can fake these headers, so keep the port closed to the network.
+- **Client addresses.** The server counts sign-in attempts per client address. Set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` so that address is the visitor's, taken from `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for`; the Compose file already defaults to `true`. Turn it off when nothing sits in front of the server: the address is then the one the connection came from, and every user shares one budget, so one visitor trying passwords can keep everybody else out. If the server can be reached without the proxy, a client can fake these headers, so keep the port closed to the network.
+- **Webhook targets.** A server refuses webhook URLs that use plain `http` or point at a private address, so a stranger who signs up cannot use your server to reach machines on your network. To deliver to an address on your own network, set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`. The server logs one warning at startup when stored targets are refused by this rule.
 - **Uploads.** One upload can be up to 500 MB. Set the proxy's body size limit to at least that value. The nginx example uses `client_max_body_size 500m;`.
 - **Audio playback.** The player asks for parts of a file with HTTP range requests. The proxy must pass the `Range` header through. The nginx example does this by default.
 - **Timeouts.** Uploads, downloads and backups can take minutes. If they fail with a gateway timeout, raise the proxy timeouts.
