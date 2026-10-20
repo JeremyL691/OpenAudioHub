@@ -12,12 +12,14 @@ RUN pnpm build
 
 # cargo-chef keeps the dependency build in its own layer, so changing the app source does not
 # recompile every dependency in the image.
-FROM rust:1-trixie AS chef
+FROM rust:1.94.1-trixie AS chef
 RUN cargo install cargo-chef --version 0.1.78 --locked
 WORKDIR /src
 
 FROM chef AS planner
-COPY Cargo.toml Cargo.lock ./
+# The toolchain pin is copied with the manifests so the recipe is built by the same compiler
+# that builds the final binary, exactly as CI and a release do.
+COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 # The workspace lists the desktop app; only its manifest is needed here, so the lock file stays valid.
 COPY desktop-tauri/Cargo.toml desktop-tauri/Cargo.toml
@@ -29,7 +31,7 @@ FROM chef AS server
 WORKDIR /src
 COPY --from=planner /src/recipe.json recipe.json
 RUN cargo chef cook --release --locked --recipe-path recipe.json -p oah --bin oah-server
-COPY Cargo.toml Cargo.lock ./
+COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY desktop-tauri/Cargo.toml desktop-tauri/Cargo.toml
 RUN mkdir -p desktop-tauri/src && echo 'fn main() {}' > desktop-tauri/src/main.rs

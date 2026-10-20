@@ -34,7 +34,7 @@ jobs:
           # The action runs in a musl image, so the host triplet in rust-toolchain.toml does not
           # exist there and cargo would try to download it. cargo-deny only reads the lock file,
           # so it does not need the workspace compiler.
-          rust-version: "1.94"
+          rust-version: "1.94.1"
 
   npm:
     name: JavaScript advisories
