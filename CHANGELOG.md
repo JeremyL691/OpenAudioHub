@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Saving a transcript and the work that follows it now commit together. `transcription.completed`, the automatic title and the automatic summary used to be called after the transcript was committed, so a process that stopped in between left a transcript with no event and no automatic summary, and a failed summary enqueue was only logged. A queue job that names the transcript is written in the same transaction, and a follow-up for a transcript that was since deleted or replaced ends without touching the newer text. A retried save does not queue the same follow-up twice. The guarantee is at least once: a provider call that answered but was not committed is made again.
 - A worker that lost a long-transcription job can no longer write that job's chunk state. Marking a chunk as sending, storing its result and recording its failure now apply only while the job runs under the generation the worker claimed, so a response that arrives after a takeover cannot overwrite what the new run stored or is about to read. Chunk results stored before a takeover stay reusable.
 
 - The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.

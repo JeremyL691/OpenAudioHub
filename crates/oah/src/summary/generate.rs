@@ -35,6 +35,10 @@ pub struct Plan {
     /// Set for an automatic run. Jobs written before this field existed are manual runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger: Option<String>,
+    /// The transcript this automatic run was queued for. Jobs written before this field
+    /// existed, and manual runs, leave it unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript_id: Option<String>,
 }
 
 impl Plan {
@@ -107,7 +111,21 @@ pub fn plan(
         language: language.to_owned(),
         source: source.to_owned(),
         trigger: None,
+        transcript_id: None,
     }
+}
+
+/// Whether a transcript is still stored for its recording, so a run queued for it is still
+/// about the text the user has.
+async fn transcript_is_current(state: &AppState, recording_id: &str, transcript_id: &str) -> bool {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM transcriptions WHERE id = ? AND recording_id = ?)",
+    )
+    .bind(transcript_id)
+    .bind(recording_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false)
 }
 
 /// Duration in milliseconds of a recording the user owns and has not deleted.
@@ -198,6 +216,14 @@ pub async fn run_job(state: &AppState, job: Job) -> Outcome {
             };
         }
     };
+    // An automatic run names the transcript it was queued for. If a newer transcript replaced
+    // that one, the summary would describe the wrong text, so the run ends here. Manual runs and
+    // jobs written before the field existed carry no id and are unaffected.
+    if let Some(transcript_id) = plan.transcript_id.as_deref()
+        && !transcript_is_current(state, recording_id, transcript_id).await
+    {
+        return Outcome::Done;
+    }
     // The hourly cap applies to automatic runs, counted when the run starts. A manual run is
     // never capped, so a user who asks for a summary always gets one.
     if plan.is_auto() {

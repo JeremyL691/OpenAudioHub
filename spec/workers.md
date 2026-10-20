@@ -30,7 +30,8 @@ Terms used below:
 | Webhook delivery | Starts at boot with one immediate pass. Also runs when a delivery is queued. | Every 30 seconds | One pass at a time. Up to 50 deliveries per pass, at most 10 for one user. Deliveries in a pass are sent one after another. | Up to 6 attempts in total. Waits 30 seconds, 2 minutes, 10 minutes, 1 hour, and 6 hours after failures 1 to 5. | Status becomes `dead` after the 6th failure, or at once for a permanent failure. The endpoint's last delivery status becomes `failed`. |
 | Background Plaud sync | Starts at boot. First pass 30 seconds after boot. | `BACKGROUND_SYNC_INTERVAL_MS`, default 300000 (5 minutes) | One pass at a time. Up to 20 users per pass, one after another. A user's run is abandoned after 10 minutes. | No retry inside a pass. The next pass tries again. | Error is logged for that user. Other users still run. A rejected Plaud token marks the connection (see section 3). |
 | Auto-transcription | A job is queued when an upload or a Plaud sync adds a recording, and the user has auto-transcribe on. | When a job is queued. Idle workers check again every 5 seconds for delayed retries. | Two jobs at a time, across users. | Retryable provider errors are retried, up to 3 attempts in total, with backoff (section 4). | The job is marked failed. The recording keeps no transcript. A `transcription.failed` event is sent. |
-| Auto-summary | Right after a transcript is saved, when the user has auto-summarize on. | None (event-driven) | Runs inside the save step for that recording. | None. Hourly cap per user (section 5). | An event `summary.failed` is emitted. The transcript is kept. |
+| Follow-up of a saved transcript | Queued in the transaction that saves the transcript. | When the job is queued. | Two jobs at a time, across users. | Database errors are retried, up to 3 attempts in total, with backoff. | The job is marked failed with its error. The transcript is kept. |
+| Auto-summary | Right after the transcript's follow-up runs, when the user has auto-summarize on. | Where the summary is queued by the follow-up. | Two jobs at a time. | None. Hourly cap per user (section 5). | An event `summary.failed` is emitted. The transcript is kept. |
 | Manual summary job | A request for a summary (`ai.md`). | When a job is queued | Two jobs at a time. | None. A failed job is not retried. | The job fails and its error is returned to the request. |
 | Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
@@ -129,9 +130,11 @@ When an upload or a Plaud sync adds a recording and the user has auto-transcribe
 
 ### When it runs
 
-It runs right after a transcript is saved, from any path that saves one: a manual run, an automatic run, a browser transcript, and a finished audio pipeline job. It is also queued after Plaud's own transcript is imported.
+The queue holds one follow-up job per saved transcript. It is written in the same transaction that stores the transcript, for every path that saves one: a manual run, an automatic run, a browser transcript, and a finished audio pipeline job. An imported Plaud transcript queues one too, with source `plaud`.
 
-The save step queues the run and returns. An automatic summary is a job of kind `summary`, the same kind a manual request uses, so a recording has at most one run at a time and the recording's status covers it. The job records the trigger in its payload.
+The follow-up job emits `transcription.completed` and runs the title step for a transcript this server produced, then queues the automatic summary. A transcript that was deleted or replaced before the job runs ends it without doing any of those things, and a job that already finished is not queued again by a retried save. A provider call that answered but was not committed before the process stopped is made again: the guarantee is at least once, not exactly once.
+
+The automatic summary is a job of kind `summary`, the same kind a manual request uses, so a recording has at most one run at a time and the recording's status covers it. The job records the trigger and the transcript it was queued for in its payload; a run whose transcript was replaced ends without writing a summary.
 
 ### Rules
 

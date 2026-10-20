@@ -395,7 +395,7 @@ Retry requeues the job with its completed chunk results kept. Cancel stops the j
 
 ## After a transcript is saved
 
-These steps run after a transcript is saved, in this order, for manual runs, automatic runs, and browser transcripts:
+These steps run after a transcript is saved, in this order, for manual runs, automatic runs, and browser transcripts. They are recorded in the same transaction that saves the transcript, as a queue job that names that transcript, so a process that stops before they run leaves them queued instead of losing them, and a transcript that is replaced or deleted before they run does not apply them to the newer text.
 
 1. `transcription.completed` is emitted.
 2. Title. If automatic title is on (default on), a short title is generated from the first part of the transcript (about 2,000 characters) by the default AI provider for enhancement. The title is cleaned: surrounding quotes removed, colons and semicolons removed, and cut to 60 characters (57 characters and `...`). It replaces the recording's name. If the generation fails or returns nothing, the name is left as it was and the transcript is kept. If the setting that syncs titles to Plaud is on and the recording came from Plaud, the new title is sent to Plaud. A Plaud failure is logged and does not fail the run. If the auto-export setting uses AI titles, the exported copy is renamed too.
