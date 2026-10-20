@@ -1,7 +1,7 @@
 # The workspace needs Rust 1.94.1 for its dependencies (see `rust-version` in Cargo.toml).
-# Pinning it here keeps a local build, CI and a release on the same compiler, so an upgrade
-# is a commit rather than a surprise.
+# Pinning the exact patch release here keeps a local build, CI and a release on the same
+# compiler, so an upgrade is a commit rather than a surprise.
 [toolchain]
-channel = "1.94"
+channel = "1.94.1"
 components = ["clippy", "rustfmt"]
 profile = "minimal"

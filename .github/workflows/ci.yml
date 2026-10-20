@@ -19,12 +19,15 @@ jobs:
     runs-on: ubuntu-24.04
     # The bundled ONNX Runtime needs GCC 14's libstdc++. The tag matches rust-toolchain.toml,
     # so the compiler here is the one the workspace pins instead of whatever `rust:1` points at.
-    container: rust:1.94-trixie
+    container: rust:1.94.1-trixie
     steps:
       - uses: actions/checkout@v4
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
       - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
+      # The same version has to be declared in the workspace, the toolchain, the images and the
+      # documents a reader installs from; a drift here is a broken build for someone else.
+      - run: tools/check/rust-version.sh
       - run: cargo fmt --all -- --check
       - run: cargo clippy -p oah --all-targets -- -D warnings
       - run: cargo test -p oah
@@ -34,13 +37,14 @@ jobs:
   msrv:
     name: Minimum Rust version
     runs-on: ubuntu-24.04
-    container: rust:1.94-trixie
+    container: rust:1.94.1-trixie
     steps:
       - uses: actions/checkout@v4
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
       - uses: Swatinem/rust-cache@v2
+      - run: tools/check/rust-version.sh
       # `--ignore-rust-version` is not used: the point is that the pinned version really builds.
-      - run: cargo check -p oah --all-targets
+      - run: cargo check -p oah --all-targets --locked
 
   web:
     runs-on: ubuntu-24.04
@@ -107,7 +111,7 @@ jobs:
 
   pipeline:
     runs-on: ubuntu-24.04
-    container: rust:1.94-trixie
+    container: rust:1.94.1-trixie
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
@@ -143,7 +147,7 @@ jobs:
 
   contract:
     runs-on: ubuntu-24.04
-    container: rust:1.94-trixie
+    container: rust:1.94.1-trixie
     # Chromium falls back to the default download name when the process locale is not
     # UTF-8, which hides filenames derived from non-ASCII titles.
     env:
