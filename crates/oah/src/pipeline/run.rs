@@ -71,6 +71,12 @@ fn guard(wrote: bool) -> Step<()> {
     if wrote { Ok(()) } else { Err(Stop::LeaseLost) }
 }
 
+/// The condition every chunk write carries: the job is still running under the generation
+/// this worker claimed. A chunk is shared state, so a worker whose lease was taken over must
+/// not touch it: the run that replaced it would read the old result as its own.
+const STILL_OURS: &str =
+    "EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)";
+
 impl From<sqlx::Error> for Stop {
     fn from(e: sqlx::Error) -> Self {
         Stop::Retry(e.to_string())
@@ -766,7 +772,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     if samples > MAX_CHUNK_SAMPLES {
         return record_failure(
             db,
-            &ctx.lease.id,
+            ctx.lease,
             index,
             "LimitError",
             "Chunk exceeds provider duration limit",
@@ -776,7 +782,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     if wav.len() > MAX_WAV_BYTES {
         return record_failure(
             db,
-            &ctx.lease.id,
+            ctx.lease,
             index,
             "LimitError",
             "Chunk exceeds provider file-size limit",
@@ -789,12 +795,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     let mut attempt = 0;
     loop {
         attempt += 1;
-        sqlx::query("UPDATE pipeline_chunks SET state = 'running', attempts = ? WHERE job_id = ? AND idx = ?")
-            .bind(attempt)
-            .bind(&ctx.lease.id)
-            .bind(index)
-            .execute(db)
-            .await?;
+        mark_running(db, ctx.lease, index, attempt).await?;
         match transcribe::transcribe_file(ctx.state, ctx.provider, &wav_path, ctx.options).await {
             Ok(t) => {
                 let response = serde_json::to_string(&merge::Stored {
@@ -803,12 +804,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                     segments: t.segments,
                 })
                 .map_err(|e| Stop::Retry(e.to_string()))?;
-                sqlx::query("UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL WHERE job_id = ? AND idx = ?")
-                    .bind(response)
-                    .bind(&ctx.lease.id)
-                    .bind(index)
-                    .execute(db)
-                    .await?;
+                store_success(db, ctx.lease, index, &response).await?;
                 break;
             }
             Err(e) if e.retryable && attempt < CHUNK_ATTEMPTS => {
@@ -816,7 +812,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                 check_cancel(db, &ctx.lease.id).await?;
             }
             Err(e) => {
-                record_failure(db, &ctx.lease.id, index, e.code, &e.message).await?;
+                record_failure(db, ctx.lease, index, e.code, &e.message).await?;
                 break;
             }
         }
@@ -825,21 +821,66 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     Ok(())
 }
 
+/// Marks a chunk as being sent. Only the worker that holds the lease can start a send, so a
+/// replaced run cannot make a chunk look busy to the run that owns it.
+async fn mark_running(db: &SqlitePool, lease: &Lease, index: i64, attempt: u32) -> Step<()> {
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'running', attempts = ? \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(i64::from(attempt))
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
+}
+
+/// Stores a finished chunk. The response is what the next run would reuse, so it is written
+/// only while this worker still holds the lease.
+async fn store_success(db: &SqlitePool, lease: &Lease, index: i64, response: &str) -> Step<()> {
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(response)
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
+}
+
 async fn record_failure(
     db: &SqlitePool,
-    job_id: &str,
+    lease: &Lease,
     index: i64,
     code: &str,
     message: &str,
 ) -> Step<()> {
-    sqlx::query("UPDATE pipeline_chunks SET state = 'failed', error_code = ?, error_message = ? WHERE job_id = ? AND idx = ?")
-        .bind(code)
-        .bind(truncate(message.to_owned()))
-        .bind(job_id)
-        .bind(index)
-        .execute(db)
-        .await?;
-    Ok(())
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'failed', error_code = ?, error_message = ? \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(code)
+    .bind(truncate(message.to_owned()))
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
 }
 
 /// Exponential delay from 2 s, capped at 120 s, with up to 1 s of jitter (spec 8.5).
@@ -1199,6 +1240,119 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(stored, 0, "a replaced run stores no transcript");
+    }
+
+    /// Seeds one planned chunk for the job `save_state` created.
+    async fn seed_chunk(state: &AppState, index: i64) {
+        sqlx::query(
+            "INSERT INTO pipeline_chunks (job_id, idx, chunk_id, start_sample, end_sample) VALUES ('j', ?, 'c', 0, 16000)",
+        )
+        .bind(index)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_chunk_that_was_taken_over_is_not_marked_running() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        // Another worker claimed the job after this one lost its lease.
+        sqlx::query("UPDATE jobs SET lease_gen = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let stale = test_lease();
+        let outcome = mark_running(&state.db, &stale, 0, 1).await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a stale worker cannot start a chunk"
+        );
+        // The worker that does hold the lease can.
+        let holder = Lease {
+            id: "j".into(),
+            lease_gen: 1,
+        };
+        mark_running(&state.db, &holder, 0, 1).await.ok().unwrap();
+        let started: String =
+            sqlx::query_scalar("SELECT state FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(started, "running", "the current holder starts the chunk");
+    }
+
+    #[tokio::test]
+    async fn a_chunk_result_from_a_lost_lease_is_dropped() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let stale = Lease {
+            id: "j".into(),
+            lease_gen: 0,
+        };
+        mark_running(&state.db, &stale, 0, 1).await.ok().unwrap();
+        // The lease moves on while the provider request is in flight.
+        sqlx::query("UPDATE jobs SET lease_gen = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = store_success(&state.db, &stale, 0, "stale words").await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a response from a lost lease is refused"
+        );
+        let stored: Option<String> = sqlx::query_scalar(
+            "SELECT response FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(stored, None, "the replaced run keeps its own chunk state");
+    }
+
+    #[tokio::test]
+    async fn a_chunk_failure_from_a_lost_lease_is_dropped() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let stale = Lease {
+            id: "j".into(),
+            lease_gen: 0,
+        };
+        sqlx::query("UPDATE jobs SET lease_gen = 3")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = record_failure(&state.db, &stale, 0, "UpstreamError", "boom").await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a failure from a lost lease is refused"
+        );
+        let chunk_state: String =
+            sqlx::query_scalar("SELECT state FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(chunk_state, "queued", "a stale failure changes nothing");
+    }
+
+    #[tokio::test]
+    async fn the_current_lease_still_records_its_chunks() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let lease = test_lease();
+        mark_running(&state.db, &lease, 0, 1).await.ok().unwrap();
+        store_success(&state.db, &lease, 0, "kept words")
+            .await
+            .ok()
+            .unwrap();
+        let (chunk_state, response): (String, Option<String>) = sqlx::query_as(
+            "SELECT state, response FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(chunk_state, "completed");
+        assert!(response.unwrap().contains("kept words"));
     }
 
     #[tokio::test]
