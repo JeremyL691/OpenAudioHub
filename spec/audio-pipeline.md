@@ -609,9 +609,20 @@ These responses have no `code` field. The `error` text is the only detail.
 - The contract suite covers the status route (no job, sync transcript, other user's
   recording), the action validation, and the not-found cases. Browser tests wait for a
   pipeline job to reach `completed`.
+- The pipeline contract run (`contract-tests/run.sh pipeline`) drives the whole path over
+  HTTP with the pipeline on: a generated speech recording goes through ffmpeg, the speech
+  detection, chunk planning, two or more provider calls, the merge and the save. It checks
+  a stored timeline that spans more than one chunk, cancel during a run, a provider that
+  fails a few times, a provider that never answers, and a retry after a failed run that
+  keeps the chunks that already succeeded. The recording is generated from `espeak-ng` at
+  test time, so the repository holds no audio file and no licence applies; a machine
+  without it skips these tests with that reason.
 - Chunk planning, merging, the checkpoint format and the job queue have unit tests in
   the server code. One test compares speech spans with a reference file, and runs only
   with fixtures that are not in the repository.
+- A restart is covered by an ignored unit test that runs with a fixture: it stops a run
+  after some chunks were answered, claims the job again, and checks that the saved speech
+  detection is reused and the finished chunks are not sent again.
 - Cancel and save against the same job, the status table, the speaker settings read by the
   pipeline (including a diarizing model with speaker labels off), the retry claim counter
   and the superseded work folder have unit tests in the server code.
@@ -619,4 +630,4 @@ These responses have no `code` field. The `error` text is the only detail.
   progress, record its outcome, change the phase or save a transcript, including after an
   explicit retry reset the retry counter.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
-  `needs_alignment` results, provider retries and their delays, and crash recovery.
+  and `needs_alignment` results.

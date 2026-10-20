@@ -31,4 +31,19 @@ export default defineConfig({
         // Keep a trace for a failed run, so CI failures can be inspected afterwards.
         trace: "retain-on-failure",
     },
+    // The long-recording pipeline runs on its own server, so its tests live in their own
+    // project: the default run keeps them out, and pipeline mode runs only them.
+    projects: [
+        {
+            name: "contract",
+            testIgnore: ["pipeline/**"],
+        },
+        {
+            name: "pipeline",
+            testMatch: ["pipeline/**/*.spec.ts"],
+            // Speech detection, chunk transcription and the save step take longer than the
+            // suite-wide limit, and a slow machine adds to every poll.
+            timeout: 180_000,
+        },
+    ],
 });
