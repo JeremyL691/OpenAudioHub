@@ -1087,10 +1087,22 @@ mod tests {
             );
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
+        // Speech detection finishes before the first chunk is sent, so a provider call means the
+        // marker is already there. Waiting for it as well keeps the crash from landing between a
+        // first provider answer and the marker write on a slow or loaded machine, which would
+        // check the restart against a run that never reached speech detection at all.
+        let work = pipeline_dir(&state, &id);
+        let marker_deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !work.join("vad.complete").exists() {
+            assert!(
+                std::time::Instant::now() < marker_deadline,
+                "the run never saved its speech detection"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
         running.abort();
         let _ = running.await;
         let sent_first = asked.load(std::sync::atomic::Ordering::SeqCst);
-        let work = pipeline_dir(&state, &id);
         let vad_done = work.join("vad.complete").exists();
 
         let plan: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ?")
