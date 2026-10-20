@@ -21,6 +21,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The pull request checks now format-check the Rust code, lint and test the Mac app crate, and run the long-recording suite. They used to cover the server, the web app and the extension only.
 - A security workflow runs `cargo-deny` and the npm audits, on lock-file changes, on `main`, and weekly. Dependabot opens grouped dependency updates.
 
+### Added
+
+- `docs/performance.md` records how long the pipeline takes on a reference machine, what it uses in memory and disk, and how to measure the same numbers with `tools/bench/pipeline.sh`.
+
 ## [1.2.0] - 2026-10-19
 
 ### Added
