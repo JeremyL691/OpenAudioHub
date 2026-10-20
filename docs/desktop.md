@@ -139,7 +139,7 @@ The check box is not available in development builds.
 
 The app makes one kind of backup itself. For what you can export, see [Backup and restore](backup-and-restore.md).
 
-**A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-1.1.0.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
+**A copy before each upgrade.** When a new version of the app starts on data that an older version wrote, it first copies the database to `backups/`. The file name has the time and the app version, for example `<time>-before-<version>.sqlite`. The app keeps the five newest copies. If the copy fails, the app does not start, so that your data stays as it was.
 
 **Auto export.** In **Settings**, then **Export**, save each new recording into a folder of your choice, once, as MP3, as OGG (Ogg container with Opus audio), or as the original file. An original Opus recording keeps its bytes and is saved as `.ogg`. The file name can be the recording's original name, its date (`2026-10-12`), or the AI title once one exists. Only recordings that arrive while auto export is on are saved; recordings already in the library are not.
 

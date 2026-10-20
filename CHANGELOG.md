@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.5] - 2026-10-20
 
 ### Security
 
@@ -17,6 +17,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` now defaults to `true` on a server and `false` in the Mac app, and an unset or empty value follows the default of the mode. A self-hosted server that delivers to a machine on its own network, such as a home automation tool at a `192.168` address, must set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`; the server logs a warning at startup naming how many stored targets the rule refuses. An invalid value now stops startup instead of failing webhook requests.
 - The Compose file sets `RATE_LIMIT_TRUST_PROXY_HEADERS` to `true` by default, because it publishes the port on loopback only and expects a reverse proxy in front of it. Turn it off when the server is reached directly.
 - The public API rate limit is counted per connection address instead of one shared bucket when the proxy setting is off.
+- A release tag is checked before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit. A tag pushed at an unreviewed commit no longer publishes downloads.
+- The pull request checks now format-check the Rust code, lint and test the Mac app crate, and run the long-recording suite. They used to cover the server, the web app and the extension only.
+- A security workflow runs `cargo-deny` and the npm audits, on lock-file changes, on `main`, and weekly. Dependabot opens grouped dependency updates.
+
+### Added
+
+- The long-recording pipeline is covered end to end over HTTP. A separate contract run drives a generated speech recording through ffmpeg, speech detection, chunk planning, several provider calls and the merge, and checks cancel, provider failures, a timeout, and a retry that keeps the chunks that already succeeded. A restart after a crash is covered too: the saved speech detection is reused and finished chunks are not sent again.
+- `docs/performance.md` records how long the pipeline takes on a reference machine, what it uses in memory and disk, and how to measure the same numbers with `tools/bench/pipeline.sh`.
 
 ## [1.2.0] - 2026-10-19
 
@@ -91,7 +99,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.2.5
 [1.2.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.2.0
 [1.1.2]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.2
 [1.1.1]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.1

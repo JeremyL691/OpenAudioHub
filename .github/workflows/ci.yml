@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A release re-runs the whole suite on the tagged commit before it builds anything.
+  workflow_call:
 
 permissions:
   contents: read
@@ -20,8 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
-      - run: rustup component add clippy
+      - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
       - run: cargo clippy -p oah --all-targets -- -D warnings
       - run: cargo test -p oah
 
@@ -60,6 +63,69 @@ jobs:
         working-directory: extension
       - run: pnpm zip
         working-directory: extension
+
+  # The Mac app crate is a workspace member the Linux jobs never build, so its lint and its
+  # tests only ran when a release tag was pushed.
+  desktop:
+    name: Mac app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: web
+      # The build script pins every source archive, so it is part of the cache key.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            desktop-tauri/.cache/ffmpeg-*
+            desktop-tauri/binaries
+          key: ffmpeg-sidecars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
+      - name: Build the ffmpeg sidecars the app bundle expects
+        working-directory: desktop-tauri
+        run: scripts/build-ffmpeg.sh
+      - run: cargo fmt -p openaudiohub-desktop -- --check
+      - run: cargo clippy -p openaudiohub-desktop --all-targets -- -D warnings
+      - run: cargo test -p openaudiohub-desktop
+
+  pipeline:
+    runs-on: ubuntu-24.04
+    container: rust:1-trixie
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl espeak-ng
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y nodejs
+          corepack enable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+        working-directory: contract-tests
+      # The long-recording path is off in the main contract run, so this job turns it on and
+      # drives a real ffmpeg, the real speech detection and a fake provider end to end.
+      - run: bash contract-tests/fixtures/make-speech.sh .dev-artifacts/speech-pipeline-15.wav 15
+      - run: contract-tests/run.sh pipeline
+      - name: Pipeline restart and lease recovery
+        run: |
+          OAH_PIPELINE_FIXTURE="$PWD/.dev-artifacts/speech-pipeline-15.wav" \
+            cargo test -p oah --lib -- --ignored a_restart_reuses_the_saved_speech_detection
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-results
+          path: .dev-artifacts/
+          include-hidden-files: true
 
   contract:
     runs-on: ubuntu-24.04

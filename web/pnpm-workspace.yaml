@@ -3,3 +3,8 @@ allowBuilds:
   onnxruntime-node: false
   protobufjs: false
   sharp: false
+
+# The browser build never runs sharp, but the version transformers pins has known advisories.
+# Keep it at the patched release so a dependency audit stays clean.
+overrides:
+  sharp: ">=0.35.5"

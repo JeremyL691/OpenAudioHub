@@ -338,6 +338,47 @@ async fn change(
         .into_response())
 }
 
+/// Fixtures shared by the pipeline tests in this module and in `run`.
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use crate::AppState;
+
+    /// A user and a recording whose audio is the file at `path`.
+    pub async fn seed_user_recording(state: &AppState, id: &str, path: &str) {
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES (?, 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', ?, '1', 0, 0)",
+        )
+        .bind(id)
+        .bind(path)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    /// The default transcription provider for the seeded user, pointing at `base_url`.
+    pub async fn seed_provider(state: &AppState, user_id: &str, base_url: &str) {
+        let key = state.config.field_key.encrypt("test-key");
+        sqlx::query(
+            "INSERT INTO api_credentials (id, user_id, provider, api_key, base_url, default_model,
+             is_default_transcription, is_default_enhancement, created_at, updated_at)
+             VALUES ('p', ?, 'Custom', ?, ?, 'test-model', 1, 1, 0, 0)",
+        )
+        .bind(user_id)
+        .bind(key)
+        .bind(base_url)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

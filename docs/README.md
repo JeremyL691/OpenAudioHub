@@ -32,6 +32,7 @@ You run the server yourself, with Docker Compose, or with the Mac app. These pag
 - [Environment variables](environment-variables.md): every setting the server reads at startup.
 - [S3-compatible storage](storage-s3.md): store audio in AWS S3, Cloudflare R2, MinIO, Backblaze B2 and other services.
 - [Email (SMTP) setup](email-smtp.md): outgoing mail for notifications and password reset.
+- [Performance](performance.md): how long a long recording takes, memory and disk use, and how to measure it.
 
 ## Reference
 

@@ -1,0 +1,51 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "**/package.json"
+      - "**/pnpm-lock.yaml"
+      - "deny.toml"
+      - ".github/workflows/security.yml"
+  # New advisories appear without a commit here, so the checks also run on a schedule.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust advisories and licences
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          # `check` with no subcommand covers advisories, bans, licences and sources with the
+          # policy in deny.toml. The default arguments are left alone: they match how the
+          # policy was tuned against this workspace.
+          command: check
+
+  npm:
+    name: JavaScript advisories
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      # A high or worse advisory fails the run. Moderate notices are reported in the log: the
+      # one left is in a transitive package the browser build never reaches.
+      - name: Audit the web app
+        working-directory: web
+        run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level high
+      - name: Audit the extension
+        working-directory: extension
+        run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level high

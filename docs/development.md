@@ -10,6 +10,7 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 - [Contract tests](#contract-tests)
 - [Desktop app](#desktop-app)
 - [Container image](#container-image)
+- [Continuous integration and dependency checks](#continuous-integration-and-dependency-checks)
 
 ## Project layout
 
@@ -117,6 +118,14 @@ This builds the server and the web app into `.dev-artifacts/`, starts the server
 contract-tests/run.sh server tests/recordings.spec.ts
 ```
 
+The long-recording pipeline is off in that run. To exercise it end to end over HTTP, run the pipeline suite:
+
+```sh
+contract-tests/run.sh pipeline
+```
+
+It starts a second server on port 3212 with `AUDIO_PIPELINE_ENABLED=true`, a short provider timeout, and generates a speech recording with `espeak-ng` and `ffmpeg` instead of using a stored file. The tests cover a full run with more than one chunk, cancel, provider failures, a timeout, and a retry. A machine without `espeak-ng` skips them and says so.
+
 To run against a server that is already running, start the fake AI provider, then pass the address of the server:
 
 ```sh
@@ -168,6 +177,31 @@ docker build -f deploy/Dockerfile -t openaudiohub .
 The image builds in three stages: the web app with Node 22, the server with Rust, and a Debian slim image that holds the server and ffmpeg. The image needs no secrets to build. `ENCRYPTION_KEY` is set at run time.
 
 To try the image, run it with the same settings as `compose.yml`, or tag it with the name in `compose.yml` and use the compose file. See [Self-hosting](self-hosting.md).
+
+## Continuous integration and dependency checks
+
+Every pull request runs these checks:
+
+| Check | What it does |
+|---|---|
+| `server` | `cargo fmt --all -- --check`, then clippy and the tests for `oah`. |
+| `web` | The translation catalogs, the type check and the build. |
+| `extension` | Type check, tests, build and zip. |
+| `desktop` | Builds the web app and the ffmpeg sidecars, then lints and tests the Mac app crate. |
+| `contract` | The browser and HTTP suite against a real server. |
+| `pipeline` | The long-recording suite with the pipeline on, plus the restart test. |
+
+Two more workflows guard dependencies. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app and the extension; it runs on a pull request that changes a lock file, on `main`, and every Monday. Dependabot opens grouped updates monthly for Rust and npm, and weekly for the workflows.
+
+`deny.toml` carries the dependency policy, including the licences allowed in this tree and the advisories that cannot be cleared from here. Each ignored advisory has a comment saying why; remove an entry once its dependency is updated.
+
+A release tag runs `verify` before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit.
+
+## Benchmarks
+
+`tools/bench/pipeline.sh` measures a long recording end to end: build the server, upload a generated speech file, run the pipeline against a local provider, and print the wall time of each phase, the peak memory and the work-folder size. It needs `ffmpeg` and `espeak-ng`, keeps everything in `.dev-artifacts/bench/`, and uses ports 3290 and 3291.
+
+The reference numbers and what they mean are in [Performance](performance.md).
 
 ## Interface language
 

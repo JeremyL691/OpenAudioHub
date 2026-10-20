@@ -6,6 +6,9 @@
 //   GET /__requests          the last 50 requests received (newest last), each with a growing `seq`
 //   GET /__requests?path=X   only those whose path ends with X
 //   POST /__answer           { content } overrides the chat answer; null restores the fixed one
+//   POST /__transcription    { failNext, status, delayMs, proportional } changes how transcription
+//                            answers fail or stall; any field left out keeps its current value
+//   POST /__reset            clears the requests, the failure counter and the chat override
 import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? process.env.FAKE_AI_PORT ?? 3299);
@@ -21,6 +24,12 @@ const segments = [
 
 const requests = [];
 let seq = 0;
+/**
+ * How transcription answers behave. `failNext` requests answer with `status`,
+ * `delayMs` postpones every answer, and `proportional` makes the segments span
+ * the length of the uploaded audio instead of the fixed three seconds.
+ */
+const transcriptionControl = { failNext: 0, status: 500, delayMs: 0, proportional: false };
 /** Chat answer override: a string replaces the fixed reply, null restores it. */
 let answerOverride = null;
 
@@ -54,12 +63,72 @@ function formFields(raw, contentType) {
     return fields;
 }
 
-function transcription(fields) {
+/** Seconds of audio in a WAV body, from its data chunk header. */
+function wavSeconds(raw) {
+    let offset = 12;
+    while (offset + 8 <= raw.length) {
+        const id = raw.toString("latin1", offset, offset + 4);
+        const size = raw.readUInt32LE(offset + 4);
+        if (id === "data") {
+            const header = raw.toString("latin1", 0, Math.min(64, raw.length));
+            const byteRate = header.startsWith("RIFF") ? wavByteRate(raw) : 0;
+            return byteRate ? size / byteRate : 0;
+        }
+        offset += 8 + size + (size % 2);
+    }
+    return 0;
+}
+
+/** Bytes per second from the WAV `fmt ` chunk. */
+function wavByteRate(raw) {
+    let offset = 12;
+    while (offset + 8 <= raw.length) {
+        const id = raw.toString("latin1", offset, offset + 4);
+        const size = raw.readUInt32LE(offset + 4);
+        if (id === "fmt ") return raw.readUInt32LE(offset + 16);
+        offset += 8 + size + (size % 2);
+    }
+    return 0;
+}
+
+/** Bytes of the single uploaded file part, for the audio headers. */
+function formFile(raw, contentType) {
+    const boundary = /boundary=(.+)$/.exec(contentType ?? "")?.[1];
+    if (!boundary) return null;
+    for (const part of raw.toString("latin1").split(`--${boundary}`)) {
+        const headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd < 0 || !/filename="/.test(part.slice(0, headerEnd))) continue;
+        const body = part.slice(headerEnd + 4, part.length - 2);
+        return Buffer.from(body, "latin1");
+    }
+    return null;
+}
+
+function transcription(fields, file) {
     const base = { text: TRANSCRIPT_TEXT, language: "en", duration: 3 };
     if (fields.response_format === "text") return TRANSCRIPT_TEXT;
     if (fields.response_format === "diarized_json")
         return { ...base, segments: segments.map((s) => ({ ...s, type: "transcript.text.segment" })) };
     return { ...base, segments: segments.map(({ speaker, ...s }) => s) };
+}
+
+/**
+ * A transcript whose segments span the uploaded audio. The pipeline rejects timestamps
+ * that run past a chunk, so the answer has to follow the length of what it received.
+ */
+function proportionalTranscription(fields, file) {
+    const seconds = file ? wavSeconds(file) : 0;
+    const duration = seconds > 0 ? seconds : 3;
+    const spans = [
+        { start: 0, end: duration / 2, text: "First part of the recording." },
+        { start: duration / 2, end: duration, text: "Second part of the recording." },
+    ].filter((s) => s.end - s.start > 0.01);
+    const answer = { text: spans.map((s) => s.text).join(" "), language: "en", duration };
+    if (fields.response_format === "text") return answer.text;
+    const payload = spans.map((s, id) => ({ id, ...s, speaker: id % 2 === 0 ? "A" : "B" }));
+    if (fields.response_format === "diarized_json")
+        return { ...answer, segments: payload.map((s) => ({ ...s, type: "transcript.text.segment" })) };
+    return { ...answer, segments: payload.map(({ speaker, ...s }) => s) };
 }
 
 createServer((req, res) => {
@@ -73,6 +142,25 @@ createServer((req, res) => {
         if (req.method === "GET" && path === "/__requests") {
             const filter = url.searchParams.get("path");
             return send(res, 200, requests.filter((r) => !filter || r.path.endsWith(filter)));
+        }
+        if (req.method === "POST" && path === "/__transcription") {
+            const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+            for (const key of ["failNext", "status", "delayMs", "proportional"]) {
+                if (body[key] !== undefined) transcriptionControl[key] = body[key];
+            }
+            return send(res, 200, transcriptionControl);
+        }
+        if (req.method === "POST" && path === "/__reset") {
+            requests.length = 0;
+            seq = 0;
+            answerOverride = null;
+            Object.assign(transcriptionControl, {
+                failNext: 0,
+                status: 500,
+                delayMs: 0,
+                proportional: false,
+            });
+            return send(res, 200, { ok: true });
         }
         if (req.method === "POST" && path === "/__answer") {
             const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
@@ -107,12 +195,28 @@ createServer((req, res) => {
             });
         }
         if (req.method === "POST" && path === "/audio/transcriptions") {
-            const body = transcription(fields);
-            if (typeof body === "string") {
-                res.writeHead(200, { "content-type": "text/plain" });
-                return res.end(body);
+            const file = formFile(raw, req.headers["content-type"]);
+            const answer = () => {
+                const body = transcriptionControl.proportional
+                    ? proportionalTranscription(fields, file)
+                    : transcription(fields, file);
+                if (typeof body === "string") {
+                    res.writeHead(200, { "content-type": "text/plain" });
+                    return res.end(body);
+                }
+                send(res, 200, body);
+            };
+            if (transcriptionControl.failNext > 0) {
+                transcriptionControl.failNext -= 1;
+                return send(res, transcriptionControl.status, {
+                    error: { message: "Transcription failed for this request" },
+                });
             }
-            return send(res, 200, body);
+            if (transcriptionControl.delayMs > 0) {
+                setTimeout(answer, transcriptionControl.delayMs);
+                return;
+            }
+            return answer();
         }
         if (req.method === "POST" && path === "/speech-to-text") {
             // ElevenLabs shape: words with timings and speaker ids.
