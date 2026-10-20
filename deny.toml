@@ -1,0 +1,63 @@
+# Dependency policy. Run by the security workflow with cargo-deny.
+[graph]
+# The whole workspace, so the Mac app's dependencies are covered too.
+all-features = false
+targets = []
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# A vulnerability in a dependency fails the run.
+#
+# These three come from the AWS SDK's own HTTP and TLS stack (aws-smithy-http-client), which the
+# S3 storage option pulls in. No published version of aws-sdk-s3 avoids them, so the only way
+# to clear them here would be to drop S3 support. They affect outbound calls to the operator's
+# own S3 endpoint, not requests from the internet, and the server talks to that endpoint over a
+# trusted path. Remove these once the SDK moves on.
+ignore = [
+    # rustls 0.21, pulled in by the AWS SDK's HTTP client. No published aws-sdk-s3 avoids it.
+    "RUSTSEC-2026-0098", # URI name constraints accepted
+    "RUSTSEC-2026-0099", # wildcard name constraints accepted
+    "RUSTSEC-2026-0104", # panic while parsing a revocation list
+    "RUSTSEC-2026-0346", # name constraints, same requirement
+    "RUSTSEC-2026-0349", # revocation list parsing, same requirement
+    # h2 0.3, also from the AWS SDK.
+    "RUSTSEC-2026-0258", # unbounded empty DATA frames
+    # Build-time only, through a macro expansion.
+    "RUSTSEC-2024-0370", # proc-macro-error is unmaintained
+]
+
+[licenses]
+allow = [
+    "0BSD",
+    "AGPL-3.0-only",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "LGPL-2.1-or-later",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "allow"
+# `allow-wildcard-paths` keeps a `path` dependency between workspace members from counting as
+# a wildcard: there is no registry version to pin for the crate in this repository.
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

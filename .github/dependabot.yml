@@ -1,55 +1,48 @@
 version: 2
+
 updates:
-  # Minor and patch updates arrive as one grouped pull request per ecosystem.
-  # Major versions are handled by hand, because they need a migration plan.
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      cargo-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: npm
-    directory: /web
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      web-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: npm
-    directory: /contract-tests
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      contract-tests-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
+  # The actions the workflows use.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
     groups:
-      actions-minor-patch:
+      actions:
         patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+
+  # Rust dependencies, grouped so a version bump arrives as one pull request.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      web:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /extension
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      extension:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /contract-tests
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      contract-tests:
+        patterns: ["*"]
