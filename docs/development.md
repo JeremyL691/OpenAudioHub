@@ -189,6 +189,12 @@ Two more workflows guard dependencies. `security.yml` runs `cargo-deny` against 
 
 A release tag runs `verify` before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit.
 
+## Benchmarks
+
+`tools/bench/pipeline.sh` measures a long recording end to end: build the server, upload a generated speech file, run the pipeline against a local provider, and print the wall time of each phase, the peak memory and the work-folder size. It needs `ffmpeg` and `espeak-ng`, keeps everything in `.dev-artifacts/bench/`, and uses ports 3290 and 3291.
+
+The reference numbers and what they mean are in [Performance](performance.md).
+
 ## Interface language
 
 The web app and the Mac app speak English, Simplified Chinese, Japanese and Korean. Strings live in `web/src/locales/{en,zh-CN,ja,ko}/`; components read them through `useI18n()` and `t()`, described in `web/src/lib/i18n.ts`.
