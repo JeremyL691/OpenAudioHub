@@ -2,3 +2,8 @@ packages:
   - .
 allowBuilds:
   esbuild: true
+
+# vitest 3.2.7 still resolves tinypool below the release that fixed the worker-option
+# prototype pollution advisories. The extension only runs vitest locally and in CI.
+overrides:
+  tinypool: ">=2.1.2"
