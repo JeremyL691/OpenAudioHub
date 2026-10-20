@@ -157,13 +157,15 @@ Side effects: one delivery row is updated.
 3. The URL must not contain a username or password.
 4. The stored and returned URL is the normalized form. Path and query are kept.
 5. Redirects are not followed when delivering. A 3xx reply is a failed attempt.
-6. Default setting (`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`): any HTTP or HTTPS host is accepted, including `localhost`, loopback and private addresses. The shared contract-test server runs with this setting.
-7. Strict setting (`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`), checked on create, on update, and again at each send:
+6. Lenient policy (`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`): any HTTP or HTTPS host is accepted, including `localhost`, loopback and private addresses. This is the default in the desktop app, and the shared contract-test server runs with it.
+7. Strict policy (`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`), the default on a server, checked on create, on update, and again at each send:
    - The scheme must be `https:`.
    - The host must not be `localhost`, must not end in `.localhost`, `.local`, `.internal`, `.home.arpa` or `.lan`, and must not be an IP literal in a non-public range.
    - The host name must resolve, and every resolved address must be public. Otherwise create and update return `INVALID_INPUT` with `details.field` = `url`. At send time the attempt fails permanently and the delivery becomes `dead`.
    - The request is sent to the addresses checked at send time.
-   - Non-public IPv4 ranges: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0.0/24, 192.0.2.0/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, 224/4 and above. Non-public IPv6: `::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`, `2001:db8::/32`. IPv4-mapped IPv6 addresses use the IPv4 rules. Other addresses are public. A host name that cannot be resolved fails the check.
+   - The request is sent directly, without an environment proxy, so the proxy cannot resolve the host a second time and reach a different address.
+   - Non-public IPv4 ranges: 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0.0/24, 192.0.2.0/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, 224/4 and above. Non-public IPv6: `::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`, `2001:db8::/32`, `100::/64`. IPv4-mapped IPv6 addresses use the IPv4 rules, and so does the IPv4 address inside NAT64 `64:ff9b::/96` and 6to4 `2002::/16`. Other addresses are public. A host name that cannot be resolved fails the check.
+   - At startup the server counts the stored targets this policy refuses and logs one warning with the count when there are any. The startup check reads only the URL, so a name that resolves to a private address is not counted there.
 
 ## Secrets
 
@@ -285,7 +287,7 @@ Receivers should:
 - Each attempt sets `lastAttemptAt` and increases `attempts` by 1.
 - A successful attempt sets the delivery to `success`, clears `lastError`, and sets the endpoint's `lastDeliveryStatus` to `"success"`.
 - A failed attempt sets `lastResponseStatus` (or `null` if there was no reply), sets `lastError` to `"HTTP <status>"` for a non-2xx reply (for example `"HTTP 500"`), and sets the endpoint's `lastDeliveryStatus` to `"failed"`.
-- The first 4096 characters of the reply body are stored in `lastResponseBody` only when `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. Under the default setting it stays `null`. The response body is kept only in strict mode so that a delivery to a private address cannot be used to read that address back through the API. See `workers.md`.
+- The first 4096 characters of the reply body are stored in `lastResponseBody` only under the strict policy. Under the lenient policy it stays `null`. The response body is kept only in strict mode so that a delivery to a private address cannot be used to read that address back through the API. See `workers.md`.
 
 ### Retry schedule
 

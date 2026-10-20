@@ -190,8 +190,8 @@ Within a pass, deliveries are sent one after another. A redelivery request, by c
 - Timeout: 10 seconds from the start of the request. On timeout the request is cut and counted as a transient failure.
 - Redirects are not followed. Success: any HTTP status from 200 to 299.
 - Failure: any other status, or a network error. The status text is `HTTP <status>` for a non-2xx response.
-- Response body: the first 4096 characters are stored with the delivery record, only when `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` is `true` and the target passed the public-address check. Otherwise the stored body is `null`, so a delivery to an internal address cannot be read back through the deliveries list.
-- The target is checked against the URL policy before sending. The check resolves the host and sends to the checked address. `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` controls the policy (see `deployment.md` and `webhooks.md`).
+- Response body: the first 4096 characters are stored with the delivery record, only when the target passed the strict public-address check. Otherwise the stored body is `null`, so a delivery to an internal address cannot be read back through the deliveries list.
+- The target is checked against the URL policy before sending. Under the strict policy the check resolves the host and sends to the checked address without an environment proxy. `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` controls the policy (see `deployment.md` and `webhooks.md`).
 
 ### Recording the result
 
@@ -394,5 +394,5 @@ These are current limits of the design.
 | `SMTP_REPLY_TO` | unset | Reply-To address. |
 | `OAH_DESKTOP` | unset | `1` turns on desktop mode. Automatic export runs only in desktop mode. |
 | `AUDIO_PIPELINE_ENABLED` | see `deployment.md` | Turns on the audio pipeline. Auto-transcription may hand work to it. |
-| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | see `deployment.md` | Controls the URL policy for webhook targets. |
-| `RATE_LIMIT_TRUST_PROXY_HEADERS` | unset | Startup warning when not `true`. |
+| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | see `deployment.md` | Controls the URL policy for webhook targets. `true` on a server, `false` in the desktop app; an invalid value stops startup. |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | When not `true`, the first request that carries forwarding headers logs one warning. |

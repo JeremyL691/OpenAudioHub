@@ -52,7 +52,7 @@ if [ "$MODE" = "server" ]; then
   fi
   OAH_DATA_DIR="$data" PORT="$port" HOST=127.0.0.1 APP_URL="$OAH_BASE_URL" \
     ENCRYPTION_KEY="$(openssl rand -hex 32)" \
-    RATE_LIMIT_TRUST_PROXY_HEADERS=true OAH_PLAUD_API_BASE="http://127.0.0.1:3298" AUDIO_PIPELINE_ENABLED=false OAH_WEB_DIR="$web_out" \
+    RATE_LIMIT_TRUST_PROXY_HEADERS=true WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false OAH_PLAUD_API_BASE="http://127.0.0.1:3298" AUDIO_PIPELINE_ENABLED=false OAH_WEB_DIR="$web_out" \
     "$target_dir/debug/oah-server" >"$ROOT/.dev-artifacts/contract-server-$port.log" 2>&1 &
   pids+=($!)
 fi
