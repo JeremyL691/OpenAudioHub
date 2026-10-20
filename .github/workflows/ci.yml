@@ -102,6 +102,9 @@ jobs:
             desktop-tauri/.cache/ffmpeg-*
             desktop-tauri/binaries
           key: ffmpeg-sidecars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
+      # The download path, without touching the network: a failed transfer has to be reported
+      # as a download and not as a tampered archive.
+      - run: tools/check/fetch-source.sh
       - name: Build the ffmpeg sidecars the app bundle expects
         working-directory: desktop-tauri
         run: scripts/build-ffmpeg.sh

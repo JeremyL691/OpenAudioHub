@@ -19,6 +19,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.
+- The Mac app build reports a failed source download as a download, with retries and a deadline, instead of calling the missing file a checksum mismatch. A cached archive that no longer matches its pinned checksum is downloaded again.
+- The contract suites stop the server and the fake services they started, including when a run ends early. A port held by a process the run did not start is reported instead of killed.
 
 ## [1.2.5] - 2026-10-20
 
