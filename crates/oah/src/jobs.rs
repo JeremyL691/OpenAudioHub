@@ -35,6 +35,7 @@ impl Job {
 }
 
 /// What a handler decided about its job.
+#[derive(Debug)]
 pub enum Outcome {
     Done,
     /// Try again after the delay, unless the job is out of attempts.

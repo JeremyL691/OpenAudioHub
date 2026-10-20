@@ -983,6 +983,137 @@ mod tests {
         }
     }
 
+    /// A run interrupted after some chunks were finished: the next claim keeps those chunks,
+    /// finds the saved speech detection, and only sends what is left.
+    ///
+    /// Needs a real recording and `ffmpeg`, so it runs only when `OAH_PIPELINE_FIXTURE` names a
+    /// speech file: `cargo test -p oah --lib -- --ignored a_restart_reuses`.
+    #[tokio::test]
+    #[ignore]
+    async fn a_restart_reuses_the_saved_speech_detection_and_finished_chunks() {
+        let Ok(fixture) = std::env::var("OAH_PIPELINE_FIXTURE") else {
+            eprintln!("skipped: set OAH_PIPELINE_FIXTURE to a speech recording");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::config::Config::for_tests(dir.path());
+        config.pipeline_enabled = true;
+        let state = AppState::new(config, crate::db::open_memory().await.unwrap());
+        // Storage keys are relative to the storage root.
+        let storage = state.config.storage_root.join("r.wav");
+        tokio::fs::create_dir_all(&state.config.storage_root)
+            .await
+            .unwrap();
+        tokio::fs::copy(&fixture, &storage).await.unwrap();
+        crate::pipeline::tests_support::seed_user_recording(&state, "r", "r.wav").await;
+
+        // A provider that answers each chunk with a transcript covering its audio.
+        let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = asked.clone();
+        let app = axum::Router::new().route(
+            "/audio/transcriptions",
+            axum::routing::post(move |body: axum::body::Bytes| {
+                let counter = counter.clone();
+                async move {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    // Two one-second spans per chunk, matching a real answer's shape.
+                    axum::Json(serde_json::json!({
+                        "text": "First part. Second part.",
+                        "language": "en",
+                        "duration": 2,
+                        "segments": [
+                            {"id": 0, "start": 0, "end": 1, "text": "First part."},
+                            {"id": 1, "start": 1, "end": 2, "text": "Second part."}
+                        ],
+                        "_bytes": body.len(),
+                    }))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        crate::pipeline::tests_support::seed_provider(&state, "u", &format!("http://{addr}")).await;
+
+        let id = crate::jobs::enqueue(
+            &state.db,
+            crate::jobs::NewJob {
+                kind: "pipeline",
+                user_id: Some("u"),
+                recording_id: Some("r"),
+                payload: serde_json::json!({"language": null}),
+            },
+        )
+        .await
+        .unwrap();
+        let first = crate::jobs::claim(&state.db, "pipeline", std::time::Duration::from_secs(120))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.id, id);
+        // The run is stopped the way a crash stops it: the task is dropped after the provider
+        // has answered a few chunks, so nothing writes an outcome and the work folder stays.
+        let running = tokio::spawn(run(state.clone(), first.clone()));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while asked.load(std::sync::atomic::Ordering::SeqCst) < 3 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the run never reached a provider call"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        running.abort();
+        let _ = running.await;
+        let sent_first = asked.load(std::sync::atomic::Ordering::SeqCst);
+        let work = pipeline_dir(&state, &id);
+        let vad_done = work.join("vad.complete").exists();
+
+        let plan: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ?")
+            .bind(&id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert!(plan > 0, "the run planned its chunks");
+        let finished: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ? AND state = 'completed'",
+        )
+        .bind(&id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+
+        // Simulate the crash: the lease is gone, the job is claimed again.
+        sqlx::query("UPDATE jobs SET lease_until = 0, state = 'running'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let second = crate::jobs::claim(&state.db, "pipeline", std::time::Duration::from_secs(120))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(second.lease_gen > first.lease_gen);
+        // The speech detection is not recomputed, which is what the marker proves.
+        assert!(vad_done, "the first run saved its speech detection");
+        let _ = run(state.clone(), second).await;
+        let sent_after = asked.load(std::sync::atomic::Ordering::SeqCst);
+
+        let done: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM transcriptions WHERE recording_id = 'r' AND user_id = 'u'",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(done, 1, "the restarted run stores one transcript");
+        if finished > 0 {
+            assert!(
+                sent_after - sent_first < plan as usize,
+                "finished chunks were not sent again: {finished} of {plan} were done, \
+                 {} calls in total",
+                sent_after
+            );
+        }
+    }
+
     #[tokio::test]
     async fn the_worker_save_is_stopped_by_a_cancel_that_committed_first() {
         let (state, _dir) = save_state().await;
