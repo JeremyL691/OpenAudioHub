@@ -529,27 +529,8 @@ fn plaud_browser_url(mut origin: tauri::Url, code: &str) -> Result<tauri::Url, S
     Ok(origin)
 }
 
-#[cfg(target_os = "macos")]
 pub(crate) fn open_default_browser(url: &tauri::Url) -> Result<(), String> {
     std::process::Command::new("open")
-        .arg(url.as_str())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("Could not open the default browser: {e}"))
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn open_default_browser(url: &tauri::Url) -> Result<(), String> {
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", url.as_str()])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("Could not open the default browser: {e}"))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-pub(crate) fn open_default_browser(url: &tauri::Url) -> Result<(), String> {
-    std::process::Command::new("xdg-open")
         .arg(url.as_str())
         .spawn()
         .map(|_| ())

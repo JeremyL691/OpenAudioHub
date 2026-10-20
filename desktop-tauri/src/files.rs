@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 
-/// `~/Library/Application Support/OpenAudioHub` on macOS, `%LOCALAPPDATA%\OpenAudioHub` on Windows.
-/// `OAH_DESKTOP_DATA_DIR` overrides it (development and tests must never touch real data).
+/// `~/Library/Application Support/OpenAudioHub`. `OAH_DESKTOP_DATA_DIR` overrides it
+/// (development and tests must never touch real data).
 pub fn data_dir() -> PathBuf {
     // OAH_USER_DATA_DIR is accepted as an alias.
     // An empty value is ignored, so it never means the current folder.
@@ -17,19 +17,7 @@ pub fn data_dir() -> PathBuf {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default();
-    if cfg!(target_os = "macos") {
-        home.join("Library/Application Support/OpenAudioHub")
-    } else if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or(home)
-            .join("OpenAudioHub")
-    } else {
-        std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".local/share"))
-            .join("OpenAudioHub")
-    }
+    home.join("Library/Application Support/OpenAudioHub")
 }
 
 /// `main.log` is moved to `main.log.1` once it reaches this size; the older copy is replaced.
@@ -67,23 +55,18 @@ pub fn log(dir: &Path, message: &str) {
 
 /// Startup failures happen before any window exists, so they are shown with the system's dialog.
 pub fn fatal_dialog(title: &str, message: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let esc = |t: &str| t.replace('\\', "\\\\").replace('"', "\\\"");
-        let script = format!(
-            "display alert \"{}\" message \"{}\" as critical",
-            esc(title),
-            esc(message)
-        );
-        let _ = std::process::Command::new("osascript")
-            .args(["-e", &script])
-            .status();
-    }
-    #[cfg(not(target_os = "macos"))]
-    eprintln!("{title}: {message}");
+    let esc = |t: &str| t.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(
+        "display alert \"{}\" message \"{}\" as critical",
+        esc(title),
+        esc(message)
+    );
+    let _ = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .status();
 }
 
-/// The free space the app needs on the data folder's disk (spec/desktop.md section 12).
+/// The free space the app needs on the data folder's disk (spec/desktop.md section 3.4).
 pub const MIN_FREE_BYTES: u64 = 200 * 1024 * 1024;
 
 /// Refuses to start when the disk that holds `folder` (or its nearest existing parent) has less than
