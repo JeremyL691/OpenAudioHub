@@ -31,6 +31,10 @@ jobs:
           # policy in deny.toml. The default arguments are left alone: they match how the
           # policy was tuned against this workspace.
           command: check
+          # The action runs in a musl image, so the host triplet in rust-toolchain.toml does not
+          # exist there and cargo would try to download it. cargo-deny only reads the lock file,
+          # so it does not need the workspace compiler.
+          rust-version: "1.94"
 
   npm:
     name: JavaScript advisories
