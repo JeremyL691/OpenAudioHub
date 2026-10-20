@@ -29,7 +29,7 @@ Values marked **secret** must not appear in logs, screenshots or support message
 | `API_TOKEN_HASH_SECRET` | Derived from `ENCRYPTION_KEY` when not set. | **Secret.** At least 32 characters. It keys the hashes of personal API keys. Set it yourself if you want to control the value. Changing it invalidates every API key. |
 | `APP_URL` | `http://localhost:3000` | The public address people open in the browser, with scheme and port, for example `https://audio.example.com`. Trailing slashes are removed. When it starts with `https://`, the session cookie gets the `Secure` flag. Used in email links and webhook links too. |
 | `DISABLE_REGISTRATION` | `false` | `true` hides and blocks sign-up. Create your account first if you want only you to use the server. |
-| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` makes the server take the client address from `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for`. Turn it on only behind a proxy that sets these headers. See [Reverse proxy](self-hosting.md#reverse-proxy). |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` makes the server take the client address from `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for`. Turn it on only behind a proxy that sets these headers. When it is `false` the address is the one the connection came from, so every visitor behind a proxy shares one budget. See [Reverse proxy](self-hosting.md#reverse-proxy). |
 
 ## Address and files
 
@@ -98,7 +98,7 @@ Email is on only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are all set. 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | `false` | `true` allows only `https` URLs whose host resolves only to public IP addresses. Private, loopback and local names are refused. An invalid value makes webhook create and update requests fail. See [Automation API and webhooks](automation-and-webhooks.md#allowed-urls). |
+| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | `true` on a server, `false` in the Mac app | `true` allows only `https` URLs whose host resolves only to public IP addresses. Private, loopback and local names are refused. Leave it empty to keep the default for the mode you run, or set it to `false` to deliver to a machine on your own network. Any other value stops startup. See [Automation API and webhooks](automation-and-webhooks.md#allowed-urls). |
 
 ## Providers
 

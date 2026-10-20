@@ -193,7 +193,7 @@ Call it with the `X-OpenAudioHub-Timestamp` and `X-OpenAudioHub-Signature` heade
 
 ## Retries and redelivery
 
-A delivery counts as successful when your server answers with a `2xx` status. Redirects are not followed, so a `3xx` answer counts as a failure. The server waits up to 10 seconds for an answer. When the server runs with `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`, it also keeps the first 4096 characters of the response body for the log.
+A delivery counts as successful when your server answers with a `2xx` status. Redirects are not followed, so a `3xx` answer counts as a failure. The server waits up to 10 seconds for an answer. Under the strict URL rule the server also keeps the first 4096 characters of the response body for the log.
 
 A failed delivery is retried. The waits are:
 
@@ -224,6 +224,6 @@ curl -b cookies.txt -X POST \
 
 ## Allowed URLs
 
-By default, the server accepts any `http` or `https` URL with no credentials. The receiving host can be on your private network, which is useful for tools running at home.
+A server accepts only `https` URLs whose host resolves only to public IP addresses. It refuses `localhost`, names ending in `.local`, `.internal`, `.home.arpa` and `.lan`, and private or loopback addresses, so a person who signs up cannot use your server to reach machines on your network. The server connects to the address it checked and does not use an environment proxy, so the answer cannot change between the check and the send.
 
-If you run a server that other people can use, turn on `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. The server then accepts only `https` URLs whose host resolves only to public IP addresses. It refuses `localhost`, names ending in `.local`, `.internal`, `.home.arpa` and `.lan`, and private or loopback addresses. The server connects to the address it checked, so the answer cannot change between the check and the send. See [Environment variables](environment-variables.md#webhooks).
+To deliver to a tool running on your own network, set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`. The Mac app already does this for you: it is single-user, so it accepts any `http` or `https` URL with no credentials. The server logs one warning at startup when stored targets are refused by the rule. See [Environment variables](environment-variables.md#address-and-files).

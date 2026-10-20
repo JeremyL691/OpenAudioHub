@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Sign-in, sign-up and password-reset limits are counted per connection address again. Without `RATE_LIMIT_TRUST_PROXY_HEADERS` the server used to have no client address at all and skipped the per-address checks, so an unauthenticated client could try passwords without limit. Forwarding headers are still ignored unless the setting is on, so a client cannot pick its own bucket.
+- A server refuses webhook targets that use plain `http` or resolve to a private address, which stops an ordinary user from making the server reach machines on its own network. The Mac app keeps allowing local targets because it is single-user. The policy also refuses the private IPv4 address inside a NAT64 or 6to4 address, and the delivery no longer goes through an `HTTPS_PROXY` from the environment.
+- A worker that lost a long-transcription job can no longer write its progress, phase, error or transcript over the run that replaced it. The retry counter is reset by an explicit retry, so it repeats; each claim now carries a generation that does not.
+
+### Changed
+
+- `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` now defaults to `true` on a server and `false` in the Mac app, and an unset or empty value follows the default of the mode. A self-hosted server that delivers to a machine on its own network, such as a home automation tool at a `192.168` address, must set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`; the server logs a warning at startup naming how many stored targets the rule refuses. An invalid value now stops startup instead of failing webhook requests.
+- The Compose file sets `RATE_LIMIT_TRUST_PROXY_HEADERS` to `true` by default, because it publishes the port on loopback only and expects a reverse proxy in front of it. Turn it off when the server is reached directly.
+- The public API rate limit is counted per connection address instead of one shared bucket when the proxy setting is off.
+
 ## [1.2.0] - 2026-10-19
 
 ### Added
