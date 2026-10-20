@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.5] - 2026-10-20
 
 ### Security
 
@@ -99,7 +99,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.2.5
 [1.2.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.2.0
 [1.1.2]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.2
 [1.1.1]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.1
