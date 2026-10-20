@@ -16,17 +16,17 @@ aws-sdk-s3 = "1.144"
 argon2 = "0.6.0"
 axum = { version = "0.8", features = ["multipart"] }
 hex = "0.4.3"
-rand = "0.9"
+rand = "0.10"
 scrypt = "0.12.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
-hmac = "0.12"
-sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+sha2 = "0.11"
+hmac = "0.13"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 subtle = "2.6.1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "fs", "time", "process", "sync", "net", "io-util"] }
-tower-http = { version = "0.6", features = ["trace", "limit"] }
+tower-http = { version = "0.7", features = ["trace", "limit"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1.25"
@@ -36,7 +36,7 @@ tokio-util = { version = "0.7.20", features = ["io"] }
 futures-util = "0.3.34"
 fs4 = "1.1.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
-md-5 = "0.10"
+md-5 = "0.11"
 ort = "=2.0.0-rc.14"
 rust-embed = { version = "8.13.0", features = ["mime-guess"] }
 flate2 = "1"
