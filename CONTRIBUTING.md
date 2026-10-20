@@ -13,7 +13,7 @@ By contributing, you agree that your contribution is licensed under the [GNU Aff
 
 You need:
 
-- Rust 1.85 or newer, with `clippy` and `rustfmt`.
+- Rust 1.94 or newer, with `clippy` and `rustfmt`. `rust-toolchain.toml` pins this version, so a checkout with rustup uses it automatically.
 - Node.js 22 and pnpm. The pnpm version is set in the `packageManager` field of `web/package.json`.
 - `ffmpeg` and `ffprobe` on your `PATH`.
 - Docker, if you change the container image or the installer.
