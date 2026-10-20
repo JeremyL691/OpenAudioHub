@@ -998,7 +998,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut config = crate::config::Config::for_tests(dir.path());
         config.pipeline_enabled = true;
-        let state = AppState::new(config, crate::db::open_memory().await.unwrap());
+        // A file-backed database: each `:memory:` connection is a separate database, so a pool
+        // that reopens one would lose the migrations and the rows written so far.
+        let db = crate::db::open(&dir.path().join("test.sqlite"))
+            .await
+            .unwrap();
+        let state = AppState::new(config, db);
         // Storage keys are relative to the storage root.
         let storage = state.config.storage_root.join("r.wav");
         tokio::fs::create_dir_all(&state.config.storage_root)
@@ -1059,6 +1064,26 @@ mod tests {
             assert!(
                 std::time::Instant::now() < deadline,
                 "the run never reached a provider call"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        // At least one chunk should finish before the crash, so the restart has stored work to
+        // keep. Without it the check about finished chunks would pass without proving anything.
+        let finished_deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let done: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ? AND state = 'completed'",
+            )
+            .bind(&id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+            if done > 0 || asked.load(std::sync::atomic::Ordering::SeqCst) >= 8 {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < finished_deadline,
+                "no chunk finished before the crash"
             );
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
