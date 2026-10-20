@@ -9,6 +9,8 @@ set -euo pipefail
 
 out="$1"
 sentences="${2:-15}"
+# The caller may name a folder that does not exist yet.
+mkdir -p "$(dirname "$out")"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
