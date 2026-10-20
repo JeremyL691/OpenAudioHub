@@ -17,6 +17,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` now defaults to `true` on a server and `false` in the Mac app, and an unset or empty value follows the default of the mode. A self-hosted server that delivers to a machine on its own network, such as a home automation tool at a `192.168` address, must set `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false`; the server logs a warning at startup naming how many stored targets the rule refuses. An invalid value now stops startup instead of failing webhook requests.
 - The Compose file sets `RATE_LIMIT_TRUST_PROXY_HEADERS` to `true` by default, because it publishes the port on loopback only and expects a reverse proxy in front of it. Turn it off when the server is reached directly.
 - The public API rate limit is counted per connection address instead of one shared bucket when the proxy setting is off.
+- A release tag is checked before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit. A tag pushed at an unreviewed commit no longer publishes downloads.
+- The pull request checks now format-check the Rust code, lint and test the Mac app crate, and run the long-recording suite. They used to cover the server, the web app and the extension only.
+- A security workflow runs `cargo-deny` and the npm audits, on lock-file changes, on `main`, and weekly. Dependabot opens grouped dependency updates.
 
 ## [1.2.0] - 2026-10-19
 
