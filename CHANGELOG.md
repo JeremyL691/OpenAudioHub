@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The workspace states Rust 1.94.1 as its minimum, and the toolchain pin, the CI images, the container build and the documentation all name that same patch release. The container image is built by a fixed compiler now instead of whatever the floating `rust:1` tag points at.
+- `tools/check/rust-version.sh` compares every place the Rust version is declared and fails on a difference. CI runs it, so a drift fails a pull request instead of a contributor's build.
+- The development and contribution guides install and check the extension as well, and their commands no longer assume the shell stayed in the directory of a previous step.
+- The security policy states that fixes go into the newest release, instead of listing version lines that were already out of date.
+
+### Fixed
+
+- The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.
+
 ## [1.2.5] - 2026-10-20
 
 ### Security

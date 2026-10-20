@@ -152,7 +152,7 @@ Then open `http://localhost:3000/register` and create your account. Keep the `EN
 
 Prerequisites:
 
-- Rust 1.85 or newer (edition 2024)
+- Rust 1.94.1 or newer (edition 2024)
 - Node.js 22 and pnpm, as set in the `packageManager` field of `web/package.json`
 - `ffmpeg` and `ffprobe` on your `PATH`
 - For the Mac app: macOS with the Xcode command line tools
@@ -163,8 +163,8 @@ Common commands:
 cargo test -p oah                       # server tests
 cargo clippy -p oah --all-targets -- -D warnings
 
-cd web && pnpm install && pnpm build    # type checks, then builds the web app
-cd contract-tests && pnpm install && cd ..
+pnpm --dir web install && pnpm --dir web build    # type checks, then builds the web app
+pnpm --dir contract-tests install
 contract-tests/run.sh server            # builds the server and runs the contract suite
 ```
 

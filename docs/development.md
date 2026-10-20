@@ -41,7 +41,7 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 
 ## Prerequisites
 
-- Rust 1.94 or newer. The workspace needs it for its dependencies, mostly the AWS SDK that the S3 storage option uses; `rust-version` in `Cargo.toml` states the floor and `rust-toolchain.toml` pins it, so a checkout with rustup uses the right compiler on its own.
+- Rust 1.94.1 or newer. The workspace needs it for its dependencies, mostly the AWS SDK that the S3 storage option uses; `rust-version` in `Cargo.toml` states the floor and `rust-toolchain.toml` pins the same exact version, so a checkout with rustup uses the right compiler on its own.
 - Node.js 22 and pnpm. The version of pnpm is named in the `packageManager` field of `web/package.json`.
 - `ffmpeg` and `ffprobe` on your `PATH`, or set `FFMPEG_PATH` and `FFPROBE_PATH`. The pipeline and the media tests need them.
 - For the Mac app: macOS with the Xcode command line tools, which provide the C compiler and `make` that the ffmpeg build script uses.
@@ -184,12 +184,19 @@ Every pull request runs these checks:
 
 | Check | What it does |
 |---|---|
-| `server` | `cargo fmt --all -- --check`, then clippy and the tests for `oah`. |
+| `server` | Checks that one Rust version is declared everywhere, then `cargo fmt --all -- --check`, clippy and the tests for `oah`. |
+| `Minimum Rust version` | Builds the workspace with the pinned Rust version and the committed lock file. |
 | `web` | The translation catalogs, the type check and the build. |
 | `extension` | Type check, tests, build and zip. |
 | `desktop` | Builds the web app and the ffmpeg sidecars, then lints and tests the Mac app crate. |
 | `contract` | The browser and HTTP suite against a real server. |
 | `pipeline` | The long-recording suite with the pipeline on, plus the restart test. |
+
+The Rust version lives in four places that have to agree: `rust-version` in `Cargo.toml`, the pinned channel in `rust-toolchain.toml`, the `rust:` image tags in the workflows and `deploy/Dockerfile`, and the version the documents tell you to install. `tools/check/rust-version.sh` compares them and fails on a difference, so run it after you change a version:
+
+```sh
+tools/check/rust-version.sh
+```
 
 One more workflow guards dependencies. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app and the extension. It runs on a pull request that changes a lock file, on `main`, and every Monday, because a new advisory appears without a commit here.
 
