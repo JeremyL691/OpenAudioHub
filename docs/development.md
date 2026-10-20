@@ -41,7 +41,7 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 
 ## Prerequisites
 
-- A Rust toolchain that supports edition 2024, which means Rust 1.85 or newer.
+- Rust 1.94 or newer. The workspace needs it for its dependencies, mostly the AWS SDK that the S3 storage option uses; `rust-version` in `Cargo.toml` states the floor and `rust-toolchain.toml` pins it, so a checkout with rustup uses the right compiler on its own.
 - Node.js 22 and pnpm. The version of pnpm is named in the `packageManager` field of `web/package.json`.
 - `ffmpeg` and `ffprobe` on your `PATH`, or set `FFMPEG_PATH` and `FFPROBE_PATH`. The pipeline and the media tests need them.
 - For the Mac app: macOS with the Xcode command line tools, which provide the C compiler and `make` that the ffmpeg build script uses.
