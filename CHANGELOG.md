@@ -12,10 +12,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `tools/check/rust-version.sh` compares every place the Rust version is declared and fails on a difference. CI runs it, so a drift fails a pull request instead of a contributor's build.
 - The development and contribution guides install and check the extension as well, and their commands no longer assume the shell stayed in the directory of a previous step.
 - The security policy states that fixes go into the newest release, instead of listing version lines that were already out of date.
+- One check, `Quality gate`, now covers the whole pull request suite: the server, the minimum Rust version, the web app, the extension, the Mac app, the long-recording pipeline, the contract tests and the dependency scans. A skipped or cancelled check fails it, so a check that never ran cannot read as a pass.
+- The dependency scan covers the development dependencies of the web app, the extension and the contract tests, not only their production packages. The extension keeps all of its tooling in `devDependencies`, so an audit of production packages alone never looked at it.
+- `vitest` in the extension is at the release that fixes the reported advisories, with `tinypool` pinned above the affected versions.
 
 ### Fixed
 
 - The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.
+- The Mac app build reports a failed source download as a download, with retries and a deadline, instead of calling the missing file a checksum mismatch. A cached archive that no longer matches its pinned checksum is downloaded again.
+- The contract suites stop the server and the fake services they started, including when a run ends early. A port held by a process the run did not start is reported instead of killed.
 
 ## [1.2.5] - 2026-10-20
 

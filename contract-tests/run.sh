@@ -16,9 +16,23 @@ export OAH_FAKE_AI_URL="${OAH_FAKE_AI_URL:-http://127.0.0.1:3299/v1}"
 export OAH_EMAIL="${OAH_EMAIL:-contract@openaudiohub.test}"
 export OAH_PASSWORD="${OAH_PASSWORD:-contract-password-1}"
 
+# Every process this run starts. Only these are stopped on exit, so an interrupted run cannot
+# take down a server somebody else owns.
 pids=()
-cleanup() { for p in "${pids[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done; }
+# shellcheck disable=SC2329  # installed by the trap below
+cleanup() {
+  for p in "${pids[@]:-}"; do
+    [ -n "$p" ] || continue
+    kill "$p" 2>/dev/null || true
+  done
+  for p in "${pids[@]:-}"; do
+    [ -n "$p" ] || continue
+    wait "$p" 2>/dev/null || true
+  done
+}
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 wait_for() {
   for _ in $(seq 1 600); do curl -sf -o /dev/null "$1" && return 0; sleep 0.5; done
@@ -26,18 +40,16 @@ wait_for() {
 }
 
 # A server left behind by an interrupted run would answer the health check and hide the
-# build under test, which makes a failing test look like a passing one.
-free_port() {
+# build under test, which makes a failing test look like a passing one. A port held by a
+# process this run did not start is reported instead of killed: something else owns it, and
+# stopping it could take down a development server or another agent's run.
+require_free_port() {
   local pids_here
   pids_here="$(lsof -ti:"$1" 2>/dev/null || true)"
   if [ -n "$pids_here" ]; then
-    echo "port $1 is held by $pids_here; stopping it" >&2
-    # shellcheck disable=SC2086
-    kill $pids_here 2>/dev/null || true
-    sleep 2
-    # shellcheck disable=SC2086
-    kill -9 $pids_here 2>/dev/null || true
-    sleep 1
+    echo "port $1 is already held by $pids_here" >&2
+    echo "stop that process, or set OAH_SERVER_PORT to another port" >&2
+    return 1
   fi
 }
 
@@ -61,7 +73,7 @@ if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ]; then
     port="${OAH_SERVER_PORT:-3211}"
   fi
   export OAH_BASE_URL="http://localhost:$port"
-  free_port "$port"
+  require_free_port "$port"
   # Honor a shared cargo target dir (CARGO_TARGET_DIR) when one is set.
   target_dir="${CARGO_TARGET_DIR:-$ROOT/target}"
   mkdir -p "$ROOT/.dev-artifacts"
@@ -73,9 +85,11 @@ if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ]; then
   # Each port builds the web app into its own folder, so parallel runs never overwrite each other.
   web_out="$ROOT/.dev-artifacts/web-dist-$port"
   (cd "$ROOT/web" && pnpm exec vite build --outDir "$web_out" --emptyOutDir >/dev/null)
-  # Shared by parallel runs, like the fake AI: start it only when nothing answers.
+  # Shared by parallel runs, like the fake AI: start it only when nothing answers, and only
+  # this run's copy is stopped on exit.
   if ! curl -sf -o /dev/null "http://127.0.0.1:3298/__control/health"; then
     node "$HERE/fakes/fake-plaud.mjs" 3298 >/dev/null 2>&1 &
+    pids+=($!)
   fi
   env OAH_DATA_DIR="$data" PORT="$port" HOST=127.0.0.1 APP_URL="$OAH_BASE_URL" \
     ENCRYPTION_KEY="$(openssl rand -hex 32)" \
@@ -92,7 +106,17 @@ wait_for "$OAH_FAKE_AI_URL/models"
 cd "$HERE"
 # Each mode runs one project: the pipeline tests need a server started with the pipeline on,
 # so they must never run inside the main suite.
+#
+# The suite runs as a child rather than through exec: exec would replace this shell, and the
+# exit trap that stops the server and the fakes would never run. The exit status is passed on,
+# so a failing suite still fails the caller.
 if [ "$MODE" = "pipeline" ]; then
-  exec pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=pipeline "$@"
+  set +e
+  pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=pipeline "$@"
+  status=$?
+else
+  set +e
+  pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=contract "$@"
+  status=$?
 fi
-pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=contract "$@"
+exit "$status"

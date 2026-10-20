@@ -13,6 +13,9 @@ WORK="$CACHE/work"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}"
 TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
 
+# shellcheck source=./fetch-source.sh
+. "$HERE/scripts/fetch-source.sh"
+
 FFMPEG_VERSION=9.0.2
 FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
 FFMPEG_SHA=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
@@ -23,19 +26,11 @@ LAME_VERSION=4.0
 LAME_URL="https://downloads.sourceforge.net/project/lame/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz"
 LAME_SHA=3df5124d5ad3a98312ffd7ba6a9b36230e4f8a3e66d3ce0f425e336c32d216eb
 
-fetch() { # <url> <sha256>; prints the local path
-    local url="$1" sha="$2" file="$DOWNLOADS/$(basename "$1")"
-    mkdir -p "$DOWNLOADS"
-    if [ ! -f "$file" ] || [ "$(shasum -a 256 "$file" | cut -d' ' -f1)" != "$sha" ]; then
-        curl -fsSL --retry 3 -o "$file.partial" "$url" && mv "$file.partial" "$file"
-    fi
-    [ "$(shasum -a 256 "$file" | cut -d' ' -f1)" = "$sha" ] || { echo "sha256 mismatch for $file" >&2; exit 1; }
-    echo "$file"
-}
-
-OPUS_TAR="$(fetch "$OPUS_URL" "$OPUS_SHA")"
-LAME_TAR="$(fetch "$LAME_URL" "$LAME_SHA")"
-FFMPEG_TAR="$(fetch "$FFMPEG_URL" "$FFMPEG_SHA")"
+# fetch_source retries a transient failure and reports a download apart from a checksum
+# mismatch, so a flaky host does not read as a corrupted archive.
+OPUS_TAR="$(fetch_source "$OPUS_URL" "$OPUS_SHA" "$DOWNLOADS")"
+LAME_TAR="$(fetch_source "$LAME_URL" "$LAME_SHA" "$DOWNLOADS")"
+FFMPEG_TAR="$(fetch_source "$FFMPEG_URL" "$FFMPEG_SHA" "$DOWNLOADS")"
 
 KEY="$( { echo "$FFMPEG_SHA $OPUS_SHA $LAME_SHA $TRIPLE"; cat "$0"; } | shasum -a 256 | cut -c1-16)"
 PREFIX="$CACHE/ffmpeg-$KEY"
