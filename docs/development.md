@@ -118,6 +118,14 @@ This builds the server and the web app into `.dev-artifacts/`, starts the server
 contract-tests/run.sh server tests/recordings.spec.ts
 ```
 
+The long-recording pipeline is off in that run. To exercise it end to end over HTTP, run the pipeline suite:
+
+```sh
+contract-tests/run.sh pipeline
+```
+
+It starts a second server on port 3212 with `AUDIO_PIPELINE_ENABLED=true`, a short provider timeout, and generates a speech recording with `espeak-ng` and `ffmpeg` instead of using a stored file. The tests cover a full run with more than one chunk, cancel, provider failures, a timeout, and a retry. A machine without `espeak-ng` skips them and says so.
+
 To run against a server that is already running, start the fake AI provider, then pass the address of the server:
 
 ```sh

@@ -91,6 +91,42 @@ jobs:
       - run: cargo clippy -p openaudiohub-desktop --all-targets -- -D warnings
       - run: cargo test -p openaudiohub-desktop
 
+  pipeline:
+    runs-on: ubuntu-24.04
+    container: rust:1-trixie
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl espeak-ng
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y nodejs
+          corepack enable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+        working-directory: contract-tests
+      # The long-recording path is off in the main contract run, so this job turns it on and
+      # drives a real ffmpeg, the real speech detection and a fake provider end to end.
+      - run: bash contract-tests/fixtures/make-speech.sh .dev-artifacts/speech-pipeline-15.wav 15
+      - run: contract-tests/run.sh pipeline
+      - name: Pipeline restart and lease recovery
+        run: |
+          OAH_PIPELINE_FIXTURE="$PWD/.dev-artifacts/speech-pipeline-15.wav" \
+            cargo test -p oah --lib -- --ignored a_restart_reuses_the_saved_speech_detection
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-results
+          path: .dev-artifacts/
+          include-hidden-files: true
+
   contract:
     runs-on: ubuntu-24.04
     container: rust:1-trixie

@@ -44,6 +44,8 @@ contract-tests/run.sh server
 
 `contract-tests/run.sh server` builds the server and the web app, starts the server on a new data folder, runs the contract suite and stops the server. It needs `openssl` and `curl`.
 
+The long-recording pipeline runs in its own suite, `contract-tests/run.sh pipeline`. It also needs `espeak-ng` and `ffmpeg`, which generate the speech recording it transcribes.
+
 ## Interface text and translations
 
 The interface is translated into English, Simplified Chinese, Japanese and Korean. Every string a person can see in the app lives in `web/src/locales/{en,zh-CN,ja,ko}/`, one file per area.
