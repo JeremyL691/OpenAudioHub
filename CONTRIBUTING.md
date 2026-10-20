@@ -13,7 +13,7 @@ By contributing, you agree that your contribution is licensed under the [GNU Aff
 
 You need:
 
-- Rust 1.94 or newer, with `clippy` and `rustfmt`. `rust-toolchain.toml` pins this version, so a checkout with rustup uses it automatically.
+- Rust 1.94.1 or newer, with `clippy` and `rustfmt`. `rust-toolchain.toml` pins this exact version, so a checkout with rustup uses it automatically.
 - Node.js 22 and pnpm. The pnpm version is set in the `packageManager` field of `web/package.json`.
 - `ffmpeg` and `ffprobe` on your `PATH`.
 - Docker, if you change the container image or the installer.
@@ -23,6 +23,7 @@ The full guide, with the project layout, is in [docs/development.md](docs/develo
 ```sh
 cd web && pnpm install && cd ..
 cd contract-tests && pnpm install && cd ..
+cd extension && pnpm install && cd ..
 ```
 
 Use a test data folder for every local run. Never point a development build at a real library.
@@ -32,6 +33,8 @@ Use a test data folder for every local run. Never point a development build at a
 Run these before you open a pull request. They match the CI workflow.
 
 ```sh
+tools/check/rust-version.sh
+
 cargo fmt --all --check
 cargo clippy -p oah --all-targets -- -D warnings
 cargo test -p oah
@@ -39,7 +42,18 @@ cargo test -p oah
 pnpm --dir web typecheck
 pnpm --dir web build
 
+pnpm --dir extension typecheck
+pnpm --dir extension test
+
 contract-tests/run.sh server
+```
+
+The Mac app crate has its own checks, which run on macOS:
+
+```sh
+cargo fmt -p openaudiohub-desktop -- --check
+cargo clippy -p openaudiohub-desktop --all-targets -- -D warnings
+cargo test -p openaudiohub-desktop
 ```
 
 `contract-tests/run.sh server` builds the server and the web app, starts the server on a new data folder, runs the contract suite and stops the server. It needs `openssl` and `curl`.
