@@ -5,6 +5,8 @@ resolver = "3"
 [workspace.package]
 version = "1.2.5"
 edition = "2024"
+# The AWS SDK here needs 1.94.1, so that is the floor for the whole workspace.
+rust-version = "1.94"
 license = "AGPL-3.0-only"
 publish = false
 
