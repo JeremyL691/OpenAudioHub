@@ -191,7 +191,9 @@ Every pull request runs these checks:
 | `contract` | The browser and HTTP suite against a real server. |
 | `pipeline` | The long-recording suite with the pipeline on, plus the restart test. |
 
-Two more workflows guard dependencies. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app and the extension; it runs on a pull request that changes a lock file, on `main`, and every Monday. Dependabot opens grouped updates monthly for Rust and npm, and weekly for the workflows.
+One more workflow guards dependencies. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app and the extension. It runs on a pull request that changes a lock file, on `main`, and every Monday, because a new advisory appears without a commit here.
+
+There is no dependency update bot. Upgrades are made by hand, when someone decides to make them, which keeps a broken major version from blocking every smaller update behind it. The weekly scan is what reports the problem; fixing it is a normal change with the usual checks.
 
 `deny.toml` carries the dependency policy, including the licences allowed in this tree and the advisories that cannot be cleared from here. Each ignored advisory has a comment saying why; remove an entry once its dependency is updated.
 
