@@ -61,8 +61,7 @@ async fn user_by_id(state: &AppState, id: &str) -> Result<Option<UserRow>, sqlx:
         .await
 }
 
-fn limit(state: &AppState, name: &str, ip: Option<&str>, max: u32) -> ApiResult<()> {
-    let Some(ip) = ip else { return Ok(()) };
+fn limit(state: &AppState, name: &str, ip: &str, max: u32) -> ApiResult<()> {
     let now = now_ms();
     let decision = state
         .limiter
@@ -110,7 +109,7 @@ pub async fn sign_up(
 ) -> ApiResult<Response> {
     let peer = peer.as_ref().map(|Extension(p)| p);
     let ip = auth::client_ip(&state, &headers, peer);
-    limit(&state, "sign-up", ip.as_deref(), 5)?;
+    limit(&state, "sign-up", &ip, 5)?;
     if state.config.disable_registration || state.config.desktop.is_some() {
         return Err(AppError::new(
             StatusCode::FORBIDDEN,
@@ -211,7 +210,7 @@ pub async fn sign_in(
 ) -> ApiResult<Response> {
     let peer = peer.as_ref().map(|Extension(p)| p);
     let ip = auth::client_ip(&state, &headers, peer);
-    limit(&state, "sign-in", ip.as_deref(), 10)?;
+    limit(&state, "sign-in", &ip, 10)?;
     let (Some(email), Some(password)) = (body.email, body.password) else {
         return Err(AppError::bad_request(
             "VALIDATION_ERROR",
@@ -477,7 +476,7 @@ pub async fn request_password_reset(
     Json(body): Json<ResetRequest>,
 ) -> ApiResult<Json<Value>> {
     let ip = auth::client_ip(&state, &headers, peer.as_ref().map(|Extension(p)| p));
-    limit(&state, "request-password-reset", ip.as_deref(), 3)?;
+    limit(&state, "request-password-reset", &ip, 3)?;
     let email = body
         .email
         .as_deref()
@@ -603,7 +602,7 @@ pub async fn reset_password_link(
     Query(query): Query<CallbackQuery>,
 ) -> ApiResult<Response> {
     let ip = auth::client_ip(&state, &headers, peer.as_ref().map(|Extension(p)| p));
-    limit(&state, "reset-link", ip.as_deref(), 10)?;
+    limit(&state, "reset-link", &ip, 10)?;
     let callback = callback_url(query.callback_url.as_deref());
     let location = if live_reset_user(&state, &token).await?.is_some() {
         with_query(&callback, &format!("token={token}"))
@@ -628,7 +627,7 @@ pub async fn reset_password(
     Json(body): Json<ResetBody>,
 ) -> ApiResult<Json<Value>> {
     let ip = auth::client_ip(&state, &headers, peer.as_ref().map(|Extension(p)| p));
-    limit(&state, "reset-password", ip.as_deref(), 10)?;
+    limit(&state, "reset-password", &ip, 10)?;
     let Some(password) = body.new_password else {
         return Err(AppError::bad_request(
             "VALIDATION_ERROR",
