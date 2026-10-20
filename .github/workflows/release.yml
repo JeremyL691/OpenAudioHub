@@ -75,7 +75,9 @@ jobs:
       # pnpm version comes from the packageManager field of web/package.json.
       - run: corepack enable
 
-      - uses: dtolnay/rust-toolchain@stable
+      # With no `toolchain` input it reads rust-toolchain.toml, so the release is built with
+      # the same compiler as CI.
+      - uses: dtolnay/rust-toolchain@master
 
       - uses: Swatinem/rust-cache@v2
 
