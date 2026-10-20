@@ -124,7 +124,7 @@ The long-recording pipeline is off in that run. To exercise it end to end over H
 contract-tests/run.sh pipeline
 ```
 
-It starts a second server on port 3212 with `AUDIO_PIPELINE_ENABLED=true`, a short provider timeout, and generates a speech recording with `espeak-ng` and `ffmpeg` instead of using a stored file. The tests cover a full run with more than one chunk, cancel, provider failures, a timeout, and a retry. A machine without `espeak-ng` skips them and says so.
+It starts a second server on port 3212 with `AUDIO_PIPELINE_ENABLED=true`, a short provider timeout, and generates a speech recording with `espeak-ng` and `ffmpeg` instead of using a stored file. Both modes stop the server and the fake services they started; a port held by another process is reported, not killed. The tests cover a full run with more than one chunk, cancel, provider failures, a timeout, and a retry. A machine without `espeak-ng` skips them and says so.
 
 To run against a server that is already running, start the fake AI provider, then pass the address of the server:
 
@@ -139,7 +139,7 @@ Tests create their own data. Do not depend on counts or on data from another tes
 
 ## Desktop app
 
-Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options:
+Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options. A download is retried with a connection and a transfer deadline, and a download failure is reported apart from a checksum mismatch:
 
 ```sh
 cd desktop-tauri
@@ -201,6 +201,9 @@ tools/check/rust-version.sh
 A `Quality gate` job depends on all of them. It fails when any of them failed, was cancelled, or never ran, so one check name covers the whole suite in branch protection. Require that name, and a failure in the Mac app job or the long-recording suite blocks a merge the same way a failing server test does.
 
 The dependency checks run inside that suite. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app, the extension and the contract tests, including their development dependencies. `ci.yml` calls it, so a pull request runs it with everything else. It also runs on `main` and every Monday, because a new advisory appears without a commit here.
+
+`tools/check/` holds the checks that read declarations and scripts rather than the product; the
+table in [its README](../tools/check/README.md) lists them.
 
 There is no dependency update bot. Upgrades are made by hand, when someone decides to make them, which keeps a broken major version from blocking every smaller update behind it. The weekly scan is what reports the problem; fixing it is a normal change with the usual checks.
 
