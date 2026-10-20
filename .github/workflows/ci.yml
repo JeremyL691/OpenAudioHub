@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A release re-runs the whole suite on the tagged commit before it builds anything.
+  workflow_call:
 
 permissions:
   contents: read
@@ -20,8 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
-      - run: rustup component add clippy
+      - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
       - run: cargo clippy -p oah --all-targets -- -D warnings
       - run: cargo test -p oah
 
@@ -60,6 +63,33 @@ jobs:
         working-directory: extension
       - run: pnpm zip
         working-directory: extension
+
+  # The Mac app crate is a workspace member the Linux jobs never build, so its lint and its
+  # tests only ran when a release tag was pushed.
+  desktop:
+    name: Mac app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile && pnpm build
+        working-directory: web
+      # The build script pins every source archive, so it is part of the cache key.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            desktop-tauri/.cache/ffmpeg-*
+            desktop-tauri/binaries
+          key: ffmpeg-sidecars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
+      - name: Build the ffmpeg sidecars the app bundle expects
+        working-directory: desktop-tauri
+        run: scripts/build-ffmpeg.sh
+      - run: cargo fmt -p openaudiohub-desktop -- --check
+      - run: cargo clippy -p openaudiohub-desktop --all-targets -- -D warnings
+      - run: cargo test -p openaudiohub-desktop
 
   contract:
     runs-on: ubuntu-24.04
