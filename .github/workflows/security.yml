@@ -24,7 +24,7 @@ jobs:
     name: Rust advisories and licences
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           # `check` with no subcommand covers advisories, bans, licences and sources with the
@@ -40,8 +40,8 @@ jobs:
     name: JavaScript advisories
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: corepack enable

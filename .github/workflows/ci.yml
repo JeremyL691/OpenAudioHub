@@ -21,7 +21,7 @@ jobs:
     # so the compiler here is the one the workspace pins instead of whatever `rust:1` points at.
     container: rust:1.94-trixie
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
       - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: rust:1.94-trixie
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
       - uses: Swatinem/rust-cache@v2
       # `--ignore-rust-version` is not used: the point is that the pinned version really builds.
@@ -45,8 +45,8 @@ jobs:
   web:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: corepack enable
@@ -62,8 +62,8 @@ jobs:
   extension:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: corepack enable
@@ -84,15 +84,15 @@ jobs:
     name: Mac app
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: corepack enable
       - run: pnpm install --frozen-lockfile && pnpm build
         working-directory: web
       # The build script pins every source archive, so it is part of the cache key.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             desktop-tauri/.cache/ffmpeg-*
@@ -112,7 +112,7 @@ jobs:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           apt-get update
           apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl espeak-ng
@@ -135,7 +135,7 @@ jobs:
           OAH_PIPELINE_FIXTURE="$PWD/.dev-artifacts/speech-pipeline-15.wav" \
             cargo test -p oah --lib -- --ignored a_restart_reuses_the_saved_speech_detection
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pipeline-results
           path: .dev-artifacts/
@@ -150,7 +150,7 @@ jobs:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           apt-get update
           apt-get install -y --no-install-recommends ffmpeg curl ca-certificates openssl xvfb xauth
@@ -171,7 +171,7 @@ jobs:
           xvfb-run -a pnpm e2e
         working-directory: extension
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: contract-results
           path: .dev-artifacts/

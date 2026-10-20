@@ -14,7 +14,7 @@ jobs:
     name: Verify the tag
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The ancestry check needs the history, not a single commit.
           fetch-depth: 0
@@ -66,9 +66,9 @@ jobs:
     needs: [verify, ci]
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -89,7 +89,7 @@ jobs:
         run: pnpm install --frozen-lockfile && pnpm build
 
       # The key covers the build script, which pins every source archive and is part of the cache key.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: desktop-tauri/.cache/ffmpeg-*
           key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
@@ -103,14 +103,14 @@ jobs:
         run: npx @tauri-apps/cli@2 build --bundles app,dmg
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openaudiohub-dmg
           path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload the ffmpeg source archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-source
           path: desktop-tauri/binaries/source/*
@@ -124,18 +124,18 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/jeremyl691/openaudiohub
           tags: |
@@ -144,7 +144,7 @@ jobs:
             type=raw,value=latest
 
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile
@@ -159,7 +159,7 @@ jobs:
           mkdir -p /tmp/digests
           echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest-amd64.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-digest-amd64
           path: /tmp/digests/digest-amd64.txt
@@ -173,18 +173,18 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/jeremyl691/openaudiohub
           tags: |
@@ -193,7 +193,7 @@ jobs:
             type=raw,value=latest
 
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile
@@ -208,7 +208,7 @@ jobs:
           mkdir -p /tmp/digests
           echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest-arm64.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-digest-arm64
           path: /tmp/digests/digest-arm64.txt
@@ -222,26 +222,26 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: image-digest-amd64
           path: /tmp/digests
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: image-digest-arm64
           path: /tmp/digests
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/jeremyl691/openaudiohub
           tags: |
@@ -269,20 +269,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
       - run: corepack enable
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: openaudiohub-dmg
           path: dist
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ffmpeg-source
           path: dist/source
@@ -345,7 +345,7 @@ jobs:
           cat dist/SHA256SUMS.txt
 
       - name: Create the draft release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           name: OpenAudioHub ${{ github.ref_name }}
