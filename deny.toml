@@ -21,6 +21,9 @@ ignore = [
     "RUSTSEC-2026-0104", # panic while parsing a revocation list
     "RUSTSEC-2026-0346", # name constraints, same requirement
     "RUSTSEC-2026-0349", # revocation list parsing, same requirement
+    # rustls-webpki 0.101, the verifier behind rustls 0.21. The 0.101 line has no fixed
+    # release, so this clears only when the AWS SDK moves to rustls 0.23.
+    "RUSTSEC-2026-0382", # distrusted emSign intermediates accepted
     # h2 0.3, also from the AWS SDK.
     "RUSTSEC-2026-0258", # unbounded empty DATA frames
     # Build-time only, through a macro expansion.

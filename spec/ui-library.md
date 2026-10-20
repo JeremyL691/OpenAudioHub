@@ -22,7 +22,8 @@ Colors, fonts and spacing are out of scope.
 
 ## 1. Library page `/recordings`
 
-Signed in only. The page is rendered on the server. The list is built from the
+Signed in only. The server answers the path with the app shell, and the page
+renders in the browser (`pages.md`). The list is built from the
 account's non-deleted recordings, newest first by recording time. Per-user
 preferences (sort, density, page size, playback defaults) are read on first paint.
 

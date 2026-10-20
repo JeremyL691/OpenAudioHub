@@ -2,12 +2,12 @@
 
 ## Supported versions
 
-Security fixes are released for the following versions.
+Security fixes go into the newest release and into `main`. Older releases are not patched: upgrade to the newest version to get a fix.
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | Yes       |
-| < 1.0   | No        |
+| Newest release | Yes |
+| Any older release | No |
 
 ## Reporting a vulnerability
 

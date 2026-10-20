@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The workspace states Rust 1.94.1 as its minimum, and the toolchain pin, the CI images, the container build and the documentation all name that same patch release. The container image is built by a fixed compiler now instead of whatever the floating `rust:1` tag points at.
+- `tools/check/rust-version.sh` compares every place the Rust version is declared and fails on a difference. CI runs it, so a drift fails a pull request instead of a contributor's build.
+- The development and contribution guides install and check the extension as well, and their commands no longer assume the shell stayed in the directory of a previous step.
+- The security policy states that fixes go into the newest release, instead of listing version lines that were already out of date.
+
+### Fixed
+
+- The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.
+
 ## [1.2.5] - 2026-10-20
 
 ### Security
@@ -19,7 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The public API rate limit is counted per connection address instead of one shared bucket when the proxy setting is off.
 - A release tag is checked before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit. A tag pushed at an unreviewed commit no longer publishes downloads.
 - The pull request checks now format-check the Rust code, lint and test the Mac app crate, and run the long-recording suite. They used to cover the server, the web app and the extension only.
-- A security workflow runs `cargo-deny` and the npm audits, on lock-file changes, on `main`, and weekly. Dependabot opens grouped dependency updates.
+- A security workflow runs `cargo-deny` and the npm audits, on lock-file changes, on `main`, and weekly.
 
 ### Added
 
