@@ -1,6 +1,7 @@
 //! Summaries and titles (spec/ai.md "Summaries", "Title generation"; spec/workers.md "Auto-summary").
 //! A manual summary runs as a `summary` job; concurrent requests wait on that one job.
 
+pub mod followup;
 mod generate;
 mod prompts;
 mod text;
@@ -21,7 +22,7 @@ use crate::error::{ApiResult, AppError};
 use crate::jobs::{self, Job, NewJob};
 use crate::time::iso;
 use crate::{AppState, ai, routes};
-use generate::{Failed, Plan};
+use generate::Plan;
 
 pub(crate) const AUTO_LIMIT_DEFAULT: u64 = 60;
 pub(crate) const HOUR_MS: i64 = 3_600_000;
@@ -49,47 +50,37 @@ pub fn spawn(state: &AppState) {
             async move { generate::run_job(&state, job).await }
         },
     );
+    followup::spawn(state);
 }
 
-/// Called after a transcript is saved: auto title, then a queued auto summary. Never fails the caller.
+/// Queues an automatic summary for a transcript, if the user wants one and this transcript does
+/// not have one yet.
 ///
-/// The summary is a job like a manual run, so the recording's status covers it and a reload sees
-/// the same state. The save step does not wait for the model.
-pub async fn after_transcript(state: &AppState, user_id: &str, recording_id: &str) {
-    emit(
-        state,
-        user_id,
-        recording_id,
-        "transcription.completed",
-        None,
-    )
-    .await;
-    if let Err(e) = auto(state, user_id, recording_id).await {
-        tracing::error!(recording = recording_id, code = e.code, error = %e.message, "automatic summary step failed");
-    }
-}
-
-/// Queues an automatic summary for a recording that has none, once. Returns whether it queued.
-///
-/// Used both after a transcript is saved and after Plaud's own transcript is imported, so the
-/// same recording never gets two automatic runs.
-pub async fn queue_auto(state: &AppState, user_id: &str, recording_id: &str) -> ApiResult<bool> {
+/// This is the entry point the follow-up job uses, so the run is tied to the transcript it was
+/// asked for: the plan carries the transcript id, and the worker skips the run when a newer
+/// transcript replaced it. A transcript that already produced a summary does not get a second
+/// automatic one.
+pub async fn queue_auto_for(
+    state: &AppState,
+    user_id: &str,
+    recording_id: &str,
+    transcript_id: &str,
+) -> ApiResult<bool> {
     let settings = routes::settings::effective(state, user_id).await?;
     if settings.get("autoSummarize") != Some(&Value::Bool(true)) {
         return Ok(false);
     }
-    if has_content(state, recording_id).await? {
+    if has_summary_for(state, recording_id, transcript_id).await? {
         return Ok(false);
     }
-    // A queued or running run already covers this recording; enqueue returns that job.
-
     let preset = settings
         .get("autoSummarizePreset")
         .and_then(Value::as_str)
         .filter(|p| !p.is_empty());
-    let plan = generate::plan(&settings, preset, None, "");
-    let mut payload = serde_json::to_value(&plan).map_err(AppError::internal)?;
-    payload["trigger"] = json!("auto");
+    let mut plan = generate::plan(&settings, preset, None, "");
+    plan.trigger = Some("auto".into());
+    plan.transcript_id = Some(transcript_id.to_owned());
+    let payload = serde_json::to_value(&plan).map_err(AppError::internal)?;
     jobs::enqueue(
         &state.db,
         NewJob {
@@ -104,15 +95,28 @@ pub async fn queue_auto(state: &AppState, user_id: &str, recording_id: &str) -> 
     Ok(true)
 }
 
-async fn auto(state: &AppState, user_id: &str, recording_id: &str) -> Result<(), Failed> {
-    let settings = routes::settings::effective(state, user_id).await?;
-    if settings.get("autoGenerateTitle") == Some(&Value::Bool(true))
-        && let Err(e) = title::generate(state, user_id, recording_id, &settings).await
-    {
-        tracing::error!(recording = recording_id, code = e.code, error = %e.message, "title generation failed");
+/// Whether the summary that exists was written from this transcript.
+///
+/// A summary has no transcript id of its own, so it cannot prove which transcript it came from.
+/// The save step deletes the summary whenever a new transcript replaces an old one, which is why
+/// any summary on a recording whose transcript is still this one was written from it, and why a
+/// summary that exists is enough to skip a second automatic run.
+async fn has_summary_for(
+    state: &AppState,
+    recording_id: &str,
+    transcript_id: &str,
+) -> ApiResult<bool> {
+    let still_current: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM transcriptions WHERE id = ? AND recording_id = ?)",
+    )
+    .bind(transcript_id)
+    .bind(recording_id)
+    .fetch_one(&state.db)
+    .await?;
+    if !still_current {
+        return Ok(true);
     }
-    queue_auto(state, user_id, recording_id).await?;
-    Ok(())
+    has_content(state, recording_id).await
 }
 
 /// Whether a recording has a summary the UI can show: text, key points or action items.
@@ -123,16 +127,6 @@ pub async fn has_content(state: &AppState, recording_id: &str) -> ApiResult<bool
             .fetch_optional(&state.db)
             .await?;
     Ok(row == Some(1))
-}
-
-async fn emit(
-    state: &AppState,
-    user_id: &str,
-    recording_id: &str,
-    event: &str,
-    failure: Option<&str>,
-) {
-    crate::webhooks::emit_soft(state, user_id, recording_id, event, failure).await;
 }
 
 fn recording_not_found() -> AppError {

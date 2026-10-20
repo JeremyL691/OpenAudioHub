@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool};
 use tokio::sync::Notify;
 
 use crate::db::now_ms;
@@ -68,6 +68,40 @@ impl Wakeup {
     }
 }
 
+/// Adds a job inside a transaction the caller already opened, so the work it describes is
+/// committed together with the row that asked for it. Returns `None` when a job with the same
+/// `dedupe_key` already exists, which makes a retried save harmless.
+pub async fn enqueue_in<'e, E>(
+    executor: E,
+    job: NewJob<'_>,
+    dedupe_key: Option<&str>,
+) -> Result<Option<String>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    let id = ids::new_id();
+    let now = now_ms();
+    // A dedupe key covers the whole life of the job, not just its active states, so a retried
+    // caller cannot queue the same follow-up twice after the first one finished.
+    let inserted = sqlx::query(
+        "INSERT INTO jobs (id, kind, user_id, recording_id, payload, dedupe_key, run_after, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING",
+    )
+    .bind(&id)
+    .bind(job.kind)
+    .bind(job.user_id)
+    .bind(job.recording_id)
+    .bind(job.payload.to_string())
+    .bind(dedupe_key)
+    .bind(now)
+    .bind(now)
+    .bind(now)
+    .execute(executor)
+    .await?;
+    Ok((inserted.rows_affected() == 1).then_some(id))
+}
+
 /// Adds a job unless the same kind is already queued or running for the same
 /// recording; returns the id of the new or existing job.
 pub async fn enqueue(db: &SqlitePool, job: NewJob<'_>) -> Result<String, sqlx::Error> {
@@ -76,7 +110,7 @@ pub async fn enqueue(db: &SqlitePool, job: NewJob<'_>) -> Result<String, sqlx::E
     let inserted = sqlx::query(
         "INSERT INTO jobs (id, kind, user_id, recording_id, payload, run_after, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (kind, recording_id) WHERE state IN ('queued', 'running') AND recording_id IS NOT NULL DO NOTHING",
+         ON CONFLICT (kind, recording_id) WHERE state IN ('queued', 'running') AND recording_id IS NOT NULL AND kind <> 'after_transcript' DO NOTHING",
     )
     .bind(&id)
     .bind(job.kind)
