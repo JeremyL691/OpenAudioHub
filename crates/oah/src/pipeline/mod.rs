@@ -493,7 +493,16 @@ mod tests {
                 .unwrap();
         assert_eq!(phase, "cancelled");
         // The worker's own first phase write must not restart a cancelled job.
-        run::set_phase(&state.db, "j", "queued").await.unwrap();
+        run::set_phase(
+            &state.db,
+            &run::Lease {
+                id: "j".into(),
+                lease_gen: 0,
+            },
+            "queued",
+        )
+        .await
+        .unwrap();
         let phase: String =
             sqlx::query_scalar("SELECT phase FROM pipeline_runs WHERE job_id = 'j'")
                 .fetch_one(&state.db)
