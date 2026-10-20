@@ -232,7 +232,7 @@ Any other path under `/api/` answers `404 NOT_FOUND`. In particular there is no 
 
 Every limit is a fixed window of 60 seconds. Counters are held in memory of one server process and reset when the process restarts.
 
-Per-address limits apply only when `RATE_LIMIT_TRUST_PROXY_HEADERS=true`. The client address is then taken from `CF-Connecting-IP`, else `X-Real-IP`, else the last entry of `X-Forwarded-For`, else the TCP peer. Only trust this setting behind a proxy that sets these headers itself. When the setting is `false`, a request has no client address, so the per-address checks are skipped. Only the per-email check on reset requests still applies.
+The client address comes from the connection. When `RATE_LIMIT_TRUST_PROXY_HEADERS=true`, it is taken from `CF-Connecting-IP`, else `X-Real-IP`, else the last entry of `X-Forwarded-For`, else the TCP peer; only trust this setting behind a proxy that sets these headers itself. When the setting is `false` the headers are ignored, so a client cannot choose its own bucket by sending them. A request with neither a header nor a peer address is counted under the address `unknown`, so it still meets the limit instead of skipping it.
 
 | Route | Per client address, per 60 s | Per email, per 60 s |
 |---|---|---|
@@ -246,6 +246,8 @@ Order of checks:
 
 - The per-address check runs before the body is read.
 - The per-email check runs after the email is validated. It counts every valid request for that address, whether or not an account exists. The key is the trimmed, lowercased email.
+
+Behind a proxy with the setting at its default, every client appears with the proxy's address and shares the row's budget. A server started that way that receives forwarding headers logs one warning at the first such request.
 
 A refused request answers `429`:
 

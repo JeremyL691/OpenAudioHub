@@ -204,7 +204,7 @@ impl FromRequestParts<AppState> for ApiUser {
     type Rejection = AppError;
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, AppError> {
         let peer = parts.extensions.get::<ConnectInfo<SocketAddr>>();
-        let ip = auth::client_ip(state, &parts.headers, peer).unwrap_or_else(|| "unknown".into());
+        let ip = auth::client_ip(state, &parts.headers, peer);
         rate_limit(state, &format!("api-ip:{ip}"), 1200)?;
         let bearer = parts
             .headers
