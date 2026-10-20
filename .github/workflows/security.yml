@@ -1,16 +1,11 @@
 name: Security
 
 on:
+  # Called by ci.yml, so a pull request runs these checks with the rest of the suite instead of
+  # on a separate path filter. A change that touches nothing here still has to pass them.
+  workflow_call:
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "**/package.json"
-      - "**/pnpm-lock.yaml"
-      - "deny.toml"
-      - ".github/workflows/security.yml"
   # New advisories appear without a commit here, so the checks also run on a schedule.
   schedule:
     - cron: "0 6 * * 1"
@@ -45,11 +40,19 @@ jobs:
         with:
           node-version: 22
       - run: corepack enable
-      # A high or worse advisory fails the run. Moderate notices are reported in the log: the
-      # one left is in a transitive package the browser build never reaches.
+      # Every lock file in the tree, with its development dependencies. The build tools run on a
+      # developer machine and in this workflow, so an advisory in them is in scope: the extension
+      # keeps all of its tooling in devDependencies, and an audit of production packages alone
+      # would never look at it.
+      #
+      # A high or worse advisory fails the run. Moderate notices are printed and do not fail it:
+      # the ones left are in transitive packages the shipped build never reaches.
       - name: Audit the web app
         working-directory: web
-        run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level high
+        run: pnpm install --frozen-lockfile && pnpm audit --audit-level high
       - name: Audit the extension
         working-directory: extension
-        run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level high
+        run: pnpm install --frozen-lockfile && pnpm audit --audit-level high
+      - name: Audit the contract tests
+        working-directory: contract-tests
+        run: pnpm install --frozen-lockfile && pnpm audit --audit-level high

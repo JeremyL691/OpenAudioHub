@@ -180,3 +180,36 @@ jobs:
           name: contract-results
           path: .dev-artifacts/
           include-hidden-files: true
+
+  security:
+    name: Security
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+
+  # One check to require in branch protection. It fails when any check it needs failed, was
+  # cancelled, or never ran: "the job was skipped" must not read as "the code passed". The
+  # previous setup required three checks by name, so a failure in the Mac app job, the pipeline
+  # suite or the dependency scans could not block a merge.
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [server, msrv, web, extension, desktop, pipeline, contract, security]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail unless every required check passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          failed=0
+          for name in server msrv web extension desktop pipeline contract security; do
+            result="$(printf '%s' "$RESULTS" | python3 -c "import json,sys; print(json.load(sys.stdin)['$name']['result'])")"
+            if [ "$result" != "success" ]; then
+              echo "::error::$name ended as '$result', not 'success'" >&2
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Every required check passed."

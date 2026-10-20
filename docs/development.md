@@ -198,11 +198,13 @@ The Rust version lives in four places that have to agree: `rust-version` in `Car
 tools/check/rust-version.sh
 ```
 
-One more workflow guards dependencies. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app and the extension. It runs on a pull request that changes a lock file, on `main`, and every Monday, because a new advisory appears without a commit here.
+A `Quality gate` job depends on all of them. It fails when any of them failed, was cancelled, or never ran, so one check name covers the whole suite in branch protection. Require that name, and a failure in the Mac app job or the long-recording suite blocks a merge the same way a failing server test does.
+
+The dependency checks run inside that suite. `security.yml` runs `cargo-deny` against `deny.toml`, and `pnpm audit` for the web app, the extension and the contract tests, including their development dependencies. `ci.yml` calls it, so a pull request runs it with everything else. It also runs on `main` and every Monday, because a new advisory appears without a commit here.
 
 There is no dependency update bot. Upgrades are made by hand, when someone decides to make them, which keeps a broken major version from blocking every smaller update behind it. The weekly scan is what reports the problem; fixing it is a normal change with the usual checks.
 
-`deny.toml` carries the dependency policy, including the licences allowed in this tree and the advisories that cannot be cleared from here. Each ignored advisory has a comment saying why; remove an entry once its dependency is updated.
+`deny.toml` carries the dependency policy, including the licences allowed in this tree and the advisories that cannot be cleared from here. Each ignored advisory has a comment saying why: which dependency pulls it in, and what removing it depends on. Remove an entry once its dependency is updated.
 
 A release tag runs `verify` before anything is built: the tagged commit must be on `main`, the four version files must match the tag, `CHANGELOG.md` must have a section for it, and the whole suite runs again on that commit.
 
