@@ -268,7 +268,7 @@ The reset routes also repeat the text in `message`. Each `429` carries these hea
 | `X-RateLimit-Remaining` | Requests left in the window after this one. `0` on a refusal. |
 | `X-RateLimit-Reset` | Unix time in seconds when the window resets. |
 
-The public API (see [settings.md](settings.md)) uses the same client address. Without trusted proxy headers, all its clients share one bucket named `unknown`.
+The public API (see [settings.md](settings.md)) uses the same client address. Without trusted proxy headers it is the connection's address, and a request that has neither a header nor a peer address shares one bucket named `unknown`.
 
 ## Origin checks
 
