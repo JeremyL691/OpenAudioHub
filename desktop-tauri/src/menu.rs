@@ -1,4 +1,4 @@
-//! The menu-bar item and the actions it starts (spec/desktop.md sections 8.1, 8.2, 8.4 and 10).
+//! The menu-bar item and the actions it starts (spec/desktop.md sections 6 and 10).
 //! Labels follow the interface language. Sync is not here: it runs in the server.
 
 use std::path::{Path, PathBuf};
@@ -250,17 +250,10 @@ fn data_dir(app: &AppHandle) -> PathBuf {
 
 /// Opens a file or folder with the system's default app. Failures are logged only.
 fn open_path(dir: &Path, path: &Path, as_text: bool) {
-    let mut command = if cfg!(target_os = "macos") {
-        let mut c = Command::new("open");
-        if as_text {
-            c.arg("-t");
-        }
-        c
-    } else if cfg!(windows) {
-        Command::new("explorer")
-    } else {
-        Command::new("xdg-open")
-    };
+    let mut command = Command::new("open");
+    if as_text {
+        command.arg("-t");
+    }
     if let Err(e) = command.arg(path).spawn() {
         files::log(dir, &format!("could not open {}: {e}", path.display()));
     }

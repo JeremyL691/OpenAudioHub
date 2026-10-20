@@ -1,7 +1,5 @@
 //! The desktop app: the server runs in this process, and a window shows it (spec/desktop.md).
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 mod backup;
 mod bridge;
 mod download;
@@ -64,11 +62,7 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
         .and_then(|e| e.parent().map(PathBuf::from))
     {
         for (key, tool) in [("FFMPEG_PATH", "ffmpeg"), ("FFPROBE_PATH", "ffprobe")] {
-            let path = dir.join(if cfg!(windows) {
-                format!("{tool}.exe")
-            } else {
-                tool.to_owned()
-            });
+            let path = dir.join(tool);
             if path.exists() {
                 // SAFETY: no other thread exists yet.
                 unsafe { std::env::set_var(key, path) };
@@ -200,12 +194,9 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .run(|app, event| {
             // Clicking the Dock icon while the window is hidden brings it back.
-            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 show_main(app);
             }
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
         });
     Ok(())
 }

@@ -1,4 +1,4 @@
-//! Background Plaud token refresh (spec/desktop.md section 11.2).
+//! Background Plaud token refresh (spec/desktop.md section 10.3).
 //!
 //! The account token Plaud hands out lasts 24 hours. The Plaud web session in the app's
 //! webview store issues a fresh one on page load, so a hidden window loads the Plaud site,

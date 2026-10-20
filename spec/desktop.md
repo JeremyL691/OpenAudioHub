@@ -5,8 +5,7 @@ This file specifies the macOS desktop app: what it does at start and quit, what 
 ## 1. Scope
 
 - Platform: macOS on Apple Silicon (`aarch64-apple-darwin`), minimum macOS 11.0. The app is distributed as an app bundle and a disk image, signed ad hoc (signing identity `-`).
-- Product name `OpenAudioHub`. Bundle identifier `io.github.jeremyl691.openaudiohub`. Version `1.1.0` (the workspace version, which is also the value written to `config.json` as `lastVersion`).
-- The shell source has Windows and Linux branches. They are not specified here.
+- Product name `OpenAudioHub`. Bundle identifier `io.github.jeremyl691.openaudiohub`. Version `1.2.0` (the workspace version, which is also the value written to `config.json` as `lastVersion`).
 - One copy of the app runs at a time, on one data folder. It signs in as one local account (section 4).
 - The server listens on 127.0.0.1 only. The app has no automatic update check.
 - The app bundles two programs, `ffmpeg` and `ffprobe`, placed next to the app executable. The server uses them to decode and convert audio, compute waveforms and prepare files for transcription. They are built with GPL, nonfree and version 3 components disabled (`desktop-tauri/scripts/build-ffmpeg.sh`).
@@ -48,7 +47,7 @@ The window's browser data (cookies, local storage) is kept by the framework's de
   "closeAction": "background",
   "showTray": true,
   "launchAtLogin": false,
-  "lastVersion": "1.1.0",
+  "lastVersion": "1.2.0",
   "boundUserId": "<user id>"
 }
 ```
@@ -273,6 +272,15 @@ The main window's pages get one object, `window.__openaudiohubDesktop`, with a `
 - Other schemes, `about:blank` included, are not loaded and are dropped.
 - The Plaud refresh window (section 10.2) has its own rules.
 
+### 7.4 Interface language
+
+- The desktop app speaks the same four languages as the page (spec/ui-app.md, "Interface language"): English, Simplified Chinese, Japanese and Korean.
+- At start the language is the one saved in `config.json`, else the system language, else English. A saved value that names no supported language is ignored.
+- Choosing a language in the page (`setLocale`) or in the menu-bar item saves it in `config.json` and switches the menu labels at once. Choosing it in the menu-bar item also tells the window's page, which applies it without writing the choice back.
+- The menu-bar labels and the shell's own dialogs and messages use the language: "Export Keys…" (section 6.4), "Choose the export folder" (section 7.2), "Save download" (section 8), and the start-up disk-space and start-failure dialogs.
+- The buttons the system adds to a dialog (for example "Cancel" on a save dialog) follow the system language, not this setting.
+- A language change never changes stored recordings, transcripts or summaries.
+
 ## 8. Downloads and file saves
 
 Audio and text are saved by the shell, not by the webview.
@@ -285,15 +293,6 @@ Audio and text are saved by the shell, not by the webview.
 - The response streams into a temporary file in the destination folder with mode 0600. Only a complete transfer is renamed to the chosen name; a cancelled dialog, a refused response, a stalled transfer or a write error removes the temporary file and leaves any existing destination unchanged.
 - A transfer with no bytes for 60 seconds is stopped. The server is given up to 15 minutes to start answering.
 - `saveTextFile` uses the same name rules, opens the save dialog in the Downloads folder, and writes the text through a temporary file with mode 0600. A cancelled dialog returns false.
-
-### 7.4 Interface language
-
-- The desktop app speaks the same four languages as the page (spec/ui-app.md, "Interface language"): English, Simplified Chinese, Japanese and Korean.
-- At start the language is the one saved in `config.json`, else the system language, else English. A saved value that names no supported language is ignored.
-- Choosing a language in the page (`setLocale`) or in the menu-bar item saves it in `config.json` and switches the menu labels at once. Choosing it in the menu-bar item also tells the window's page, which applies it without writing the choice back.
-- The menu-bar labels and the shell's own dialogs and messages use the language: "Export Keys…" (section 6.4), "Choose the export folder" (section 7.2), "Save download" (section 8), and the start-up disk-space and start-failure dialogs.
-- The buttons the system adds to a dialog (for example "Cancel" on a save dialog) follow the system language, not this setting.
-- A language change never changes stored recordings, transcripts or summaries.
 
 ## 9. Start at login
 
