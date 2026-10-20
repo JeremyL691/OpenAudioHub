@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- The long-recording pipeline is covered end to end over HTTP. A separate contract run drives a generated speech recording through ffmpeg, speech detection, chunk planning, several provider calls and the merge, and checks cancel, provider failures, a timeout, and a retry that keeps the chunks that already succeeded. A restart after a crash is covered too: the saved speech detection is reused and finished chunks are not sent again.
 - `docs/performance.md` records how long the pipeline takes on a reference machine, what it uses in memory and disk, and how to measure the same numbers with `tools/bench/pipeline.sh`.
 
 ## [1.2.0] - 2026-10-19
