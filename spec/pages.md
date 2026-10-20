@@ -54,7 +54,7 @@ Unless a row says otherwise, a page path returns the same result signed in or ou
 Auth: none. Status `200`, `Content-Type: application/json`:
 
 ```json
-{ "status": "ok", "version": "1.1.0" }
+{ "status": "ok", "version": "<version>" }
 ```
 
 - `version` is the application version without a `v` prefix.

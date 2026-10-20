@@ -1,4 +1,4 @@
-//! The database copy made before an upgrade (spec/desktop.md section 15.2). It is written with
+//! The database copy made before an upgrade (spec/desktop.md section 3.5). It is written with
 //! SQLite's `VACUUM INTO`, so it is a consistent copy even when the database is in WAL mode. The
 //! `backups/` directory is created with mode 0700 and each copy is written with mode 0600.
 

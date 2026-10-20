@@ -43,7 +43,7 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 - A Rust toolchain that supports edition 2024, which means Rust 1.85 or newer.
 - Node.js 22 and pnpm. The version of pnpm is named in the `packageManager` field of `web/package.json`.
 - `ffmpeg` and `ffprobe` on your `PATH`, or set `FFMPEG_PATH` and `FFPROBE_PATH`. The pipeline and the media tests need them.
-- For the Mac app: macOS with the Xcode command line tools. The build script uses `xcrun`.
+- For the Mac app: macOS with the Xcode command line tools, which provide the C compiler and `make` that the ffmpeg build script uses.
 - `openssl`, to make test keys.
 
 ## Rust workspace
