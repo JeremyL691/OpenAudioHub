@@ -411,7 +411,8 @@ Three buckets, each a fixed 60-second window that starts with its first request:
 - Per signed-in account (session): 600 requests per minute.
 
 The client IP comes from forwarding headers only when `RATE_LIMIT_TRUST_PROXY_HEADERS` is
-`true`. Otherwise all clients share the bucket for the IP `unknown`.
+`true`. Otherwise it is the connection's address, and a request without one shares the bucket
+for the IP `unknown`.
 
 When a bucket is full:
 

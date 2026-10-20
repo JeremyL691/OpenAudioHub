@@ -23,6 +23,9 @@ pub struct Job {
     pub recording_id: Option<String>,
     pub payload: String,
     pub attempts: i64,
+    /// Identifies this claim. Every claim of the job gets a new, larger value, so a worker
+    /// that lost its lease cannot pass its own generation to `renew`, `set_progress` or `finish`.
+    pub lease_gen: i64,
 }
 
 impl Job {
@@ -97,9 +100,10 @@ pub async fn enqueue(db: &SqlitePool, job: NewJob<'_>) -> Result<String, sqlx::E
 /// Atomically takes the oldest due job of `kind`: a queued one whose time has
 /// come, or a running one whose lease ran out (its worker died).
 ///
-/// Every claim bumps `attempts`, so the returned value identifies this claim.
-/// `renew` and `finish` match on it, so a worker that lost its lease cannot
-/// touch the run that replaced it.
+/// Every claim bumps `lease_gen`, so the returned value identifies this claim.
+/// `renew`, `set_progress` and `finish` match on it, so a worker that lost its
+/// lease cannot touch the run that replaced it. `attempts` counts retries and is
+/// reset by an explicit retry, so it cannot serve as the claim identity.
 pub async fn claim(
     db: &SqlitePool,
     kind: &str,
@@ -107,13 +111,14 @@ pub async fn claim(
 ) -> Result<Option<Job>, sqlx::Error> {
     let now = now_ms();
     sqlx::query_as(
-        "UPDATE jobs SET state = 'running', lease_until = ?, attempts = attempts + 1, updated_at = ?
+        "UPDATE jobs SET state = 'running', lease_until = ?, attempts = attempts + 1,
+                lease_gen = lease_gen + 1, updated_at = ?
          WHERE id = (
              SELECT id FROM jobs
              WHERE kind = ? AND ((state = 'queued' AND run_after <= ?) OR (state = 'running' AND lease_until < ?))
              ORDER BY run_after, created_at LIMIT 1
          )
-         RETURNING id, kind, user_id, recording_id, payload, attempts",
+         RETURNING id, kind, user_id, recording_id, payload, attempts, lease_gen",
     )
     .bind(now + lease.as_millis() as i64)
     .bind(now)
@@ -124,36 +129,46 @@ pub async fn claim(
     .await
 }
 
-/// Extends the lease of a job this worker still holds. `attempts` is the value
+/// Extends the lease of a job this worker still holds. `lease_gen` is the value
 /// the worker got from `claim`. Returns false when the lease was lost, because
 /// the job was reclaimed or is no longer running.
 pub async fn renew(
     db: &SqlitePool,
     id: &str,
-    attempts: i64,
+    lease_gen: i64,
     lease: Duration,
 ) -> Result<bool, sqlx::Error> {
     let now = now_ms();
     let res = sqlx::query(
-        "UPDATE jobs SET lease_until = ?, updated_at = ? WHERE id = ? AND state = 'running' AND attempts = ?",
+        "UPDATE jobs SET lease_until = ?, updated_at = ? WHERE id = ? AND state = 'running' AND lease_gen = ?",
     )
     .bind(now + lease.as_millis() as i64)
     .bind(now)
     .bind(id)
-    .bind(attempts)
+    .bind(lease_gen)
     .execute(db)
     .await?;
     Ok(res.rows_affected() == 1)
 }
 
-pub async fn set_progress(db: &SqlitePool, id: &str, progress: f64) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE jobs SET progress = ?, updated_at = ? WHERE id = ?")
-        .bind(progress.clamp(0.0, 1.0))
-        .bind(now_ms())
-        .bind(id)
-        .execute(db)
-        .await?;
-    Ok(())
+/// Records progress for the run that still holds the lease. Returns false, and writes nothing,
+/// when the job was reclaimed, so an old worker cannot move the bar of the run that replaced it.
+pub async fn set_progress(
+    db: &SqlitePool,
+    id: &str,
+    lease_gen: i64,
+    progress: f64,
+) -> Result<bool, sqlx::Error> {
+    let res = sqlx::query(
+        "UPDATE jobs SET progress = ?, updated_at = ? WHERE id = ? AND state = 'running' AND lease_gen = ?",
+    )
+    .bind(progress.clamp(0.0, 1.0))
+    .bind(now_ms())
+    .bind(id)
+    .bind(lease_gen)
+    .execute(db)
+    .await?;
+    Ok(res.rows_affected() == 1)
 }
 
 /// Records the handler's outcome. `max_attempts` bounds retries so a job that
@@ -186,7 +201,7 @@ pub async fn finish(
     let res = sqlx::query(
         "UPDATE jobs SET state = ?, error_code = ?, error_message = ?, run_after = ?, lease_until = NULL,
          progress = CASE WHEN ? = 'done' THEN 1 ELSE progress END, finished_at = ?, updated_at = ?
-         WHERE id = ? AND state = 'running' AND attempts = ?",
+         WHERE id = ? AND state = 'running' AND lease_gen = ?",
     )
     .bind(state)
     .bind(code)
@@ -196,7 +211,7 @@ pub async fn finish(
     .bind(finished)
     .bind(now)
     .bind(&job.id)
-    .bind(job.attempts)
+    .bind(job.lease_gen)
     .execute(db)
     .await?;
     Ok(res.rows_affected() == 1)
@@ -246,12 +261,12 @@ pub fn spawn_workers<F, Fut>(
                 let handler_task = tokio::spawn(handler(job.clone()));
                 // When another worker has reclaimed the job, this worker stops its handler.
                 let renewer = {
-                    let (db, id, attempts) = (db.clone(), job.id.clone(), job.attempts);
+                    let (db, id, lease_gen) = (db.clone(), job.id.clone(), job.lease_gen);
                     let abort = handler_task.abort_handle();
                     tokio::spawn(async move {
                         loop {
                             tokio::time::sleep(LEASE / 3).await;
-                            match renew(&db, &id, attempts, LEASE).await {
+                            match renew(&db, &id, lease_gen, LEASE).await {
                                 Ok(true) => {}
                                 Ok(false) => {
                                     tracing::warn!(
@@ -412,15 +427,100 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(
-            !renew(&db, &stale.id, stale.attempts, Duration::from_secs(60))
+            !renew(&db, &stale.id, stale.lease_gen, Duration::from_secs(60))
                 .await
                 .unwrap()
         );
         assert!(
-            renew(&db, &current.id, current.attempts, Duration::from_secs(60))
+            renew(&db, &current.id, current.lease_gen, Duration::from_secs(60))
                 .await
                 .unwrap()
         );
+    }
+
+    #[tokio::test]
+    async fn a_retry_that_resets_attempts_does_not_revive_the_old_claim() {
+        // An explicit retry sets `attempts` back to 0, so `attempts` alone cannot identify a
+        // claim: the counter repeats. The lease generation never repeats.
+        let db = db().await;
+        enqueue(&db, job(None)).await.unwrap();
+        let first = claim(&db, "test", Duration::from_secs(60))
+            .await
+            .unwrap()
+            .unwrap();
+        finish(
+            &db,
+            &first,
+            Outcome::Failed {
+                code: "X",
+                message: "boom".into(),
+            },
+            3,
+        )
+        .await
+        .unwrap();
+        sqlx::query("UPDATE jobs SET state = 'queued', attempts = 0, lease_until = NULL")
+            .execute(&db)
+            .await
+            .unwrap();
+        let second = claim(&db, "test", Duration::from_secs(60))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            first.attempts, second.attempts,
+            "the test needs equal counters"
+        );
+        assert!(second.lease_gen > first.lease_gen);
+        assert!(
+            !renew(&db, &first.id, first.lease_gen, Duration::from_secs(60))
+                .await
+                .unwrap()
+        );
+        assert!(!finish(&db, &first, Outcome::Done, 3).await.unwrap());
+        assert!(
+            renew(&db, &second.id, second.lease_gen, Duration::from_secs(60))
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn progress_from_a_lost_lease_is_ignored() {
+        let db = db().await;
+        enqueue(&db, job(None)).await.unwrap();
+        let stale = claim(&db, "test", Duration::from_secs(60))
+            .await
+            .unwrap()
+            .unwrap();
+        sqlx::query("UPDATE jobs SET lease_until = 0")
+            .execute(&db)
+            .await
+            .unwrap();
+        let current = claim(&db, "test", Duration::from_secs(60))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            !set_progress(&db, &stale.id, stale.lease_gen, 0.9)
+                .await
+                .unwrap()
+        );
+        let progress: f64 = sqlx::query_scalar("SELECT progress FROM jobs")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(progress, 0.0);
+        assert!(
+            set_progress(&db, &current.id, current.lease_gen, 0.5)
+                .await
+                .unwrap()
+        );
+        let progress: f64 = sqlx::query_scalar("SELECT progress FROM jobs")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(progress, 0.5);
     }
 
     #[tokio::test]

@@ -52,7 +52,7 @@ See [Personal API keys](automation-and-webhooks.md#personal-api-keys).
 - Each endpoint has its own signing secret. Each delivery is signed with HMAC-SHA256 over a timestamp and the body. Your receiver should check the signature and reject old timestamps. See [Verify a signature](automation-and-webhooks.md#verify-a-signature).
 - The server does not follow redirects. A redirect counts as a failed delivery.
 - A webhook URL cannot contain a user name or password.
-- `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true` allows only `https` addresses whose host resolves to public IP addresses. It refuses local and private addresses, and it connects to the address it checked. Turn this on for any server that other people can use. See [Allowed URLs](automation-and-webhooks.md#allowed-urls).
+- A server refuses webhook targets that use plain `http` or resolve to private addresses, so a signed-up user cannot use the server to reach your network. It refuses local and private addresses in every form, including the IPv4 address inside a NAT64 or 6to4 address, and it connects to the address it checked without an environment proxy. The Mac app keeps allowing local targets because it is single-user. See `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` in [Environment variables](environment-variables.md#address-and-files) and [Allowed URLs](automation-and-webhooks.md#allowed-urls).
 
 ## Rate limits
 
@@ -69,7 +69,7 @@ The server counts requests in fixed time windows. These are the main limits:
 
 The counters are kept in memory. They reset when the server restarts. See [Limits of one process](architecture.md#limits-of-one-process).
 
-The client address comes from the connection. Proxy headers are used only when `RATE_LIMIT_TRUST_PROXY_HEADERS=true`. Turn that on only behind a proxy that sets the headers, and keep the server port closed to other machines.
+The client address comes from the connection. Proxy headers are used only when `RATE_LIMIT_TRUST_PROXY_HEADERS=true`. Turn that on only behind a proxy that sets the headers, and keep the server port closed to other machines. Without it, every client behind a proxy shares one budget for each limit.
 
 ## Browser security headers
 
@@ -119,7 +119,7 @@ Some of your data leaves the server by design:
 - Keep `ENCRYPTION_KEY` and a copy of it, apart from your backups.
 - Use HTTPS for the public address, and keep the server port closed to the internet except through the proxy.
 - Keep `APP_URL` exact, so the origin check works.
-- Turn on `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` if other people can use the server.
+- Keep `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` at its default on a server that other people can use. Set it to `false` only to deliver to a machine on your own network.
 - Turn off sign-up when only you should use the server.
 - Protect backups, exports and the storage folder, because they are not encrypted.
 - Keep the server and the image up to date.

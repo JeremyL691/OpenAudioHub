@@ -11,9 +11,13 @@ services:
     environment:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      # Set to true only when a reverse proxy in front of the app sets X-Forwarded-For.
-      RATE_LIMIT_TRUST_PROXY_HEADERS: ${RATE_LIMIT_TRUST_PROXY_HEADERS:-false}
+      # The port below is bound to localhost, so a reverse proxy on the host is what reaches
+      # the app. Trusting its headers gives each visitor their own rate-limit bucket. Set this
+      # to false when the app is reached without a proxy.
+      RATE_LIMIT_TRUST_PROXY_HEADERS: ${RATE_LIMIT_TRUST_PROXY_HEADERS:-true}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      # Empty keeps the default: private webhook targets are refused in the server.
+      WEBHOOKS_REQUIRE_PUBLIC_TARGETS: ${WEBHOOKS_REQUIRE_PUBLIC_TARGETS:-}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

@@ -181,15 +181,17 @@ pub async fn origin_check(State(state): State<AppState>, request: Request, next:
 }
 
 /// The client address used for per-client rate limits. Proxy headers count only when the
-/// operator says the server sits behind a trusted proxy. Without trust there is no per-client
-/// address (`None`), so per-IP checks are skipped and the public API shares one bucket.
+/// operator says the server sits behind a trusted proxy that sets them. Without that setting the
+/// address comes from the connection, so a client cannot pick its own bucket. A request with
+/// neither shares one `unknown` bucket instead of escaping the limits.
 pub fn client_ip(
     state: &AppState,
     headers: &HeaderMap,
     peer: Option<&ConnectInfo<SocketAddr>>,
-) -> Option<String> {
+) -> String {
     if !state.config.trust_proxy_headers {
-        return None;
+        warn_once_on_forwarded_headers(headers);
+        return peer_ip(peer).unwrap_or_else(|| UNKNOWN_CLIENT.to_owned());
     }
     // A trusted proxy appends the address it saw, so the last entry is the one
     // the client cannot forge.
@@ -205,6 +207,29 @@ pub fn client_ip(
         .or_else(|| from_header("x-real-ip"))
         .or_else(|| from_header("x-forwarded-for"))
         .or_else(|| peer_ip(peer))
+        .unwrap_or_else(|| UNKNOWN_CLIENT.to_owned())
+}
+
+/// The bucket shared by requests that carry no address at all.
+pub const UNKNOWN_CLIENT: &str = "unknown";
+
+/// Reminds the operator once when a proxy forwards requests but trust is off. Without trust the
+/// address is the proxy's, so every user shares one bucket, which is worth telling them.
+fn warn_once_on_forwarded_headers(headers: &HeaderMap) {
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    if !["x-forwarded-for", "x-real-ip", "cf-connecting-ip"]
+        .iter()
+        .any(|name| headers.contains_key(*name))
+    {
+        return;
+    }
+    WARNED.call_once(|| {
+        tracing::warn!(
+            "requests carry proxy headers but RATE_LIMIT_TRUST_PROXY_HEADERS is not true; \
+             per-client rate limits use the proxy address, so every client shares one bucket. \
+             Set it to true when a reverse proxy sets those headers."
+        );
+    });
 }
 
 /// The address recorded on a new session: the client address when trusted, else the TCP peer.
@@ -213,7 +238,11 @@ pub fn session_ip(
     headers: &HeaderMap,
     peer: Option<&ConnectInfo<SocketAddr>>,
 ) -> Option<String> {
-    client_ip(state, headers, peer).or_else(|| peer_ip(peer))
+    // A desktop session records no address, so the shared bucket marker is not stored.
+    let address = client_ip(state, headers, peer);
+    (address != UNKNOWN_CLIENT)
+        .then_some(address)
+        .or_else(|| peer_ip(peer))
 }
 
 fn peer_ip(peer: Option<&ConnectInfo<SocketAddr>>) -> Option<String> {
@@ -255,12 +284,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn untrusted_proxy_headers_give_no_rate_limit_address() {
+    async fn untrusted_proxy_headers_use_the_peer_address() {
         let state = state(false).await;
         let peer = ConnectInfo("198.51.100.7:4000".parse::<SocketAddr>().unwrap());
-        // No per-client address, so per-IP limits are skipped and the public API uses one bucket.
-        assert_eq!(client_ip(&state, &forwarded(), Some(&peer)), None);
-        // The session still records the peer address, as before.
+        // Forwarding headers are ignored, so a client cannot pick its own limit bucket.
+        assert_eq!(client_ip(&state, &forwarded(), Some(&peer)), "198.51.100.7");
+        // The session records the same address.
         assert_eq!(
             session_ip(&state, &forwarded(), Some(&peer)).as_deref(),
             Some("198.51.100.7")
@@ -268,17 +297,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_untrusted_request_without_a_peer_shares_one_bucket() {
+        let state = state(false).await;
+        assert_eq!(client_ip(&state, &forwarded(), None), "unknown");
+    }
+
+    #[tokio::test]
     async fn trusted_proxy_headers_give_the_forwarded_client() {
         let state = state(true).await;
         let peer = ConnectInfo("198.51.100.7:4000".parse::<SocketAddr>().unwrap());
-        assert_eq!(
-            client_ip(&state, &forwarded(), Some(&peer)).as_deref(),
-            Some("203.0.113.9")
-        );
+        assert_eq!(client_ip(&state, &forwarded(), Some(&peer)), "203.0.113.9");
         // Without a proxy header, the peer is the fallback.
         assert_eq!(
-            client_ip(&state, &HeaderMap::new(), Some(&peer)).as_deref(),
-            Some("198.51.100.7")
+            client_ip(&state, &HeaderMap::new(), Some(&peer)),
+            "198.51.100.7"
         );
+        // A trusted request with neither still shares one bucket rather than escaping limits.
+        assert_eq!(client_ip(&state, &HeaderMap::new(), None), "unknown");
     }
 }

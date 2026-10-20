@@ -70,10 +70,11 @@ pub struct Saved<'a> {
     pub transcription_type: &'a str,
     /// Pipeline timeline JSON and its source; `None` for whole-file runs.
     pub timeline: Option<(serde_json::Value, &'a str)>,
-    /// The pipeline job that produced this transcript and the phase it ends in. The phase is
-    /// written in the same transaction as the transcript, so a cancel that arrived first wins
-    /// and a save that committed first is never overwritten (spec/audio-pipeline.md 13.1).
-    pub job: Option<(&'a str, &'a str)>,
+    /// The pipeline job that produced this transcript, the lease generation of the run that
+    /// saved it, and the phase it ends in. The phase is written in the same transaction as the
+    /// transcript, so a cancel that arrived first wins, a save that committed first is never
+    /// overwritten (spec/audio-pipeline.md 13.1), and a worker that lost its lease writes nothing.
+    pub job: Option<(&'a str, i64, &'a str)>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -121,19 +122,29 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
     // committed first leaves the phase at `cancelled`, the guard misses, and the save rolls
     // back. A save that committed first leaves `completed`/`needs_alignment`, which the cancel
     // endpoint refuses to overwrite (spec/audio-pipeline.md section 13.1).
-    if let Some((job_id, phase)) = saved.job {
+    if let Some((job_id, lease_gen, phase)) = saved.job {
         // The job must belong to the same user; the phase write stays scoped like every other
         // query of the save.
-        let owner: Option<String> = sqlx::query_scalar("SELECT user_id FROM jobs WHERE id = ?")
-            .bind(job_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-        if owner.as_deref() != Some(saved.user_id) {
+        let owner: Option<(Option<String>, i64)> =
+            sqlx::query_as("SELECT user_id, lease_gen FROM jobs WHERE id = ?")
+                .bind(job_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if owner.as_ref().and_then(|(user, _)| user.as_deref()) != Some(saved.user_id) {
             tx.rollback().await?;
             return Err(AppError::new(
                 StatusCode::CONFLICT,
                 "JOB_CANCELLED",
                 "The job was cancelled",
+            ));
+        }
+        // A worker whose lease was taken over must not save over the run that replaced it.
+        if owner.map(|(_, generation)| generation) != Some(lease_gen) {
+            tx.rollback().await?;
+            return Err(AppError::new(
+                StatusCode::CONFLICT,
+                "JOB_LEASE_LOST",
+                "The job lease was lost",
             ));
         }
         let moved = sqlx::query(
@@ -739,12 +750,46 @@ mod tests {
                 model: "whisper-1",
                 transcription_type: "server",
                 timeline: None,
-                job: Some(("j", "completed")),
+                job: Some(("j", 0, "completed")),
             },
         )
         .await
         .unwrap_err();
         assert_eq!(err.code, "JOB_CANCELLED");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+
+    #[tokio::test]
+    async fn a_save_from_a_lost_lease_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path()).await;
+        seed_user_recording(&state).await;
+        // Claimed once, then taken over: the job still runs, but for a newer generation.
+        sqlx::query("INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at, lease_gen) VALUES ('j', 'pipeline', 'u', 'r', 'running', '{}', 0, 0, 0, 2)")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let text = transcript("stale words");
+        let err = save_transcript(
+            &state,
+            Saved {
+                user_id: "u",
+                recording_id: "r",
+                transcript: &text,
+                provider: "OpenAI",
+                model: "whisper-1",
+                transcription_type: "server",
+                timeline: None,
+                job: Some(("j", 1, "completed")),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, "JOB_LEASE_LOST");
         let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
             .fetch_one(&state.db)
             .await
@@ -803,7 +848,7 @@ mod tests {
                 model: "whisper-1",
                 transcription_type: "server",
                 timeline: None,
-                job: Some(("j", "completed")),
+                job: Some(("j", 0, "completed")),
             },
         )
         .await;
@@ -850,7 +895,7 @@ mod tests {
                 model: "whisper-1",
                 transcription_type: "server",
                 timeline: None,
-                job: Some(("j", "completed")),
+                job: Some(("j", 0, "completed")),
             },
         )
         .await
@@ -889,7 +934,7 @@ mod tests {
                 model: "whisper-1",
                 transcription_type: "server",
                 timeline: None,
-                job: Some(("j", "completed")),
+                job: Some(("j", 0, "completed")),
             },
         )
         .await

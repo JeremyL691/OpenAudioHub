@@ -41,8 +41,8 @@ Command forms of the entrypoint:
 
 - Image: `ghcr.io/jeremyl691/openaudiohub:${OPENAUDIOHUB_VERSION:-latest}`.
 - `restart: unless-stopped`.
-- Environment: `ENCRYPTION_KEY` (required), `APP_URL` (default `http://localhost:3000`), `RATE_LIMIT_TRUST_PROXY_HEADERS` (default `false`), `DISABLE_REGISTRATION` (default `false`).
-- Port: `127.0.0.1:3000:3000`. The server is reachable from the host only through loopback.
+- Environment: `ENCRYPTION_KEY` (required), `APP_URL` (default `http://localhost:3000`), `RATE_LIMIT_TRUST_PROXY_HEADERS` (default `true`), `DISABLE_REGISTRATION` (default `false`), `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` (default `true`).
+- Port: `127.0.0.1:3000:3000`. The server is reachable from the host only through loopback, so a reverse proxy on the host is what serves clients. That is why the Compose defaults trust the proxy's headers and refuse private webhook targets.
 - Volume: `data:/data`.
 
 First start:
@@ -102,7 +102,7 @@ When `API_TOKEN_HASH_SECRET` is not set, a stable value is derived from `ENCRYPT
 | Variable | Default | Meaning |
 |---|---|---|
 | `DISABLE_REGISTRATION` | `false` | `true` refuses new accounts and hides the sign-up page. |
-| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` takes the client address from `CF-Connecting-IP`, `X-Real-IP` or `X-Forwarded-For`. Set it only behind a proxy that sets these headers. When `false`, per-address rate limits are not applied (see `auth.md`). |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` takes the client address from `CF-Connecting-IP`, `X-Real-IP` or `X-Forwarded-For`. Set it only behind a proxy that sets these headers. When `false` the address is the connection's, so every client behind a proxy shares one budget (see `auth.md`). |
 
 ### 4.6 Email (SMTP)
 
@@ -145,7 +145,7 @@ Recording uploads are refused above 500 MiB per file.
 | `BACKGROUND_SYNC_ENABLED` | `true` | Turns the background Plaud sync on or off. |
 | `BACKGROUND_SYNC_INTERVAL_MS` | `300000`, range 60000 to 3600000 | Interval of the background sync. The first run starts 30 seconds after the server starts. |
 | `PLAUD_SYNC_RATE_LIMIT_PER_MINUTE` | `10`, range 1 to 600 | Sync starts allowed per user per minute. |
-| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | `false` | `true` requires webhook targets to use public addresses (see `webhooks.md`). |
+| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` | `true` on a server, `false` in the desktop app | `true` allows only `https` targets that resolve to public addresses (see `webhooks.md`). Unset or empty follows the default of the mode; an explicit value wins in both modes. Any other value stops startup. |
 
 ### 4.10 Desktop app only
 

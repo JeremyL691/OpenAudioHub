@@ -27,6 +27,9 @@ pub struct Config {
     pub ffprobe: PathBuf,
     /// Long and large recordings go through the in-process audio pipeline.
     pub pipeline_enabled: bool,
+    /// Webhook targets must use HTTPS and resolve to public addresses
+    /// (`WEBHOOKS_REQUIRE_PUBLIC_TARGETS`).
+    pub webhooks_strict: bool,
     /// Plaud API base for tests (`OAH_PLAUD_API_BASE`); `None` means the real regional hosts.
     pub plaud_api_base: Option<String>,
     /// Outgoing email (test email, notifications, password reset). Environment only.
@@ -177,12 +180,23 @@ fn api_hash_secret(
 
 /// `true/1/yes/on` and `false/0/no/off`, any case; unset means `default`.
 fn flag(name: &str, default: bool) -> Result<bool, ConfigError> {
-    match var(name).map(|v| v.to_ascii_lowercase()).as_deref() {
+    parse_flag(name, var(name).as_deref(), default)
+}
+
+fn parse_flag(name: &str, value: Option<&str>, default: bool) -> Result<bool, ConfigError> {
+    let value = value.map(str::trim).filter(|v| !v.is_empty());
+    match value.map(|v| v.to_ascii_lowercase()).as_deref() {
         None => Ok(default),
         Some("true" | "1" | "yes" | "on") => Ok(true),
         Some("false" | "0" | "no" | "off") => Ok(false),
         Some(_) => Err(ConfigError(format!("{name} must be true or false"))),
     }
+}
+
+/// The webhook target policy. An explicit setting wins; otherwise a shared server refuses
+/// private targets and the single-user desktop app accepts them.
+fn webhook_strictness(configured: Option<&str>, desktop: bool) -> Result<bool, ConfigError> {
+    parse_flag("WEBHOOKS_REQUIRE_PUBLIC_TARGETS", configured, !desktop)
 }
 
 /// A whole-number setting from the environment, checked against a range. Unset uses `default`.
@@ -246,6 +260,7 @@ impl Config {
         let field_key = FieldKey::from_hex(&required("ENCRYPTION_KEY")?)
             .map_err(|e| ConfigError(e.to_string()))?;
         let api_token_hash_secret = api_hash_secret(&required("ENCRYPTION_KEY")?, None)?;
+        let desktop = desktop()?;
         Ok(Self {
             listen: SocketAddr::new(host, port),
             app_url: app_url.trim_end_matches('/').to_owned(),
@@ -261,7 +276,11 @@ impl Config {
             api_token_hash_secret,
             disable_registration: flag("DISABLE_REGISTRATION", false)?,
             trust_proxy_headers: flag("RATE_LIMIT_TRUST_PROXY_HEADERS", false)?,
-            desktop: desktop()?,
+            webhooks_strict: webhook_strictness(
+                var("WEBHOOKS_REQUIRE_PUBLIC_TARGETS").as_deref(),
+                desktop.is_some(),
+            )?,
+            desktop,
             ffmpeg: var("FFMPEG_PATH").unwrap_or_else(|| "ffmpeg".into()).into(),
             ffprobe: var("FFPROBE_PATH")
                 .unwrap_or_else(|| "ffprobe".into())
@@ -293,6 +312,10 @@ impl Config {
             api_token_hash_secret: api_hash_secret(key_hex, Some(data_dir))?,
             disable_registration: true,
             trust_proxy_headers: false,
+            webhooks_strict: webhook_strictness(
+                var("WEBHOOKS_REQUIRE_PUBLIC_TARGETS").as_deref(),
+                true,
+            )?,
             desktop: Some(Desktop {
                 launch_secret: launch_code.to_owned(),
                 user_id,
@@ -326,6 +349,8 @@ impl Config {
             api_token_hash_secret: crate::ids::token_hex(32),
             disable_registration: false,
             trust_proxy_headers: true,
+            // Tests deliver webhooks to a local receiver.
+            webhooks_strict: false,
             desktop: None,
             ffmpeg: "ffmpeg".into(),
             ffprobe: "ffprobe".into(),
@@ -336,5 +361,40 @@ impl Config {
                 ..SmtpConfig::default()
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn webhook_targets_are_strict_on_a_server_and_lenient_in_the_desktop_app() {
+        // Unset: a shared server refuses private targets, the single-user app accepts them.
+        assert!(webhook_strictness(None, false).unwrap());
+        assert!(!webhook_strictness(None, true).unwrap());
+        // An empty setting counts as unset, which is how compose passes it through.
+        assert!(webhook_strictness(Some(""), false).unwrap());
+        assert!(webhook_strictness(Some("  "), false).unwrap());
+    }
+
+    #[test]
+    fn an_explicit_webhook_setting_wins_in_both_modes() {
+        for text in ["true", "1", "yes", "on", "TRUE"] {
+            assert!(webhook_strictness(Some(text), true).unwrap(), "{text}");
+        }
+        for text in ["false", "0", "no", "off", "False"] {
+            assert!(!webhook_strictness(Some(text), false).unwrap(), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_webhook_setting_stops_startup() {
+        let error = webhook_strictness(Some("maybe"), false).unwrap_err();
+        assert!(
+            error.0.contains("WEBHOOKS_REQUIRE_PUBLIC_TARGETS"),
+            "{}",
+            error.0
+        );
     }
 }

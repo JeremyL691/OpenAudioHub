@@ -163,8 +163,16 @@ exists (reused decoded audio or speech probabilities) sets no progress.
 
 - One pipeline job runs at a time per server process. Pipeline jobs and transcription
   jobs use separate workers.
-- A worker claims the oldest due job and holds a lease of 120 s, renewed every 40 s. If
-  the lease is lost, the job's handler is stopped and its result is discarded.
+- A worker claims the oldest due job and holds a lease of 120 s, renewed every 40 s. Every
+  claim gives the job a new lease generation, a counter that only grows. The phase write, the
+  progress write, the disk-pause error fields, the lease renewal, the outcome write and the
+  transcript save all match on that generation, so a worker that lost its lease writes
+  nothing and cannot overwrite the run that replaced it. If the lease is lost, the job's
+  handler is stopped and its result is discarded.
+- The retry counter (`attempts`) and the lease generation are separate. An explicit retry
+  resets the retry counter, so the counter repeats; the generation never does, which is why
+  the generation is what identifies a claim. Chunk rows are written by the run that owns the
+  job and are idempotent per chunk, so they carry no generation (spec section 10).
 - A job whose lease has expired (for example after a crash or restart) is claimed again.
   Stored work is reused (section 11).
 - A transient failure (a database or file error, or a failed save) returns the job to
@@ -607,5 +615,8 @@ These responses have no `code` field. The `error` text is the only detail.
 - Cancel and save against the same job, the status table, the speaker settings read by the
   pipeline (including a diarizing model with speaker labels off), the retry claim counter
   and the superseded work folder have unit tests in the server code.
+- The lease generation has unit tests: a claim that was replaced cannot renew, write
+  progress, record its outcome, change the phase or save a transcript, including after an
+  explicit retry reset the retry counter.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,
   `needs_alignment` results, provider retries and their delays, and crash recovery.

@@ -60,9 +60,16 @@ pub enum Stop {
     Cancelled,
     /// Transient failure; the job runs again later.
     Retry(String),
+    /// Another worker took the job over, so this run stops without recording anything.
+    LeaseLost,
 }
 
 type Step<T> = Result<T, Stop>;
+
+/// Stops the run when a lease-guarded write wrote nothing, which means the lease was lost.
+fn guard(wrote: bool) -> Step<()> {
+    if wrote { Ok(()) } else { Err(Stop::LeaseLost) }
+}
 
 impl From<sqlx::Error> for Stop {
     fn from(e: sqlx::Error) -> Self {
@@ -105,23 +112,42 @@ pub(super) async fn cancel(db: &SqlitePool, job_id: &str) -> Result<bool, sqlx::
     Ok(res.rows_affected() == 1)
 }
 
-/// Sets the phase shown to users. A cancelled job keeps its phase.
+/// Sets the phase shown to users. A cancelled job keeps its phase. A worker that lost its lease
+/// writes nothing, so the run that replaced it keeps its own phase.
 pub(super) async fn set_phase(
     db: &SqlitePool,
-    job_id: &str,
+    lease: &Lease,
     phase: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO pipeline_runs (job_id, phase, updated_at) VALUES (?, ?, ?)
          ON CONFLICT (job_id) DO UPDATE SET phase = excluded.phase, updated_at = excluded.updated_at
-         WHERE pipeline_runs.phase <> 'cancelled'",
+         WHERE pipeline_runs.phase <> 'cancelled'
+           AND EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)",
     )
-    .bind(job_id)
+    .bind(&lease.id)
     .bind(phase)
     .bind(crate::db::now_ms())
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
     .execute(db)
     .await?;
     Ok(())
+}
+
+/// The claim this worker holds: the job id plus the generation that identifies the claim.
+pub(super) struct Lease {
+    pub id: String,
+    pub lease_gen: i64,
+}
+
+impl Lease {
+    fn of(job: &Job) -> Self {
+        Self {
+            id: job.id.clone(),
+            lease_gen: job.lease_gen,
+        }
+    }
 }
 
 async fn is_cancelled(db: &SqlitePool, job_id: &str) -> Result<bool, sqlx::Error> {
@@ -150,7 +176,7 @@ pub async fn run(state: AppState, job: Job) -> Outcome {
             Outcome::Done
         }
         Err(Stop::Fail { code, message }) => {
-            let _ = set_phase(&state.db, &job.id, "failed").await;
+            let _ = set_phase(&state.db, &Lease::of(&job), "failed").await;
             if let (Some(user), Some(recording)) =
                 (job.user_id.as_deref(), job.recording_id.as_deref())
             {
@@ -167,6 +193,10 @@ pub async fn run(state: AppState, job: Job) -> Outcome {
                 code,
                 message: truncate(message),
             }
+        }
+        Err(Stop::LeaseLost) => {
+            // The renewer notices the lost lease too; nothing is written either way.
+            Outcome::Done
         }
         Err(Stop::Retry(message)) => Outcome::Retry {
             code: "PIPELINE_RETRY",
@@ -203,8 +233,9 @@ fn truncate(text: String) -> String {
 
 async fn process(state: &AppState, job: &Job) -> Step<()> {
     let db = &state.db;
+    let lease = Lease::of(job);
     let id = job.id.as_str();
-    set_phase(db, id, "queued").await?;
+    set_phase(db, &lease, "queued").await?;
     check_cancel(db, id).await?;
 
     let payload: Payload = serde_json::from_value(job.payload()).unwrap_or_default();
@@ -309,7 +340,7 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
     let pcm = dir.join("audio.pcm");
     if !pcm.exists() {
         let pcm_bytes = (duration_ms as u64 * 32_000).div_ceil(1000);
-        decode_when_space(state, id, &audio, &dir, pcm_bytes).await?;
+        decode_when_space(state, &lease, &audio, &dir, pcm_bytes).await?;
     }
     let samples = tokio::fs::metadata(&pcm).await?.len() / 2;
     if samples > MAX_DECODED_SAMPLES {
@@ -319,15 +350,15 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
         });
     }
 
-    let probs = speech_probs(state, id, &dir, &pcm, samples).await?;
+    let probs = speech_probs(state, &lease, &dir, &pcm, samples).await?;
     let spans = plan::speech_spans(&probs, samples);
     create_plan(db, id, &pcm, &plan::plan_chunks(&spans, &probs, samples)).await?;
 
-    set_phase(db, id, "transcribing").await?;
-    jobs::set_progress(db, id, 0.68).await?;
+    set_phase(db, &lease, "transcribing").await?;
+    guard(jobs::set_progress(db, id, lease.lease_gen, 0.68).await?)?;
     let ctx = Ctx {
         state,
-        job_id: id,
+        lease: &lease,
         provider: &provider,
         options: &options,
         pcm: &pcm,
@@ -385,7 +416,7 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
 
     save_merged(
         state,
-        id,
+        &lease,
         user_id,
         recording_id,
         &provider.name,
@@ -402,7 +433,7 @@ async fn process(state: &AppState, job: &Job) -> Step<()> {
 /// (spec section 13.1).
 async fn save_merged(
     state: &AppState,
-    job_id: &str,
+    lease: &Lease,
     user_id: &str,
     recording_id: &str,
     provider: &str,
@@ -430,13 +461,14 @@ async fn save_merged(
             model,
             transcription_type: "server",
             timeline,
-            job: Some((job_id, phase)),
+            job: Some((&lease.id, lease.lease_gen, phase)),
         },
     )
     .await
     {
         Ok(()) => Ok(()),
         Err(e) if e.code == "JOB_CANCELLED" => Err(Stop::Cancelled),
+        Err(e) if e.code == "JOB_LEASE_LOST" => Err(Stop::LeaseLost),
         Err(e) => Err(Stop::Retry(e.message)),
     }
 }
@@ -445,17 +477,17 @@ async fn save_merged(
 /// fails while space is short pauses the job instead of failing it.
 async fn decode_when_space(
     state: &AppState,
-    job_id: &str,
+    lease: &Lease,
     audio: &Path,
     dir: &Path,
     pcm_bytes: u64,
 ) -> Step<()> {
     let first = decode_budget(pcm_bytes);
     let resume = resume_budget(pcm_bytes, false);
-    wait_for_space(state, job_id, first, resume, WAIT_DECODE).await?;
+    wait_for_space(state, lease, first, resume, WAIT_DECODE).await?;
     loop {
-        set_phase(&state.db, job_id, "decode").await?;
-        jobs::set_progress(&state.db, job_id, 0.05).await?;
+        set_phase(&state.db, lease, "decode").await?;
+        guard(jobs::set_progress(&state.db, &lease.id, lease.lease_gen, 0.05).await?)?;
         match decode(&state.config.ffmpeg, audio, dir).await {
             Ok(()) => return Ok(()),
             Err(e) => {
@@ -466,7 +498,7 @@ async fn decode_when_space(
                         message: format!("ffmpeg decode failed: {e}"),
                     });
                 }
-                wait_for_space(state, job_id, first, resume, WAIT_FINISH_DECODE).await?;
+                wait_for_space(state, lease, first, resume, WAIT_FINISH_DECODE).await?;
             }
         }
     }
@@ -476,35 +508,49 @@ async fn decode_when_space(
 /// only when `resume` bytes are free. Shows `paused_disk` with `message` while it waits.
 async fn wait_for_space(
     state: &AppState,
-    job_id: &str,
+    lease: &Lease,
     first: u64,
     resume: u64,
     message: &str,
 ) -> Step<()> {
     let mut need = first;
     loop {
-        check_cancel(&state.db, job_id).await?;
+        check_cancel(&state.db, &lease.id).await?;
         let free = fs4::available_space(&state.config.storage_root)?;
         if free >= need {
-            sqlx::query("UPDATE jobs SET error_code = NULL, error_message = NULL WHERE id = ?")
-                .bind(job_id)
+            guard(
+                sqlx::query(
+                    "UPDATE jobs SET error_code = NULL, error_message = NULL
+                     WHERE id = ? AND state = 'running' AND lease_gen = ?",
+                )
+                .bind(&lease.id)
+                .bind(lease.lease_gen)
                 .execute(&state.db)
-                .await?;
+                .await?
+                .rows_affected()
+                    == 1,
+            )?;
             return Ok(());
         }
         need = resume;
-        set_phase(&state.db, job_id, "paused_disk").await?;
-        sqlx::query(
-            "UPDATE jobs SET error_code = 'DiskBudgetError', error_message = ? WHERE id = ?",
-        )
-        .bind(message)
-        .bind(job_id)
-        .execute(&state.db)
-        .await?;
+        set_phase(&state.db, lease, "paused_disk").await?;
+        guard(
+            sqlx::query(
+                "UPDATE jobs SET error_code = 'DiskBudgetError', error_message = ?
+                 WHERE id = ? AND state = 'running' AND lease_gen = ?",
+            )
+            .bind(message)
+            .bind(&lease.id)
+            .bind(lease.lease_gen)
+            .execute(&state.db)
+            .await?
+            .rows_affected()
+                == 1,
+        )?;
         // Re-check every 30 s, but notice a cancel within a second.
         for _ in 0..30 {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            check_cancel(&state.db, job_id).await?;
+            check_cancel(&state.db, &lease.id).await?;
         }
     }
 }
@@ -551,7 +597,7 @@ async fn decode(ffmpeg: &Path, source: &Path, dir: &Path) -> Result<(), String> 
 /// A checkpoint is saved after each block, so an interrupted run resumes at the last block.
 async fn speech_probs(
     state: &AppState,
-    job_id: &str,
+    lease: &Lease,
     dir: &Path,
     pcm: &Path,
     samples: u64,
@@ -568,8 +614,8 @@ async fn speech_probs(
         return Ok(tokio::fs::read(&probs_path).await?);
     }
 
-    set_phase(&state.db, job_id, "vad").await?;
-    jobs::set_progress(&state.db, job_id, 0.10).await?;
+    set_phase(&state.db, lease, "vad").await?;
+    guard(jobs::set_progress(&state.db, &lease.id, lease.lease_gen, 0.10).await?)?;
     let checkpoint_path = dir.join(VAD_CHECKPOINT);
     // A damaged or mismatched checkpoint is ignored, so the run starts from block 0.
     let resume = tokio::fs::read(&checkpoint_path)
@@ -578,7 +624,8 @@ async fn speech_probs(
         .and_then(|bytes| vad::decode_checkpoint(&bytes, samples as usize));
     let handle = tokio::runtime::Handle::current();
     let db = state.db.clone();
-    let pid = job_id.to_owned();
+    let pid = lease.id.clone();
+    let (progress_id, progress_gen) = (pid.clone(), lease.lease_gen);
     let pcm_path = pcm.to_owned();
     let ckpt_path = checkpoint_path.clone();
     let probs = tokio::task::spawn_blocking(move || -> Result<Option<Vec<u8>>, String> {
@@ -611,8 +658,12 @@ async fn speech_probs(
                 tracing::warn!(job = %pid, error = %e, "could not save speech detection checkpoint");
             }
             handle.block_on(async {
-                let _ = jobs::set_progress(&db, &pid, 0.10 + 0.55 * fraction).await;
-                !matches!(is_cancelled(&db, &pid).await, Ok(true))
+                // A lost lease stops the detection instead of reporting progress for a run that
+                // no longer exists.
+                let held = jobs::set_progress(&db, &progress_id, progress_gen, 0.10 + 0.55 * fraction)
+                    .await
+                    .unwrap_or(false);
+                held && !matches!(is_cancelled(&db, &pid).await, Ok(true))
             })
         };
         vad::speech_probs(&mut session, samples as usize, resume, read, progress)
@@ -666,7 +717,7 @@ async fn create_plan(db: &SqlitePool, job_id: &str, pcm: &Path, ranges: &[(u64, 
 /// Everything a chunk send needs.
 struct Ctx<'a> {
     state: &'a AppState,
-    job_id: &'a str,
+    lease: &'a Lease,
     provider: &'a Provider,
     options: &'a Options,
     pcm: &'a Path,
@@ -679,11 +730,11 @@ async fn transcribe_chunks(ctx: &Ctx<'_>) -> Step<()> {
     let todo: Vec<(i64, i64, i64)> = sqlx::query_as(
         "SELECT idx, start_sample, end_sample FROM pipeline_chunks WHERE job_id = ? AND state <> 'completed' ORDER BY idx",
     )
-    .bind(ctx.job_id)
+    .bind(&ctx.lease.id)
     .fetch_all(db)
     .await?;
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ?")
-        .bind(ctx.job_id)
+        .bind(&ctx.lease.id)
         .fetch_one(db)
         .await?;
     stream::iter(todo.into_iter().map(Ok::<_, Stop>))
@@ -692,11 +743,14 @@ async fn transcribe_chunks(ctx: &Ctx<'_>) -> Step<()> {
             let done: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ? AND state = 'completed'",
             )
-            .bind(ctx.job_id)
+            .bind(&ctx.lease.id)
             .fetch_one(&ctx.state.db)
             .await?;
             let progress = 0.68 + 0.30 * done as f64 / total.max(1) as f64;
-            jobs::set_progress(&ctx.state.db, ctx.job_id, progress).await?;
+            guard(
+                jobs::set_progress(&ctx.state.db, &ctx.lease.id, ctx.lease.lease_gen, progress)
+                    .await?,
+            )?;
             Ok(())
         })
         .await
@@ -705,14 +759,14 @@ async fn transcribe_chunks(ctx: &Ctx<'_>) -> Step<()> {
 /// Sends one chunk with retries. A chunk that still fails is recorded, not raised.
 async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step<()> {
     let db = &ctx.state.db;
-    check_cancel(db, ctx.job_id).await?;
+    check_cancel(db, &ctx.lease.id).await?;
     let samples = end - start;
     let pcm = read_pcm(ctx.pcm, start, end).await?;
     let wav = wav_bytes(&pcm);
     if samples > MAX_CHUNK_SAMPLES {
         return record_failure(
             db,
-            ctx.job_id,
+            &ctx.lease.id,
             index,
             "LimitError",
             "Chunk exceeds provider duration limit",
@@ -722,7 +776,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     if wav.len() > MAX_WAV_BYTES {
         return record_failure(
             db,
-            ctx.job_id,
+            &ctx.lease.id,
             index,
             "LimitError",
             "Chunk exceeds provider file-size limit",
@@ -737,7 +791,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
         attempt += 1;
         sqlx::query("UPDATE pipeline_chunks SET state = 'running', attempts = ? WHERE job_id = ? AND idx = ?")
             .bind(attempt)
-            .bind(ctx.job_id)
+            .bind(&ctx.lease.id)
             .bind(index)
             .execute(db)
             .await?;
@@ -751,7 +805,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                 .map_err(|e| Stop::Retry(e.to_string()))?;
                 sqlx::query("UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL WHERE job_id = ? AND idx = ?")
                     .bind(response)
-                    .bind(ctx.job_id)
+                    .bind(&ctx.lease.id)
                     .bind(index)
                     .execute(db)
                     .await?;
@@ -759,10 +813,10 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
             }
             Err(e) if e.retryable && attempt < CHUNK_ATTEMPTS => {
                 tokio::time::sleep(retry_delay(attempt)).await;
-                check_cancel(db, ctx.job_id).await?;
+                check_cancel(db, &ctx.lease.id).await?;
             }
             Err(e) => {
-                record_failure(db, ctx.job_id, index, e.code, &e.message).await?;
+                record_failure(db, &ctx.lease.id, index, e.code, &e.message).await?;
                 break;
             }
         }
@@ -908,6 +962,14 @@ mod tests {
         (state, dir)
     }
 
+    /// The claim of the job `save_state` seeds: its first claim, generation 0.
+    fn test_lease() -> Lease {
+        Lease {
+            id: "j".into(),
+            lease_gen: 0,
+        }
+    }
+
     fn merged(text: &str) -> merge::Merged {
         merge::Merged {
             transcript: transcribe::Transcript {
@@ -932,7 +994,7 @@ mod tests {
         .unwrap();
         let outcome = save_merged(
             &state,
-            "j",
+            &test_lease(),
             "u",
             "r",
             "OpenAI",
@@ -949,6 +1011,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_worker_save_is_refused_after_the_lease_moved_on() {
+        let (state, _dir) = save_state().await;
+        // Another worker claimed the job after the lease expired.
+        sqlx::query("UPDATE jobs SET lease_gen = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = save_merged(
+            &state,
+            &test_lease(),
+            "u",
+            "r",
+            "OpenAI",
+            "whisper-1",
+            &merged("stale"),
+        )
+        .await;
+        assert!(matches!(outcome, Err(Stop::LeaseLost)));
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM transcriptions")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0, "a replaced run stores no transcript");
+    }
+
+    #[tokio::test]
     async fn the_worker_save_writes_the_transcript_and_its_phase() {
         let (state, _dir) = save_state().await;
         sqlx::query(
@@ -959,7 +1047,7 @@ mod tests {
         .unwrap();
         save_merged(
             &state,
-            "j",
+            &test_lease(),
             "u",
             "r",
             "OpenAI",

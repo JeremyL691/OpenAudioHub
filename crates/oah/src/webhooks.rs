@@ -1,7 +1,7 @@
 //! Durable, signed webhook endpoints and deliveries.
 
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -21,7 +21,6 @@ use sha2::Sha256;
 use crate::{
     AppState,
     auth::CurrentUser,
-    config,
     db::now_ms,
     error::{ApiResult, AppError},
     ids, time,
@@ -125,6 +124,7 @@ pub async fn emit(
 pub fn spawn(state: &AppState) {
     let state = state.clone();
     tokio::spawn(async move {
+        warn_blocked_targets(&state).await;
         let mut tick = tokio::time::interval(Duration::from_secs(30));
         loop {
             tokio::select! { _ = tick.tick() => {}, _ = WAKEUP.notified() => {} }
@@ -133,6 +133,43 @@ pub fn spawn(state: &AppState) {
             }
         }
     });
+}
+
+/// Tells the operator once, at startup, how many stored targets the strict policy will refuse.
+/// The check does not resolve names, so a target that merely resolves to a private address is
+/// not counted here and only fails when it is delivered.
+async fn warn_blocked_targets(state: &AppState) {
+    if !state.config.webhooks_strict {
+        return;
+    }
+    let urls: Vec<String> = match sqlx::query_scalar("SELECT url FROM webhook_endpoints")
+        .fetch_all(&state.db)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::warn!(%error, "could not read webhook targets");
+            return;
+        }
+    };
+    let blocked = urls
+        .iter()
+        .filter(|raw| {
+            state
+                .config
+                .field_key
+                .decrypt(raw)
+                .map(|plain| strict_blocked(&plain))
+                .unwrap_or(true)
+        })
+        .count();
+    if blocked > 0 {
+        tracing::warn!(
+            blocked,
+            total = urls.len(),
+            "webhook targets are not allowed by WEBHOOKS_REQUIRE_PUBLIC_TARGETS; set it to false to deliver to private addresses"
+        );
+    }
 }
 
 async fn list(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Json<Value>> {
@@ -155,7 +192,7 @@ async fn create(
             .and_then(Value::as_str)
             .ok_or_else(|| invalid("url", "URL is required"))?,
     )?;
-    validate_target(&url, strict_targets().map_err(AppError::internal)?)
+    validate_target(&url, state.config.webhooks_strict)
         .await
         .map_err(|_| invalid("url", "The URL is not allowed"))?;
     let events = parse_events(body.get("events"))?;
@@ -201,7 +238,7 @@ async fn update(
                 .as_str()
                 .ok_or_else(|| invalid("url", "URL is required"))?,
         )?;
-        validate_target(&url, strict_targets().map_err(AppError::internal)?)
+        validate_target(&url, state.config.webhooks_strict)
             .await
             .map_err(|_| invalid("url", "The URL is not allowed"))?;
         row.url = state.config.field_key.encrypt(url.as_str());
@@ -363,6 +400,24 @@ fn parse_url(raw: &str) -> ApiResult<reqwest::Url> {
     }
     Ok(url)
 }
+/// Whether the strict policy refuses a stored target without resolving its host. Used by the
+/// startup audit, which must not do DNS lookups.
+fn strict_blocked(raw: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(raw.trim()) else {
+        return true;
+    };
+    if url.scheme() != "https" {
+        return true;
+    }
+    let Ok((host, literal)) = split_host(&url) else {
+        return true;
+    };
+    if blocked_name(&host) {
+        return true;
+    }
+    literal.is_some_and(|ip| !public_ip(ip))
+}
+
 fn parse_events(value: Option<&Value>) -> ApiResult<Vec<String>> {
     let Some(items) = value.and_then(Value::as_array).filter(|a| !a.is_empty()) else {
         return Err(invalid("events", "Choose at least one event"));
@@ -751,24 +806,7 @@ async fn deliver_claimed(state: &AppState, id: &str) {
             return;
         }
     };
-    let strict = match strict_targets() {
-        Ok(x) => x,
-        Err(e) => {
-            finish_delivery(
-                state,
-                id,
-                &endpoint_id,
-                attempts + 1,
-                None,
-                None,
-                Some(&e),
-                true,
-            )
-            .await;
-            return;
-        }
-    };
-    let checked = match validate_target(&url, strict).await {
+    let checked = match validate_target(&url, state.config.webhooks_strict).await {
         Ok(x) => x,
         Err(e) => {
             finish_delivery(
@@ -810,7 +848,9 @@ async fn deliver_claimed(state: &AppState, id: &str) {
     let keep_body = checked.is_some();
     let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
     if let Some((host, addresses)) = checked {
-        builder = builder.resolve_to_addrs(&host, &addresses);
+        // The address was checked, so the request must go there directly: a proxy taken from the
+        // environment would resolve the host again and could reach a different address.
+        builder = builder.no_proxy().resolve_to_addrs(&host, &addresses);
     }
     let client = match builder.build() {
         Ok(c) => c,
@@ -943,10 +983,6 @@ fn signature(secret: &str, message: &[u8]) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
-fn strict_targets() -> Result<bool, String> {
-    config::boolean("WEBHOOKS_REQUIRE_PUBLIC_TARGETS", false).map_err(|e| e.to_string())
-}
-
 async fn validate_target(
     url: &reqwest::Url,
     strict: bool,
@@ -957,50 +993,88 @@ async fn validate_target(
     if url.scheme() != "https" {
         return Err("Strict webhook targets require HTTPS".into());
     }
-    let host = url
-        .host_str()
-        .ok_or("Webhook URL has no host")?
-        .to_ascii_lowercase();
-    if host == "localhost"
-        || [".localhost", ".local", ".internal", ".home.arpa", ".lan"]
-            .iter()
-            .any(|suffix| host.ends_with(suffix))
-    {
+    let (host, literal) = split_host(url)?;
+    if blocked_name(&host) {
         return Err("Webhook host is not public".into());
     }
     let port = url
         .port_or_known_default()
         .ok_or("Webhook URL has no port")?;
-    let addresses: Vec<SocketAddr> = if let Ok(ip) = host.parse::<IpAddr>() {
-        vec![SocketAddr::new(ip, port)]
-    } else {
-        tokio::net::lookup_host((host.as_str(), port))
+    let addresses: Vec<SocketAddr> = match literal {
+        Some(ip) => vec![SocketAddr::new(ip, port)],
+        None => tokio::net::lookup_host((host.as_str(), port))
             .await
             .map_err(|e| e.to_string())?
-            .collect()
+            .collect(),
     };
     if addresses.is_empty() || addresses.iter().any(|a| !public_ip(a.ip())) {
         return Err("Webhook host does not resolve exclusively to public addresses".into());
     }
     Ok(Some((host, addresses)))
 }
+
+/// The host of a URL without brackets, plus its address when the URL holds an IP literal.
+fn split_host(url: &reqwest::Url) -> Result<(String, Option<IpAddr>), String> {
+    let raw = url.host_str().ok_or("Webhook URL has no host")?;
+    // `host_str` keeps the brackets of an IPv6 literal.
+    let host = raw
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
+    let literal = host.parse::<IpAddr>().ok();
+    Ok((host, literal))
+}
+
+/// Names that never count as public, whatever they resolve to.
+fn blocked_name(host: &str) -> bool {
+    host == "localhost"
+        || [".localhost", ".local", ".internal", ".home.arpa", ".lan"]
+            .iter()
+            .any(|suffix| host.ends_with(suffix))
+}
 fn public_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => public_v4(ip),
         IpAddr::V6(ip) => {
             if let Some(v4) = ip.to_ipv4_mapped() {
-                public_v4(v4)
-            } else {
-                let s = ip.segments();
-                !(ip.is_unspecified()
-                    || ip.is_loopback()
-                    || (s[0] & 0xfe00) == 0xfc00
-                    || (s[0] & 0xffc0) == 0xfe80
-                    || (s[0] & 0xff00) == 0xff00
-                    || (s[0] == 0x2001 && s[1] == 0x0db8))
+                return public_v4(v4);
             }
+            let s = ip.segments();
+            // Translations and tunnels carry an IPv4 address that decides reachability.
+            if let Some(v4) = embedded_v4(ip) {
+                return public_v4(v4);
+            }
+            !(ip.is_unspecified()
+                || ip.is_loopback()
+                || (s[0] & 0xfe00) == 0xfc00
+                || (s[0] & 0xffc0) == 0xfe80
+                || (s[0] & 0xff00) == 0xff00
+                || (s[0] == 0x2001 && s[1] == 0x0db8)
+                || (s[0] == 0x0100 && s[1..4] == [0, 0, 0]))
         }
     }
+}
+
+/// The IPv4 address inside a transition address: NAT64 `64:ff9b::/96` or 6to4 `2002::/16`.
+fn embedded_v4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let s = ip.segments();
+    if s[0..6] == [0x0064, 0xff9b, 0, 0, 0, 0] {
+        return Some(Ipv4Addr::new(
+            (s[6] >> 8) as u8,
+            s[6] as u8,
+            (s[7] >> 8) as u8,
+            s[7] as u8,
+        ));
+    }
+    if s[0] == 0x2002 {
+        return Some(Ipv4Addr::new(
+            (s[1] >> 8) as u8,
+            s[1] as u8,
+            (s[2] >> 8) as u8,
+            s[2] as u8,
+        ));
+    }
+    None
 }
 fn public_v4(ip: Ipv4Addr) -> bool {
     let o = ip.octets();
@@ -1017,4 +1091,81 @@ fn public_v4(ip: Ipv4Addr) -> bool {
         || (o[0] == 198 && o[1] == 51 && o[2] == 100)
         || (o[0] == 203 && o[1] == 0 && o[2] == 113)
         || o[0] >= 224)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_ipv4_addresses_use_the_ipv4_rules() {
+        // NAT64 (64:ff9b::/96) and 6to4 (2002::/16) carry an IPv4 address that must be checked,
+        // otherwise a private target slips past the public-address rule.
+        for text in [
+            "64:ff9b::a00:1",    // 10.0.0.1
+            "64:ff9b::c0a8:101", // 192.168.1.1
+            "64:ff9b::7f00:1",   // 127.0.0.1
+            "2002:a00:1::",      // 10.0.0.1
+            "2002:c0a8:101::1",  // 192.168.1.1
+            "::ffff:10.0.0.1",   // IPv4-mapped
+        ] {
+            let ip: IpAddr = text.parse().unwrap();
+            assert!(!public_ip(ip), "{text} must not count as public");
+        }
+        for text in ["64:ff9b::808:808", "2002:808:808::1", "2606:4700::1111"] {
+            let ip: IpAddr = text.parse().unwrap();
+            assert!(public_ip(ip), "{text} must count as public");
+        }
+    }
+
+    #[test]
+    fn the_discard_prefix_is_not_public() {
+        let ip: IpAddr = "100::1".parse().unwrap();
+        assert!(!public_ip(ip));
+    }
+
+    #[test]
+    fn stored_targets_are_flagged_when_strict_mode_refuses_them_without_a_lookup() {
+        // The startup audit cannot resolve names, so it reports only what the URL itself shows.
+        for url in [
+            "http://example.com/hook",
+            "https://localhost/hook",
+            "https://hook.local/hook",
+            "https://127.0.0.1/hook",
+            "https://192.168.1.10/hook",
+            "https://[::1]/hook",
+        ] {
+            assert!(strict_blocked(url), "{url} must be reported");
+        }
+        for url in [
+            "https://example.com/hook",
+            "https://hooks.example.org:8443/x",
+        ] {
+            assert!(!strict_blocked(url), "{url} must not be reported");
+        }
+        // A target that is not a URL can no longer be delivered either.
+        assert!(strict_blocked("not a url"));
+    }
+
+    #[tokio::test]
+    async fn strict_targets_refuse_plain_http_and_private_hosts() {
+        for url in [
+            "http://example.com/hook",
+            "https://localhost/hook",
+            "https://127.0.0.1/hook",
+            "https://192.168.1.10/hook",
+            "https://hook.lan/hook",
+        ] {
+            let parsed = parse_url(url).unwrap();
+            assert!(
+                validate_target(&parsed, true).await.is_err(),
+                "{url} must be refused in strict mode"
+            );
+        }
+        // The lenient policy keeps accepting them for local use.
+        for url in ["http://example.com/hook", "https://192.168.1.10/hook"] {
+            let parsed = parse_url(url).unwrap();
+            assert!(validate_target(&parsed, false).await.is_ok(), "{url}");
+        }
+    }
 }
