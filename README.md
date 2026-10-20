@@ -126,7 +126,7 @@ Install with one command. It downloads the compose file, creates the encryption 
 curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
 ```
 
-To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.0.0`. The installer never overwrites an existing `.env`. To read the script before you run it, download [`install.sh`](deploy/install.sh) from the release first.
+To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.2.5`. The installer never overwrites an existing `.env`. To read the script before you run it, download [`install.sh`](deploy/install.sh) from the release first.
 
 Or set it up by hand:
 
