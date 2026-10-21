@@ -22,6 +22,8 @@ export interface RecordingListProps {
     emptyText: string | null;
     /** Whether the search box is waiting for an answer, has an answer, or could not get one. */
     searchStatus?: "idle" | "searching" | "ready" | "error";
+    /** The message shown when a search could not run. */
+    searchErrorText?: string | null;
     onSearchRetry?(): void;
     renderRow(recording: Recording): ReactNode;
     /** More rows exist than are shown. */
@@ -119,7 +121,21 @@ export function RecordingList(props: RecordingListProps) {
                     <div className="flex flex-col items-center gap-3 px-4 py-8" role="status" aria-live="polite">
                         <p className="text-center text-sm text-muted-foreground">{props.emptyText}</p>
                         {props.searchStatus === "searching" ? <Spinner /> : null}
-                        {props.searchStatus === "error" && props.onSearchRetry ? (
+                    </div>
+                ) : null}
+
+                {/* A failed search is reported whether or not the list still shows rows: the rows
+                    that are there are not the answer to the query being asked. */}
+                {props.searchStatus === "error" ? (
+                    <div
+                        className="flex flex-col items-center gap-3 px-4 py-6"
+                        role="alert"
+                        data-testid="recording-search-error"
+                    >
+                        <p className="text-center text-sm text-muted-foreground">
+                            {props.searchErrorText}
+                        </p>
+                        {props.onSearchRetry ? (
                             <Button variant="outline" size="sm" onClick={props.onSearchRetry}>
                                 {t("library.retry")}
                             </Button>

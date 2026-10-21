@@ -258,6 +258,7 @@ export default function LibraryPage() {
                         pending={uploads.pending}
                         emptyText={emptyText}
                         searchStatus={needle ? search.status : "idle"}
+                        searchErrorText={needle ? t("library.searchFailed") : null}
                         onSearchRetry={search.retry}
                         renderRow={(r) => (
                             <RecordingRow
