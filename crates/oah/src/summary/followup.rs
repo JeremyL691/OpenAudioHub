@@ -95,6 +95,92 @@ where
     Ok(())
 }
 
+/// Runs the follow-up for a transcript now, and leaves it queued if that does not finish.
+///
+/// The request that saved the transcript calls this, so the `transcription.completed` event, the
+/// title and the summary queue are behind the answer the caller gets, which is what the
+/// specification describes. The queue is still what makes the work durable: if another worker
+/// already holds the job, or the process stops while this runs, the job stays queued and the
+/// worker runs it. Claiming here is a fast path, not a second mechanism.
+pub async fn run_now(state: &AppState, recording_id: &str, transcript_id: &str) {
+    let key = dedupe_key(transcript_id);
+    let now = crate::db::now_ms();
+    let claimed = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            i64,
+            i64,
+        ),
+    >(
+        "UPDATE jobs SET state = 'running', attempts = attempts + 1, lease_gen = lease_gen + 1,
+                lease_until = ?, updated_at = ?
+         WHERE id = (
+             SELECT id FROM jobs WHERE kind = ? AND dedupe_key = ?
+               AND state = 'queued' AND run_after <= ?
+         )
+         RETURNING id, kind, user_id, recording_id, payload, attempts, lease_gen",
+    )
+    .bind(now + CLAIM_MS)
+    .bind(now)
+    .bind(KIND)
+    .bind(&key)
+    .bind(now)
+    .fetch_optional(&state.db)
+    .await;
+    let job = match claimed {
+        Ok(Some((id, kind, user_id, recording_id, payload, attempts, lease_gen))) => Job {
+            id,
+            kind,
+            user_id,
+            recording_id,
+            payload,
+            attempts,
+            lease_gen,
+        },
+        // Another worker holds it, or it is not due yet: the queue runs it.
+        Ok(None) => return,
+        Err(e) => {
+            tracing::warn!(recording = recording_id, error = %e, "could not claim the follow-up job");
+            return;
+        }
+    };
+    let outcome = run_job(state, job.clone()).await;
+    // The queue's own bookkeeping records the outcome, so a failure here is retried by the worker
+    // instead of being lost.
+    let failed = matches!(outcome, Outcome::Failed { .. });
+    let state_name = if failed { "failed" } else { "done" };
+    if let Err(e) = sqlx::query(
+        "UPDATE jobs SET state = ?, error_code = ?, error_message = ?, finished_at = ?, updated_at = ?
+         WHERE id = ? AND state = 'running' AND lease_gen = ?",
+    )
+    .bind(state_name)
+    .bind(match &outcome {
+        Outcome::Failed { code, .. } => Some(*code),
+        _ => None,
+    })
+    .bind(match &outcome {
+        Outcome::Failed { message, .. } => Some(message.clone()),
+        _ => None,
+    })
+    .bind(crate::db::now_ms())
+    .bind(crate::db::now_ms())
+    .bind(&job.id)
+    .bind(job.lease_gen)
+    .execute(&state.db)
+    .await
+    {
+        tracing::warn!(job = job.id, error = %e, "could not record the follow-up outcome");
+    }
+}
+
+/// How long the claim made by `run_now` is held while the request waits for it.
+const CLAIM_MS: i64 = 5 * 60 * 1000;
+
 /// Wakes the worker after the transaction that queued the work has committed.
 pub fn notify(state: &AppState) {
     state.wakeup.notify();
