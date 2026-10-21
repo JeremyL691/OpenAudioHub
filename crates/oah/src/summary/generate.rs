@@ -195,7 +195,16 @@ pub async fn run(
     let settings = routes::settings::effective(state, user_id).await?;
     let template = prompts::template(&settings, &plan.prompt_id);
     let reply = summarize(&provider, &template, &transcript, duration, &plan.language).await?;
-    save(state, user_id, recording_id, &provider, plan, &reply).await
+    save(
+        state,
+        user_id,
+        recording_id,
+        &provider,
+        plan,
+        &reply,
+        plan.transcript_id.as_deref(),
+    )
+    .await
 }
 
 /// Worker entry point for a queued summary job.
@@ -365,6 +374,7 @@ async fn save(
     provider: &Provider,
     plan: &Plan,
     reply: &Reply,
+    transcript_id: Option<&str>,
 ) -> Result<(), Failed> {
     // An empty answer is a failed run, not a summary. Saving it would mark the recording ready
     // while the detail pane has nothing to show.
@@ -378,6 +388,25 @@ async fn save(
     let key = &state.config.field_key;
     let action_items = key.encrypt_json(&json!(reply.action_items)).to_string();
     let key_points = key.encrypt_json(&json!(reply.key_points)).to_string();
+    // An automatic run names the transcript it summarised. If that transcript was replaced while
+    // the provider was working, the answer describes text the user no longer has, so nothing is
+    // written. A manual run names none and keeps the older behaviour.
+    if let Some(transcript_id) = transcript_id {
+        let still_current: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM transcriptions WHERE id = ? AND recording_id = ? AND user_id = ?)",
+        )
+        .bind(transcript_id)
+        .bind(recording_id)
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await?;
+        if !still_current {
+            return Err(Failed {
+                code: "TRANSCRIPT_REPLACED",
+                message: "The transcript was replaced while the summary was made.".to_owned(),
+            });
+        }
+    }
     let saved = sqlx::query(
         "INSERT INTO ai_enhancements (id, recording_id, user_id, summary, action_items, key_points, provider, model, source, prompt_id, language, created_at, has_content)
          SELECT ?, id, user_id, ?, ?, ?, ?, ?, 'openaudiohub', ?, ?, ?, 1 FROM recordings
@@ -405,4 +434,95 @@ async fn save(
         return Err(deleted());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::summary::text::Reply;
+
+    async fn state() -> (AppState, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO transcriptions (id, recording_id, user_id, text, transcription_type, provider, model, source, created_at)
+             VALUES ('t1', 'r', 'u', ?, 'server', 'OpenAI', 'whisper-1', 'openaudiohub', 0)",
+        )
+        .bind(state.config.field_key.encrypt("the words"))
+        .execute(&state.db)
+        .await
+        .unwrap();
+        (state, dir)
+    }
+
+    fn reply() -> Reply {
+        Reply {
+            summary: "a summary".into(),
+            key_points: vec![],
+            action_items: vec![],
+        }
+    }
+
+    fn provider() -> Provider {
+        Provider {
+            id: "p".into(),
+            name: "OpenAI".into(),
+            base_url: "http://127.0.0.1:1/v1".into(),
+            api_key: "k".into(),
+            model: Some("gpt-4o-mini".into()),
+        }
+    }
+
+    /// A summary written from a transcript the user has replaced must not be stored: it describes
+    /// text that is no longer theirs.
+    #[tokio::test]
+    async fn a_summary_of_a_replaced_transcript_is_refused() {
+        let (state, _dir) = state().await;
+        let plan = plan(&serde_json::Map::new(), None, None, "");
+        // The transcript this run was asked for is gone by the time the answer arrives.
+        sqlx::query("UPDATE transcriptions SET id = 't2' WHERE id = 't1'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = save(&state, "u", "r", &provider(), &plan, &reply(), Some("t1")).await;
+        assert!(outcome.is_err(), "a stale summary is refused");
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ai_enhancements")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0, "nothing is written for a replaced transcript");
+    }
+
+    /// The same answer for a transcript that is still current is stored.
+    #[tokio::test]
+    async fn a_summary_of_the_current_transcript_is_stored() {
+        let (state, _dir) = state().await;
+        let plan = plan(&serde_json::Map::new(), None, None, "");
+        save(&state, "u", "r", &provider(), &plan, &reply(), Some("t1"))
+            .await
+            .ok()
+            .unwrap();
+        let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ai_enhancements")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 1);
+    }
 }

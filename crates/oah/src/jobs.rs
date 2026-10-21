@@ -110,7 +110,7 @@ pub async fn enqueue(db: &SqlitePool, job: NewJob<'_>) -> Result<String, sqlx::E
     let inserted = sqlx::query(
         "INSERT INTO jobs (id, kind, user_id, recording_id, payload, run_after, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (kind, recording_id) WHERE state IN ('queued', 'running') AND recording_id IS NOT NULL AND kind <> 'after_transcript' DO NOTHING",
+         ON CONFLICT (kind, recording_id) WHERE state IN ('queued', 'running') AND recording_id IS NOT NULL AND dedupe_key IS NULL DO NOTHING",
     )
     .bind(&id)
     .bind(job.kind)

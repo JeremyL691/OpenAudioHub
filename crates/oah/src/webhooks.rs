@@ -88,9 +88,34 @@ pub async fn emit(
     event: &str,
     failure: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let mut tx = state.db.begin().await?;
+    let wrote = record_in(&mut tx, state, user_id, recording_id, event, failure, None).await?;
+    tx.commit().await?;
+    if wrote {
+        WAKEUP.notify_one();
+    }
+    Ok(())
+}
+
+/// Records an event and its subscriber deliveries inside the caller's transaction.
+///
+/// `dedupe_key` makes the registration repeatable: a save that runs twice for the same transcript
+/// passes the same key, and a delivery that was already recorded is left alone. The key is per
+/// endpoint, so a second endpoint subscribed later still gets its own delivery.
+///
+/// Returns whether any delivery was added, so the caller can wake the worker after it commits.
+pub async fn record_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    state: &AppState,
+    user_id: &str,
+    recording_id: &str,
+    event: &str,
+    failure: Option<&str>,
+    dedupe_key: Option<&str>,
+) -> Result<bool, sqlx::Error> {
     if !EVENTS.contains(&event) {
         tracing::error!(event, "unknown webhook event dropped");
-        return Ok(());
+        return Ok(false);
     }
     let now = now_ms();
     let event_json = serde_json::to_string(&Envelope {
@@ -102,23 +127,45 @@ pub async fn emit(
     })
     .expect("webhook envelope serializes");
     let encrypted_payload = state.config.field_key.encrypt(&event_json);
-    let mut tx = state.db.begin().await?;
     let endpoints: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, events FROM webhook_endpoints WHERE user_id = ? AND enabled = 1",
     )
     .bind(user_id)
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?;
+    let mut wrote = false;
     for (endpoint, subscribed) in endpoints {
         let subscriptions: Vec<String> = serde_json::from_str(&subscribed).unwrap_or_default();
-        if subscriptions.iter().any(|candidate| candidate == event) {
-            sqlx::query("INSERT INTO webhook_deliveries (id, endpoint_id, user_id, recording_id, event, delivered_at, payload, next_attempt_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                .bind(ids::new_id()).bind(endpoint).bind(user_id).bind(recording_id).bind(event).bind(now).bind(&encrypted_payload).bind(now).bind(now).bind(now).execute(&mut *tx).await?;
+        if !subscriptions.iter().any(|candidate| candidate == event) {
+            continue;
         }
+        let key = dedupe_key.map(|key| format!("{key}:{endpoint}"));
+        let inserted = sqlx::query(
+            "INSERT INTO webhook_deliveries (id, endpoint_id, user_id, recording_id, event, delivered_at, payload, next_attempt_at, created_at, updated_at, dedupe_key)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING",
+        )
+        .bind(ids::new_id())
+        .bind(endpoint)
+        .bind(user_id)
+        .bind(recording_id)
+        .bind(event)
+        .bind(now)
+        .bind(&encrypted_payload)
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .bind(key)
+        .execute(&mut **tx)
+        .await?;
+        wrote |= inserted.rows_affected() == 1;
     }
-    tx.commit().await?;
+    Ok(wrote)
+}
+
+/// Wakes the delivery worker, for a caller that recorded a delivery in its own transaction.
+pub fn wake() {
     WAKEUP.notify_one();
-    Ok(())
 }
 
 pub fn spawn(state: &AppState) {

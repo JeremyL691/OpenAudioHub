@@ -19,7 +19,6 @@ use serde_json::Value;
 use crate::AppState;
 use crate::jobs::{self, Job, NewJob, Outcome};
 use crate::routes;
-use crate::webhooks;
 
 /// The job kind.
 pub const KIND: &str = "after_transcript";
@@ -150,30 +149,11 @@ pub async fn run_now(state: &AppState, recording_id: &str, transcript_id: &str) 
         }
     };
     let outcome = run_job(state, job.clone()).await;
-    // The queue's own bookkeeping records the outcome, so a failure here is retried by the worker
-    // instead of being lost.
-    let failed = matches!(outcome, Outcome::Failed { .. });
-    let state_name = if failed { "failed" } else { "done" };
-    if let Err(e) = sqlx::query(
-        "UPDATE jobs SET state = ?, error_code = ?, error_message = ?, finished_at = ?, updated_at = ?
-         WHERE id = ? AND state = 'running' AND lease_gen = ?",
-    )
-    .bind(state_name)
-    .bind(match &outcome {
-        Outcome::Failed { code, .. } => Some(*code),
-        _ => None,
-    })
-    .bind(match &outcome {
-        Outcome::Failed { message, .. } => Some(message.clone()),
-        _ => None,
-    })
-    .bind(crate::db::now_ms())
-    .bind(crate::db::now_ms())
-    .bind(&job.id)
-    .bind(job.lease_gen)
-    .execute(&state.db)
-    .await
-    {
+    // The queue's own bookkeeping decides what the outcome means: `Done` finishes the job, a
+    // `Retry` puts it back with its delay until the attempts run out, and a failure is recorded.
+    // Treating a retry as success here would end work that a transient database or settings error
+    // interrupted, which is exactly what this job exists to survive.
+    if let Err(e) = jobs::finish(&state.db, &job, outcome, MAX_ATTEMPTS).await {
         tracing::warn!(job = job.id, error = %e, "could not record the follow-up outcome");
     }
 }
@@ -194,6 +174,12 @@ fn dedupe_key(transcript_id: &str) -> String {
 /// The key a follow-up job for this transcript is deduped on.
 pub fn key_for(transcript_id: &str) -> String {
     dedupe_key(transcript_id)
+}
+
+/// The key the `transcription.completed` delivery for this transcript is deduped on. The save
+/// records the event, so running the follow-up twice cannot deliver it twice.
+pub fn event_key(transcript_id: &str) -> String {
+    format!("transcription.completed:{transcript_id}")
 }
 
 async fn run_job(state: &AppState, job: Job) -> Outcome {
@@ -230,16 +216,10 @@ async fn run_job(state: &AppState, job: Job) -> Outcome {
     }
 
     if payload.source == "transcription" {
-        webhooks::emit_soft(
-            state,
-            user_id,
-            recording_id,
-            "transcription.completed",
-            None,
-        )
-        .await;
+        // The completion event was recorded by the save, in the transaction that stored the
+        // transcript, so this job only owes the title and the summary.
         if !payload.title_done {
-            auto_title(state, user_id, recording_id).await;
+            auto_title(state, user_id, recording_id, &payload.transcript_id).await;
             // The title step is behind this job whether it produced a title or not: the
             // specification says a failed title leaves the name as it was and does not stop the
             // summary after it. Recording that keeps a later claim from asking again.
@@ -303,7 +283,7 @@ async fn current(
 
 /// Generates the title when the user asked for one. A failure is logged and does not stop the
 /// summary after it, which is what the specification promises.
-async fn auto_title(state: &AppState, user_id: &str, recording_id: &str) {
+async fn auto_title(state: &AppState, user_id: &str, recording_id: &str, transcript_id: &str) {
     let settings = match routes::settings::effective(state, user_id).await {
         Ok(settings) => settings,
         Err(e) => {
@@ -318,7 +298,15 @@ async fn auto_title(state: &AppState, user_id: &str, recording_id: &str) {
     if settings.get("autoGenerateTitle") != Some(&Value::Bool(true)) {
         return;
     }
-    if let Err(e) = crate::summary::title::generate(state, user_id, recording_id, &settings).await {
+    if let Err(e) = crate::summary::title::generate(
+        state,
+        user_id,
+        recording_id,
+        &settings,
+        Some(transcript_id),
+    )
+    .await
+    {
         tracing::error!(recording = recording_id, code = e.code, error = %e.message, "title generation failed");
     }
 }
@@ -505,5 +493,166 @@ mod tests {
             0,
             "the job goes with its recording"
         );
+    }
+}
+
+#[cfg(test)]
+mod rework_tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn state() -> (AppState, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::query(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@x.test', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version, created_at, updated_at)
+             VALUES ('r', 'u', 'd', 'p', 'f', 0, 0, 0, 0, '', 'local', 'x', '1', 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        (state, dir)
+    }
+
+    async fn transcript(state: &AppState, id: &str) {
+        sqlx::query(
+            "INSERT INTO transcriptions (id, recording_id, user_id, text, transcription_type, provider, model, source, created_at)
+             VALUES (?, 'r', 'u', 'v1:text', 'server', 'OpenAI', 'whisper-1', 'openaudiohub', 0)",
+        )
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    /// A transient failure has to stay retryable. Recording it as done would end work that a
+    /// database or settings read interrupted. This drives the request path itself, so a wrong
+    /// outcome there is caught.
+    #[tokio::test]
+    async fn a_retry_from_the_request_path_stays_queued() {
+        let (state, _dir) = state().await;
+        transcript(&state, "t1").await;
+        sqlx::query(
+            "INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at, dedupe_key)
+             VALUES ('j', ?, 'u', 'r', 'queued', ?, 0, 0, 0, 'after_transcript:t1')",
+        )
+        .bind(KIND)
+        .bind(serde_json::json!({"transcriptId": "t1", "source": "transcription"}).to_string())
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        // A successful run finishes the job.
+        run_now(&state, "r", "t1").await;
+        let job_state: String = sqlx::query_scalar("SELECT state FROM jobs WHERE id = 'j'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(job_state, "done", "a completed follow-up is done");
+
+        // The same path with work that can only be retried: the settings table the run reads is
+        // gone, so the run reports a retryable error instead of an answer.
+        sqlx::query(
+            "INSERT INTO jobs (id, kind, user_id, recording_id, state, payload, run_after, created_at, updated_at, dedupe_key)
+             VALUES ('k', ?, 'u', 'r', 'queued', ?, 0, 0, 0, ?)",
+        )
+        .bind(KIND)
+        .bind(serde_json::json!({"transcriptId": "t1b", "source": "transcription"}).to_string())
+        .bind(key_for("t1b"))
+        .execute(&state.db)
+        .await
+        .unwrap();
+        // A second transcript for the same recording, so the retry case has its own job.
+        sqlx::query("UPDATE transcriptions SET id = 't1b' WHERE id = 't1'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("DROP TABLE user_settings")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        run_now(&state, "r", "t1b").await;
+        let (job_state, attempts): (String, i64) =
+            sqlx::query_as("SELECT state, attempts FROM jobs WHERE id = 'k'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(
+            job_state, "queued",
+            "a retry has to stay queued, not be recorded as done"
+        );
+        assert_eq!(attempts, 1, "the attempt is counted once");
+    }
+
+    /// The completion event is recorded by the save, so a repeated save cannot deliver it twice.
+    #[tokio::test]
+    async fn the_completion_event_is_recorded_once_per_transcript() {
+        let (state, _dir) = state().await;
+        transcript(&state, "t1").await;
+        sqlx::query(
+            "INSERT INTO webhook_endpoints (id, user_id, url, secret, events, enabled, created_at, updated_at)
+             VALUES ('e', 'u', 'https://example.test/hook', 's', '[\"transcription.completed\"]', 1, 0, 0)",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        for _ in 0..2 {
+            let mut tx = state.db.begin().await.unwrap();
+            crate::webhooks::record_in(
+                &mut tx,
+                &state,
+                "u",
+                "r",
+                "transcription.completed",
+                None,
+                Some(&event_key("t1")),
+            )
+            .await
+            .unwrap();
+            tx.commit().await.unwrap();
+        }
+        let deliveries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM webhook_deliveries")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(deliveries, 1, "recorded once, not once per save");
+    }
+
+    /// A newer transcript gets its own summary job instead of reusing an older transcript's
+    /// queued run, which would end as stale and leave the new transcript unsummarised.
+    #[tokio::test]
+    async fn a_newer_transcript_gets_its_own_summary_job() {
+        let (state, _dir) = state().await;
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u', ?, 0)")
+            .bind(serde_json::json!({"autoSummarize": true}).to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        transcript(&state, "t1").await;
+        crate::summary::queue_auto_for(&state, "u", "r", "t1")
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM transcriptions WHERE id = 't1'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        transcript(&state, "t2").await;
+        crate::summary::queue_auto_for(&state, "u", "r", "t2")
+            .await
+            .unwrap();
+        let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE kind = 'summary'")
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(jobs, 2, "each transcript gets its own run");
     }
 }
