@@ -6,8 +6,9 @@
 //   GET /__requests          the last 50 requests received (newest last), each with a growing `seq`
 //   GET /__requests?path=X   only those whose path ends with X
 //   POST /__answer           { content } overrides the chat answer; null restores the fixed one
-//   POST /__transcription    { failNext, status, delayMs, proportional } changes how transcription
-//                            answers fail or stall; any field left out keeps its current value
+//   POST /__transcription    { failNext, status, delayMs, proportional, text } changes how
+//                            transcription answers fail, stall or what text they return; any field
+//                            left out keeps its current value
 //   POST /__reset            clears the requests, the failure counter and the chat override
 import { createServer } from "node:http";
 
@@ -29,7 +30,7 @@ let seq = 0;
  * `delayMs` postpones every answer, and `proportional` makes the segments span
  * the length of the uploaded audio instead of the fixed three seconds.
  */
-const transcriptionControl = { failNext: 0, status: 500, delayMs: 0, proportional: false };
+const transcriptionControl = { failNext: 0, status: 500, delayMs: 0, proportional: false, text: null };
 /** Chat answer override: a string replaces the fixed reply, null restores it. */
 let answerOverride = null;
 
@@ -105,7 +106,11 @@ function formFile(raw, contentType) {
 }
 
 function transcription(fields, file) {
-    const base = { text: TRANSCRIPT_TEXT, language: "en", duration: 3 };
+    const base = {
+        text: transcriptionControl.text ?? TRANSCRIPT_TEXT,
+        language: "en",
+        duration: 3,
+    };
     if (fields.response_format === "text") return TRANSCRIPT_TEXT;
     if (fields.response_format === "diarized_json")
         return { ...base, segments: segments.map((s) => ({ ...s, type: "transcript.text.segment" })) };
@@ -145,7 +150,7 @@ createServer((req, res) => {
         }
         if (req.method === "POST" && path === "/__transcription") {
             const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
-            for (const key of ["failNext", "status", "delayMs", "proportional"]) {
+            for (const key of ["failNext", "status", "delayMs", "proportional", "text"]) {
                 if (body[key] !== undefined) transcriptionControl[key] = body[key];
             }
             return send(res, 200, transcriptionControl);
@@ -158,6 +163,7 @@ createServer((req, res) => {
                 failNext: 0,
                 status: 500,
                 delayMs: 0,
+                text: null,
                 proportional: false,
             });
             return send(res, 200, { ok: true });
