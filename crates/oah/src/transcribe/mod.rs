@@ -222,7 +222,10 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
     )
     .await?;
     tx.commit().await?;
-    summary::followup::notify(state);
+    // The caller's answer waits for the event, the title and the summary queue, which is what the
+    // specification promises. The job stays queued if this does not finish, so the work is not
+    // lost when the process stops or another worker already holds it.
+    summary::followup::run_now(state, saved.recording_id, &transcript_id).await;
     Ok(())
 }
 
