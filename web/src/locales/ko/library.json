@@ -170,5 +170,7 @@
     "noCollection": "이 컬렉션에는 아직 녹음이 없습니다.",
     "transcriptionStarted": "스크립트 작성을 시작했습니다",
     "recordingsHeading": "녹음",
-    "uploadedToast": "\"{name}\" 업로드됨"
+    "uploadedToast": "\"{name}\" 업로드됨",
+    "searching": "검색하는 중…",
+    "searchFailed": "검색을 실행하지 못했습니다. 다시 시도해 주세요."
 }

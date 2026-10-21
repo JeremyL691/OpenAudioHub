@@ -170,5 +170,7 @@
     "noCollection": "このコレクションにはまだ録音がありません。",
     "transcriptionStarted": "文字起こしを開始しました",
     "recordingsHeading": "録音",
-    "uploadedToast": "「{name}」をアップロードしました"
+    "uploadedToast": "「{name}」をアップロードしました",
+    "searching": "検索しています…",
+    "searchFailed": "検索を実行できませんでした。もう一度お試しください。"
 }
