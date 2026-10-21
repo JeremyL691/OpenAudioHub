@@ -23,6 +23,7 @@ use crate::auth::CurrentUser;
 use crate::db::now_ms;
 use crate::error::{ApiResult, AppError};
 use crate::jobs::{self, Job, NewJob, Outcome};
+use crate::webhooks;
 use crate::{ids, routes, summary};
 
 /// Longest recording the audio pipeline accepts: 24 hours.
@@ -213,6 +214,20 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
     // The event, the automatic title and the automatic summary are owed by this transcript, so
     // the job that runs them is committed with it. A process that stops before the worker runs
     // leaves the work queued rather than lost, and a retried save does not queue it twice.
+    // The completion event is recorded here too, keyed by the transcript, so it is committed with
+    // the transcript that caused it: a process that stops after the commit does not lose the
+    // event, and a save that runs twice does not record it twice. The follow-up job keeps only
+    // the title and the summary.
+    let wrote = webhooks::record_in(
+        &mut tx,
+        state,
+        saved.user_id,
+        saved.recording_id,
+        "transcription.completed",
+        None,
+        Some(&summary::followup::event_key(&transcript_id)),
+    )
+    .await?;
     summary::followup::enqueue_in(
         &mut *tx,
         saved.user_id,
@@ -222,6 +237,9 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
     )
     .await?;
     tx.commit().await?;
+    if wrote {
+        webhooks::wake();
+    }
     // The caller's answer waits for the event, the title and the summary queue, which is what the
     // specification promises. The job stays queued if this does not finish, so the work is not
     // lost when the process stops or another worker already holds it.

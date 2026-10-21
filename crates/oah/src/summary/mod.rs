@@ -81,7 +81,10 @@ pub async fn queue_auto_for(
     plan.trigger = Some("auto".into());
     plan.transcript_id = Some(transcript_id.to_owned());
     let payload = serde_json::to_value(&plan).map_err(AppError::internal)?;
-    jobs::enqueue(
+    // Keyed by the transcript, so a recording transcribed again does not reuse an older
+    // transcript's queued run: that run would end as stale and the new transcript would never be
+    // summarised. The queue allows one keyed run per transcript and any number of manual runs.
+    jobs::enqueue_in(
         &state.db,
         NewJob {
             kind: "summary",
@@ -89,10 +92,16 @@ pub async fn queue_auto_for(
             recording_id: Some(recording_id),
             payload,
         },
+        Some(&summary_key(transcript_id)),
     )
     .await?;
     state.wakeup.notify();
     Ok(true)
+}
+
+/// The key an automatic summary for this transcript is queued under.
+fn summary_key(transcript_id: &str) -> String {
+    format!("summary:{transcript_id}")
 }
 
 /// Whether the summary that exists was written from this transcript.

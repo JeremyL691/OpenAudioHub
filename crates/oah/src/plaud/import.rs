@@ -222,6 +222,10 @@ pub async fn import_content(
                     None => (None, None),
                 };
                 let transcript_id = ids::new_id();
+                // The transcript and the work it owes commit together, so a process that stops
+                // between them cannot leave a transcript whose follow-up was never recorded: such
+                // a transcript would look imported on the next pass and never be queued again.
+                let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
                 let inserted = sqlx::query(
                     "INSERT INTO transcriptions (id, recording_id, user_id, text, detected_language, transcription_type, provider, model, timeline, timeline_source, source, created_at) \
                      VALUES (?, ?, ?, ?, NULL, 'server', 'plaud', 'plaud-native', ?, ?, 'plaud', ?) ON CONFLICT DO NOTHING",
@@ -233,23 +237,25 @@ pub async fn import_content(
                 .bind(tl_val)
                 .bind(tl_src)
                 .bind(now)
-                .execute(&state.db)
+                .execute(&mut *tx)
                 .await?;
                 if inserted.rows_affected() == 1 {
-                    imported = true;
-                    transcript_added = true;
-                    // The imported transcript owes the same follow-up a saved one does, so it is
-                    // recorded the same way. Plaud's own transcript does not emit
-                    // `transcription.completed` and does not generate a title, which the source
-                    // in the payload decides.
+                    // Plaud's own transcript does not emit `transcription.completed` and does not
+                    // generate a title; the source in the payload decides that. It does owe the
+                    // automatic summary, which the follow-up queues.
                     crate::summary::followup::enqueue_in(
-                        &state.db,
+                        &mut *tx,
                         user_id,
                         recording_id,
                         &transcript_id,
                         "plaud",
                     )
                     .await?;
+                    tx.commit().await?;
+                    imported = true;
+                    transcript_added = true;
+                } else {
+                    tx.rollback().await?;
                 }
             }
         }
