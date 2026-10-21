@@ -555,6 +555,48 @@ test("the library search matches transcript text and the Transcribed chip narrow
     await expect(rowById(page, id)).toHaveCount(0);
 });
 
+test("a search asks the server once instead of fetching every recording", async ({
+    page,
+    request,
+}) => {
+    // Three transcribed recordings: the old code asked for each one's detail while searching.
+    const ids: string[] = [];
+    for (const label of ["one", "two", "three"]) {
+        const id = await namedRecording(request, uniqueName(`SearchCost ${label}`));
+        const transcribe = await request.post(`/api/recordings/${id}/transcribe`, {
+            timeout: 120_000,
+        });
+        expect(transcribe.ok(), "transcribe with the fake provider").toBeTruthy();
+        ids.push(id);
+    }
+
+    await page.goto("/recordings");
+    const searches: string[] = [];
+    const details: string[] = [];
+    page.on("request", (req) => {
+        const url = new URL(req.url());
+        if (url.pathname === "/api/recordings/search") searches.push(url.search);
+        // A detail read is /api/recordings/<id> with nothing after the id. The search route
+        // shares the prefix, so it is excluded by name.
+        if (/^\/api\/recordings\/[^/]+$/.test(url.pathname) && !url.pathname.endsWith("/search")) {
+            details.push(url.pathname);
+        }
+    });
+
+    await searchFor(page, "fixed transcript");
+    await expect(rowById(page, ids[0])).toHaveCount(1);
+
+    // One search request covers the whole library. The detail pane does read the recording it
+    // shows, which is one recording however large the library is; what must not happen is a read
+    // per recording, which is what the search used to do.
+    expect(searches.length, `search requests: ${searches.join(", ")}`).toBe(1);
+    const distinct = new Set(details);
+    expect(
+        distinct.size,
+        `distinct recordings read during the search: ${[...distinct].join(", ")} (3 are transcribed)`,
+    ).toBeLessThanOrEqual(1);
+});
+
 // ---------------------------------------------------------------------------
 // Player: transport, speed, mute and keys
 // ---------------------------------------------------------------------------
