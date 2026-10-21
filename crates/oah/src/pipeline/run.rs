@@ -1032,9 +1032,13 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn a_restart_reuses_the_saved_speech_detection_and_finished_chunks() {
+        // A run without the fixture proves nothing, so it is reported as skipped rather than
+        // passing quietly: CI sets the variable, and a person running it locally gets told.
         let Ok(fixture) = std::env::var("OAH_PIPELINE_FIXTURE") else {
-            eprintln!("skipped: set OAH_PIPELINE_FIXTURE to a speech recording");
-            return;
+            panic!(
+                "set OAH_PIPELINE_FIXTURE to a speech recording; this test cannot prove the \
+                 restart without one"
+            );
         };
         let dir = tempfile::tempdir().unwrap();
         let mut config = crate::config::Config::for_tests(dir.path());
@@ -1156,6 +1160,17 @@ mod tests {
         .fetch_one(&state.db)
         .await
         .unwrap();
+        // The point of the test is that the *remaining* chunks are the ones sent again. A first
+        // run that finished everything would make the restart check meaningless, so it fails here
+        // instead of passing on a library small enough to complete in one go.
+        assert!(
+            finished > 0,
+            "the first run finished no chunk, so there is nothing to reuse"
+        );
+        assert!(
+            finished < plan,
+            "the first run finished every chunk ({finished} of {plan}), so no restart was exercised"
+        );
 
         // Simulate the crash: the lease is gone, the job is claimed again.
         sqlx::query("UPDATE jobs SET lease_until = 0, state = 'running'")
@@ -1179,14 +1194,12 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(done, 1, "the restarted run stores one transcript");
-        if finished > 0 {
-            assert!(
-                sent_after - sent_first < plan as usize,
-                "finished chunks were not sent again: {finished} of {plan} were done, \
-                 {} calls in total",
-                sent_after
-            );
-        }
+        assert!(
+            sent_after - sent_first < plan as usize,
+            "finished chunks were not sent again: {finished} of {plan} were done, \
+             {} calls in total",
+            sent_after
+        );
     }
 
     #[tokio::test]
