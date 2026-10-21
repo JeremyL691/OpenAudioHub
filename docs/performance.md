@@ -71,6 +71,34 @@ takes roughly five minutes at the speed above.
 - Disk, not speed, is the limit to watch on a small server. Decide how much free space you
   want to keep and set the volume size from that.
 
+## Library and search
+
+`tools/bench/library.mjs` measures the two routes a large library leans on. It starts a
+throwaway server, seeds it with a mix of short notes, meeting transcripts and a few long
+recordings through the API, then reports the p50 and p95 of both after a warm up:
+
+```sh
+node tools/bench/library.mjs 5000
+```
+
+Rows are:
+
+| Column | What it measures |
+|---|---|
+| List p50, p95 | `GET /api/recordings`, which carries every row and the status of the recordings a job is running for. |
+| List KiB | The size of that answer, which is what a browser parses on every reload. |
+| Search p50, p95 | `GET /api/recordings/search?q=`, one request for the whole library. |
+| Status | The status that route answered, so a failing run is not read as a fast one. |
+| Peak MiB | The highest resident memory the server reached. It reads this from `/proc`, so it is `n/a` on macOS. |
+
+The transcript search decrypts each stored text for the length of the request. That is why the
+cost grows with the number of transcribed recordings rather than staying flat: there is no
+plaintext index, which is the trade the encryption makes. The numbers say when that trade needs
+revisiting.
+
+The list has no paging. Its answer grew with the library until the point where the response and
+the browser's parse of it became the limit; the table above is where to look for that.
+
 ## Cost
 
 Provider prices change and vary by model, so this page does not list them. To estimate the
