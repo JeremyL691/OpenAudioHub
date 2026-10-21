@@ -94,10 +94,17 @@ export function textKey(r: Recording): string {
 }
 
 /** `needle` must already be trimmed and lower case. */
-export function matchesQuery(r: Recording, needle: string, texts: Record<string, string>): boolean {
+/**
+ * Whether a row survives the search box.
+ *
+ * `matched` holds the ids the server reported, which covers both the name and the transcript
+ * text. While a search is still running the rows already known to match a name stay visible, so
+ * typing does not blank the list.
+ */
+export function matchesQuery(r: Recording, needle: string, matched: ReadonlySet<string>): boolean {
     if (!needle) return true;
     if (r.filename.toLowerCase().includes(needle)) return true;
-    return (texts[textKey(r)] ?? "").toLowerCase().includes(needle);
+    return matched.has(r.id);
 }
 
 export function sortRecordings(list: Recording[], order: SortOrder): Recording[] {

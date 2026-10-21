@@ -82,7 +82,7 @@
     "downloadRow": "Download {title}",
     "deleteRow": "Delete {title}",
     "loadFailed": "Could not load the recordings",
-    "retry": "Retry",
+    "retry": "Try again",
     "sourcePlaud": "Plaud",
     "sourceUpload": "Upload",
     "allRecordings": "All recordings",
@@ -164,5 +164,7 @@
     "noCollection": "No recordings in this collection yet.",
     "transcriptionStarted": "Transcription started",
     "recordingsHeading": "Recordings",
-    "uploadedToast": "\"{name}\" uploaded"
+    "uploadedToast": "\"{name}\" uploaded",
+    "searching": "Searching…",
+    "searchFailed": "The search could not run. Try again."
 }

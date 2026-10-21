@@ -16,6 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The dependency scan covers the development dependencies of the web app, the extension and the contract tests, not only their production packages. The extension keeps all of its tooling in `devDependencies`, so an audit of production packages alone never looked at it.
 - `vitest` in the extension is at the release that fixes the reported advisories, with `tinypool` pinned above the affected versions.
 
+### Changed
+
+- The library search asks the server once for the whole library instead of fetching every transcribed recording's detail and matching in memory. `GET /api/recordings/search?q=` returns the ids whose name or newest transcript text matches; the transcript text itself is never returned, and nothing is indexed in plain text. The search box waits for a short pause in typing, and a request that is still running or that failed shows its own state rather than reading as "nothing matches".
+
 ### Fixed
 
 - The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.

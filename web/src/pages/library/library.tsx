@@ -6,7 +6,7 @@ import { DeleteDialog, MergeDialog, RenameDialog } from "@/components/recordings
 import { LibraryHeader } from "@/components/recordings/library-header";
 import { RecordingList } from "@/components/recordings/recording-list";
 import { RecordingRow, type RowActions } from "@/components/recordings/recording-row";
-import { useIsDesktop, useLibraryPrefs, useRecordings, useTranscriptTexts } from "@/components/recordings/hooks";
+import { useIsDesktop, useLibraryPrefs, useRecordings, useTranscriptSearch } from "@/components/recordings/hooks";
 import {
     countLabel,
     groupRows,
@@ -64,7 +64,7 @@ export default function LibraryPage() {
     }, [filterParam]);
 
     const needle = query.trim().toLowerCase();
-    const texts = useTranscriptTexts(lib.items, needle.length > 0);
+    const search = useTranscriptSearch(lib.items, needle);
 
     const inScope = useMemo(() => {
         const nowMs = Date.now();
@@ -72,8 +72,8 @@ export default function LibraryPage() {
     }, [lib.items, collection]);
 
     const visible = useMemo(
-        () => sortRecordings(inScope.filter((r) => matchesStatus(r, filter) && matchesQuery(r, needle, texts)), prefs.sort),
-        [inScope, filter, needle, texts, prefs.sort],
+        () => sortRecordings(inScope.filter((r) => matchesStatus(r, filter) && matchesQuery(r, needle, search.ids)), prefs.sort),
+        [inScope, filter, needle, search.ids, prefs.sort],
     );
 
     // Pages: the list shows the first `limit` rows and grows as its end comes into view.
@@ -203,7 +203,9 @@ export default function LibraryPage() {
 
     let emptyText: string | null = null;
     if (visible.length === 0) {
-        if (needle) emptyText = t("library.noMatchSearch");
+        if (needle && search.status === "searching") emptyText = t("library.searching");
+        else if (needle && search.status === "error") emptyText = t("library.searchFailed");
+        else if (needle) emptyText = t("library.noMatchSearch");
         else if (filter !== "all") emptyText = t("library.noMatchFilter");
         else if (collection && inScope.length === 0) emptyText = t("library.noCollection");
     }
@@ -255,6 +257,8 @@ export default function LibraryPage() {
                         showHeadings={prefs.sort !== "name"}
                         pending={uploads.pending}
                         emptyText={emptyText}
+                        searchStatus={needle ? search.status : "idle"}
+                        onSearchRetry={search.retry}
                         renderRow={(r) => (
                             <RecordingRow
                                 recording={r}

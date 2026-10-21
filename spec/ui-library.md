@@ -69,16 +69,20 @@ Status chips (`data-testid` on each button, text is the label):
 | `recording-filter-processing` | Processing | Has a job in progress or a transcript job running. |
 | `recording-filter-untranscribed` | Untranscribed | No transcript. |
 
-Chips and the search filter the list that is already loaded. They do not call the
-server. The filter can also come from the address: `?filter=all|transcribed|processing|untranscribed`
-(any other value means `all`).
+Chips filter the list that is already loaded. They do not call the server. The filter can
+also come from the address: `?filter=all|transcribed|processing|untranscribed` (any other
+value means `all`).
 
 Sort and density changes are saved at once with `PUT /api/settings/user`
 (fields `recordingListSortOrder` and `listDensity`). The save is best effort.
 
-Search rules: the text is trimmed and compared in lower case. A recording matches
-when its name contains the text, or when its transcript text contains it. The
-search can be seeded with `?q=` (at most 200 characters; longer values are ignored).
+Search rules: the text is trimmed and compared in lower case. A recording matches when
+its name contains the text, or when its transcript text contains it. The name is matched
+in the browser; the transcript text is matched by the server, through `GET
+/api/recordings/search` (see `recordings.md`). The page asks that route once per query
+after a short pause in typing, and not once per recording, and a search request that is
+still running or that failed shows its own state: it never reads as "nothing matches".
+The search can be seeded with `?q=` (at most 200 characters; longer values are ignored).
 
 Enter in the search box opens the first row of the current filtered list in the
 detail pane.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, errorMessage } from "@/lib/api";
-import { listRecordings, RECORDINGS_CHANGED, type Recording } from "@/lib/recordings";
-import { parseDensity, parsePageSize, parseSort, textKey, type Density, type SortOrder } from "./library-model";
+import { listRecordings, RECORDINGS_CHANGED, searchTranscripts, type Recording } from "@/lib/recordings";
+import { parseDensity, parsePageSize, parseSort, type Density, type SortOrder } from "./library-model";
 
 export type LoadStatus = "loading" | "ready" | "error";
 
@@ -102,55 +102,69 @@ export function useLibraryPrefs(): LibraryPrefs {
     return { ...prefs, setSort, setDensity };
 }
 
-/** Text of a recording's transcript, from the detail answer. Empty when there is none or it cannot be read. */
-function transcriptText(value: unknown): string {
-    if (typeof value === "string") return value;
-    if (Array.isArray(value)) return value.map(transcriptText).join(" ");
-    if (value && typeof value === "object" && typeof (value as { text?: unknown }).text === "string") {
-        return (value as { text: string }).text;
-    }
-    return "";
-}
-
-async function fetchTranscriptText(id: string): Promise<string> {
-    try {
-        const body = await api<{ transcription?: unknown }>(`/api/recordings/${encodeURIComponent(id)}`);
-        return transcriptText(body.transcription);
-    } catch {
-        return "";
-    }
-}
+export type SearchStatus = "idle" | "searching" | "ready" | "error";
 
 /**
- * Transcript texts for the search box. The list carries no text, so the texts of
- * transcribed recordings are read once, in small batches, when a search starts.
+ * The recordings whose transcript text matches the query.
+ *
+ * The server answers which ids match in one request. The list the page already has carries every
+ * other field, so nothing else is fetched: the old code asked for each transcribed recording's
+ * detail in turn, which cost one request per recording in a large library.
+ *
+ * The request is debounced and cancellable. A response that belongs to a query the user has
+ * already replaced is dropped, so a slow answer cannot overwrite a newer one.
  */
-export function useTranscriptTexts(items: Recording[], enabled: boolean): Record<string, string> {
-    const [texts, setTexts] = useState<Record<string, string>>({});
-    const requested = useRef(new Set<string>());
+export function useTranscriptSearch(items: Recording[], needle: string): {
+    ids: ReadonlySet<string>;
+    status: SearchStatus;
+    retry(): void;
+} {
+    const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
+    const [status, setStatus] = useState<SearchStatus>("idle");
+    const [attempt, setAttempt] = useState(0);
+    const latest = useRef(0);
+    // A search is about the library as it is now: a recording that was just transcribed, renamed
+    // or deleted has to be asked about again, which is what this signature changes on.
+    const library = items
+        .map((r) => `${r.id}:${r.hasTranscript ? 1 : 0}:${r.filename}`)
+        .sort()
+        .join("|");
 
     useEffect(() => {
-        if (!enabled) return;
-        const missing = items.filter((r) => r.hasTranscript && !requested.current.has(textKey(r)));
-        if (missing.length === 0) return;
-        missing.forEach((r) => requested.current.add(textKey(r)));
-        void (async () => {
-            for (let i = 0; i < missing.length; i += 4) {
-                const batch = missing.slice(i, i + 4);
-                const results = await Promise.all(
-                    batch.map(async (r) => [textKey(r), await fetchTranscriptText(r.id)] as const),
-                );
-                setTexts((prev) => {
-                    const next = { ...prev };
-                    for (const [key, text] of results) next[key] = text;
-                    return next;
-                });
-            }
-        })();
-    }, [items, enabled]);
+        if (!needle) {
+            latest.current += 1;
+            setIds(new Set());
+            setStatus("idle");
+            return;
+        }
+        const ticket = ++latest.current;
+        const controller = new AbortController();
+        setStatus("searching");
+        const timer = window.setTimeout(() => {
+            void (async () => {
+                try {
+                    const found = await searchTranscripts(needle, controller.signal);
+                    if (ticket !== latest.current) return;
+                    setIds(new Set(found));
+                    setStatus("ready");
+                } catch (error) {
+                    if (controller.signal.aborted || ticket !== latest.current) return;
+                    setStatus("error");
+                }
+            })();
+        }, SEARCH_DEBOUNCE_MS);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [needle, attempt, library]);
 
-    return texts;
+    const retry = useCallback(() => setAttempt((n) => n + 1), []);
+    return { ids, status, retry };
 }
+
+/** How long the search box waits after the last keystroke before asking the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 const DESKTOP_QUERY = "(min-width: 1024px)";
 

@@ -2,6 +2,7 @@
 //! Behavior is described in spec/recordings.md.
 
 pub mod media;
+pub mod search;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -38,6 +39,7 @@ const PRIVATE: &str = "private, no-store";
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/recordings", get(list))
+        .route("/api/recordings/search", get(search::search))
         .route("/api/recordings/download", get(download))
         .route(
             "/api/recordings/upload",
