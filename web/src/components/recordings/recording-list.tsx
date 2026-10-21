@@ -20,6 +20,9 @@ export interface RecordingListProps {
     showHeadings: boolean;
     pending: PendingUpload[];
     emptyText: string | null;
+    /** Whether the search box is waiting for an answer, has an answer, or could not get one. */
+    searchStatus?: "idle" | "searching" | "ready" | "error";
+    onSearchRetry?(): void;
     renderRow(recording: Recording): ReactNode;
     /** More rows exist than are shown. */
     hasMore: boolean;
@@ -111,7 +114,17 @@ export function RecordingList(props: RecordingListProps) {
                 ))}
 
                 {props.emptyText && props.status === "ready" ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">{props.emptyText}</p>
+                    // A search that is running or that failed gets its own state, with a way to
+                    // ask again: an incomplete answer must not read as "nothing matches".
+                    <div className="flex flex-col items-center gap-3 px-4 py-8" role="status" aria-live="polite">
+                        <p className="text-center text-sm text-muted-foreground">{props.emptyText}</p>
+                        {props.searchStatus === "searching" ? <Spinner /> : null}
+                        {props.searchStatus === "error" && props.onSearchRetry ? (
+                            <Button variant="outline" size="sm" onClick={props.onSearchRetry}>
+                                {t("library.retry")}
+                            </Button>
+                        ) : null}
+                    </div>
                 ) : null}
 
                 {hasMore ? <div ref={marker} aria-hidden="true" className="h-px" /> : null}

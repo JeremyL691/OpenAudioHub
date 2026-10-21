@@ -67,3 +67,17 @@ export async function mergeRecordings(ids: string[], title?: string): Promise<st
 
 /** Fired on window after any change to the list, so every view can reload. */
 export const RECORDINGS_CHANGED = "oah:recordings-changed";
+
+/**
+ * The ids of the recordings whose text matches the query.
+ *
+ * The answer is ids only: the list already carries every other field, and the transcript text
+ * never leaves the server for a search.
+ */
+export async function searchTranscripts(q: string, signal?: AbortSignal): Promise<string[]> {
+    const body = await api<{ recordingIds?: unknown }>(`/api/recordings/search?q=${encodeURIComponent(q)}`, {
+        signal,
+    });
+    const ids = Array.isArray(body.recordingIds) ? body.recordingIds : [];
+    return ids.filter((id): id is string => typeof id === "string");
+}

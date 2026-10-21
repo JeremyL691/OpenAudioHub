@@ -170,5 +170,7 @@
     "noCollection": "这个合集里还没有录音。",
     "transcriptionStarted": "已开始转写",
     "recordingsHeading": "录音",
-    "uploadedToast": "“{name}”已上传"
+    "uploadedToast": "“{name}”已上传",
+    "searching": "正在搜索…",
+    "searchFailed": "搜索未能完成，请重试。"
 }
