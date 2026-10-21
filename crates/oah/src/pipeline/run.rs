@@ -1069,8 +1069,16 @@ mod tests {
         }
         // At least one chunk should finish before the crash, so the restart has stored work to
         // keep. Without it the check about finished chunks would pass without proving anything.
+        // The same loop notes the speech-detection marker, which is written before the first
+        // chunk is sent: a finished run removes the whole work folder, so the marker is observed
+        // while the run is alive rather than looked for afterwards.
+        let work = pipeline_dir(&state, &id);
         let finished_deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let mut saw_marker = false;
         loop {
+            if work.join("vad.complete").exists() {
+                saw_marker = true;
+            }
             let done: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ? AND state = 'completed'",
             )
@@ -1078,7 +1086,7 @@ mod tests {
             .fetch_one(&state.db)
             .await
             .unwrap();
-            if done > 0 || asked.load(std::sync::atomic::Ordering::SeqCst) >= 8 {
+            if (done > 0 && saw_marker) || asked.load(std::sync::atomic::Ordering::SeqCst) >= 8 {
                 break;
             }
             assert!(
@@ -1087,23 +1095,12 @@ mod tests {
             );
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
-        // Speech detection finishes before the first chunk is sent, so a provider call means the
-        // marker is already there. Waiting for it as well keeps the crash from landing between a
-        // first provider answer and the marker write on a slow or loaded machine, which would
-        // check the restart against a run that never reached speech detection at all.
-        let work = pipeline_dir(&state, &id);
-        let marker_deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-        while !work.join("vad.complete").exists() {
-            assert!(
-                std::time::Instant::now() < marker_deadline,
-                "the run never saved its speech detection"
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
         running.abort();
         let _ = running.await;
         let sent_first = asked.load(std::sync::atomic::Ordering::SeqCst);
-        let vad_done = work.join("vad.complete").exists();
+        // A run that finished before the abort removed its work folder, and finishing requires
+        // speech detection to have completed, so a missing folder counts as the marker.
+        let vad_done = saw_marker || !work.exists();
 
         let plan: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pipeline_chunks WHERE job_id = ?")
             .bind(&id)
