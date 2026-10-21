@@ -73,6 +73,32 @@ job for the recording is queued or running.
 Errors: `401` `AUTH_SESSION_MISSING`
 Side effects: none
 
+### GET /api/recordings/search
+Auth: session
+Request: query `q`, the text to look for. It is trimmed, and compared in lower case.
+Response: `200`
+```json
+{ "recordingIds": ["abc", "def"] }
+```
+The caller's non-deleted recordings whose name, or whose newest transcript text, contains
+`q`. A recording appears once, whether the name or the text matched. Only the newest
+transcript of a recording is searched: it is the one the detail page shows. The ids are
+returned in no particular order, and the list the client already has is what sorts and
+filters them.
+
+No text is returned and nothing is cached between requests. The text is encrypted at rest
+and decrypted for the length of one request, so this route does not create a plaintext
+index.
+
+Errors:
+
+| Status | Code | When |
+| --- | --- | --- |
+| 401 | `AUTH_SESSION_MISSING` | No session. |
+| 400 | `INVALID_INPUT` | `q` is missing, empty after trimming, or longer than 200 characters. |
+
+Side effects: none
+
 ### GET /api/recordings/{id}
 Auth: session
 Request: path `id`.
