@@ -1024,6 +1024,10 @@ mod tests {
         }
     }
 
+    /// How many provider answers are served before the rest are held, so an interrupted run
+    /// always leaves work for the restart.
+    const HOLD_AFTER: usize = 4;
+
     /// A run interrupted after some chunks were finished: the next claim keeps those chunks,
     /// finds the saved speech detection, and only sends what is left.
     ///
@@ -1057,15 +1061,35 @@ mod tests {
         tokio::fs::copy(&fixture, &storage).await.unwrap();
         crate::pipeline::tests_support::seed_user_recording(&state, "r", "r.wav").await;
 
-        // A provider that answers each chunk with a transcript covering its audio.
+        // A provider that answers the first few chunks and then holds, so the run always stops
+        // with chunks still owed. Without the hold a fast machine finished every chunk before the
+        // test could interrupt it, which made the restart untested rather than failing loudly.
         let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        // Held answers wait for this flag, which the test sets once the crash has been simulated.
+        // A flag rather than a notification: a request that starts after the flag is set sees it
+        // immediately instead of waiting for a signal that was already sent.
+        let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let counter = asked.clone();
+        let waiter = gate.clone();
         let app = axum::Router::new().route(
             "/audio/transcriptions",
             axum::routing::post(move |body: axum::body::Bytes| {
                 let counter = counter.clone();
+                let waiter = waiter.clone();
                 async move {
-                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let served = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if served >= HOLD_AFTER {
+                        // Parked until the test opens the gate, so the interrupted run always has
+                        // chunks still owed. A bounded wait keeps a mistake from hanging the run.
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(120);
+                        while !waiter.load(std::sync::atomic::Ordering::SeqCst) {
+                            if std::time::Instant::now() >= deadline {
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        }
+                    }
                     // Two one-second spans per chunk, matching a real answer's shape.
                     axum::Json(serde_json::json!({
                         "text": "First part. Second part.",
@@ -1131,7 +1155,13 @@ mod tests {
             .fetch_one(&state.db)
             .await
             .unwrap();
-            if (done > 0 && saw_marker) || asked.load(std::sync::atomic::Ordering::SeqCst) >= 8 {
+            // The provider holds from `HOLD_AFTER` onwards, so reaching that count means every
+            // remaining chunk is parked. Combined with one stored chunk and the speech marker,
+            // the run is in the state the test exists to interrupt.
+            if done > 0
+                && saw_marker
+                && asked.load(std::sync::atomic::Ordering::SeqCst) >= HOLD_AFTER
+            {
                 break;
             }
             assert!(
@@ -1177,6 +1207,9 @@ mod tests {
             .execute(&state.db)
             .await
             .unwrap();
+        // The restarted run has to finish, so the provider answers everything from here on: the
+        // chunks it already stored are not sent again, which is what the assertions below check.
+        gate.store(true, std::sync::atomic::Ordering::SeqCst);
         let second = crate::jobs::claim(&state.db, "pipeline", std::time::Duration::from_secs(120))
             .await
             .unwrap()
