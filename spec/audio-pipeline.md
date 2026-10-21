@@ -171,8 +171,13 @@ exists (reused decoded audio or speech probabilities) sets no progress.
   handler is stopped and its result is discarded.
 - The retry counter (`attempts`) and the lease generation are separate. An explicit retry
   resets the retry counter, so the counter repeats; the generation never does, which is why
-  the generation is what identifies a claim. Chunk rows are written by the run that owns the
-  job and are idempotent per chunk, so they carry no generation (spec section 10).
+  the generation is what identifies a claim.
+- Chunk rows are shared between runs of the same job, so their writes follow the same rule as
+  the transcript save: marking a chunk as sending, storing its result and recording its
+  failure each apply only while the job is still running under the generation this worker
+  claimed. A worker whose lease was taken over writes no chunk state, so the run that replaced
+  it cannot read a result that belongs to a claim it never held. Chunk results that were fully
+  stored before a takeover stay reusable (section 11).
 - A job whose lease has expired (for example after a crash or restart) is claimed again.
   Stored work is reused (section 11).
 - A transient failure (a database or file error, or a failed save) returns the job to
@@ -626,7 +631,8 @@ These responses have no `code` field. The `error` text is the only detail.
 - Cancel and save against the same job, the status table, the speaker settings read by the
   pipeline (including a diarizing model with speaker labels off), the retry claim counter
   and the superseded work folder have unit tests in the server code.
-- The lease generation has unit tests: a claim that was replaced cannot renew, write
+- The lease generation has unit tests: a chunk write from a replaced claim changes nothing, and
+  a claim that was replaced cannot renew, write
   progress, record its outcome, change the phase or save a transcript, including after an
   explicit retry reset the retry counter.
 - Not tested: disk-budget pauses and resume, cancel during decoding and speech detection,

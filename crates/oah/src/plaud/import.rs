@@ -221,21 +221,42 @@ pub async fn import_content(
                     ),
                     None => (None, None),
                 };
-                sqlx::query(
+                let transcript_id = ids::new_id();
+                // The transcript and the work it owes commit together, so a process that stops
+                // between them cannot leave a transcript whose follow-up was never recorded: such
+                // a transcript would look imported on the next pass and never be queued again.
+                let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+                let inserted = sqlx::query(
                     "INSERT INTO transcriptions (id, recording_id, user_id, text, detected_language, transcription_type, provider, model, timeline, timeline_source, source, created_at) \
                      VALUES (?, ?, ?, ?, NULL, 'server', 'plaud', 'plaud-native', ?, ?, 'plaud', ?) ON CONFLICT DO NOTHING",
                 )
-                .bind(ids::new_id())
+                .bind(&transcript_id)
                 .bind(recording_id)
                 .bind(user_id)
                 .bind(state.config.field_key.encrypt(&text))
                 .bind(tl_val)
                 .bind(tl_src)
                 .bind(now)
-                .execute(&state.db)
+                .execute(&mut *tx)
                 .await?;
-                imported = true;
-                transcript_added = true;
+                if inserted.rows_affected() == 1 {
+                    // Plaud's own transcript does not emit `transcription.completed` and does not
+                    // generate a title; the source in the payload decides that. It does owe the
+                    // automatic summary, which the follow-up queues.
+                    crate::summary::followup::enqueue_in(
+                        &mut *tx,
+                        user_id,
+                        recording_id,
+                        &transcript_id,
+                        "plaud",
+                    )
+                    .await?;
+                    tx.commit().await?;
+                    imported = true;
+                    transcript_added = true;
+                } else {
+                    tx.rollback().await?;
+                }
             }
         }
     }
@@ -283,10 +304,10 @@ pub async fn import_content(
             }
         }
     }
-    // Plaud's transcript arrives outside the transcription job, so the automatic summary step
-    // runs from here. It queues at most one run per recording.
+    // Plaud's transcript arrives outside the transcription job, so the summary step runs from
+    // the follow-up job the import queued above.
     if transcript_added {
-        crate::summary::queue_auto(state, user_id, recording_id).await?;
+        crate::summary::followup::notify(state);
     }
     Ok(imported)
 }

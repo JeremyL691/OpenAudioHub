@@ -71,6 +71,12 @@ fn guard(wrote: bool) -> Step<()> {
     if wrote { Ok(()) } else { Err(Stop::LeaseLost) }
 }
 
+/// The condition every chunk write carries: the job is still running under the generation
+/// this worker claimed. A chunk is shared state, so a worker whose lease was taken over must
+/// not touch it: the run that replaced it would read the old result as its own.
+const STILL_OURS: &str =
+    "EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)";
+
 impl From<sqlx::Error> for Stop {
     fn from(e: sqlx::Error) -> Self {
         Stop::Retry(e.to_string())
@@ -766,7 +772,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     if samples > MAX_CHUNK_SAMPLES {
         return record_failure(
             db,
-            &ctx.lease.id,
+            ctx.lease,
             index,
             "LimitError",
             "Chunk exceeds provider duration limit",
@@ -776,7 +782,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     if wav.len() > MAX_WAV_BYTES {
         return record_failure(
             db,
-            &ctx.lease.id,
+            ctx.lease,
             index,
             "LimitError",
             "Chunk exceeds provider file-size limit",
@@ -789,12 +795,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     let mut attempt = 0;
     loop {
         attempt += 1;
-        sqlx::query("UPDATE pipeline_chunks SET state = 'running', attempts = ? WHERE job_id = ? AND idx = ?")
-            .bind(attempt)
-            .bind(&ctx.lease.id)
-            .bind(index)
-            .execute(db)
-            .await?;
+        mark_running(db, ctx.lease, index, attempt).await?;
         match transcribe::transcribe_file(ctx.state, ctx.provider, &wav_path, ctx.options).await {
             Ok(t) => {
                 let response = serde_json::to_string(&merge::Stored {
@@ -803,12 +804,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                     segments: t.segments,
                 })
                 .map_err(|e| Stop::Retry(e.to_string()))?;
-                sqlx::query("UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL WHERE job_id = ? AND idx = ?")
-                    .bind(response)
-                    .bind(&ctx.lease.id)
-                    .bind(index)
-                    .execute(db)
-                    .await?;
+                store_success(db, ctx.lease, index, &response).await?;
                 break;
             }
             Err(e) if e.retryable && attempt < CHUNK_ATTEMPTS => {
@@ -816,7 +812,7 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                 check_cancel(db, &ctx.lease.id).await?;
             }
             Err(e) => {
-                record_failure(db, &ctx.lease.id, index, e.code, &e.message).await?;
+                record_failure(db, ctx.lease, index, e.code, &e.message).await?;
                 break;
             }
         }
@@ -825,21 +821,66 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
     Ok(())
 }
 
+/// Marks a chunk as being sent. Only the worker that holds the lease can start a send, so a
+/// replaced run cannot make a chunk look busy to the run that owns it.
+async fn mark_running(db: &SqlitePool, lease: &Lease, index: i64, attempt: u32) -> Step<()> {
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'running', attempts = ? \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(i64::from(attempt))
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
+}
+
+/// Stores a finished chunk. The response is what the next run would reuse, so it is written
+/// only while this worker still holds the lease.
+async fn store_success(db: &SqlitePool, lease: &Lease, index: i64, response: &str) -> Step<()> {
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(response)
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
+}
+
 async fn record_failure(
     db: &SqlitePool,
-    job_id: &str,
+    lease: &Lease,
     index: i64,
     code: &str,
     message: &str,
 ) -> Step<()> {
-    sqlx::query("UPDATE pipeline_chunks SET state = 'failed', error_code = ?, error_message = ? WHERE job_id = ? AND idx = ?")
-        .bind(code)
-        .bind(truncate(message.to_owned()))
-        .bind(job_id)
-        .bind(index)
-        .execute(db)
-        .await?;
-    Ok(())
+    let wrote = sqlx::query(&format!(
+        "UPDATE pipeline_chunks SET state = 'failed', error_code = ?, error_message = ? \
+         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
+    ))
+    .bind(code)
+    .bind(truncate(message.to_owned()))
+    .bind(&lease.id)
+    .bind(index)
+    .bind(&lease.id)
+    .bind(lease.lease_gen)
+    .execute(db)
+    .await?
+    .rows_affected()
+        == 1;
+    guard(wrote)
 }
 
 /// Exponential delay from 2 s, capped at 120 s, with up to 1 s of jitter (spec 8.5).
@@ -983,6 +1024,10 @@ mod tests {
         }
     }
 
+    /// How many provider answers are served before the rest are held, so an interrupted run
+    /// always leaves work for the restart.
+    const HOLD_AFTER: usize = 4;
+
     /// A run interrupted after some chunks were finished: the next claim keeps those chunks,
     /// finds the saved speech detection, and only sends what is left.
     ///
@@ -991,9 +1036,13 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn a_restart_reuses_the_saved_speech_detection_and_finished_chunks() {
+        // A run without the fixture proves nothing, so it is reported as skipped rather than
+        // passing quietly: CI sets the variable, and a person running it locally gets told.
         let Ok(fixture) = std::env::var("OAH_PIPELINE_FIXTURE") else {
-            eprintln!("skipped: set OAH_PIPELINE_FIXTURE to a speech recording");
-            return;
+            panic!(
+                "set OAH_PIPELINE_FIXTURE to a speech recording; this test cannot prove the \
+                 restart without one"
+            );
         };
         let dir = tempfile::tempdir().unwrap();
         let mut config = crate::config::Config::for_tests(dir.path());
@@ -1012,15 +1061,35 @@ mod tests {
         tokio::fs::copy(&fixture, &storage).await.unwrap();
         crate::pipeline::tests_support::seed_user_recording(&state, "r", "r.wav").await;
 
-        // A provider that answers each chunk with a transcript covering its audio.
+        // A provider that answers the first few chunks and then holds, so the run always stops
+        // with chunks still owed. Without the hold a fast machine finished every chunk before the
+        // test could interrupt it, which made the restart untested rather than failing loudly.
         let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        // Held answers wait for this flag, which the test sets once the crash has been simulated.
+        // A flag rather than a notification: a request that starts after the flag is set sees it
+        // immediately instead of waiting for a signal that was already sent.
+        let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let counter = asked.clone();
+        let waiter = gate.clone();
         let app = axum::Router::new().route(
             "/audio/transcriptions",
             axum::routing::post(move |body: axum::body::Bytes| {
                 let counter = counter.clone();
+                let waiter = waiter.clone();
                 async move {
-                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let served = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if served >= HOLD_AFTER {
+                        // Parked until the test opens the gate, so the interrupted run always has
+                        // chunks still owed. A bounded wait keeps a mistake from hanging the run.
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(120);
+                        while !waiter.load(std::sync::atomic::Ordering::SeqCst) {
+                            if std::time::Instant::now() >= deadline {
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        }
+                    }
                     // Two one-second spans per chunk, matching a real answer's shape.
                     axum::Json(serde_json::json!({
                         "text": "First part. Second part.",
@@ -1086,7 +1155,13 @@ mod tests {
             .fetch_one(&state.db)
             .await
             .unwrap();
-            if (done > 0 && saw_marker) || asked.load(std::sync::atomic::Ordering::SeqCst) >= 8 {
+            // The provider holds from `HOLD_AFTER` onwards, so reaching that count means every
+            // remaining chunk is parked. Combined with one stored chunk and the speech marker,
+            // the run is in the state the test exists to interrupt.
+            if done > 0
+                && saw_marker
+                && asked.load(std::sync::atomic::Ordering::SeqCst) >= HOLD_AFTER
+            {
                 break;
             }
             assert!(
@@ -1115,12 +1190,26 @@ mod tests {
         .fetch_one(&state.db)
         .await
         .unwrap();
+        // The point of the test is that the *remaining* chunks are the ones sent again. A first
+        // run that finished everything would make the restart check meaningless, so it fails here
+        // instead of passing on a library small enough to complete in one go.
+        assert!(
+            finished > 0,
+            "the first run finished no chunk, so there is nothing to reuse"
+        );
+        assert!(
+            finished < plan,
+            "the first run finished every chunk ({finished} of {plan}), so no restart was exercised"
+        );
 
         // Simulate the crash: the lease is gone, the job is claimed again.
         sqlx::query("UPDATE jobs SET lease_until = 0, state = 'running'")
             .execute(&state.db)
             .await
             .unwrap();
+        // The restarted run has to finish, so the provider answers everything from here on: the
+        // chunks it already stored are not sent again, which is what the assertions below check.
+        gate.store(true, std::sync::atomic::Ordering::SeqCst);
         let second = crate::jobs::claim(&state.db, "pipeline", std::time::Duration::from_secs(120))
             .await
             .unwrap()
@@ -1138,14 +1227,12 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(done, 1, "the restarted run stores one transcript");
-        if finished > 0 {
-            assert!(
-                sent_after - sent_first < plan as usize,
-                "finished chunks were not sent again: {finished} of {plan} were done, \
-                 {} calls in total",
-                sent_after
-            );
-        }
+        assert!(
+            sent_after - sent_first < plan as usize,
+            "finished chunks were not sent again: {finished} of {plan} were done, \
+             {} calls in total",
+            sent_after
+        );
     }
 
     #[tokio::test]
@@ -1199,6 +1286,119 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(stored, 0, "a replaced run stores no transcript");
+    }
+
+    /// Seeds one planned chunk for the job `save_state` created.
+    async fn seed_chunk(state: &AppState, index: i64) {
+        sqlx::query(
+            "INSERT INTO pipeline_chunks (job_id, idx, chunk_id, start_sample, end_sample) VALUES ('j', ?, 'c', 0, 16000)",
+        )
+        .bind(index)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_chunk_that_was_taken_over_is_not_marked_running() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        // Another worker claimed the job after this one lost its lease.
+        sqlx::query("UPDATE jobs SET lease_gen = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let stale = test_lease();
+        let outcome = mark_running(&state.db, &stale, 0, 1).await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a stale worker cannot start a chunk"
+        );
+        // The worker that does hold the lease can.
+        let holder = Lease {
+            id: "j".into(),
+            lease_gen: 1,
+        };
+        mark_running(&state.db, &holder, 0, 1).await.ok().unwrap();
+        let started: String =
+            sqlx::query_scalar("SELECT state FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(started, "running", "the current holder starts the chunk");
+    }
+
+    #[tokio::test]
+    async fn a_chunk_result_from_a_lost_lease_is_dropped() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let stale = Lease {
+            id: "j".into(),
+            lease_gen: 0,
+        };
+        mark_running(&state.db, &stale, 0, 1).await.ok().unwrap();
+        // The lease moves on while the provider request is in flight.
+        sqlx::query("UPDATE jobs SET lease_gen = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = store_success(&state.db, &stale, 0, "stale words").await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a response from a lost lease is refused"
+        );
+        let stored: Option<String> = sqlx::query_scalar(
+            "SELECT response FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(stored, None, "the replaced run keeps its own chunk state");
+    }
+
+    #[tokio::test]
+    async fn a_chunk_failure_from_a_lost_lease_is_dropped() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let stale = Lease {
+            id: "j".into(),
+            lease_gen: 0,
+        };
+        sqlx::query("UPDATE jobs SET lease_gen = 3")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let outcome = record_failure(&state.db, &stale, 0, "UpstreamError", "boom").await;
+        assert!(
+            matches!(outcome, Err(Stop::LeaseLost)),
+            "a failure from a lost lease is refused"
+        );
+        let chunk_state: String =
+            sqlx::query_scalar("SELECT state FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(chunk_state, "queued", "a stale failure changes nothing");
+    }
+
+    #[tokio::test]
+    async fn the_current_lease_still_records_its_chunks() {
+        let (state, _dir) = save_state().await;
+        seed_chunk(&state, 0).await;
+        let lease = test_lease();
+        mark_running(&state.db, &lease, 0, 1).await.ok().unwrap();
+        store_success(&state.db, &lease, 0, "kept words")
+            .await
+            .ok()
+            .unwrap();
+        let (chunk_state, response): (String, Option<String>) = sqlx::query_as(
+            "SELECT state, response FROM pipeline_chunks WHERE job_id = 'j' AND idx = 0",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(chunk_state, "completed");
+        assert!(response.unwrap().contains("kept words"));
     }
 
     #[tokio::test]

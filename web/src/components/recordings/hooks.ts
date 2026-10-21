@@ -139,6 +139,10 @@ export function useTranscriptSearch(items: Recording[], needle: string): {
         }
         const ticket = ++latest.current;
         const controller = new AbortController();
+        // A new query cannot answer with the previous query's text matches: leaving them in place
+        // would keep showing a recording whose transcript no longer contains what is being looked
+        // for, for as long as the request runs and after it fails.
+        setIds(new Set());
         setStatus("searching");
         const timer = window.setTimeout(() => {
             void (async () => {

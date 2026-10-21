@@ -160,9 +160,24 @@ async function main() {
         const row = rows.find((r) => !known.has(r.id));
         if (!row) throw new Error(`upload ${i} created no recording`);
         known = new Set(rows.map((r) => r.id));
+        // The provider answers with the text this recording is meant to hold, so the library has
+        // the short, medium and long transcripts the numbers describe.
+        const setText = await fetch(`${FAKE}/__transcription`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ text: script(i) }),
+        });
+        if (!setText.ok) throw new Error(`set transcription text ${i}: ${setText.status}`);
         const tr = await call(`/api/recordings/${row.id}/transcribe`, { method: "POST" });
         if (tr.status !== 200 && tr.status !== 202) throw new Error(`transcribe ${i}: ${tr.status}`);
         if (i % 100 === 0) console.error(`  ${i}/${COUNT}`);
+    }
+
+    // Report the library that is actually there, not the number that was asked for.
+    const actual = (await (await call("/api/recordings")).json()).recordings.length;
+    if (actual !== COUNT) {
+        console.error(`the library holds ${actual} recordings, not the ${COUNT} this run names`);
+        if (!reuse) process.exitCode = 1;
     }
 
     const time = async (path) => {
@@ -186,6 +201,7 @@ async function main() {
         listBytes = r.bytes;
     }
 
+    // Every seventh recording holds this word, so the search has real matches to return.
     const query = encodeURIComponent("needle");
     for (let i = 0; i < 5; i++) await time(`/api/recordings/search?q=${query}`);
     const search = [];

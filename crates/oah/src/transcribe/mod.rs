@@ -23,6 +23,7 @@ use crate::auth::CurrentUser;
 use crate::db::now_ms;
 use crate::error::{ApiResult, AppError};
 use crate::jobs::{self, Job, NewJob, Outcome};
+use crate::webhooks;
 use crate::{ids, routes, summary};
 
 /// Longest recording the audio pipeline accepts: 24 hours.
@@ -186,11 +187,12 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         .bind(saved.user_id)
         .execute(&mut *tx)
         .await?;
+    let transcript_id = ids::new_id();
     sqlx::query(
         "INSERT INTO transcriptions (id, recording_id, user_id, text, detected_language, transcription_type, provider, model, timeline, timeline_source, source, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'openaudiohub', ?)",
     )
-    .bind(ids::new_id())
+    .bind(&transcript_id)
     .bind(saved.recording_id)
     .bind(saved.user_id)
     .bind(text)
@@ -209,8 +211,39 @@ pub async fn save_transcript(state: &AppState, saved: Saved<'_>) -> ApiResult<()
         .bind(saved.user_id)
         .execute(&mut *tx)
         .await?;
+    // The event, the automatic title and the automatic summary are owed by this transcript, so
+    // the job that runs them is committed with it. A process that stops before the worker runs
+    // leaves the work queued rather than lost, and a retried save does not queue it twice.
+    // The completion event is recorded here too, keyed by the transcript, so it is committed with
+    // the transcript that caused it: a process that stops after the commit does not lose the
+    // event, and a save that runs twice does not record it twice. The follow-up job keeps only
+    // the title and the summary.
+    let wrote = webhooks::record_in(
+        &mut tx,
+        state,
+        saved.user_id,
+        saved.recording_id,
+        "transcription.completed",
+        None,
+        Some(&summary::followup::event_key(&transcript_id)),
+    )
+    .await?;
+    summary::followup::enqueue_in(
+        &mut *tx,
+        saved.user_id,
+        saved.recording_id,
+        &transcript_id,
+        "transcription",
+    )
+    .await?;
     tx.commit().await?;
-    summary::after_transcript(state, saved.user_id, saved.recording_id).await;
+    if wrote {
+        webhooks::wake();
+    }
+    // The caller's answer waits for the event, the title and the summary queue, which is what the
+    // specification promises. The job stays queued if this does not finish, so the work is not
+    // lost when the process stops or another worker already holds it.
+    summary::followup::run_now(state, saved.recording_id, &transcript_id).await;
     Ok(())
 }
 

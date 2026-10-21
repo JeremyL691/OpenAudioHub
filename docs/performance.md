@@ -91,13 +91,18 @@ Rows are:
 | Status | The status that route answered, so a failing run is not read as a fast one. |
 | Peak MiB | The highest resident memory the server reached. It reads this from `/proc`, so it is `n/a` on macOS. |
 
+The seeded library holds the mix the script describes: mostly short notes, some meeting-length
+transcripts, a few long ones, and about one recording in seven contains the word the measured
+query asks for. An earlier version of the script reused one fixed short answer for every
+recording, which made the search cost look far lower than it is.
+
 Measured on an Apple M3 Pro with a debug build, on a library where every recording is
 transcribed:
 
 | Records | List p50 | List p95 | List answer | Search p50 | Search p95 |
 |---|---|---|---|---|---|
-| 300 | 23 ms | 24 ms | 249 KiB | 11 ms | 13 ms |
-| 1000 | 66 ms | 67 ms | 725 KiB | 35 ms | 36 ms |
+| 300 | 20 ms | 20 ms | 217 KiB | 218 ms | 229 ms |
+| 1000 | 63 ms | 65 ms | 725 KiB | 715 ms | 729 ms |
 
 Seeding is slow by construction: every recording is uploaded and transcribed through the API,
 so the stored text is encrypted the way a real library's is. Measure a library once and then set
@@ -107,6 +112,12 @@ The transcript search decrypts each stored text for the length of the request. T
 cost grows with the number of transcribed recordings rather than staying flat: there is no
 plaintext index, which is the trade the encryption makes. The numbers say when that trade needs
 revisiting.
+
+The growth is close to linear in the recorded text: a library of a thousand transcribed
+recordings with a realistic text mix answers in well under a second, and a search that asks for
+a word the library does not contain costs the same as one that matches, because every text is
+decrypted and compared either way. Read this as the reason to measure before raising the target
+size, not as a promise about a library of tens of thousands.
 
 The list has no paging. Its answer grew with the library until the point where the response and
 the browser's parse of it became the limit; the table above is where to look for that.
