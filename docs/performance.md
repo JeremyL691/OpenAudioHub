@@ -91,6 +91,18 @@ Rows are:
 | Status | The status that route answered, so a failing run is not read as a fast one. |
 | Peak MiB | The highest resident memory the server reached. It reads this from `/proc`, so it is `n/a` on macOS. |
 
+Measured on an Apple M3 Pro with a debug build, on a library where every recording is
+transcribed:
+
+| Records | List p50 | List p95 | List answer | Search p50 | Search p95 |
+|---|---|---|---|---|---|
+| 300 | 23 ms | 24 ms | 249 KiB | 11 ms | 13 ms |
+| 1000 | 66 ms | 67 ms | 725 KiB | 35 ms | 36 ms |
+
+Seeding is slow by construction: every recording is uploaded and transcribed through the API,
+so the stored text is encrypted the way a real library's is. Measure a library once and then set
+`OAH_BENCH_REUSE=1` to measure it again without seeding.
+
 The transcript search decrypts each stored text for the length of the request. That is why the
 cost grows with the number of transcribed recordings rather than staying flat: there is no
 plaintext index, which is the trade the encryption makes. The numbers say when that trade needs

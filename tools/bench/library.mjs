@@ -15,7 +15,7 @@
 //
 // Everything stays in .dev-artifacts/bench-library/, so the app you run is never touched.
 import { spawn } from "node:child_process";
-import { createReadStream, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 
@@ -43,8 +43,29 @@ function script(i) {
 }
 
 async function main() {
-    rmSync(DATA, { recursive: true, force: true });
+    // A second run can measure the library the first one seeded: seeding through the API costs
+    // far more than the reads this script exists to measure.
+    const reuse = process.env.OAH_BENCH_REUSE === "1";
+    if (reuse) {
+        console.error("reusing the seeded library; set OAH_BENCH_REUSE=0 to seed again");
+    } else {
+        rmSync(DATA, { recursive: true, force: true });
+    }
     mkdirSync(DATA, { recursive: true });
+
+    // The key is written next to the data, so a later run can measure the same library again
+    // instead of seeding it a second time.
+    const keyFile = resolve(ART, "key.txt");
+    const emailFile = resolve(ART, "email.txt");
+    let encryptionKey = process.env.OAH_BENCH_KEY ?? "";
+    let email = process.env.OAH_BENCH_EMAIL ?? EMAIL;
+    if (reuse) {
+        encryptionKey = readFileSync(keyFile, "utf8").trim();
+        email = readFileSync(emailFile, "utf8").trim();
+    }
+    if (!encryptionKey) encryptionKey = randomBytes(32).toString("hex");
+    writeFileSync(keyFile, encryptionKey);
+    writeFileSync(emailFile, email);
 
     const fake = spawn(process.execPath, [resolve(ROOT, "contract-tests/fakes/fake-ai.mjs"), String(FAKE_PORT)], {
         stdio: ["ignore", "ignore", "inherit"],
@@ -56,7 +77,7 @@ async function main() {
             PORT: String(PORT),
             HOST: "127.0.0.1",
             APP_URL: BASE,
-            ENCRYPTION_KEY: randomBytes(32).toString("hex"),
+            ENCRYPTION_KEY: encryptionKey,
             RATE_LIMIT_TRUST_PROXY_HEADERS: "true",
             WEBHOOKS_REQUIRE_PUBLIC_TARGETS: "false",
             // The pipeline would run ffmpeg and speech detection per recording; the synchronous
@@ -106,7 +127,11 @@ async function main() {
         return res.json();
     };
 
-    await json("/api/auth/sign-up/email", { name: "Bench", email: EMAIL, password: PASSWORD });
+    if (reuse) {
+        await json("/api/auth/sign-in/email", { email, password: PASSWORD });
+    } else {
+        await json("/api/auth/sign-up/email", { name: "Bench", email, password: PASSWORD });
+    }
     await call("/api/settings/user", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -120,13 +145,13 @@ async function main() {
         isDefaultTranscription: true,
         isDefaultEnhancement: true,
     });
-    console.error(`seeding ${COUNT} recordings…`);
+    if (!reuse) console.error(`seeding ${COUNT} recordings…`);
     // The upload answer carries no id, so the new one is the id not seen before. The list is
     // read once per upload, which is what keeps seeding linear rather than quadratic.
     let known = new Set((await (await call("/api/recordings")).json()).recordings.map((r) => r.id));
     const bytes = readFileSync(FIXTURE);
 
-    for (let i = 0; i < COUNT; i++) {
+    for (let i = 0; i < (reuse ? 0 : COUNT); i++) {
         const form = new FormData();
         form.append("file", new Blob([bytes], { type: "audio/mpeg" }), `bench-${i}.mp3`);
         const up = await call("/api/recordings/upload", { method: "POST", body: form });
@@ -185,7 +210,13 @@ async function main() {
     console.log(`| ${COUNT} | ${l.p50.toFixed(0)} | ${l.p95.toFixed(0)} | ${(listBytes / 1024).toFixed(0)} | ${s.p50.toFixed(0)} | ${s.p95.toFixed(0)} | ${status} | ${rss ? (rss / 1024).toFixed(0) : "n/a"} |`);
 }
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+main()
+    .then(() => {
+        // Leaving a server or the fake provider behind keeps the process alive and the port busy
+        // for the next run.
+        process.exit(0);
+    })
+    .catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
