@@ -57,7 +57,10 @@ pub async fn search(
 
     // One question per kind of match, both scoped to this user and to live recordings. The name
     // is encrypted, so it is compared after decryption, in the same pass as the transcripts.
-    let mut matches: Vec<String> = Vec::new();
+    // One pass over the recordings, one over the transcripts: a search that failed to read a
+    // stored value returns an error, because an answer with the unreadable rows quietly missing
+    // would look like a complete "these are your matches".
+    let mut matched: std::collections::HashSet<String> = std::collections::HashSet::new();
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, filename FROM recordings WHERE user_id = ? AND deleted_at IS NULL",
     )
@@ -69,35 +72,59 @@ pub async fn search(
             .config
             .field_key
             .decrypt(&filename)
-            .unwrap_or_default();
+            .map_err(stored_value_unreadable)?;
         if name.to_lowercase().contains(&needle) {
-            matches.push(id);
+            matched.insert(id);
         }
     }
 
     // A recording's own transcript is the one the detail page shows: the newest one for the
     // recording. Matching any older transcript would show a recording that no longer contains
     // the text the user searched for.
+    // The transcript a search is about is the one the detail page shows: the newest for the
+    // recording, with the same tie-break so two rows of one timestamp cannot disagree. Grouping
+    // keeps it to one row per recording.
     let transcripts: Vec<(String, String)> = sqlx::query_as(
-        "SELECT recording_id, text FROM transcriptions t
-         WHERE user_id = ?
-           AND created_at = (SELECT MAX(created_at) FROM transcriptions x WHERE x.recording_id = t.recording_id AND x.user_id = t.user_id)
-           AND EXISTS (SELECT 1 FROM recordings r WHERE r.id = t.recording_id AND r.user_id = t.user_id AND r.deleted_at IS NULL)",
+        "SELECT recording_id, text FROM (
+             SELECT recording_id, text,
+                    ROW_NUMBER() OVER (PARTITION BY recording_id ORDER BY created_at DESC, id DESC) AS rank
+             FROM transcriptions WHERE user_id = ?
+         ) WHERE rank = 1
+           AND EXISTS (SELECT 1 FROM recordings r WHERE r.id = recording_id AND r.user_id = ? AND r.deleted_at IS NULL)",
     )
+    .bind(&user.id)
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
     for (recording_id, text) in transcripts {
-        if matches.contains(&recording_id) {
+        if matched.contains(&recording_id) {
             continue;
         }
-        let plain = state.config.field_key.decrypt(&text).unwrap_or_default();
+        let plain = state
+            .config
+            .field_key
+            .decrypt(&text)
+            .map_err(stored_value_unreadable)?;
         if plain.to_lowercase().contains(&needle) {
-            matches.push(recording_id);
+            matched.insert(recording_id);
         }
     }
 
+    let mut matches: Vec<String> = matched.into_iter().collect();
+    matches.sort();
     Ok(Json(json!({ "recordingIds": matches })))
+}
+
+/// A stored value that cannot be read is an error, not an empty string: answering as if the row
+/// held no text would report a search as complete while some of the library was never compared.
+fn stored_value_unreadable(_: crate::crypto::CryptoError) -> AppError {
+    let mut error = AppError::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "SEARCH_FAILED",
+        "Some stored text could not be read, so the search is incomplete.",
+    );
+    error.source = Some("a stored value failed to decrypt".into());
+    error
 }
 
 #[cfg(test)]
@@ -306,8 +333,10 @@ mod tests {
         assert_eq!(ids_for(&state, "u", "new words").await.unwrap(), ["r1"]);
     }
 
+    /// A stored value that cannot be read makes the search an error. Reporting it as a complete
+    /// answer would hide rows that were never compared.
     #[tokio::test]
-    async fn a_damaged_ciphertext_does_not_fail_the_search() {
+    async fn a_damaged_ciphertext_fails_the_search() {
         let (state, _dir) = state().await;
         recording(&state, "r1", "u", "readable").await;
         sqlx::query(
@@ -317,7 +346,9 @@ mod tests {
         .execute(&state.db)
         .await
         .unwrap();
-        // The readable recording is still found; one damaged value does not take the answer away.
-        assert_eq!(ids_for(&state, "u", "readable").await.unwrap(), ["r1"]);
+        assert!(
+            ids_for(&state, "u", "readable").await.is_err(),
+            "an unreadable row makes the answer incomplete, so it is refused"
+        );
     }
 }
