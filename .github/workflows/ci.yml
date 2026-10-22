@@ -15,7 +15,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A pull request that only changes web/ skips the server, pipeline and contract jobs. Every
+  # other event (a push to main, a release tag) runs the whole suite.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      web_only: ${{ steps.paths.outputs.web_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          web_only=false
+          if [ "$EVENT" = "pull_request" ]; then
+            files="$(git diff --name-only "$BASE...$HEAD")"
+            outside="$(printf '%s\n' "$files" | grep -v '^web/' || true)"
+            # An empty diff is not web-only, so the full suite runs when in doubt.
+            if [ -n "$files" ] && [ -z "$outside" ]; then
+              web_only=true
+            fi
+          fi
+          echo "web_only=$web_only" >> "$GITHUB_OUTPUT"
+
   server:
+    needs: changes
+    if: needs.changes.outputs.web_only != 'true'
     runs-on: ubuntu-24.04
     # The bundled ONNX Runtime needs GCC 14's libstdc++. The tag matches rust-toolchain.toml,
     # so the compiler here is the one the workspace pins instead of whatever `rust:1` points at.
@@ -114,6 +144,8 @@ jobs:
       - run: cargo test -p openaudiohub-desktop
 
   pipeline:
+    needs: changes
+    if: needs.changes.outputs.web_only != 'true'
     runs-on: ubuntu-24.04
     container: rust:1.94.1-trixie
     env:
@@ -150,6 +182,8 @@ jobs:
           include-hidden-files: true
 
   contract:
+    needs: changes
+    if: needs.changes.outputs.web_only != 'true'
     runs-on: ubuntu-24.04
     container: rust:1.94.1-trixie
     # Chromium falls back to the default download name when the process locale is not
@@ -199,20 +233,27 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [server, msrv, web, extension, desktop, pipeline, contract, security]
+    needs: [changes, server, msrv, web, extension, desktop, pipeline, contract, security]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail unless every required check passed
         env:
           RESULTS: ${{ toJSON(needs) }}
+          WEB_ONLY: ${{ needs.changes.outputs.web_only }}
         run: |
           failed=0
           for name in server msrv web extension desktop pipeline contract security; do
             result="$(printf '%s' "$RESULTS" | python3 -c "import json,sys; print(json.load(sys.stdin)['$name']['result'])")"
-            if [ "$result" != "success" ]; then
-              echo "::error::$name ended as '$result', not 'success'" >&2
-              failed=1
+            if [ "$result" = "success" ]; then
+              continue
             fi
+            if [ "$result" = "skipped" ] && [ "$WEB_ONLY" = "true" ]; then
+              case "$name" in
+                server | pipeline | contract) continue ;;
+              esac
+            fi
+            echo "::error::$name ended as '$result', not 'success'" >&2
+            failed=1
           done
           if [ "$failed" -ne 0 ]; then
             exit 1
