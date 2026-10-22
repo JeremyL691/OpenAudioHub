@@ -212,7 +212,7 @@ async fn create(
         created_at: now,
     };
 
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     if row.is_default_transcription {
         clear_default(&mut tx, &user.id, true).await?;
     }
@@ -246,7 +246,7 @@ async fn update(
     Path(id): Path<String>,
     Json(body): Json<ProviderBody>,
 ) -> ApiResult<Json<Value>> {
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     let row = find(&mut *tx, &user.id, &id)
         .await?
         .ok_or_else(missing_provider)?;
@@ -316,7 +316,7 @@ async fn set_default_transcription(
                 .detail("issues", json!(["providerId must be a non-empty string"])),
         );
     };
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     let row = find(&mut *tx, &user.id, id)
         .await?
         .ok_or_else(missing_provider)?;

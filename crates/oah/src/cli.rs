@@ -17,7 +17,9 @@ pub async fn reset_password(db: &SqlitePool, email: &str) -> Result<String, Stri
     let user_id = user_id.ok_or_else(|| format!("no account with the email {email}"))?;
     let password = ids::token_hex(12);
     let hash = crypto::hash_password(&password);
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = crate::db::begin_write(db)
+        .await
+        .map_err(|e| e.to_string())?;
     sqlx::query(
         "INSERT INTO credentials (user_id, password_hash, updated_at) VALUES (?, ?, ?)
          ON CONFLICT (user_id) DO UPDATE SET password_hash = excluded.password_hash, updated_at = excluded.updated_at",

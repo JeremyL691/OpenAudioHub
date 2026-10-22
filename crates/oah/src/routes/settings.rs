@@ -371,7 +371,7 @@ async fn put_user(
             ));
         }
     };
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     let data: Option<String> =
         sqlx::query_scalar("SELECT data FROM user_settings WHERE user_id = ?")
             .bind(&user.id)

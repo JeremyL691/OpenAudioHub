@@ -88,7 +88,7 @@ pub async fn emit(
     event: &str,
     failure: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     let wrote = record_in(&mut tx, state, user_id, recording_id, event, failure, None).await?;
     tx.commit().await?;
     if wrote {

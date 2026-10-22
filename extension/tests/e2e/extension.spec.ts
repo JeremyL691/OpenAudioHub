@@ -3,6 +3,7 @@ import {
     BASE_URL,
     type Extension,
     accountToken,
+    clickClosing,
     createAccount,
     createHandoff,
     fakePlaudSite,
@@ -44,7 +45,7 @@ test.describe("browser extension", () => {
 
             const token = await accountToken(`cookie.${Date.now()}@example.test`);
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             const plaud = await waitForNewPage(ext.context, seen, "https://web.plaud.ai");
             const closed = plaud.waitForEvent("close");
@@ -69,7 +70,7 @@ test.describe("browser extension", () => {
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId);
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-success")).toBeVisible();
             expect(await handoffStatus(ext.context, code)).toBe("connected");
             const opened = ext.context.pages().filter((candidate) => !seen.has(candidate));
@@ -90,7 +91,7 @@ test.describe("browser extension", () => {
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId);
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await waitForNewPage(ext.context, seen, "https://web.plaud.ai");
             await page.waitForTimeout(700);
@@ -117,7 +118,7 @@ test.describe("browser extension", () => {
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId);
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await waitForNewPage(ext.context, seen, "https://web.plaud.ai");
             await page.waitForTimeout(700);
@@ -141,13 +142,13 @@ test.describe("browser extension", () => {
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId);
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await waitForNewPage(ext.context, seen, "https://web.plaud.ai");
 
             const waiting = await openPopup(ext, tabId);
             await expect(waiting.getByTestId("popup-state")).toHaveAttribute("data-state", "waiting");
-            await waiting.getByTestId("popup-cancel").click();
+            await clickClosing(waiting, "popup-cancel");
             await expect(page.getByTestId("connect-error")).toBeVisible();
             await expect(page.getByTestId("connect-error-text")).toHaveText(
                 "Sign-in was cancelled. Click the OpenAudioHub icon to try again.",
@@ -166,11 +167,22 @@ test.describe("browser extension", () => {
             const page = await connectPage(ext, code);
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId);
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await page.close();
-            await new Promise((resolve) => setTimeout(resolve, 800));
 
+            // The worker records the closed page when it sees the tab removed. The popup takes that
+            // result once when it loads, so open it only after the worker has stored it.
+            await expect
+                .poll(
+                    () =>
+                        ext.worker.evaluate(async () => {
+                            const stored = await chrome.storage.session.get("lastResult");
+                            return stored.lastResult !== undefined;
+                        }),
+                    { timeout: 10_000 },
+                )
+                .toBe(true);
             const result = await ext.context.newPage();
             await result.goto(`chrome-extension://${ext.extensionId}/popup.html`);
             await expect(result.getByTestId("popup-state")).toHaveAttribute("data-state", "result");
@@ -217,7 +229,7 @@ test.describe("browser extension", () => {
             const tabId = await findTabId(ext.worker, `/connect/plaud?code=${code}`);
             const popup = await openPopup(ext, tabId, "&timeoutMs=1500");
             const seen = new Set(ext.context.pages());
-            await popup.getByTestId("popup-connect").click();
+            await clickClosing(popup, "popup-connect");
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await waitForNewPage(ext.context, seen, "https://web.plaud.ai");
             await expect(page.getByTestId("connect-error-text")).toHaveText(TIMEOUT_TEXT, { timeout: 15_000 });

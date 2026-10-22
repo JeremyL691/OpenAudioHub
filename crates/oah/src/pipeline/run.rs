@@ -705,7 +705,7 @@ async fn create_plan(db: &SqlitePool, job_id: &str, pcm: &Path, ranges: &[(u64, 
         ));
         rows.push((index, start, end, chunk_id[..24].to_owned()));
     }
-    let mut tx = db.begin().await?;
+    let mut tx = crate::db::begin_write(db).await?;
     for (index, start, end, chunk_id) in rows {
         sqlx::query("INSERT INTO pipeline_chunks (job_id, idx, chunk_id, start_sample, end_sample) VALUES (?, ?, ?, ?, ?)")
             .bind(job_id)

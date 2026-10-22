@@ -194,7 +194,7 @@ pub(super) async fn connect(
     let devices = checker.devices().await.map_err(generic)?;
 
     let now = now_ms();
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     sqlx::query(
         "INSERT INTO plaud_connections (id, user_id, bearer_token, api_base, plaud_email, workspace_id, invalidated_at, last_sync, created_at, updated_at) \
          VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?) \
@@ -274,7 +274,7 @@ pub async fn disconnect(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<Value>> {
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     sqlx::query("DELETE FROM plaud_devices WHERE user_id = ?")
         .bind(&user.id)
         .execute(&mut *tx)

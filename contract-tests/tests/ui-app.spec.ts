@@ -503,7 +503,10 @@ test.describe("settings: saving controls (fresh account)", () => {
         const { page, close } = await freshPage(browser);
         try {
             await page.goto("/settings/storage");
+            // The switch saves too. Wait for that save, or the listener below can count it late.
+            const toggled = page.waitForResponse((res) => putBodyHas(res.request(), "autoDeleteRecordings", true));
             await page.getByRole("switch", { name: "Auto-delete old recordings" }).click();
+            await toggled;
             const field = page.getByLabel("Retention period (days)");
             const saves: Request[] = [];
             page.on("request", (req) => {
