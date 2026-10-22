@@ -8,6 +8,7 @@ Most providers offer the OpenAI API: chat completions and audio transcriptions, 
 - [Presets](#presets)
 - [Which provider is used](#which-provider-is-used)
 - [Which model is used](#which-model-is-used)
+- [Ask AI](#ask-ai)
 - [Long recordings](#long-recordings)
 - [Transcribe in the browser](#transcribe-in-the-browser)
 - [Local providers](#local-providers)
@@ -81,6 +82,18 @@ If you do not enter a default model, OpenAudioHub uses these:
 Models with `whisper`, `asr`, `sensevoice`, `telespeech`, `transcribe`, `scribe`, `parakeet` or `speech` in their names are treated as transcription models.
 
 Set the models yourself if a provider changes its model names.
+
+## Ask AI
+
+Ask AI answers questions about one recording. It starts from the provider marked **Use for AI enhancements**, then keeps a provider, model and thinking level of its own for that recording, chosen at the top of its panel.
+
+- The choice belongs to the conversation, so a recording can use a different model from summaries without changing the summary default.
+- Choosing a provider lists the models it offers when it publishes a list. A provider that publishes none offers its configured model, and a model name can be typed.
+- A thinking level asks the model to think for longer. The levels are minimal, low, medium, high, xhigh and max, plus **Default**, which asks for nothing.
+- A level the model does not publish is never sent. The app sends the closest higher level, or the model's highest level when the choice is above all of them. When the app does not know which levels a model accepts, it sends none and says the support is unknown rather than unsupported, so a wrong guess cannot make a working provider fail.
+- The app does not guess a model's context size from its name. An unlisted model gets a smaller, conservative amount of transcript, and nothing is sent twice to make up for a refusal.
+
+See `../spec/recording-chat.md` for the requests, the bounds one question works within, and the errors a provider can cause.
 
 ## Long recordings
 

@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod auth;
+pub mod chat;
 pub mod cli;
 pub mod config;
 pub mod crypto;
@@ -65,6 +66,18 @@ impl AppState {
 
 /// Starts every background worker. Called once by the server binary.
 pub fn start_workers(state: &AppState) {
+    // A chat answer left running by a previous process has no provider connection any more, so it
+    // ends as interrupted and keeps the text it had. Nothing is sent anywhere on startup.
+    let orphan = state.clone();
+    tokio::spawn(async move {
+        match chat::store::interrupt_orphans(&orphan.db, &orphan.config.field_key).await {
+            Ok(0) => {}
+            Ok(count) => {
+                tracing::info!(count, "interrupted chat answers left by a previous process")
+            }
+            Err(e) => tracing::warn!(error = %e, "could not close interrupted chat answers"),
+        }
+    });
     transcribe::spawn(state);
     pipeline::spawn(state);
     summary::spawn(state);
@@ -82,6 +95,7 @@ pub fn app(state: AppState) -> Router {
         .merge(summary::router())
         .merge(plaud::router())
         .merge(export::router())
+        .merge(chat::routes::router())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::origin_check,

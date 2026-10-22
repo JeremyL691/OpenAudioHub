@@ -119,3 +119,11 @@ This group has no codes of its own. Webhook routes use `CONFLICT`, `INVALID_INPU
 | `NOT_FOUND` | 404 | Unknown `/api` path, or the item is unknown or belongs to another user. The message says which. |
 | `NOT_FOUND` | 410 | The recording was deleted while a summary was being made. |
 | `RATE_LIMITED` | 429 | Too many requests in the window. `details.retryAfter` gives the wait in seconds. |
+
+| Code | Status | When |
+|---|---|---|
+| `CONFLICT` | 409 | A recording chat already has an answer running. |
+| `REVISION_CHANGED` | 409 | A question was composed against a transcript that has since been replaced. |
+| `AI_REASONING_EXHAUSTED` | in the turn | The model exhausted its output budget during thinking (`recording-chat.md`). |
+| `CHAT_LIMIT_REACHED` | in the turn | One answer reached a call, token or size bound (`recording-chat.md`). |
+| `CHAT_INTERRUPTED` | in the turn | An answer stopped without finishing, including after a restart. |
