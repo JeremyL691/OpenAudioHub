@@ -575,7 +575,7 @@ async fn remove(
         return Err(err);
     }
     let now = now_ms();
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     sqlx::query("DELETE FROM transcriptions WHERE recording_id = ?")
         .bind(id.as_str())
         .execute(&mut *tx)

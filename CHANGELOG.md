@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- A request that reads and then writes no longer fails with "database is locked" when another request commits in between. Every transaction takes the write lock when it starts, so a busy writer makes the request wait for the busy timeout instead of failing at once.
+
 ## [1.3.0] - 2026-10-21
 
 ### Added

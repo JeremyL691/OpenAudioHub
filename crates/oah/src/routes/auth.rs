@@ -158,7 +158,7 @@ pub async fn sign_up(
         created_at: now,
         updated_at: now,
     };
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     let inserted = sqlx::query("INSERT INTO users (id, email, name, email_verified, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?) ON CONFLICT (email) DO NOTHING")
         .bind(&user.id)
         .bind(&user.email)
@@ -660,7 +660,7 @@ pub async fn reset_password(
         .await
         .map_err(AppError::internal)?;
     let now = now_ms();
-    let mut tx = state.db.begin().await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     // Deleting and returning in one statement makes the token single use.
     let used: Option<String> = sqlx::query_scalar(
         "DELETE FROM verifications WHERE value = ? AND expires_at > ? RETURNING identifier",

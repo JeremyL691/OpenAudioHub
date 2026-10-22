@@ -255,7 +255,7 @@ pub async fn create_turn(
     key: &FieldKey,
     new: &NewTurn<'_>,
 ) -> Result<Result<Turn, TurnRefusal>, sqlx::Error> {
-    let mut tx = db.begin().await?;
+    let mut tx = crate::db::begin_write(db).await?;
     let current: Option<i64> =
         sqlx::query_scalar("SELECT generation FROM recording_chats WHERE id = ? AND user_id = ?")
             .bind(new.chat_id)
@@ -613,7 +613,7 @@ pub async fn end_run(
 
 /// Moves the conversation forward so every run of an older generation can no longer save.
 pub async fn clear(db: &SqlitePool, user_id: &str, recording_id: &str) -> Result<(), sqlx::Error> {
-    let mut tx = db.begin().await?;
+    let mut tx = crate::db::begin_write(db).await?;
     let chat_id: Option<String> =
         sqlx::query_scalar("SELECT id FROM recording_chats WHERE recording_id = ? AND user_id = ?")
             .bind(recording_id)
