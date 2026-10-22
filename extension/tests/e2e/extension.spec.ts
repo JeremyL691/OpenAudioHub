@@ -171,18 +171,21 @@ test.describe("browser extension", () => {
             await expect(page.getByTestId("connect-waiting")).toBeVisible();
             await page.close();
 
-            // The worker records the closed page when it sees the tab removed, and the popup reads
-            // that once when it loads. Reload until the result is there, instead of guessing a delay.
-            const result = await ext.context.newPage();
+            // The worker records the closed page when it sees the tab removed. The popup takes that
+            // result once when it loads, so open it only after the worker has stored it.
             await expect
                 .poll(
-                    async () => {
-                        await result.goto(`chrome-extension://${ext.extensionId}/popup.html`);
-                        return result.getByTestId("popup-state").getAttribute("data-state");
-                    },
+                    () =>
+                        ext.worker.evaluate(async () => {
+                            const stored = await chrome.storage.session.get("lastResult");
+                            return stored.lastResult !== undefined;
+                        }),
                     { timeout: 10_000 },
                 )
-                .toBe("result");
+                .toBe(true);
+            const result = await ext.context.newPage();
+            await result.goto(`chrome-extension://${ext.extensionId}/popup.html`);
+            await expect(result.getByTestId("popup-state")).toHaveAttribute("data-state", "result");
             await expect(result.getByTestId("popup-state")).toContainText(
                 "The OpenAudioHub page was closed or reloaded. Start again from that page.",
             );
