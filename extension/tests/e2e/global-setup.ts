@@ -75,6 +75,7 @@ export default async function globalSetup(): Promise<void> {
             OAH_PLAUD_API_BASE: `http://127.0.0.1:${fakePort}`,
             AUDIO_PIPELINE_ENABLED: "false",
             RATE_LIMIT_TRUST_PROXY_HEADERS: "true",
+            OAH_MULTI_USER: "true",
         },
         stdio: "ignore",
     });
