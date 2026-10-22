@@ -16,6 +16,7 @@ import { downloadText, buildTranscriptJson, safeFileName, timecode } from "./exp
 import { isActiveStatus } from "./data";
 import { phaseLabel } from "./pipeline-labels";
 import type { PipelineState, ProviderRow, TimelineSegment, TranscriptRecord } from "./types";
+import type { CitationFocus } from "./chat/types";
 import { t, useI18n, type MessageKey } from "@/lib/i18n";
 
 const SOURCE_LABELS: Record<string, MessageKey> = {
@@ -50,15 +51,23 @@ export interface TranscriptCardProps {
     onCancelPipeline(): Promise<void>;
     onRetryPipeline(): Promise<void>;
     onChanged(): void;
+    /** The rows or the part of a line a citation points at, which the transcript scrolls to and marks once. */
+    citationFocus?: CitationFocus | null;
+    onHighlightShown?(): void;
 }
 
 /** The transcript card: pipeline state, source switcher, toolbar, timeline or plain text. */
 export function TranscriptCard(props: TranscriptCardProps) {
     const { transcript, transcripts, selectedSource, onSelectSource, pipeline, pipelineActive, transcribing, busy, onRequestTranscribe } = props;
+    const focus = props.citationFocus ?? null;
     const [follow, setFollow] = useState(true);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const { t: tr } = useI18n();
+
+    useEffect(() => {
+        if (focus) setFollow(false);
+    }, [focus]);
     const browser = useBrowserTranscription(props.recordingId, props.onChanged);
     const job = pipeline?.job ?? null;
     const timed = Boolean(transcript?.timeline?.length);
@@ -160,9 +169,19 @@ export function TranscriptCard(props: TranscriptCardProps) {
                         </p>
                     ) : null}
                     {timed ? (
-                        <Timeline segments={transcript.timeline ?? []} follow={follow} onManualScroll={() => setFollow(false)} />
+                        <Timeline
+                            segments={transcript.timeline ?? []}
+                            follow={follow}
+                            onManualScroll={() => setFollow(false)}
+                            focus={focus}
+                            onHighlightShown={props.onHighlightShown}
+                        />
                     ) : (
-                        <PlainText text={transcript.text} />
+                        <PlainText
+                            text={transcript.text}
+                            focus={focus}
+                            onHighlightShown={props.onHighlightShown}
+                        />
                     )}
                     <TranscriptMeta transcript={transcript} />
                 </>
@@ -270,16 +289,48 @@ function PipelineBlock({
 }
 
 /** Timed transcript: one row per segment, the playing one highlighted and kept in view. */
-function Timeline({ segments, follow, onManualScroll }: { segments: TimelineSegment[]; follow: boolean; onManualScroll(): void }) {
+function Timeline({
+    segments,
+    follow,
+    onManualScroll,
+    focus,
+    onHighlightShown,
+}: {
+    segments: TimelineSegment[];
+    follow: boolean;
+    onManualScroll(): void;
+    focus: CitationFocus | null;
+    onHighlightShown?(): void;
+}) {
     const player = usePlayer();
     const ms = (player?.time ?? 0) * 1000;
     const activeIndex = segments.findIndex((s) => ms >= s.start_ms && ms < s.end_ms);
     const activeRef = useRef<HTMLLIElement | null>(null);
+    // A citation names the rows it covers by their index, so exactly those rows are marked.
+    const citedRange =
+        focus && focus.segmentStart !== null && focus.segmentStart < segments.length
+            ? { first: focus.segmentStart, last: Math.min(focus.segmentEnd ?? focus.segmentStart, segments.length - 1) }
+            : null;
+    const citedIndex = citedRange ? citedRange.first : -1;
 
     useEffect(() => {
         if (!follow || activeIndex < 0) return;
         activeRef.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
     }, [activeIndex, follow]);
+
+    // A citation moved the reader here: show the rows it points at, keep them marked for a few
+    // seconds, then let the pane forget it so a later scroll does not jump again.
+    const focusKey = citedIndex >= 0 ? focus?.key : undefined;
+    useEffect(() => {
+        if (focusKey === undefined) return;
+        const element = document.querySelector<HTMLElement>(`[data-testid="transcript-segment"][data-cited="true"]`);
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+        element?.focus({ preventScroll: true });
+        const timer = setTimeout(() => {
+            onHighlightShown?.();
+        }, CITED_MS);
+        return () => clearTimeout(timer);
+    }, [focusKey, onHighlightShown]);
 
     return (
         <ol
@@ -290,6 +341,7 @@ function Timeline({ segments, follow, onManualScroll }: { segments: TimelineSegm
         >
             {segments.map((seg, i) => {
                 const active = i === activeIndex;
+                const cited = citedRange !== null && i >= citedRange.first && i <= citedRange.last;
                 return (
                     <li
                         key={`${seg.start_ms}-${i}`}
@@ -297,8 +349,10 @@ function Timeline({ segments, follow, onManualScroll }: { segments: TimelineSegm
                         data-testid="transcript-segment"
                         data-start-ms={seg.start_ms}
                         data-active={active ? "true" : "false"}
+                        data-cited={cited ? "true" : undefined}
                         aria-current={active ? "time" : undefined}
-                        className="rounded-lg data-[active=true]:bg-transcript-active"
+                        tabIndex={i === citedIndex ? -1 : undefined}
+                        className="rounded-lg transition-[background-color,box-shadow] duration-700 data-[active=true]:bg-transcript-active data-[cited=true]:bg-primary/10 data-[cited=true]:shadow-[inset_3px_0_0_var(--primary)] motion-reduce:transition-none"
                     >
                         <button
                             type="button"
@@ -322,21 +376,74 @@ const SPEAKER_LINE = /^(SPEAKER_\d+|Speaker \d+|UNKNOWN):\s*(.*)$/;
 const SPEAKER_COLORS = ["bg-tile-blue", "bg-tile-green", "bg-tile-orange", "bg-tile-purple", "bg-tile-teal", "bg-tile-pink"];
 
 /** Plain transcript text. Lines such as "SPEAKER_00: ..." are shown as speaker turns. */
-function PlainText({ text }: { text: string }) {
+function PlainText({
+    text,
+    focus,
+    onHighlightShown,
+}: {
+    text: string;
+    focus: CitationFocus | null;
+    onHighlightShown?(): void;
+}) {
     const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+    const citedIndex = focus && focus.line !== null && focus.line < lines.length ? focus.line : -1;
+
+    const focusKey = citedIndex >= 0 ? focus?.key : undefined;
+    useEffect(() => {
+        if (focusKey === undefined) return;
+        const element = document.querySelector<HTMLElement>(`[data-testid="transcript-line"][data-cited="true"]`);
+        element?.scrollIntoView({ block: "center", behavior: "smooth" });
+        const timer = setTimeout(() => {
+            onHighlightShown?.();
+        }, CITED_MS);
+        return () => clearTimeout(timer);
+    }, [focusKey, onHighlightShown]);
+
     return (
-        <div className="grid gap-3 text-[15px] leading-7 text-foreground">
+        <div className="grid gap-3 text-[15px] leading-7 text-foreground" data-testid="transcript-plain">
             {lines.map((line, i) => {
                 const match = SPEAKER_LINE.exec(line);
-                if (!match) return <p key={i}>{line}</p>;
+                const isCited = i === citedIndex;
+                const body = match ? match[2] : line;
+                // The cited part is given in the raw line; the speaker prefix shown as a label is not part of the body.
+                const offset = line.length - body.length;
+                const marked = isCited && focus ? markPart(body, focus.lineStart, focus.lineEnd, offset) : body;
                 return (
-                    <p key={i}>
-                        <SpeakerLabel name={match[1]} />
-                        {match[2]}
+                    <p
+                        key={i}
+                        data-testid="transcript-line"
+                        data-cited={isCited ? "true" : undefined}
+                        className={cn(
+                            "rounded-md px-2 py-1 transition-[background-color,box-shadow] duration-700 motion-reduce:transition-none",
+                            isCited && "bg-primary/5 shadow-[inset_3px_0_0_var(--primary)]",
+                        )}
+                    >
+                        {match ? <SpeakerLabel name={match[1]} /> : null}
+                        {marked}
                     </p>
                 );
             })}
         </div>
+    );
+}
+
+/** How long a cited row stays marked. */
+const CITED_MS = 4000;
+
+/** The text with the cited part, given in UTF-16 units of the raw line, wrapped in a mark. */
+function markPart(body: string, start: number | null, end: number | null, offset: number) {
+    if (start === null || end === null) return body;
+    const from = Math.max(0, Math.min(body.length, start - offset));
+    const to = Math.max(from, Math.min(body.length, end - offset));
+    if (to <= from || (from === 0 && to === body.length)) return body;
+    return (
+        <>
+            {body.slice(0, from)}
+            <mark data-testid="transcript-mark" className="rounded-sm bg-primary/15 px-0.5 text-foreground">
+                {body.slice(from, to)}
+            </mark>
+            {body.slice(to)}
+        </>
     );
 }
 

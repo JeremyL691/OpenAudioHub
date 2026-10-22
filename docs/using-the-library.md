@@ -12,6 +12,7 @@ This page covers the dashboard, the library and its collections, starring, searc
 - [Merge recordings](#merge-recordings)
 - [Upload audio](#upload-audio)
 - [A recording](#a-recording)
+- [Ask AI about a recording](#ask-ai-about-a-recording)
 - [Rename and delete](#rename-and-delete)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 
@@ -95,6 +96,23 @@ The recording page shows the title, the audio player, the transcript and the sum
 - **Actions.** The **Recording actions** menu holds **Transcribe recording**, **Re-transcribe recording**, **Transcribe in browser**, **Summarize**, **Star**, **Download audio**, **Delete recording**, and the export items. Export items save the transcript as JSON or TXT, and the summary as TXT or Markdown.
 
 Transcription and summaries need an AI provider, or you can transcribe in the browser. See [AI providers](providers.md).
+
+## Ask AI about a recording
+
+A recording with a transcript can be asked about. Choose **Ask AI** in its header to open the full view with the chat panel beside the recording on the same plane.
+
+- Ask in your own words, then press Enter. Shift+Enter starts a new line.
+- The answer arrives as it is written. **Stop answer** ends it and keeps the part already written.
+- An empty chat suggests a few questions, such as a summary or the action items. Choose one to ask it.
+- Answers cite the transcript with small numbered badges in the text. The first source an answer cites is 1, and the same source keeps its number. Hovering a badge shows its time, speaker and words. **Sources** under the answer lists them all.
+- Selecting a badge or a source marks the exact transcript rows it came from and plays from the start of the first one. When the transcript has no timings, the cited line is marked and the player stays put.
+- The chip under the question box shows the model in use. Choose it to pick the provider, search its models or type a model id, and choose a thinking level. The choice applies to the next question and is remembered for that recording. It does not change the provider or prompt used for summaries.
+- A thinking level asks the model to think for longer. The levels run from minimal to max. If the model does not offer the level you chose, the closest higher level is used; if it offers none above it, its highest level is used. If the app does not know which levels a model offers, it sends none and says so.
+- A long recording is answered from the passages a question needs. A question about the whole recording, such as its decisions or every action item, reads the whole transcript first. The answer says when it read only part of it.
+- **New chat** removes the conversation for that recording, after asking. The audio, transcript and summary are kept.
+- Transcribing the recording again keeps the conversation for reading. Later questions use the new transcript. An older answer keeps its text, and its sources no longer jump into the transcript.
+
+Nothing is sent to a provider until you ask a question. A question sends the transcript passages it needs and the recent conversation with the same transcript, and the panel says so before a different provider is used.
 
 ## Rename and delete
 

@@ -131,16 +131,16 @@
         "other": "{count} 件の録音"
     },
     "minutesAgo": {
-        "one": "{_count} 分前",
-        "other": "{_count} 分前"
+        "one": "{count} 分前",
+        "other": "{count} 分前"
     },
     "hoursAgo": {
-        "one": "{_count} 時間前",
-        "other": "{_count} 時間前"
+        "one": "{count} 時間前",
+        "other": "{count} 時間前"
     },
     "daysAgo": {
-        "one": "{_count} 日前",
-        "other": "{_count} 日前"
+        "one": "{count} 日前",
+        "other": "{count} 日前"
     },
     "deleting": "削除中…",
     "rowActions": "行の操作",

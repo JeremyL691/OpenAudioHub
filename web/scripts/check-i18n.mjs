@@ -68,6 +68,12 @@ for (const namespace of referenceNamespaces) {
             continue;
         }
         const expected = placeholders(english);
+        if (expected.some((p) => p.startsWith("_"))) {
+            problems.push(`${namespace}: ${key} has placeholder with leading underscore: {${expected.join(", ")}}`);
+        }
+        if ((key.endsWith(".one") || key.endsWith(".other")) && !expected.includes("count")) {
+            problems.push(`${namespace}: plural key ${key} must include {count} placeholder`);
+        }
         for (const language of languagesFound) {
             if (language === REFERENCE) continue;
             let catalog;

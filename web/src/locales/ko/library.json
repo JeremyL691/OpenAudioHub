@@ -131,16 +131,16 @@
         "other": "녹음 {count}개"
     },
     "minutesAgo": {
-        "one": "{_count}분 전",
-        "other": "{_count}분 전"
+        "one": "{count}분 전",
+        "other": "{count}분 전"
     },
     "hoursAgo": {
-        "one": "{_count}시간 전",
-        "other": "{_count}시간 전"
+        "one": "{count}시간 전",
+        "other": "{count}시간 전"
     },
     "daysAgo": {
-        "one": "{_count}일 전",
-        "other": "{_count}일 전"
+        "one": "{count}일 전",
+        "other": "{count}일 전"
     },
     "deleting": "삭제 중…",
     "rowActions": "행 작업",

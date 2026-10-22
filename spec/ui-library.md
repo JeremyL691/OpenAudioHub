@@ -294,6 +294,7 @@ belong to another account, return a not-found page (status 404).
 | Title | heading level 1 holding a button "Rename <name>" | none | Inline rename, as in 1.09. |
 | Meta line | text | none | Date, duration, source. |
 | Star | button "Star" / "Unstar" | `recording-star` | As in 1.11. |
+| Ask AI | button "Ask AI", pressed while the chat is open | `recording-ask-ai` | Opens the chat (2.6). The button stays available when the recording has no transcript, so a chat already written stays readable. |
 | Actions | button "Recording actions" | none | Opens the actions menu (2.2). |
 
 ### 2.2 Actions menu
@@ -428,7 +429,29 @@ Success: `DELETE /api/recordings/{id}`, toast "Recording deleted", navigation to
 Shows the recording's fields: name, recorded time, duration, file size, source and
 device. Read-only.
 
-### 2.9 Phone layout of the detail page
+### 2.9 Ask AI
+
+The recording chat is described in `recording-chat.md`; this section covers only where it appears.
+
+- In the library preview pane, the sections tabs strictly contain "Transcript", "Summary", and "Details". Clicking "Ask AI" in the header navigates to the recording's full view (`/recordings/{id}?chat=1`), moving the recording list aside and opening the Ask AI chat panel immediately beside the transcript on the same plane.
+- In the full view (`/recordings/{id}`), the Back button returns to the library with the recording selected.
+- On wide full views (recording view at least 860px wide), the chat displays in a side-by-side split column on the exact same plane, 420px to 500px wide, separated by a clean vertical divider (`recording-chat-dock`). It is not an overlay or floating modal. Closing the chat smoothly returns the recording view to full width, and restores the side-by-side transcript and summary layout on viewports 1440px and wider.
+- On narrow full views (recording view below 860px), chat displays inline occupying the full view.
+- With the chat open in split view, the transcript, summary and details remain available as tabs in the left column.
+- The panel has `data-testid="recording-chat"`. Its message list has `chat-messages`, each turn `chat-turn`, its source list `chat-citations` with one `chat-citation` per cited source, the composer `chat-send`, the stop button `chat-stop`, the model menu `chat-model-picker` and the new chat button `chat-clear`.
+- The header shows the title and the provider and model in use. "New chat" (`chat-clear`) asks first, in a dialog whose confirm button is `chat-clear-confirm`.
+- An empty chat offers a few suggested questions (`chat-suggestion`). Choosing one sends it.
+- The model menu (`chat-model-picker`) is a chip under the question box. It opens a popover with the saved providers, a searchable list of the provider's models, an entry that uses a typed model id as is, and the thinking levels as a radio group named "Thinking level". Only the levels the chosen model takes are offered. When the model's levels are unknown, or it takes none, the popover says so and offers none.
+- Closing the panel or leaving the page does not stop an answer. Only "Stop answer" does.
+- Citations cited in the answer text are rendered as numbered badges (`chat-citation-link`): the first source an answer cites is 1, and a repeated source keeps its number. The raw `src_` marker is never shown. Neighbouring badges read as one group, and a marker that names no checked source is dropped.
+- A badge names its moment and its words for a screen reader, and shows them on hover.
+- The source list under an answer is folded behind "Sources" (`chat-sources-toggle`) with the count. Open, it (`chat-citations`) uses the same numbers as the badges, and each row shows the time, the speaker and the cited words.
+- Choosing a badge or a source row marks exactly the transcript rows the citation names (`data-cited="true"`) for 4 seconds, scrolls them into view, and seeks the audio player to the first row's start. A transcript without timings marks the cited line, and the cited sentence within it. An answer from an older transcript keeps its text, and choosing one of its sources says the transcript has changed. On narrow views, choosing a citation switches to the transcript tab.
+- An answer read from only part of a long transcript says so under the answer (`chat-partial`).
+- Hovering an answer shows copy and regenerate actions. The question box grows with its text, and the send button and the model chip share the row under it.
+- The panel, its messages, and the choices at its bottom are translated into every interface language, like the rest of the page.
+
+### 2.10 Phone layout of the detail page
 
 Below 1024 the header, player and sections stack. The player is not docked. The
 sections are tabs.
