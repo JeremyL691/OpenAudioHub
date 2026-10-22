@@ -19,9 +19,9 @@ Unless a row says otherwise, a page path returns the same result signed in or ou
 
 | Method | Path | Auth | Result |
 |---|---|---|---|
-| GET | `/` | none | Signed out: 200 app shell (landing page). Signed in, or desktop app: 307 to `/dashboard` |
-| GET | `/login`, `/register`, `/forgot-password`, `/reset-password` | none | Signed out: 200 app shell. Signed in: 307 to `/dashboard` |
-| GET | `/suspended` | session | Signed out: 307 to `/login`. Signed in, account active: 307 to `/recordings`. Suspended account: 200 app shell |
+| GET | `/` | none | Multi-account, signed out: 200 app shell (landing page). Signed in, or desktop app: 307 to `/dashboard`. Single-account server: 307 to `/dashboard`, with a session cookie |
+| GET | `/login`, `/register`, `/forgot-password`, `/reset-password` | none | Multi-account, signed out: 200 app shell. Signed in: 307 to `/dashboard`. Single-account server: 307 to `/dashboard`, with a session cookie |
+| GET | `/suspended` | session | Signed out: 307 to `/login`. Signed in, account active: 307 to `/recordings`. Suspended account: 200 app shell. Single-account server, no session: 307 to `/dashboard`, with a session cookie |
 | GET | `/dashboard` | session | Signed out: 307 to `/login`. Suspended: 307 to `/suspended`. Active: 200 app shell, or 307 to a settings section (see "Redirects") |
 | GET | `/recordings` | session | As `/dashboard` |
 | GET | `/recordings/{id}` | session | Signed out: 307 to `/login`. Suspended: 307 to `/suspended`. Active, own recording: 200 app shell. Otherwise 404 not-found page |
@@ -34,6 +34,8 @@ Unless a row says otherwise, a page path returns the same result signed in or ou
 | GET | static files (see "Static files") | none | 200 file |
 | any | any other path | any | 404 HTML not-found page |
 | any | `/api/...` with no route | any | 404 JSON `{ "error": "Not found", "code": "NOT_FOUND" }` |
+
+On a single-account server (the default, see [Single-account mode](auth.md#single-account-mode)), a page load without a session gets a session cookie in its `307`. The root, auth and `/suspended` pages go to `/dashboard`. App pages go back to the same path and query. The landing page is shown only with `OAH_MULTI_USER=true`.
 
 ## Common response rules
 
@@ -71,7 +73,7 @@ Auth: none. Status `200`, `Content-Type: application/json`:
 
 ## Redirects
 
-Server-side redirects. All are `307` with a `Location` path.
+Server-side redirects. All are `307` with a `Location` path. On a single-account server a page load without a session is signed in instead, so the rules below that send a signed-out visitor to `/login` do not apply there (see [Single-account mode](auth.md#single-account-mode)).
 
 | From | Condition | To |
 |---|---|---|
@@ -210,6 +212,7 @@ These pages are part of the web app. The server returns the app shell for them.
 - Footer: license link, source link and "Docs" link.
 - The landing page is replaced by `/dashboard` in the browser when the session is active or
   the app runs as the desktop app.
+- The landing page is shown only with `OAH_MULTI_USER=true`. A single-account server sends every `/` load to `/dashboard`.
 
 The copy is in `web/src/pages/public/landing.tsx`.
 

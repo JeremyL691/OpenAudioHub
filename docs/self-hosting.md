@@ -54,7 +54,7 @@ Keep `.env` safe. It holds `ENCRYPTION_KEY`. Without that key, the encrypted tit
 - The image is `ghcr.io/jeremyl691/openaudiohub`. The tag is set by `OPENAUDIOHUB_VERSION` in `.env`. If you do not set it, the tag is `latest`. Pin a version number for production.
 - The port is published as `127.0.0.1:3000:3000`. Only programs on the same machine can reach it. Your reverse proxy must run on that machine.
 - The volume `data` is mounted at `/data`. The compose project is named `openaudiohub`, so Docker names the volume `openaudiohub_data`. Run `docker volume ls` to check the name.
-- `compose.yml` passes five variables into the container: `ENCRYPTION_KEY`, `APP_URL`, `RATE_LIMIT_TRUST_PROXY_HEADERS`, `DISABLE_REGISTRATION` and `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`. To set any other variable, add it under `environment:` in `compose.yml`, or set it on the image. The full list is in [Environment variables](environment-variables.md).
+- `compose.yml` passes six variables into the container: `ENCRYPTION_KEY`, `APP_URL`, `RATE_LIMIT_TRUST_PROXY_HEADERS`, `DISABLE_REGISTRATION`, `OAH_MULTI_USER` and `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`. To set any other variable, add it under `environment:` in `compose.yml`, or set it on the image. The full list is in [Environment variables](environment-variables.md).
 
 To build the image yourself, run this from the repository root:
 
@@ -69,7 +69,8 @@ Then tag it with the name in `compose.yml`, or change the `image:` line to your 
 Every setting the server reads is in [Environment variables](environment-variables.md). The ones most people change are:
 
 - [`APP_URL`](environment-variables.md#required-and-common): the public address.
-- [`DISABLE_REGISTRATION`](environment-variables.md#required-and-common): set to `true` once your account exists.
+- [`OAH_MULTI_USER`](environment-variables.md#required-and-common): set to `true` for separate accounts with sign-in. The default is one local account.
+- [`DISABLE_REGISTRATION`](environment-variables.md#required-and-common): with `OAH_MULTI_USER=true`, set to `true` to stop new sign-ups.
 - [`DEFAULT_STORAGE_TYPE`](environment-variables.md#storage) and the `S3_*` variables: store audio in an S3-compatible bucket. See [S3-compatible storage](storage-s3.md).
 - `SMTP_*` variables: send email for notifications and password reset. See [Email (SMTP) setup](email-smtp.md).
 
@@ -110,11 +111,13 @@ Keep these points in mind:
 
 ## Accounts
 
-Open `APP_URL/register` in a browser to create the first account. Then open `APP_URL/login` to sign in.
+A new server has one local account. Open `APP_URL` in a browser, and the dashboard opens with no sign-in. Anyone who can reach the port uses that account, so keep the port private or put a reverse proxy with its own authentication in front (see [Reverse proxy](#reverse-proxy)).
 
-If you want only one account on the server, create it first. Then set `DISABLE_REGISTRATION=true` in `.env`, add the variable to `compose.yml` as described in [The compose file](#the-compose-file), and run `docker compose up -d` again. With registration off, the sign-in page hides the link to sign-up, and `/register` redirects to sign-in.
+For separate accounts with sign-in, set `OAH_MULTI_USER=true` in `.env` and run `docker compose up -d` again. Then open `APP_URL/register` in a browser to create the first account, and `APP_URL/login` to sign in.
 
-If you forget your password, use the **Forgot password?** link on the sign-in page. That link sends an email, so it works only when SMTP is set up. See [Email (SMTP) setup](email-smtp.md). Without email, use [Reset a password](#reset-a-password).
+If you want only the accounts you created to use the server, create them first. Then set `DISABLE_REGISTRATION=true` in `.env` and run `docker compose up -d` again. With registration off, the sign-in page hides the link to sign-up, and `/register` redirects to sign-in. `DISABLE_REGISTRATION` has no effect unless `OAH_MULTI_USER=true` is set.
+
+If you forget your password on a server with `OAH_MULTI_USER=true`, use the **Forgot password?** link on the sign-in page. That link sends an email, so it works only when SMTP is set up. See [Email (SMTP) setup](email-smtp.md). Without email, use [Reset a password](#reset-a-password).
 
 ## Backups
 

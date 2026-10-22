@@ -138,7 +138,7 @@ docker compose up -d
 curl -fsS http://127.0.0.1:3000/api/health
 ```
 
-Then open `http://localhost:3000/register` and create your account. Keep the `ENCRYPTION_KEY` in `.env` safe: without it, the encrypted data cannot be read. The container listens on `127.0.0.1` only. See the [self-hosting guide](docs/self-hosting.md) for the reverse proxy, backups and upgrades.
+Then open `http://localhost:3000`. It goes straight to the dashboard, which uses one local account. For separate accounts with sign-in, set `OAH_MULTI_USER=true` in `.env` and run `docker compose up -d` again. Keep the `ENCRYPTION_KEY` in `.env` safe: without it, the encrypted data cannot be read. The container listens on `127.0.0.1` only. See the [self-hosting guide](docs/self-hosting.md) for the reverse proxy, backups and upgrades.
 
 ## Documentation
 
