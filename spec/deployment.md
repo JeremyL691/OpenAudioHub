@@ -41,7 +41,7 @@ Command forms of the entrypoint:
 
 - Image: `ghcr.io/jeremyl691/openaudiohub:${OPENAUDIOHUB_VERSION:-latest}`.
 - `restart: unless-stopped`.
-- Environment: `ENCRYPTION_KEY` (required), `APP_URL` (default `http://localhost:3000`), `RATE_LIMIT_TRUST_PROXY_HEADERS` (default `true`), `DISABLE_REGISTRATION` (default `false`), `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` (default `true`).
+- Environment: `ENCRYPTION_KEY` (required), `APP_URL` (default `http://localhost:3000`), `RATE_LIMIT_TRUST_PROXY_HEADERS` (default `true`), `DISABLE_REGISTRATION` (default `false`), `OAH_MULTI_USER` (default `false`), `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` (default `true`).
 - Port: `127.0.0.1:3000:3000`. The server is reachable from the host only through loopback, so a reverse proxy on the host is what serves clients. That is why the Compose defaults trust the proxy's headers and refuse private webhook targets.
 - Volume: `data:/data`.
 
@@ -101,7 +101,8 @@ When `API_TOKEN_HASH_SECRET` is not set, a stable value is derived from `ENCRYPT
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DISABLE_REGISTRATION` | `false` | `true` refuses new accounts and hides the sign-up page. |
+| `OAH_MULTI_USER` | `false` | `true` turns on separate accounts, with the landing page, sign-up, sign-in and password reset. `false` runs one local account that opens without sign-in (see `auth.md`). |
+| `DISABLE_REGISTRATION` | `false` | `true` refuses new accounts and hides the sign-up page. It matters only with `OAH_MULTI_USER=true`. |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` takes the client address from `CF-Connecting-IP`, `X-Real-IP` or `X-Forwarded-For`. Set it only behind a proxy that sets these headers. When `false` the address is the connection's, so every client behind a proxy shares one budget (see `auth.md`). |
 
 ### 4.6 Email (SMTP)
@@ -149,11 +150,11 @@ Recording uploads are refused above 500 MiB per file.
 
 ### 4.10 Desktop app only
 
-These settings are read only by the desktop app's server. A web or container deployment does not set them.
+The desktop app builds its server configuration itself, so the app does not need these settings. A web or container deployment does not set them. Setting `OAH_DESKTOP=true` with a launch secret runs the plain server in desktop mode.
 
 | Variable | Meaning |
 |---|---|
-| `OAH_DESKTOP` | `true` starts the server in desktop mode. |
+| `OAH_DESKTOP` | `true` starts the plain server in desktop mode. The desktop app does not set it. |
 | `OAH_DESKTOP_LAUNCH_SECRET` | Launch secret of at least 32 characters. Required in desktop mode. |
 | `OAH_DESKTOP_USER_ID` | Account the desktop app signs in to. Optional. |
 
@@ -204,9 +205,12 @@ A reverse proxy in front of the container must:
 - terminate TLS, when the public address is `https://`;
 - forward requests to `127.0.0.1:3000` on the host, or to the container's port;
 - keep the public origin equal to `APP_URL`, because cookie-carrying writes must send that origin (see `auth.md`);
+- pass the public host name in the `Host` header. With `RATE_LIMIT_TRUST_PROXY_HEADERS=true`, the server reads `X-Forwarded-Host` instead when that header is present, so the proxy must set it to the public host name in that case. A single-account server opens its account only for that host name (see `auth.md`);
 - allow request bodies up to 500 MiB for recording uploads;
 - pass `Range` requests and response bodies through unchanged, because audio playback uses byte ranges;
 - set the client address header (`CF-Connecting-IP`, `X-Real-IP` or `X-Forwarded-For`) only when `RATE_LIMIT_TRUST_PROXY_HEADERS=true`, and only when the proxy sets it itself.
+
+A server that other people can reach over a network needs the proxy to authenticate them. A single-account server has no sign-in of its own, so anyone who reaches the server uses the account. Put a proxy with its own authentication in front, such as single sign-on or HTTP basic authentication.
 
 The server sends these headers on every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and a Content-Security-Policy that allows only the app's own files and the model hub used for in-browser transcription. When `APP_URL` starts with `https://`, it also sends `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
 
@@ -226,6 +230,8 @@ OPENAUDIOHUB_VERSION=<version> docker compose up -d
 - The encryption key must stay the same across upgrades.
 
 ### 9.2 Account password reset from the command line
+
+This command applies to multi-account servers (`OAH_MULTI_USER=true`). A single-account server has no sign-in to reset.
 
 ```sh
 docker compose exec app oah-server reset-password <email>

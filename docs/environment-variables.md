@@ -28,7 +28,8 @@ Values marked **secret** must not appear in logs, screenshots or support message
 | `ENCRYPTION_KEY` | none. Required. | **Secret.** 64 hex characters (32 bytes). Create it with `openssl rand -hex 32`. Encrypted fields use it. Do not change it once you have data. See [Encryption at rest](encryption-at-rest.md). |
 | `API_TOKEN_HASH_SECRET` | Derived from `ENCRYPTION_KEY` when not set. | **Secret.** At least 32 characters. It keys the hashes of personal API keys. Set it yourself if you want to control the value. Changing it invalidates every API key. |
 | `APP_URL` | `http://localhost:3000` | The public address people open in the browser, with scheme and port, for example `https://audio.example.com`. Trailing slashes are removed. When it starts with `https://`, the session cookie gets the `Secure` flag. Used in email links and webhook links too. |
-| `DISABLE_REGISTRATION` | `false` | `true` hides and blocks sign-up. Create your account first if you want only you to use the server. |
+| `OAH_MULTI_USER` | `false` | `true` turns on separate accounts, with the landing page, sign-up, sign-in and password reset. With `false` the server runs one local account that opens without sign-in. See [Single-account mode](../spec/auth.md#single-account-mode). |
+| `DISABLE_REGISTRATION` | `false` | `true` hides and blocks sign-up. It applies only with `OAH_MULTI_USER=true`. Create your accounts first if you want only them to use the server. |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | `true` makes the server take the client address from `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for`. Turn it on only behind a proxy that sets these headers. When it is `false` the address is the one the connection came from, so every visitor behind a proxy shares one budget. See [Reverse proxy](self-hosting.md#reverse-proxy). |
 
 ## Address and files
@@ -116,7 +117,7 @@ Do not set these on a server.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OAH_DESKTOP` | `false` | Starts the server in the mode the Mac app uses: local only, one account, registration off. |
+| `OAH_DESKTOP` | `false` | Starts the plain server in desktop mode: one account, registration off, and sign-in with the launch secret. The Mac app builds this mode itself and does not set the variable. |
 | `OAH_DESKTOP_LAUNCH_SECRET` | none | The one-time code the Mac app uses to open its window. At least 32 characters. |
 | `OAH_DESKTOP_USER_ID` | none | The local account the Mac app signs in to. |
 | `OAH_WEB_DIR` | none | Serves the web app from this folder instead of the copy built into the server. |
