@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
+import { desktopApp } from "@/lib/desktop-app";
+import { usePublicConfig } from "@/lib/public-config";
 import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { AuthField, AuthInput, AuthLayout, AuthLink, AuthNotice } from "./auth-layout";
@@ -19,7 +21,13 @@ export default function Page() {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [pending, setPending] = useState(false);
+    const config = usePublicConfig();
+    const local = config?.singleAccount === true && desktopApp() === null;
+    useEffect(() => {
+        if (local) window.location.replace("/dashboard");
+    }, [local]);
 
+    if (local) return null;
     if (session.status === "authenticated") return <Navigate to="/dashboard" replace />;
 
     if (!token || error) {

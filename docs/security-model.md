@@ -18,9 +18,11 @@ This page explains how OpenAudioHub protects accounts and data, where the trust 
 
 ## Accounts and passwords
 
+- A new server has one local account, and the dashboard opens without sign-in. Set `OAH_MULTI_USER=true` for separate accounts with sign-in.
+- On a single-account server, the local account opens only for requests whose `Host` header matches `APP_URL`. This blocks DNS rebinding from other sites.
 - Passwords must be 8 characters or more, and at most 256 bytes.
 - Passwords are hashed with Argon2id. The server never stores or shows the password.
-- Sign-up can be turned off with `DISABLE_REGISTRATION=true`. The sign-up page then redirects to sign-in, and the sign-up request is refused.
+- With `OAH_MULTI_USER=true`, sign-up can be turned off with `DISABLE_REGISTRATION=true`. The sign-up page then redirects to sign-in, and the sign-up request is refused. Sign-up is refused on a single-account server.
 - Password reset by email sends a link that expires after 1 hour and works once. The link's return address must be a path on the same site.
 - The `reset-password` command, run on the server, sets a new password and signs out every session of the account.
 - A suspended account is refused on every request, including its API keys.
@@ -120,7 +122,8 @@ Some of your data leaves the server by design:
 - Use HTTPS for the public address, and keep the server port closed to the internet except through the proxy.
 - Keep `APP_URL` exact, so the origin check works.
 - Keep `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` at its default on a server that other people can use. Set it to `false` only to deliver to a machine on your own network.
-- Turn off sign-up when only you should use the server.
+- Set `OAH_MULTI_USER=true` only when separate accounts should sign in. Turn off sign-up when only your accounts should use the server.
+- On a single-account server, put a reverse proxy with its own authentication in front before you open the server to a network. Anyone who reaches the port uses the account.
 - Protect backups, exports and the storage folder, because they are not encrypted.
 - Keep the server and the image up to date.
 

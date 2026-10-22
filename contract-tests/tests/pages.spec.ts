@@ -235,10 +235,6 @@ test("registration disabled hides the create account button @skip", async () => 
     test.skip(true, "UNVERIFIED: needs DISABLE_REGISTRATION=true on the target");
 });
 
-test("desktop mode always redirects the landing page to the dashboard @skip", async () => {
-    test.skip(true, "UNVERIFIED: needs the desktop build");
-});
-
 test("pages and API answers send security headers", async () => {
     const api = await anonymousContext();
     for (const path of ["/login", "/api/health"]) {

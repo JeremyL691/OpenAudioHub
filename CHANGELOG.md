@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- A self-hosted server now opens straight to the dashboard with one local account, as the Mac app does. There is no landing page, sign-up or sign-in.
+- An upgraded server keeps using its earliest account.
+- Set `OAH_MULTI_USER=true` to keep separate accounts with sign-in.
+
 ### Fixed
 
 - A request that reads and then writes no longer fails with "database is locked" when another request commits in between. Every transaction takes the write lock when it starts, so the request waits for a busy writer, up to the busy timeout, instead of failing at once.

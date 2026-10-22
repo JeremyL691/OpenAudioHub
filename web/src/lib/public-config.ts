@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 
 /** Server facts the signed-out pages need (`GET /api/auth/config`). */
-export type PublicConfig = { registrationEnabled: boolean; passwordResetEnabled: boolean };
+export type PublicConfig = { registrationEnabled: boolean; passwordResetEnabled: boolean; singleAccount: boolean };
 
 export interface PublicConfigState {
     /** The server's public config, or null until it has loaded. */

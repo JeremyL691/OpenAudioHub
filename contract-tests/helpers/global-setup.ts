@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { request } from "@playwright/test";
 import {
@@ -14,6 +14,12 @@ import {
 // sign-in is rate limited per email and many runs share one server.
 export default async function globalSetup(): Promise<void> {
     const baseURL = process.env.OAH_BASE_URL ?? "http://localhost:3210";
+    if (process.env.OAH_SINGLE_ACCOUNT === "1") {
+        // Single-account mode has no sign-up. The config still reads this file, so it is written empty.
+        mkdirSync(dirname(storageStatePath), { recursive: true });
+        writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+        return;
+    }
     if (existsSync(storageStatePath)) {
         const saved = await request.newContext({
             baseURL,

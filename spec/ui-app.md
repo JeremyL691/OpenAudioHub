@@ -105,6 +105,7 @@ Right side, in order:
 Header row: a circle with the email initial, a title and a subtitle.
 
 - Web: the title is the account email, or "Signed in" when there is none. The subtitle is "Signed in".
+- Single-account server: the title is "OpenAudioHub" and the subtitle is "Local account", as in the desktop app.
 - Desktop app: the title is "OpenAudioHub" and the subtitle is "Local account".
 
 Items, in order:
@@ -120,7 +121,7 @@ Theme group:
 - Three radio items, in this order: "Light", "Dark", "Auto" ("Auto" follows the system). The checked item is the current choice.
 - Choosing a theme keeps the menu open (see section 6).
 
-Footer (web only, not in the desktop app):
+Footer (multi-account web only, not in the desktop app or on a single-account server):
 
 - "Log out" (destructive style). It ends the session and loads `/login` (see `auth.md`).
 
@@ -380,11 +381,11 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 
 ## 9. Desktop app differences
 
-These apply only to the desktop app (see `desktop.md`). The browser build shows none of them.
+These apply to the desktop app (see `desktop.md`) and, where noted, to a single-account server (see `auth.md`). A multi-account browser build shows none of them.
 
-- The account menu title is "OpenAudioHub" and the subtitle is "Local account". There is no "Log out", because the desktop app has one local account and no sign-out.
+- The account menu title is "OpenAudioHub" and the subtitle is "Local account". There is no "Log out", because the desktop app has one local account and no sign-out. A single-account server shows the same header and no "Log out".
 - The Desktop settings section is listed and reachable (see 4.13).
-- The sign-in page is not shown. The window signs in to the local account on start (see `auth.md`).
+- The sign-in page is not shown. The window signs in to the local account on start (see `auth.md`). On a single-account server, `/login` shows "Reconnecting…" and loads `/dashboard`.
 
 ## 10. Accessibility
 

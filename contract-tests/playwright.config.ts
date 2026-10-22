@@ -36,7 +36,7 @@ export default defineConfig({
     projects: [
         {
             name: "contract",
-            testIgnore: ["pipeline/**"],
+            testIgnore: ["pipeline/**", "single-account/**"],
         },
         {
             name: "pipeline",
@@ -44,6 +44,12 @@ export default defineConfig({
             // Speech detection, chunk transcription and the save step take longer than the
             // suite-wide limit, and a slow machine adds to every poll.
             timeout: 180_000,
+        },
+        {
+            // Runs against a server in single-account mode, so it starts with no session.
+            name: "single-account",
+            testMatch: ["single-account/**/*.spec.ts"],
+            use: { storageState: { cookies: [], origins: [] } },
         },
     ],
 });

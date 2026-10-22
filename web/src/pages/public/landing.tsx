@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { usePublicConfig } from "@/lib/public-config";
 import { AudioLines, Bot, FileText, Play, RefreshCw, RotateCcw, type LucideIcon } from "lucide-react";
 import { Link, Navigate } from "react-router";
@@ -47,8 +48,13 @@ export default function Landing() {
     const { t } = useI18n();
     const config = usePublicConfig();
     useDocumentMeta(t("public.landing.documentTitle"), t("public.landing.description"));
+    const local = config?.singleAccount === true && !isDesktopApp();
+    useEffect(() => {
+        if (local) window.location.replace("/dashboard");
+    }, [local]);
 
     if (status === "authenticated" || isDesktopApp()) return <Navigate to="/dashboard" replace />;
+    if (local) return null;
 
     return (
         <div className="flex min-h-svh flex-col bg-background text-foreground">

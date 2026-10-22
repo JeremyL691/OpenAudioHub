@@ -20,6 +20,9 @@ pub struct Config {
     /// Persisted hashing secret for personal API keys. Never returned to clients.
     pub api_token_hash_secret: String,
     pub disable_registration: bool,
+    /// Separate accounts with sign-up and sign-in. Off by default: one local account, as in the
+    /// desktop app.
+    pub multi_user: bool,
     /// Take the client address from proxy headers (only behind a trusted proxy).
     pub trust_proxy_headers: bool,
     pub desktop: Option<Desktop>,
@@ -275,6 +278,7 @@ impl Config {
             field_key,
             api_token_hash_secret,
             disable_registration: flag("DISABLE_REGISTRATION", false)?,
+            multi_user: flag("OAH_MULTI_USER", false)?,
             trust_proxy_headers: flag("RATE_LIMIT_TRUST_PROXY_HEADERS", false)?,
             webhooks_strict: webhook_strictness(
                 var("WEBHOOKS_REQUIRE_PUBLIC_TARGETS").as_deref(),
@@ -311,6 +315,7 @@ impl Config {
             field_key,
             api_token_hash_secret: api_hash_secret(key_hex, Some(data_dir))?,
             disable_registration: true,
+            multi_user: false,
             trust_proxy_headers: false,
             webhooks_strict: webhook_strictness(
                 var("WEBHOOKS_REQUIRE_PUBLIC_TARGETS").as_deref(),
@@ -328,6 +333,17 @@ impl Config {
             plaud_api_base: var("OAH_PLAUD_API_BASE").map(|v| v.trim_end_matches('/').to_owned()),
             smtp: SmtpConfig::from_env()?,
         })
+    }
+
+    /// True when sign-up is open: separate accounts are on and registration is not turned off.
+    pub fn registration_open(&self) -> bool {
+        self.multi_user && !self.disable_registration && self.desktop.is_none()
+    }
+
+    /// True when a page load without a session signs in the local account. A desktop build
+    /// signs in through its launch secret instead, because any local program can reach its port.
+    pub fn auto_local_session(&self) -> bool {
+        !self.multi_user && self.desktop.is_none()
     }
 
     /// A config for tests: random keys, paths under `dir`.
@@ -348,6 +364,8 @@ impl Config {
             field_key: FieldKey::from_hex(&crate::ids::token_hex(32)).expect("valid test key"),
             api_token_hash_secret: crate::ids::token_hex(32),
             disable_registration: false,
+            // Most tests work with several accounts; single-account tests turn this off.
+            multi_user: true,
             trust_proxy_headers: true,
             // Tests deliver webhooks to a local receiver.
             webhooks_strict: false,

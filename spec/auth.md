@@ -8,7 +8,7 @@ Account endpoints live under `/api/auth/*`. The desktop exchange lives under `/a
 
 | Topic | Rule |
 |---|---|
-| Accounts | Email and password. Anyone can create an account unless registration is disabled. |
+| Accounts | Email and password. A server runs one local account by default. With `OAH_MULTI_USER=true`, anyone can create an account unless registration is disabled. |
 | Email verification | None. New accounts are not verified, and no verification email is sent. New accounts can sign in at once. |
 | Session | Cookie `oah_session`, server-side lifetime 7 days, `HttpOnly`. See [Session cookie](#session-cookie). |
 | Sign-out | Deletes the session and clears the cookie. |
@@ -16,6 +16,7 @@ Account endpoints live under `/api/auth/*`. The desktop exchange lives under `/a
 | Rate limits | Fixed 60-second windows per client address on auth routes, and per email on reset requests. See [Rate limits](#rate-limits). |
 | Origin | Requests that carry the session cookie and change data must send an `Origin` header equal to `APP_URL`. See [Origin checks](#origin-checks). |
 | Desktop | One local account, signed in through a launch secret. Sign-up and sign-out are not offered. See [Desktop mode](#desktop-mode). |
+| Single-account server | The default for a self-hosted server. One local account, opened without sign-in. A server with `OAH_MULTI_USER=true` is the multi-account mode instead. See [Single-account mode](#single-account-mode). |
 | Administrator | No administrator role. The only account management is the `oah-server reset-password` command. |
 
 ## Error shape
@@ -47,7 +48,7 @@ Common codes used by the auth module:
 |---|---|
 | Name | `oah_session`, on plain HTTP and HTTPS alike. |
 | Value | Random token of 32 bytes, written as 64 hex characters. The server stores only its SHA-256 hash. |
-| Set by | Sign-up, sign-in, `POST` and `GET /api/desktop/session`. |
+| Set by | Sign-up, sign-in, `POST` and `GET /api/desktop/session`, and a page load on a single-account server. |
 | Attributes | `Path=/`, `Max-Age=604800` (7 days), `HttpOnly`, `SameSite=Lax`. `Secure` when `APP_URL` starts with `https://`. No `Domain`, so the cookie is host-only. |
 | Server-side lifetime | 7 days from creation. A session that was last extended more than 24 hours ago is extended to 7 days from the current request. The extension updates the server only, and the cookie is not sent again. |
 | Cleared by | Sign-out, which sends `oah_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`. |
@@ -67,7 +68,7 @@ Auth: none. An `Origin` check applies only if the request carries a session cook
 Checks run in this order:
 
 1. Rate limit: 5 requests per 60 seconds per client address (see [Rate limits](#rate-limits)).
-2. Registration disabled: refused with `403 REGISTRATION_DISABLED` when `DISABLE_REGISTRATION=true` or the server runs in desktop mode.
+2. Registration disabled: refused with `403 REGISTRATION_DISABLED` unless `OAH_MULTI_USER=true` and `DISABLE_REGISTRATION` is not `true`. The desktop app and a single-account server never allow sign-up.
 3. `name` and `email`: `name` must be non-empty after trimming. `email` is trimmed and lowercased, and must look like an address: a non-empty local part, a domain containing a dot that does not start or end with a dot, no whitespace, at most 254 characters.
 4. `password`: at least 8 characters, and at most 256 bytes.
 5. Uniqueness of `email`.
@@ -98,7 +99,7 @@ Errors:
 
 | Status | Code | When |
 |---|---|---|
-| 403 | `REGISTRATION_DISABLED` | Registration is disabled on this server, or desktop mode. Message `Registration is disabled`. |
+| 403 | `REGISTRATION_DISABLED` | Single-account mode, `DISABLE_REGISTRATION=true`, or desktop mode. Message `Registration is disabled`. |
 | 400 | `VALIDATION_ERROR` | `name` is empty, or `email` is missing or not an address. Message `Name and a valid email are required`. |
 | 400 | `PASSWORD_TOO_SHORT` | `password` has fewer than 8 characters. |
 | 400 | `PASSWORD_TOO_LONG` | `password` is more than 256 bytes. |
@@ -194,10 +195,11 @@ Errors: `403 INVALID_ORIGIN` or `MISSING_OR_NULL_ORIGIN` when the request carrie
 Auth: none. Facts the sign-in pages need.
 
 ```json
-{ "registrationEnabled": true, "passwordResetEnabled": false }
+{ "registrationEnabled": true, "passwordResetEnabled": false, "singleAccount": false }
 ```
 
-- `registrationEnabled` is `false` when `DISABLE_REGISTRATION=true` or desktop mode is on.
+- `registrationEnabled` is `false` when `DISABLE_REGISTRATION=true`, in single-account mode, or in desktop mode.
+- `singleAccount` is `true` in the desktop app and on a server in single-account mode. It is `false` with `OAH_MULTI_USER=true`.
 - `passwordResetEnabled` is `true` when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` are all set.
 
 ### GET and POST /api/desktop/session
@@ -286,16 +288,30 @@ The web app's own requests carry the app origin, so they pass.
 
 ## Desktop mode
 
-Desktop mode is set by the desktop app's server process (`OAH_DESKTOP=true`, with a launch secret of at least 32 characters in `OAH_DESKTOP_LAUNCH_SECRET`). In desktop mode:
+The desktop app runs its server in desktop mode. The app builds that configuration itself (`Config::desktop`). The plain server enters desktop mode with `OAH_DESKTOP=true` and a launch secret of at least 32 characters in `OAH_DESKTOP_LAUNCH_SECRET`. In desktop mode:
 
-- Sign-up is refused with `403 REGISTRATION_DISABLED`. `GET /api/auth/config` reports `registrationEnabled: false`.
+- Sign-up is refused with `403 REGISTRATION_DISABLED`. `GET /api/auth/config` reports `registrationEnabled: false` and `singleAccount: true`.
 - The login page shows only the title `Reconnecting…` and the subtitle `Signing in to your local account.`. It has no form. It calls the desktop shell's `reconnect()`. On success it opens `/dashboard`. On failure it shows `OpenAudioHub could not sign this window in. Quit and reopen the app.`
 - The account menu shows no sign-out.
 - Session and user come from the desktop session routes described above.
 
+## Single-account mode
+
+A server runs in single-account mode unless `OAH_MULTI_USER=true` is set. It has one local account, as the desktop app does. The account opens without sign-in, so anyone who can reach the port uses it.
+
+- The local account is the earliest-created user. When the database has no user, a new account is created with email `local@openaudiohub.localhost`, name `Local user`, `emailVerified: true`, and no password. Concurrent first requests create only one account.
+- An existing server that upgrades keeps using its earliest account. Only `OAH_MULTI_USER=true` changes that.
+- Sign-up is refused with `403 REGISTRATION_DISABLED`. `GET /api/auth/config` reports `singleAccount: true` and `registrationEnabled: false`.
+- The landing page is not shown. A page load without a session on `/`, `/login`, `/register`, `/forgot-password`, `/reset-password` or `/suspended` gets `307` to `/dashboard`. A page load without a session on `/dashboard`, `/recordings`, `/recordings/{id}` or `/settings/...` gets `307` back to the same path and query. Each of these answers sets the session cookie (see [Session cookie](#session-cookie)).
+- The redirect applies only when the request's `Host` equals the host of `APP_URL`. With `RATE_LIMIT_TRUST_PROXY_HEADERS=true`, `X-Forwarded-Host` is used instead of `Host` when it is present. Any other host name gets `307` to `APP_URL`, with the same path and query, and no session. This blocks DNS rebinding and sends a visitor who typed `127.0.0.1` to the configured address.
+- API requests are not signed in automatically. Without the cookie they answer `401 AUTH_SESSION_MISSING`. The sign-in and sign-out endpoints still exist. After a sign-out, the next page load signs in again.
+- In the web app, the account menu shows "Local account" and has no "Log out". The `/login` page shows "Reconnecting…" with the subtitle "Signing in to your local account.", then loads `/dashboard`. If that fails within 10 seconds, it shows "OpenAudioHub could not sign this page in. Reload the page to try again."
+- Anyone who can reach the port uses the account. To open the server to a network, put a reverse proxy with its own authentication in front (see [deployment.md](deployment.md)).
+- With `OAH_MULTI_USER=true`, the server works as a multi-account server. The landing page, sign-up, sign-in, password reset and `DISABLE_REGISTRATION` then apply as described in the rest of this file.
+
 ## Registration and accounts
 
-- Anyone can register through `/api/auth/sign-up/email` unless registration is disabled. Registration is disabled by `DISABLE_REGISTRATION=true` and in desktop mode. See [deployment.md](deployment.md).
+- Sign-up works only with `OAH_MULTI_USER=true`. Then anyone can register through `/api/auth/sign-up/email` unless `DISABLE_REGISTRATION=true` is set. Sign-up is refused in single-account mode and in desktop mode. See [deployment.md](deployment.md).
 - Accounts are not verified. There is no verification email.
 - There is no administrator role. Creation order gives no privileges.
 - No route or command sets or clears the suspension flag. See [Suspended accounts](#suspended-accounts).
@@ -315,7 +331,7 @@ The `/suspended` page says that access is paused and asks the user to contact th
 
 ## Password reset
 
-Password reset by email requires SMTP. Outgoing mail is configured by environment variables (see [deployment.md](deployment.md)).
+Password reset by email requires SMTP. Outgoing mail is configured by environment variables (see [deployment.md](deployment.md)). Password reset pages are not shown on a single-account server (see [Single-account mode](#single-account-mode)).
 
 ### POST /api/auth/request-password-reset
 

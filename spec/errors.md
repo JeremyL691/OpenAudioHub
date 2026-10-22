@@ -38,7 +38,7 @@ The table lists the status each code uses in an error response. A code can use m
 | `MISSING_OR_NULL_ORIGIN` | 403 | A session cookie is present and `Origin` is missing or `null`. |
 | `PASSWORD_TOO_LONG` | 400 | Password is more than 256 bytes. |
 | `PASSWORD_TOO_SHORT` | 400 | Password has fewer than 8 characters. |
-| `REGISTRATION_DISABLED` | 403 | Sign-up is turned off, or the server runs in desktop mode. |
+| `REGISTRATION_DISABLED` | 403 | Sign-up is refused: single-account mode (the default, see `auth.md`), `DISABLE_REGISTRATION=true`, or desktop mode. |
 | `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` | 422 | An account with this email already exists. |
 | `VALIDATION_ERROR` | 400 | A required sign-up, sign-in, or password reset field is missing. |
 
