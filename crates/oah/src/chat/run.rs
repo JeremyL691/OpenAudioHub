@@ -585,7 +585,6 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
     let turn_id = &job.turn_id;
     if outcome.stopped {
         hub.send(super::hub::HubEvent::State(TurnState::Cancelled));
-        hub.send(super::hub::HubEvent::Done);
         // A stop keeps the text written so far and is final, whichever run asks.
         let _ = store::end_run(
             &state.db,
@@ -597,6 +596,8 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             None,
         )
         .await;
+        // `done` follows the write, so a client that reloads on it reads the final turn.
+        hub.send(super::hub::HubEvent::Done);
         return;
     }
     if let Some((code, message)) = outcome.failure {
@@ -606,7 +607,6 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             TurnState::Failed
         };
         hub.send(super::hub::HubEvent::State(name));
-        hub.send(super::hub::HubEvent::Done);
         let _ = store::end_run(
             &state.db,
             key,
@@ -617,12 +617,12 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             Some(&message),
         )
         .await;
+        hub.send(super::hub::HubEvent::Done);
         return;
     }
     // The answer is checked against the units of this revision, so only real lines are cited.
     let citations = verify(&outcome.answer, &job.units);
     hub.send(super::hub::HubEvent::Citations(citations.clone()));
-    hub.send(super::hub::HubEvent::Done);
     let saved = store::finish_unfenced(
         &state.db,
         key,
@@ -649,6 +649,7 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
         )
         .await;
     }
+    hub.send(super::hub::HubEvent::Done);
 }
 
 /// A rough token count. A character of a script written without spaces counts as a token and other

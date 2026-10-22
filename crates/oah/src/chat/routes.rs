@@ -592,6 +592,26 @@ async fn events(
         let version = now_ms();
         if let Some(hub) = active_hub {
             let mut rx = hub.subscribe();
+            // A run that ended before the subscription sent its `done` to nobody: answer from
+            // the saved turn, which is written before `done` is sent.
+            if hub.is_finished() {
+                let v = now_ms();
+                if let Ok(Some(cur)) =
+                    store::turn(&worker.db, &key, &user_id, &id, &turn_id_str).await
+                {
+                    let _ = send(&sender, "snapshot", &snapshot(&cur, v)).await;
+                    if !cur.citations.is_empty() {
+                        let _ = send(
+                            &sender,
+                            "citations",
+                            &json!({ "citations": cur.citations, "version": v }),
+                        )
+                        .await;
+                    }
+                }
+                let _ = send(&sender, "done", &json!({ "version": v })).await;
+                return;
+            }
             let mut current_turn = turn;
             let live_ans = hub.current_answer();
             if !live_ans.is_empty() {
