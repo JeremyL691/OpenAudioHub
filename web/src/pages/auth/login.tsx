@@ -6,7 +6,7 @@ import { refreshSession, useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { AuthField, AuthInput, AuthLayout } from "./auth-layout";
 import { desktopApp } from "@/lib/desktop-app";
-import { usePublicConfig } from "@/lib/public-config";
+import { usePublicConfig, usePublicConfigState } from "@/lib/public-config";
 import { usePasswordResetByEmail } from "./reset-availability";
 import { useI18n } from "@/lib/i18n";
 
@@ -18,8 +18,9 @@ export default function Page() {
 
 /** A single-account server signs the page in by loading "/dashboard"; a multi-account server shows the form. */
 function WebEntry() {
-    const config = usePublicConfig();
-    if (config?.singleAccount === false) return <SignInForm />;
+    const { config, error } = usePublicConfigState();
+    // Without the server's settings (no backend, or the request failed) the form is the safe choice.
+    if (config?.singleAccount === false || (config === null && error !== null)) return <SignInForm />;
     return <LocalSignIn ready={config !== null} />;
 }
 
