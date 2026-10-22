@@ -93,6 +93,7 @@ jobs:
         with:
           node-version: 22
       - run: corepack enable
+      - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile && pnpm build
         working-directory: web
       # The build script pins every source archive, so it is part of the cache key.
