@@ -5,6 +5,7 @@
 //! checkpoints and final write-back.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::broadcast;
 
@@ -25,6 +26,8 @@ pub struct TurnHub {
     pub turn_id: String,
     tx: broadcast::Sender<HubEvent>,
     answer: Mutex<String>,
+    /// Set once `Done` is sent. A late subscriber would never receive it.
+    finished: AtomicBool,
 }
 
 impl TurnHub {
@@ -34,6 +37,7 @@ impl TurnHub {
             turn_id: turn_id.to_owned(),
             tx,
             answer: Mutex::new(String::new()),
+            finished: AtomicBool::new(false),
         }
     }
 
@@ -47,7 +51,15 @@ impl TurnHub {
         {
             answer.push_str(text);
         }
+        if matches!(event, HubEvent::Done) {
+            self.finished.store(true, Ordering::SeqCst);
+        }
         let _ = self.tx.send(event);
+    }
+
+    /// True once the run has sent `Done`, so the saved turn is final.
+    pub fn is_finished(&self) -> bool {
+        self.finished.load(Ordering::SeqCst)
     }
 
     pub fn current_answer(&self) -> String {
