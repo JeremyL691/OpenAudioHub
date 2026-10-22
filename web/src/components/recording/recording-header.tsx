@@ -1,6 +1,6 @@
 import { Fragment, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Download, Ellipsis, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Ellipsis, MessageSquareText, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
@@ -27,10 +27,14 @@ export interface RecordingHeaderProps {
     /** A transcription or pipeline job is running. Blocks transcribe and delete of the transcript. */
     busy: boolean;
     onTranscribe(): void;
+    /** Opens the Ask AI panel. */
+    onAskAi(): void;
+    chatOpen: boolean;
+    onBack?(): void;
 }
 
 /** Header of the recording view: back, title (rename in place), meta line, star, and the actions menu. */
-export function RecordingHeader({ variant, recording, transcript, busy, onTranscribe }: RecordingHeaderProps) {
+export function RecordingHeader({ variant, recording, transcript, busy, onTranscribe, onAskAi, chatOpen, onBack }: RecordingHeaderProps) {
     const navigate = useNavigate();
     const { t } = useI18n();
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -38,6 +42,14 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
     const starred = recording.starredAt !== null;
     const [starOverride, setStarOverride] = useState<boolean | null>(null);
     const effectiveStarred = starOverride ?? starred;
+
+    const handleBack = () => {
+        if (onBack) {
+            onBack();
+            return;
+        }
+        navigate("/recordings");
+    };
 
     // The server answer arrives as a refreshed recording; drop the local override once it has.
     useEffect(() => {
@@ -88,7 +100,7 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
         <header className={cn("flex items-start gap-3", variant === "page" ? "lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3" : "lg:px-8")}>
             {/* The pane variant gets its back control and "Open full view" link from the library's preview pane. */}
             {variant === "page" ? (
-                <Button variant="ghost" size="icon" aria-label={t("recording.header.backToRecordings")} onClick={() => navigate("/recordings")} className="-ml-2 shrink-0">
+                <Button variant="ghost" size="icon" aria-label={t("recording.header.backToRecordings")} onClick={handleBack} className="-ml-2 shrink-0">
                     <ArrowLeft />
                 </Button>
             ) : null}
@@ -104,6 +116,19 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
                 </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+                <Button
+                    variant={chatOpen ? "primary" : "secondary"}
+                    size="sm"
+                    className="h-8 gap-1.5 px-2.5"
+                    data-testid="recording-ask-ai"
+                    aria-label={t("recording.chat.askAria")}
+                    aria-pressed={chatOpen}
+                    title={transcript ? t("recording.chat.askAria") : t("recording.chat.emptyNoTranscript")}
+                    onClick={onAskAi}
+                >
+                    <MessageSquareText aria-hidden="true" />
+                    <span className="hidden sm:inline">{t("recording.chat.ask")}</span>
+                </Button>
                 <Button
                     variant="ghost"
                     size="icon"
