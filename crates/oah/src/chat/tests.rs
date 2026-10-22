@@ -1216,6 +1216,19 @@ mod hub_tests {
         hub::unregister("turn_test_1");
         assert!(hub::get("turn_test_1").is_none());
     }
+
+    #[test]
+    fn a_hub_remembers_that_it_finished() {
+        let hub = hub::register("turn_test_finished");
+        hub.send(HubEvent::Delta("Hi".to_owned()));
+        assert!(!hub.is_finished());
+        hub.send(HubEvent::Done);
+        // A subscriber that arrives now gets nothing from the channel, so the flag is its signal.
+        let mut rx = hub.subscribe();
+        assert!(hub.is_finished());
+        assert!(rx.try_recv().is_err());
+        hub::unregister("turn_test_finished");
+    }
 }
 
 // ---- retrieval ----

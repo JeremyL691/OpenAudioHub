@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - A request that reads and then writes no longer fails with "database is locked" when another request commits in between. Every transaction takes the write lock when it starts, so the request waits for a busy writer, up to the busy timeout, instead of failing at once.
+- An Ask AI answer that finishes quickly no longer stays on "Reading the transcript". The answer stream ends only after the turn is saved, and a stream opened just after the answer ended reads the saved turn instead of waiting.
 
 ## [1.3.0] - 2026-10-21
 
