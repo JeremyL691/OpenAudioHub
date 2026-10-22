@@ -1,4 +1,4 @@
-import { chromium, request, type BrowserContext, type Page, type Worker } from "@playwright/test";
+import { chromium, expect, request, type BrowserContext, type Page, type Worker } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -115,6 +115,12 @@ export async function openPopup(ext: Extension, tabId: number, query = ""): Prom
     await page.goto(`chrome-extension://${ext.extensionId}/popup.html?tab=${tabId}${query}`);
     await page.locator('[data-testid="popup-state"]').waitFor();
     return page;
+}
+
+/** Clicks a popup button that closes the popup itself, then waits until the popup has closed. */
+export async function clickClosing(popup: Page, testId: string): Promise<void> {
+    await popup.getByTestId(testId).dispatchEvent("click");
+    await expect.poll(() => popup.isClosed(), { timeout: 10_000 }).toBe(true);
 }
 
 /** Fulfills every Plaud web request with a plain page, so no test touches the network. */
