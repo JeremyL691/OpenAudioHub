@@ -132,16 +132,16 @@
         "other": "{count} 条录音"
     },
     "minutesAgo": {
-        "one": "{_count} 分钟前",
-        "other": "{_count} 分钟前"
+        "one": "{count} 分钟前",
+        "other": "{count} 分钟前"
     },
     "hoursAgo": {
-        "one": "{_count} 小时前",
-        "other": "{_count} 小时前"
+        "one": "{count} 小时前",
+        "other": "{count} 小时前"
     },
     "daysAgo": {
-        "one": "{_count} 天前",
-        "other": "{_count} 天前"
+        "one": "{count} 天前",
+        "other": "{count} 天前"
     },
     "rowActions": "行操作",
     "open": "打开",

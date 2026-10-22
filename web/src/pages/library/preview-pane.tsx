@@ -23,7 +23,7 @@ export function PreviewPane({ id, onBack }: PreviewPaneProps) {
             </div>
             <div className="flex justify-end px-4 pt-3 lg:shrink-0 lg:px-8 lg:pt-6 lg:pb-3">
                 <Button asChild variant="ghost" size="sm" className="h-8 gap-1 px-2" data-testid="open-full-view">
-                    <Link to={`/recordings/${encodeURIComponent(id)}`}>
+                    <Link to={`/recordings/${encodeURIComponent(id)}`} state={{ fromLibrary: true }}>
                         {t("library.openFullView")}
                         <ArrowUpRight />
                     </Link>
