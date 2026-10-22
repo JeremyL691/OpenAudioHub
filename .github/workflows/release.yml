@@ -75,9 +75,9 @@ jobs:
       # pnpm version comes from the packageManager field of web/package.json.
       - run: corepack enable
 
-      # With no `toolchain` input it reads rust-toolchain.toml, so the release is built with
-      # the same compiler as CI.
-      - uses: dtolnay/rust-toolchain@master
+      # The compiler rust-toolchain.toml pins, so the release is built with the same one as CI.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal
 
       - uses: Swatinem/rust-cache@v2
 
