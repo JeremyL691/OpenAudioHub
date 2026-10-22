@@ -110,7 +110,7 @@ pub async fn sign_up(
     let peer = peer.as_ref().map(|Extension(p)| p);
     let ip = auth::client_ip(&state, &headers, peer);
     limit(&state, "sign-up", &ip, 5)?;
-    if state.config.disable_registration || state.config.desktop.is_some() {
+    if !state.config.registration_open() {
         return Err(AppError::new(
             StatusCode::FORBIDDEN,
             "REGISTRATION_DISABLED",
@@ -354,7 +354,7 @@ pub async fn desktop_session(
     if !matches {
         return Err(AppError::unauthorized());
     }
-    let user_id = desktop_user(&state, desktop.user_id.as_deref()).await?;
+    let user_id = local_user(&state, desktop.user_id.as_deref()).await?;
     let token = auth::create_session(&state, &user_id, &headers, None).await?;
     Ok((
         StatusCode::NO_CONTENT,
@@ -390,7 +390,7 @@ pub async fn desktop_session_link(
     {
         return Err(AppError::unauthorized());
     }
-    let user_id = desktop_user(&state, desktop.user_id.as_deref()).await?;
+    let user_id = local_user(&state, desktop.user_id.as_deref()).await?;
     let token = auth::create_session(&state, &user_id, &headers, None).await?;
     Ok((
         StatusCode::SEE_OTHER,
@@ -405,8 +405,9 @@ pub async fn desktop_session_link(
         .into_response())
 }
 
-/// The configured user, else the earliest user, else a new local account.
-async fn desktop_user(state: &AppState, configured: Option<&str>) -> ApiResult<String> {
+/// The local account of a single-account server or the desktop app: the configured user, else
+/// the earliest user, else a new local account.
+pub(crate) async fn local_user(state: &AppState, configured: Option<&str>) -> ApiResult<String> {
     if let Some(id) = configured {
         return user_by_id(state, id)
             .await?
@@ -692,7 +693,8 @@ pub async fn reset_password(
 /// What the sign-in pages need to know about this server. A server-rendered page can know it directly.
 async fn public_config(State(state): State<AppState>) -> Json<Value> {
     Json(json!({
-        "registrationEnabled": !state.config.disable_registration && state.config.desktop.is_none(),
+        "registrationEnabled": state.config.registration_open(),
+        "singleAccount": !state.config.multi_user,
         "passwordResetEnabled": state.config.smtp.configured(),
     }))
 }

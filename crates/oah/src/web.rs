@@ -1,11 +1,12 @@
 //! Serves the single-page web app built into `web/dist`, plus the page-level rules the
-//! server owns: sign-in redirects, the settings shortcut, and real 404s for unknown pages
+//! server owns: sign-in redirects, the local-account sign-in of a single-account server, the
+//! settings shortcut, and real 404s for unknown pages
 //! (spec/pages.md, spec/auth.md "Pages"). Release builds embed the files; debug builds
 //! read them from disk, so a `vite build` shows up without recompiling.
 
 use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, StatusCode, Uri, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
 
@@ -193,8 +194,15 @@ pub async fn serve(State(state): State<AppState>, uri: Uri, headers: HeaderMap) 
     }
 
     let who = visitor(&state, &headers).await;
+    let page = classify(path, state.config.desktop.is_some());
+    if matches!(who, Visitor::Anonymous)
+        && state.config.auto_local_session()
+        && matches!(page, Page::Root | Page::Auth | Page::App | Page::Suspended)
+    {
+        return local_sign_in(&state, &uri, &headers, &page).await;
+    }
     let redirect = |to: &str| Redirect::temporary(to).into_response();
-    match (classify(path, state.config.desktop.is_some()), who) {
+    match (page, who) {
         // Signed-out visitors of a server see the landing page; the desktop app never shows it.
         (Page::Root, Visitor::Anonymous) if state.config.desktop.is_none() => app_shell().await,
         (Page::Root, _) | (Page::Auth, Visitor::Active(_)) => redirect("/dashboard"),
@@ -234,6 +242,64 @@ pub async fn serve(State(state): State<AppState>, uri: Uri, headers: HeaderMap) 
         (Page::Unknown, who) => not_found(matches!(who, Visitor::Active(_))),
         _ => app_shell().await,
     }
+}
+
+/// A single-account server signs a page visitor in to the local account and sends them on.
+/// Only the configured address gets a session: a page asked for under another name, such as a
+/// rebound DNS name pointing at this server, is sent to `APP_URL` instead.
+async fn local_sign_in(state: &AppState, uri: &Uri, headers: &HeaderMap, page: &Page) -> Response {
+    let target = match page {
+        Page::App => uri
+            .path_and_query()
+            .map(|p| p.as_str().to_owned())
+            .unwrap_or_else(|| "/dashboard".to_owned()),
+        _ => "/dashboard".to_owned(),
+    };
+    if !host_matches(state, headers) {
+        return Redirect::temporary(&format!("{}{target}", state.config.app_url)).into_response();
+    }
+    let user_id = match crate::routes::auth::local_user(state, None).await {
+        Ok(id) => id,
+        Err(e) => return e.into_response(),
+    };
+    let token = match auth::create_session(state, &user_id, headers, None).await {
+        Ok(token) => token,
+        Err(e) => return AppError::from(e).into_response(),
+    };
+    let location = HeaderValue::from_str(&target).unwrap_or(HeaderValue::from_static("/dashboard"));
+    (
+        StatusCode::TEMPORARY_REDIRECT,
+        [
+            (header::SET_COOKIE, auth::session_cookie(state, &token)),
+            (header::LOCATION, location),
+            (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+        ],
+    )
+        .into_response()
+}
+
+/// True when the request names the host of `APP_URL`. Behind a trusted proxy the forwarded
+/// host counts, because the proxy may rewrite `Host`.
+fn host_matches(state: &AppState, headers: &HeaderMap) -> bool {
+    let expected = state
+        .config
+        .app_url
+        .split("://")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    let forwarded = state
+        .config
+        .trust_proxy_headers
+        .then(|| headers.get("x-forwarded-host"))
+        .flatten()
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.split(',').next())
+        .map(str::trim);
+    let given = forwarded.or_else(|| headers.get(header::HOST).and_then(|h| h.to_str().ok()));
+    given.is_some_and(|h| !expected.is_empty() && h.eq_ignore_ascii_case(expected))
 }
 
 async fn app_shell() -> Response {

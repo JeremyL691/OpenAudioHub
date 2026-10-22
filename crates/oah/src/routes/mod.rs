@@ -3,7 +3,7 @@ use axum::routing::{get, post};
 
 use crate::AppState;
 
-mod auth;
+pub(crate) mod auth;
 mod browser_transcription;
 mod health;
 mod providers;
