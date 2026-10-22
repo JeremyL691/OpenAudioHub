@@ -3,7 +3,7 @@ members = ["crates/oah", "desktop-tauri"]
 resolver = "3"
 
 [workspace.package]
-version = "1.2.5"
+version = "1.3.0"
 edition = "2024"
 # The AWS SDK here needs 1.94.1, so that is the floor for the whole workspace.
 rust-version = "1.94.1"

@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-21
+
+### Added
+
+- Ask AI: a recording with a transcript can be asked about. The conversation is kept encrypted for that recording, answers stream into a panel beside the recording, and each answer cites the transcript rows it used. Selecting a citation marks exactly those rows and plays from the first one; a transcript without timings marks the cited line. The panel chooses a saved provider, a model from a searchable list and a thinking level, so a question can use a different model from summaries without changing the summary default.
+- Ask AI answers from the transcript shown in the recording, follows up on the recent questions in the same conversation, and offers suggested questions in an empty chat.
+- A thinking level follows the order minimal, low, medium, high, xhigh and max. A level the model does not declare is never sent: the choice rounds up to the closest declared level, takes the highest one when it is above them all, and sends nothing at all when the model's levels are unknown.
+- A long recording is answered from the parts a question needs, and a question about the whole recording reads every part before answering. The answer says which of the two it did, so a partial read never reads as a complete one.
+- A question, its answer and its citations survive a restart and a replaced transcript. An answer is only saved while the run that started it still holds it, so stopping, clearing or re-transcribing a recording cannot be overwritten by an older run.
+- `docs/providers.md` and `spec/recording-chat.md` describe the behaviour, including the provider requests and the bounds one question works within.
+
 ### Changed
 
 - The workspace states Rust 1.94.1 as its minimum, and the toolchain pin, the CI images, the container build and the documentation all name that same patch release. The container image is built by a fixed compiler now instead of whatever the floating `rust:1` tag points at.
@@ -15,16 +26,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - One check, `Quality gate`, now covers the whole pull request suite: the server, the minimum Rust version, the web app, the extension, the Mac app, the long-recording pipeline, the contract tests and the dependency scans. A skipped or cancelled check fails it, so a check that never ran cannot read as a pass.
 - The dependency scan covers the development dependencies of the web app, the extension and the contract tests, not only their production packages. The extension keeps all of its tooling in `devDependencies`, so an audit of production packages alone never looked at it.
 - `vitest` in the extension is at the release that fixes the reported advisories, with `tinypool` pinned above the affected versions.
-
-### Changed
-
 - The library search asks the server once for the whole library instead of fetching every transcribed recording's detail and matching in memory. `GET /api/recordings/search?q=` returns the ids whose name or newest transcript text matches; the transcript text itself is never returned, and nothing is indexed in plain text. The search box waits for a short pause in typing, and a request that is still running or that failed shows its own state rather than reading as "nothing matches".
 
 ### Fixed
 
 - Saving a transcript and the work that follows it now commit together. `transcription.completed`, the automatic title and the automatic summary used to be called after the transcript was committed, so a process that stopped in between left a transcript with no event and no automatic summary, and a failed summary enqueue was only logged. A queue job that names the transcript is written in the same transaction, and a follow-up for a transcript that was since deleted or replaced ends without touching the newer text. A retried save does not queue the same follow-up twice. The guarantee is at least once: a provider call that answered but was not committed is made again.
 - A worker that lost a long-transcription job can no longer write that job's chunk state. Marking a chunk as sending, storing its result and recording its failure now apply only while the job runs under the generation the worker claimed, so a response that arrives after a takeover cannot overwrite what the new run stored or is about to read. Chunk results stored before a takeover stay reusable.
-
 - The library specification said the recordings page is rendered on the server. The server answers the path with the app shell and the page renders in the browser, as the pages specification says.
 - The Mac app build reports a failed source download as a download, with retries and a deadline, instead of calling the missing file a checksum mismatch. A cached archive that no longer matches its pinned checksum is downloaded again.
 - The contract suites stop the server and the fake services they started, including when a run ends early. A port held by a process the run did not start is reported instead of killed.
@@ -124,7 +131,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...v1.3.0
 [1.2.5]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.2.5
 [1.2.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.2.0
 [1.1.2]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.1.2

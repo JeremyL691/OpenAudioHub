@@ -33,6 +33,11 @@ let seq = 0;
 const transcriptionControl = { failNext: 0, status: 500, delayMs: 0, proportional: false, text: null };
 /** Chat answer override: a string replaces the fixed reply, null restores it. */
 let answerOverride = null;
+/**
+ * How a streamed chat answer behaves. `delayMs` waits before each piece so a test can see the
+ * answer arrive in order, and `failAfter` drops the connection after that many pieces.
+ */
+const streamControl = { delayMs: 0, failAfter: 0 };
 
 function send(res, status, body) {
     res.writeHead(status, { "content-type": "application/json" });
@@ -155,6 +160,13 @@ createServer((req, res) => {
             }
             return send(res, 200, transcriptionControl);
         }
+        if (req.method === "POST" && path === "/__stream") {
+            const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+            for (const key of ["delayMs", "failAfter"]) {
+                if (body[key] !== undefined) streamControl[key] = body[key];
+            }
+            return send(res, 200, streamControl);
+        }
         if (req.method === "POST" && path === "/__reset") {
             requests.length = 0;
             seq = 0;
@@ -166,6 +178,7 @@ createServer((req, res) => {
                 text: null,
                 proportional: false,
             });
+            Object.assign(streamControl, { delayMs: 0, failAfter: 0 });
             return send(res, 200, { ok: true });
         }
         if (req.method === "POST" && path === "/__answer") {
@@ -236,6 +249,35 @@ createServer((req, res) => {
                 })),
             );
             return send(res, 200, { language_code: "en", text: TRANSCRIPT_TEXT, words });
+        }
+        if (req.method === "POST" && path === "/chat/completions" && json?.stream) {
+            // A streamed answer: the reply is cut into pieces so a reader sees it arrive.
+            const answer = answerOverride ?? CHAT_TEXT;
+            const pieces = answer.match(/\S+\s*|\s+/g) ?? [answer];
+            res.writeHead(200, {
+                "content-type": "text/event-stream",
+                "cache-control": "no-cache",
+                connection: "keep-alive",
+            });
+            let sent = 0;
+            const write = () => {
+                if (streamControl.failAfter > 0 && sent >= streamControl.failAfter) {
+                    res.destroy();
+                    return;
+                }
+                if (sent >= pieces.length) {
+                    res.write('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
+                    res.write("data: [DONE]\n\n");
+                    res.end();
+                    return;
+                }
+                const payload = { choices: [{ delta: { content: pieces[sent] } }] };
+                res.write(`data: ${JSON.stringify(payload)}\n\n`);
+                sent += 1;
+                if (streamControl.delayMs > 0) setTimeout(write, streamControl.delayMs);
+                else write();
+            };
+            return write();
         }
         if (req.method === "POST" && path === "/chat/completions") {
             const text = json ? messageText(json.messages) : "";

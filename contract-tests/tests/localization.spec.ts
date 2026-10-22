@@ -160,4 +160,16 @@ test.describe("interface language", () => {
         await expect(picker).toHaveAttribute("aria-checked", "true");
         expect(await page.evaluate(() => document.documentElement.lang)).toBe("ja");
     });
+
+    test("relative time strings do not leak raw placeholder braces", async ({ browser }) => {
+        const { page, close } = await signedIn(browser);
+        try {
+            await page.goto("/recordings");
+            const bodyText = await page.innerText("body");
+            expect(bodyText).not.toContain("{_count}");
+            expect(bodyText).not.toContain("{count}");
+        } finally {
+            await close();
+        }
+    });
 });
