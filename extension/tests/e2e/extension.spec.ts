@@ -147,7 +147,9 @@ test.describe("browser extension", () => {
 
             const waiting = await openPopup(ext, tabId);
             await expect(waiting.getByTestId("popup-state")).toHaveAttribute("data-state", "waiting");
-            await waiting.getByTestId("popup-cancel").click();
+            // Cancel closes the popup itself, so a normal click can end with the page already gone.
+            await waiting.getByTestId("popup-cancel").dispatchEvent("click");
+            await expect.poll(() => waiting.isClosed()).toBe(true);
             await expect(page.getByTestId("connect-error")).toBeVisible();
             await expect(page.getByTestId("connect-error-text")).toHaveText(
                 "Sign-in was cancelled. Click the OpenAudioHub icon to try again.",
