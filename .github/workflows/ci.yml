@@ -172,6 +172,7 @@ jobs:
           pnpm exec playwright install --with-deps chromium
         working-directory: contract-tests
       - run: contract-tests/run.sh server
+      - run: contract-tests/run.sh single
       - name: Extension end-to-end tests
         run: |
           pnpm install --frozen-lockfile

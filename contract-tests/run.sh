@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs the contract suite against a server.
 #   run.sh server [playwright args]    build and start the server on a fresh data folder, run the suite, stop it
+#   run.sh single [playwright args]    the same, in single-account mode, running the single-account tests
 #   run.sh pipeline [playwright args]  the same, with the audio pipeline on and a short provider timeout
 #   run.sh url [playwright args]       run the suite against an already running server at OAH_BASE_URL
 set -euo pipefail
@@ -61,7 +62,7 @@ if [ "$MODE" != "url" ] && ! curl -sf -o /dev/null "$OAH_FAKE_AI_URL/models"; th
   pids+=($!)
 fi
 
-if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ]; then
+if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ] || [ "$MODE" = "single" ]; then
   pipeline_enabled="false"
   provider_timeout=""
   if [ "$MODE" = "pipeline" ]; then
@@ -69,6 +70,8 @@ if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ]; then
     pipeline_enabled="true"
     # A short provider timeout keeps the "never answers" case inside a test's patience.
     provider_timeout="WHISPER_REQUEST_TIMEOUT_MS=3000"
+  elif [ "$MODE" = "single" ]; then
+    port="${OAH_SERVER_PORT:-3213}"
   else
     port="${OAH_SERVER_PORT:-3211}"
   fi
@@ -91,7 +94,10 @@ if [ "$MODE" = "server" ] || [ "$MODE" = "pipeline" ]; then
     node "$HERE/fakes/fake-plaud.mjs" 3298 >/dev/null 2>&1 &
     pids+=($!)
   fi
-  env OAH_DATA_DIR="$data" PORT="$port" HOST=127.0.0.1 APP_URL="$OAH_BASE_URL" \
+  # Single-account mode is the server default. Only the other modes turn on several accounts.
+  account_env=(OAH_MULTI_USER=true)
+  if [ "$MODE" = "single" ]; then account_env=(-u OAH_MULTI_USER); fi
+  env "${account_env[@]}" OAH_DATA_DIR="$data" PORT="$port" HOST=127.0.0.1 APP_URL="$OAH_BASE_URL" \
     ENCRYPTION_KEY="$(openssl rand -hex 32)" \
     RATE_LIMIT_TRUST_PROXY_HEADERS=true OAH_PLAUD_API_BASE="http://127.0.0.1:3298" \
     AUDIO_PIPELINE_ENABLED="$pipeline_enabled" WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false \
@@ -113,6 +119,11 @@ cd "$HERE"
 if [ "$MODE" = "pipeline" ]; then
   set +e
   pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=pipeline "$@"
+  status=$?
+elif [ "$MODE" = "single" ]; then
+  set +e
+  export OAH_SINGLE_ACCOUNT=1
+  pnpm --dir "$HERE" exec playwright test -c playwright.config.ts --project=single-account "$@"
   status=$?
 else
   set +e
