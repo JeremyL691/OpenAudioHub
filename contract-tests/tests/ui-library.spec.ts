@@ -962,7 +962,15 @@ test.describe.serial("library on a new account", () => {
         const { page } = user;
         await page.goto("/recordings");
         await page.getByRole("button", { name: "Density" }).click();
+        // The reload must come after the choice is stored, or it reads the old density.
+        const saved = page.waitForResponse(
+            (res) =>
+                res.request().method() === "PUT" &&
+                new URL(res.url()).pathname === "/api/settings/user" &&
+                res.request().postData()?.includes('"listDensity":"compact"') === true,
+        );
         await page.getByRole("menuitemradio", { name: "Compact" }).click();
+        expect((await saved).ok()).toBe(true);
 
         await page.reload();
         await page.getByRole("button", { name: "Density" }).click();
