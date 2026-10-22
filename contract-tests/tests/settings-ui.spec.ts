@@ -14,8 +14,13 @@ test("summary settings save custom prompts through user settings", async ({ brow
             await page.getByTestId("custom-summary-prompt-text").fill("Summarize this transcript: {transcription}");
             await page.getByRole("button", { name: "Create", exact: true }).click();
             await expect(page.getByText("Settings UI prompt")).toBeVisible();
-            const userSettings = await (await api.get("/api/settings/user")).json();
-            expect(userSettings.summaryPrompt.customPrompts.some((prompt: { name: string }) => prompt.name === "Settings UI prompt")).toBeTruthy();
+            await expect
+                .poll(async () => {
+                    const userSettings = await (await api.get("/api/settings/user")).json();
+                    const prompts: { name: string }[] = userSettings.summaryPrompt?.customPrompts ?? [];
+                    return prompts.some((prompt) => prompt.name === "Settings UI prompt");
+                })
+                .toBe(true);
         } finally {
             await context.close();
         }
