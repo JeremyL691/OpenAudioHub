@@ -19,6 +19,7 @@ The contract tests in `contract-tests/` check the specification against a runnin
 | `pages.md` | The routes the server answers: web pages, redirects, health, install and docs links, and not-found responses. |
 | `plaud.md` | The Plaud connection, its sign-in flows, sync, and the Plaud web API the app calls. |
 | `recordings.md` | Recordings over HTTP: list, detail, edit, star, delete, upload, download, audio streaming, waveform peaks and merge. |
+| `recording-chat.md` | Ask AI over a recording: the conversation, model and effort choice, streaming answers, citations and limits. |
 | `settings.md` | User settings, storage usage, the test email, and the public `/api/v1` API. |
 | `transcription.md` | Starting a transcription, choosing a provider, what providers receive and return, and storing or deleting transcripts. |
 | `ui-app.md` | The signed-in shell, navigation, the Dashboard, settings pages, dialogs, onboarding and theme. |
