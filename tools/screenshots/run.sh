@@ -45,7 +45,7 @@ mkdir -p "$DATA" "$WORK"
 node "$HERE/demo-ai.mjs" "$FAKE_PORT" >"$WORK/demo-ai.log" 2>&1 &
 pids+=($!)
 
-OAH_DATA_DIR="$DATA" PORT="$PORT" HOST=127.0.0.1 APP_URL="$BASE_URL" \
+OAH_MULTI_USER=true OAH_DATA_DIR="$DATA" PORT="$PORT" HOST=127.0.0.1 APP_URL="$BASE_URL" \
     ENCRYPTION_KEY="$(openssl rand -hex 32)" \
     RATE_LIMIT_TRUST_PROXY_HEADERS=true OAH_PLAUD_API_BASE="http://127.0.0.1:9" \
     AUDIO_PIPELINE_ENABLED=false OAH_WEB_DIR="$WEB_OUT" \
