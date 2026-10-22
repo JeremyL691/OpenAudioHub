@@ -16,6 +16,8 @@ services:
       # to false when the app is reached without a proxy.
       RATE_LIMIT_TRUST_PROXY_HEADERS: ${RATE_LIMIT_TRUST_PROXY_HEADERS:-true}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      # false runs one local account that opens without sign-in. true turns on separate accounts.
+      OAH_MULTI_USER: ${OAH_MULTI_USER:-false}
       # Empty keeps the default: private webhook targets are refused in the server.
       WEBHOOKS_REQUIRE_PUBLIC_TARGETS: ${WEBHOOKS_REQUIRE_PUBLIC_TARGETS:-}
     ports:
