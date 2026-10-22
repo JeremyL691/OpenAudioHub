@@ -13,7 +13,48 @@ import { useI18n } from "@/lib/i18n";
 export default function Page() {
     // The desktop app never shows the form: it signs the window in again (spec/auth.md "Desktop mode").
     if (desktopApp()) return <DesktopReconnect />;
-    return <SignInForm />;
+    return <WebEntry />;
+}
+
+/** A single-account server signs the page in by loading "/dashboard"; a multi-account server shows the form. */
+function WebEntry() {
+    const config = usePublicConfig();
+    if (config?.singleAccount === false) return <SignInForm />;
+    return <LocalSignIn ready={config !== null} />;
+}
+
+const LOCAL_SIGN_IN_KEY = "oah:local-sign-in-at";
+const LOCAL_SIGN_IN_WINDOW_MS = 10_000;
+
+function recentLocalSignIn(): boolean {
+    try {
+        return Date.now() - Number(sessionStorage.getItem(LOCAL_SIGN_IN_KEY)) < LOCAL_SIGN_IN_WINDOW_MS;
+    } catch {
+        return false;
+    }
+}
+
+function LocalSignIn({ ready }: { ready: boolean }) {
+    const { t } = useI18n();
+    const [blocked] = useState(recentLocalSignIn);
+    useEffect(() => {
+        if (!ready || blocked) return;
+        try {
+            sessionStorage.setItem(LOCAL_SIGN_IN_KEY, String(Date.now()));
+        } catch {
+            // Without storage the reload guard is skipped for this load.
+        }
+        window.location.replace("/dashboard");
+    }, [ready, blocked]);
+    return (
+        <AuthLayout
+            documentTitle={t("auth.reconnect.documentTitle")}
+            title={t("auth.reconnect.title")}
+            subtitle={ready && blocked ? t("auth.reconnect.failedWeb") : t("auth.reconnect.working")}
+        >
+            {null}
+        </AuthLayout>
+    );
 }
 
 function DesktopReconnect() {

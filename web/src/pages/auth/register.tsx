@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { ApiError, api, errorMessage } from "@/lib/api";
 import { refreshSession, useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { usePublicConfig } from "@/lib/public-config";
+import { desktopApp } from "@/lib/desktop-app";
 import { AuthField, AuthInput, AuthLayout } from "./auth-layout";
 import { useI18n } from "@/lib/i18n";
 
@@ -20,7 +21,12 @@ export default function Page() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [pending, setPending] = useState(false);
     const config = usePublicConfig();
+    const local = config?.singleAccount === true && desktopApp() === null;
+    useEffect(() => {
+        if (local) window.location.replace("/dashboard");
+    }, [local]);
 
+    if (local) return null;
     if (session.status === "authenticated") return <Navigate to="/dashboard" replace />;
     if (config && !config.registrationEnabled) return <Navigate to="/login" replace />;
 

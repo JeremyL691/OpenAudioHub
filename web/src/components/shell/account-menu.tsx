@@ -18,6 +18,7 @@ import { setTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { desktopApp } from "@/lib/desktop-app";
+import { usePublicConfig } from "@/lib/public-config";
 import { useShellData } from "./shell-data";
 import { LANGUAGE_ITEMS, chooseLocale } from "./language-picker";
 
@@ -40,6 +41,7 @@ export function AccountMenu() {
     const [theme] = useTheme();
     const { locale, setLocale, t } = useI18n();
     const navigate = useNavigate();
+    const config = usePublicConfig();
 
     const THEME_ITEMS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
         { value: "light", label: t("shell.account.themeLight"), icon: Sun },
@@ -55,8 +57,9 @@ export function AccountMenu() {
     };
 
     const email = session.data?.user.email ?? "";
-    // The desktop app has one local account and no sign-out (spec/ui-app.md section 9).
+    // The desktop app and a single-account server have one local account and no sign-out (spec/ui-app.md section 9).
     const desktop = desktopApp() !== null;
+    const local = desktop || config?.singleAccount === true;
     const initial = email ? email.charAt(0).toUpperCase() : "?";
     const tone: SyncTone = sync.status === "syncing" ? "syncing" : sync.status === "failed" ? "failed" : sync.status === "ok" ? "ok" : "idle";
     const needsReconnect = Boolean(connection?.needsReconnect);
@@ -97,8 +100,8 @@ export function AccountMenu() {
                         {initial}
                     </span>
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{desktop ? "OpenAudioHub" : email || t("shell.account.signedIn")}</p>
-                        <p className="text-xs text-muted-foreground">{desktop ? t("shell.account.localAccount") : t("shell.account.signedIn")}</p>
+                        <p className="truncate text-sm font-medium">{local ? "OpenAudioHub" : email || t("shell.account.signedIn")}</p>
+                        <p className="text-xs text-muted-foreground">{local ? t("shell.account.localAccount") : t("shell.account.signedIn")}</p>
                     </div>
                 </div>
 
@@ -159,7 +162,7 @@ export function AccountMenu() {
                     ))}
                 </DropdownMenuRadioGroup>
 
-                {desktop ? null : (
+                {local ? null : (
                     <>
                         <DropdownMenuSeparator className="my-0" />
                         <div className="p-1">
