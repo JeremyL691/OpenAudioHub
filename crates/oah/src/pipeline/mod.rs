@@ -55,7 +55,7 @@ pub async fn supersede(state: &AppState, user_id: &str, recording_id: &str) -> s
     let now = now_ms();
     // BEGIN IMMEDIATE takes the write lock up front. A save that commits while this runs then
     // waits instead of failing the write with SQLITE_BUSY_SNAPSHOT.
-    let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+    let mut tx = crate::db::begin_write(&state.db).await?;
     // A job claimed before its first run row existed has no phase yet, so insert one: without it
     // the worker's own `queued` write would start the run again after the cancel.
     sqlx::query(
@@ -275,7 +275,7 @@ async fn change(
         }
         // Completed chunks are kept; failed or unfinished ones are sent again. The claim counter
         // starts over so the explicit retry gets its full three claims (section 13.2).
-        let mut tx = state.db.begin().await?;
+        let mut tx = crate::db::begin_write(&state.db).await?;
         let moved = sqlx::query(
             "UPDATE jobs SET state = 'queued', run_after = ?, error_code = NULL, error_message = NULL, progress = 0,
              attempts = 0, finished_at = NULL, lease_until = NULL, updated_at = ? WHERE id = ? AND state = 'failed'",

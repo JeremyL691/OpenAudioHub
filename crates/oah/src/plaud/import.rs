@@ -225,7 +225,7 @@ pub async fn import_content(
                 // The transcript and the work it owes commit together, so a process that stops
                 // between them cannot leave a transcript whose follow-up was never recorded: such
                 // a transcript would look imported on the next pass and never be queued again.
-                let mut tx = state.db.begin_with("BEGIN IMMEDIATE").await?;
+                let mut tx = crate::db::begin_write(&state.db).await?;
                 let inserted = sqlx::query(
                     "INSERT INTO transcriptions (id, recording_id, user_id, text, detected_language, transcription_type, provider, model, timeline, timeline_source, source, created_at) \
                      VALUES (?, ?, ?, ?, NULL, 'server', 'plaud', 'plaud-native', ?, ?, 'plaud', ?) ON CONFLICT DO NOTHING",

@@ -606,7 +606,7 @@ mod rework_tests {
         .await
         .unwrap();
         for _ in 0..2 {
-            let mut tx = state.db.begin().await.unwrap();
+            let mut tx = crate::db::begin_write(&state.db).await.unwrap();
             crate::webhooks::record_in(
                 &mut tx,
                 &state,
