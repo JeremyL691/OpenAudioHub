@@ -294,6 +294,34 @@ pub async fn enhancement_provider(state: &AppState, user_id: &str) -> ApiResult<
         .transpose()
 }
 
+/// The chat model a stored provider would use, by the same rules as `Provider::chat_model`.
+pub fn chat_model_of(name: &str, model: Option<&str>, base_url: &str) -> String {
+    Provider {
+        id: String::new(),
+        name: name.to_owned(),
+        base_url: base_url.to_owned(),
+        api_key: String::new(),
+        model: model.map(str::to_owned),
+    }
+    .chat_model()
+}
+
+/// One saved provider of the user, by id. `None` when it is not theirs.
+pub async fn provider_by_id(
+    state: &AppState,
+    user_id: &str,
+    provider_id: &str,
+) -> ApiResult<Option<Provider>> {
+    let row: Option<Row> = sqlx::query_as(&format!(
+        "SELECT {COLUMNS} FROM api_credentials WHERE id = ? AND user_id = ?"
+    ))
+    .bind(provider_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+    row.map(|row| open(state, row)).transpose()
+}
+
 /// Why a provider call failed. The message is safe to store and show.
 #[derive(Debug)]
 pub struct AiError {

@@ -517,6 +517,9 @@ Built-in summary prompts have fixed ids. Each is a template with one `{transcrip
 
 ## Chat settings
 
+Ask AI uses its own streaming call and its own settings; see `recording-chat.md`. The table below
+covers summaries and titles only.
+
 | Use | Temperature | Output budget | Timeout |
 | --- | --- | --- | --- |
 | Summary, and the notes for each long-transcript part | 0.5 | 16,384 tokens | 300 s |

@@ -106,7 +106,71 @@ pub fn router() -> Router<AppState> {
             put(set_default_transcription),
         )
         .route("/api/settings/ai/providers/test", post(probe))
+        .route(
+            "/api/settings/ai/providers/{id}/chat-models",
+            get(saved_chat_models),
+        )
         .route("/api/settings/ai/providers/models", post(models))
+}
+
+/// The chat models a saved provider offers, with what this server has verified about them
+/// (spec/recording-chat.md). The key is used here and never returned.
+async fn saved_chat_models(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> ApiResult<Json<Value>> {
+    let row: Option<Row> = sqlx::query_as(&format!("{SELECT} WHERE id = ? AND user_id = ?"))
+        .bind(&id)
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await?;
+    let row = row.ok_or_else(|| AppError::not_found("NOT_FOUND", "Provider not found"))?;
+    let preset = crate::ai::preset_named(&row.provider);
+    let base = crate::ai::base_url(row.base_url.clone(), preset);
+    let api_key = state
+        .config
+        .field_key
+        .decrypt(&row.api_key)
+        .map_err(AppError::internal)?;
+    // A provider that publishes its models is asked; otherwise the configured model and the
+    // preset's suggestions are offered, so a picker is never empty for a working provider.
+    let mut models: Vec<Value> = Vec::new();
+    if preset.is_some_and(|p| p.lists_chat) {
+        let request = crate::ai::with_provider_headers(
+            crate::ai::client()
+                .get(format!("{base}/models"))
+                .bearer_auth(&api_key),
+            &row.provider,
+            &base,
+        );
+        if let Ok(response) = request.timeout(LIST_TIMEOUT).send().await
+            && let Ok(listed) = response.json::<Listed>().await
+        {
+            for model in listed.data {
+                let id = model.id;
+                let lower = id.to_lowercase();
+                if EXCLUDED_CHAT_MODELS.iter().any(|word| lower.contains(word)) {
+                    continue;
+                }
+                if is_transcription_model(&id) {
+                    continue;
+                }
+                models.push(json!({ "id": id, "name": model.name.unwrap_or_else(|| id.clone()) }));
+            }
+        }
+        models.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    }
+    let configured = row
+        .default_model
+        .clone()
+        .filter(|m| !m.is_empty() && !is_transcription_model(m));
+    let answer = json!({
+        "models": models,
+        "configuredModel": configured,
+        "managedModel": crate::ai::chat_model_of(&row.provider, row.default_model.as_deref(), &base),
+    });
+    Ok(Json(answer))
 }
 
 async fn list(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Json<Value>> {
