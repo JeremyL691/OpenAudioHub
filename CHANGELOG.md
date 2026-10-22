@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [1.4.0] - 2026-10-22
+## [1.3.2] - 2026-10-22
 
 ### Changed
 
@@ -144,8 +144,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...HEAD
-[1.4.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...v1.4.0
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...v1.3.2
 [1.3.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...v1.3.0
 [1.2.5]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.2.5
 [1.2.0]: https://github.com/JeremyL691/OpenAudioHub/releases/tag/v1.2.0
