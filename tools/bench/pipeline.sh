@@ -38,7 +38,7 @@ trap cleanup EXIT
 node "$ROOT/contract-tests/fakes/fake-ai.mjs" "$FAKE_PORT" >/dev/null 2>&1 &
 pids+=($!)
 
-ENCRYPTION_KEY="$(openssl rand -hex 32)" OAH_DATA_DIR="$data" PORT="$PORT" HOST=127.0.0.1 \
+ENCRYPTION_KEY="$(openssl rand -hex 32)" OAH_MULTI_USER=true OAH_DATA_DIR="$data" PORT="$PORT" HOST=127.0.0.1 \
   APP_URL="http://127.0.0.1:$PORT" RATE_LIMIT_TRUST_PROXY_HEADERS=true \
   WEBHOOKS_REQUIRE_PUBLIC_TARGETS=false AUDIO_PIPELINE_ENABLED=true OAH_WEB_DIR="$artifact/web" \
   "$ROOT/target/debug/oah-server" >"$artifact/server.log" 2>&1 &

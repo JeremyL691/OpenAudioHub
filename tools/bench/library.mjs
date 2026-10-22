@@ -74,6 +74,7 @@ async function main() {
         env: {
             ...process.env,
             OAH_DATA_DIR: DATA,
+            OAH_MULTI_USER: "true",
             PORT: String(PORT),
             HOST: "127.0.0.1",
             APP_URL: BASE,
