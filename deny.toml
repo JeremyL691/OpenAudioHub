@@ -26,6 +26,13 @@ ignore = [
     "RUSTSEC-2026-0382", # distrusted emSign intermediates accepted
     # h2 0.3, also from the AWS SDK.
     "RUSTSEC-2026-0258", # unbounded empty DATA frames
+    # crypto-bigint 0.5, pulled in by aws-sigv4 for S3 request signing. The fix
+    # lives only in the 0.7 line (>=0.7.6) and no published aws-sdk-s3 chain
+    # moves to it yet, so the only way to clear this here would be to drop S3
+    # support. The flaw is a timing side channel in secret-integer arithmetic,
+    # observable only to an attacker who can measure timing or microarchitectural
+    # signals. Remove once the AWS SDK moves to crypto-bigint 0.7.
+    "RUSTSEC-2026-0387", # timing variability in constant-time operations
     # Build-time only, through a macro expansion.
     "RUSTSEC-2024-0370", # proc-macro-error is unmaintained
 ]
