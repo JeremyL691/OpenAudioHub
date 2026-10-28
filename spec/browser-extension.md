@@ -1,8 +1,10 @@
 # Browser extension
 
-The browser extension reads the Plaud sign-in from the user's own browser and hands it to an OpenAudioHub connect page. It is the only sign-in path that works for Plaud accounts created with Google or Apple, because the long-lived Plaud token lives in an HttpOnly cookie that page scripts cannot read.
+The browser extension reads the Plaud sign-in from the user's own browser and hands it to an OpenAudioHub connect page. It is the only sign-in path that works for Plaud accounts created with Google or Apple, because the Plaud token lives in an HttpOnly cookie that page scripts cannot read.
 
-The extension is in `extension/`. It is built and released with the app. It runs in Chromium browsers and makes no network requests.
+After a sign-in, the extension keeps that server's Plaud token fresh. Plaud tokens last about 24 hours, so without this the connection needs a manual reconnect every day. See "Automatic refresh".
+
+The extension is in `extension/`. It is built and released with the app. It runs in Chromium browsers. Its only network request is the refresh call to a server the user connected.
 
 The connect page and the handoff endpoints are in [plaud.md](plaud.md). The desktop app that opens the page is in [desktop.md](desktop.md).
 
@@ -53,10 +55,12 @@ Permission purposes:
 
 - `activeTab` and `scripting`: deliver the result to the page the user opened the popup on, and only that page.
 - `cookies` with the Plaud host permissions: read the `pld_ut` cookie on the Plaud site.
-- `storage`: remember the chosen Plaud site and the flow in progress.
-- `alarms`: end a flow that times out.
+- `storage`: remember the chosen Plaud site, the flow in progress, and the servers to keep fresh.
+- `alarms`: end a flow that times out, and run the refresh checks.
 
 The extension declares no static content script. It adds no object to a page's `window` and injects no script into the page's main world. It runs a small function on the page to deliver a result, and one on the Plaud page to read the local storage entry.
+
+The refresh call needs no host permission for the server. The server answers it with CORS headers (see [plaud.md](plaud.md)).
 
 ## Popup
 
@@ -71,13 +75,23 @@ A tab is a connect page when all of these are true:
 
 The popup shows one of four states. The text below is used word for word. Test ids are in "Popup test ids".
 
-**A. Not a connect page, and no flow in progress.** Title "OpenAudioHub". Text "To connect Plaud, open OpenAudioHub, go to Settings, then Plaud Account, and choose Sign in with Plaud. Then click this icon on the page that opens."
+The popup picks the state in this order:
 
-**B. A connect page, and no flow in progress.** Title "Connect Plaud". Text "Send your Plaud sign-in to this OpenAudioHub server?" The page origin is shown below in a monospace font. A select labelled "Plaud site" offers "Global (web.plaud.ai)" and "China (web.plaud.cn)". The default is Global. The choice is stored in `chrome.storage.local` under `plaudSite`, with value `global` or `cn`. The main button is "Connect". Supporting text: "If you are not signed in to Plaud in this browser, Plaud opens in a new tab." When the origin scheme is `http:` and the host is not `127.0.0.1`, `localhost` or `[::1]`, the popup also shows the warning "This server does not use HTTPS. Your Plaud sign-in will travel unencrypted."
+1. A flow is in progress: state C.
+2. The popup reads and removes the stored result of the last flow. A result stored more than 10 minutes ago, or one without a time, is ignored.
+3. The active tab is a connect page: state B. A recent failed result is shown in B as a notice. A recent successful result is not shown.
+4. A recent result: state D.
+5. Otherwise: state A.
+
+So the first click on a connect page always offers Connect, even when an earlier sign-in left a result behind.
+
+**A. Not a connect page, and no flow in progress.** Title "OpenAudioHub". Text "To connect Plaud, open OpenAudioHub, go to Settings, then Plaud Account, and choose Sign in with Plaud. Then click this icon on the page that opens." For each server the extension keeps fresh, one more line: "Keeps Plaud connected for <origin>."
+
+**B. A connect page, and no flow in progress.** Title "Connect Plaud". When the last flow failed in the last 10 minutes, its failure text from "Failure messages" comes first, in the warning color. Then the text "Send your Plaud sign-in to this OpenAudioHub server?" The page origin is shown below in a monospace font. A select labelled "Plaud site" offers "Global (web.plaud.ai)" and "China (web.plaud.cn)". The default is Global. The choice is stored in `chrome.storage.local` under `plaudSite`, with value `global` or `cn`. The main button is "Connect". Supporting text: "If you are not signed in to Plaud in this browser, Plaud opens in a new tab." When the origin scheme is `http:` and the host is not `127.0.0.1`, `localhost` or `[::1]`, the popup also shows the warning "This server does not use HTTPS. Your Plaud sign-in will travel unencrypted."
 
 **C. A flow in progress, whatever the current tab is.** Title "Waiting for Plaud". Text "Sign in to Plaud in the Plaud tab. OpenAudioHub gets your sign-in as soon as it is ready." The target origin is shown. The button is "Cancel".
 
-**D. The result of the last flow.** The popup shows the result once, then removes it from storage. On success: "Sent to OpenAudioHub. Check the OpenAudioHub page for the result." On failure: the failure text for its reason, from "Failure messages". There is no button.
+**D. The result of the last flow, on a page that is not a connect page.** The popup shows the result once, then removes it from storage. On success: "Sent to OpenAudioHub. Check the OpenAudioHub page for the result." On failure: the failure text for its reason, from "Failure messages". There is no button.
 
 - "Connect" sends `{ "type": "start", "tabId": <id>, "origin": "<origin>", "site": "global" | "cn" }` to the service worker. The popup then closes itself.
 - "Cancel" sends `{ "type": "cancel" }`.
@@ -92,6 +106,8 @@ The popup shows one of four states. The text below is used word for word. Test i
 | `popup-site` | The site select | The selected site |
 | `popup-connect` | The Connect button | |
 | `popup-cancel` | The Cancel button | |
+| `popup-notice` | The failure notice in state B | |
+| `popup-refresh` | A "Keeps Plaud connected" line in state A | |
 
 ## Flow
 
@@ -133,9 +149,62 @@ The service worker registers all listeners at the top level, so a restarted work
 
 ### End
 
-A successful end delivers the token, closes the Plaud tab when the extension opened it, focuses the connect tab with `chrome.tabs.update` and `chrome.windows.update`, removes the flow and the alarm, and stores `{ "ok": true }` under `lastResult` in `chrome.storage.session`.
+A successful end delivers the token with a new refresh key, closes the Plaud tab when the extension opened it, focuses the connect tab with `chrome.tabs.update` and `chrome.windows.update`, removes the flow and the alarm, and stores `{ "ok": true, "at": <epoch ms> }` under `lastResult` in `chrome.storage.session`. It also saves the flow's origin for automatic refresh (see "Automatic refresh").
 
-A failed end removes the flow and the alarm and stores `{ "ok": false, "reason": "<reason>" }` under `lastResult`. It does not close the Plaud tab.
+A failed end removes the flow and the alarm and stores `{ "ok": false, "reason": "<reason>", "at": <epoch ms> }` under `lastResult`. It does not close the Plaud tab.
+
+The refresh key is 32 random bytes from `crypto.getRandomValues`, encoded as base64url (43 characters). A new key is made for each delivered token.
+
+## Automatic refresh
+
+The extension keeps every server it connected on the newest Plaud token, so the connection does not expire.
+
+### State
+
+`chrome.storage.local` holds `autoRefresh`, a map from origin to an entry:
+
+```json
+{ "origin": "http://127.0.0.1:38400", "refreshKey": "<43 characters>", "site": "global", "lastExp": 1700000000000, "addedAt": 1700000000000, "tabAt": 1700000000000, "tabExp": 1700000000000 }
+```
+
+- `lastExp` is the expiry, in epoch milliseconds, of the newest token the server took. It is `null` for a token without `exp`.
+- `tabAt` and `tabExp` record when the extension last opened a Plaud tab for this entry, and the `lastExp` at that time. Both are absent until then.
+- At most five entries are kept. The oldest by `addedAt` is dropped first. A new sign-in for an origin replaces its entry.
+- The token itself is never stored. Only its expiry is.
+
+A renewal tab in progress is kept in `chrome.storage.session` under `renewal`: `{ "tabId": 14, "site": "global" }`.
+
+### When the extension sends a token
+
+A Plaud value is acceptable under "Token rules". It is newer for an entry when its expiry is later than the entry's `lastExp`, or when `lastExp` is `null` and the value has an expiry. The extension sends it to every entry of the same site for which it is newer.
+
+- `chrome.cookies.onChanged` for `pld_ut` on the site's domain, while no flow is in progress.
+- The `plaud-refresh` alarm, every 30 minutes. The first run is one minute after the worker starts. The alarm is created when the worker starts, if it does not exist.
+- `chrome.runtime.onStartup` and `chrome.runtime.onInstalled`.
+
+Each check is skipped while a flow is in progress. It reads the `pld_ut` cookie of each site that has an entry.
+
+### Renewal tab
+
+When the server's token expires within six hours or has expired (`lastExp` minus now is at most 6 hours), and the cookie is no newer, the check opens the site URL with `chrome.tabs.create({ url, active: false })`. The tab does not take focus. Loading the Plaud site renews the sign-in in the browser.
+
+- Only one renewal tab is open at a time. The check stores `tabAt` and `tabExp` before it opens the tab.
+- A tab is not opened again for the same `lastExp` within six hours of `tabAt`.
+- When the tab finishes loading, the extension reads the cookie, then `localStorage.pld_tokenstr` from the tab, and sends a newer value.
+- The tab closes as soon as a newer value was sent for its site, or after 60 seconds (`plaud-renewal-end` alarm). When the user closes it, the renewal ends.
+
+### Refresh call
+
+`POST <origin>/api/plaud/auth/refresh` with `Authorization: Bearer <refreshKey>`, `Content-Type: application/json`, `credentials: "omit"`, and the body `{ "accessToken": "<token>", "apiBase": "<base>" }`. The API base comes from the region table in "Token rules". The call times out after 20 seconds.
+
+| Answer | Effect |
+| --- | --- |
+| 200 | The entry's `lastExp` becomes the token's expiry when that is later. |
+| 401 with code `PLAUD_REFRESH_KEY_INVALID` | The entry is removed. The server no longer knows the key, for example after a disconnect. |
+| 409 | The entry is removed. The browser is signed in to another Plaud account. |
+| Any other answer, a network error or a timeout | Nothing changes. The next check tries again. |
+
+The server does the token checks and the Plaud validation. See [plaud.md](plaud.md).
 
 ### Delivery
 
@@ -188,8 +257,10 @@ The extension sends messages to the connect page with `window.postMessage(data, 
 ```
 
 ```json
-{ "app": "openaudiohub-extension", "protocol": 1, "kind": "token", "accessToken": "<token>", "apiBase": "https://api.plaud.ai" }
+{ "app": "openaudiohub-extension", "protocol": 1, "kind": "token", "accessToken": "<token>", "apiBase": "https://api.plaud.ai", "refreshKey": "<43 characters>" }
 ```
+
+`refreshKey` is optional. A page that does not know it ignores it.
 
 ```json
 { "app": "openaudiohub-extension", "protocol": 1, "kind": "failed", "reason": "timeout" }
@@ -210,22 +281,23 @@ The popup and the connect page use these sentences. The connect page appends its
 
 ## Privacy
 
-- The token passes through memory only. It is never written to `chrome.storage`, a cookie, a log or `console`.
-- The extension sends no `fetch` or `XMLHttpRequest` request. It reads only the Plaud cookie and local storage entry.
+- The token passes through memory only. It is never written to `chrome.storage`, a cookie, a log or `console`. The refresh key and the token expiry are stored in `chrome.storage.local`.
+- The only network request is the refresh call, and only to an origin the user confirmed with Connect. The extension reads only the Plaud cookie and local storage entry.
 - The Plaud host permissions are used only for the cookie read and the local storage read. The `activeTab` grant is used only for the popup and delivery on the page the user chose.
 
 ## Tests
 
 The extension has its own tests. They are not part of the contract suite.
 
-- `extension/tests/unit/` holds Vitest unit tests. They cover token cleaning, shape and expiry checks, the region table, the connect page rule, the message shapes, and the release manifest permissions.
+- `extension/tests/unit/` holds Vitest unit tests. They cover token cleaning, shape and expiry checks, the region table, the connect page rule, the message shapes, the popup state choice, the refresh key shape and the refresh timing rules, and the release manifest permissions.
 - `extension/tests/e2e/` holds Playwright tests. They load the test build in Chromium and run against a local server and the fake Plaud API.
 
-The test build differs from the release build in three ways:
+The test build differs from the release build in four ways:
 
 - The manifest adds `"http://127.0.0.1/*"` to `host_permissions`, so a test page on the local server has the permission that a real user click grants.
 - The popup reads a `tab` query parameter and treats that tab as the active tab, so the tests can open it as an ordinary tab.
 - The popup sends a `timeoutMs` value from its own query string, and a token's API base is always the test API base. The test build defines both values at compile time.
+- The service worker defines `oahRefreshNow()`, which runs one refresh check, so a test does not wait for the alarm.
 
 The release build has no test code. The unit tests check the release manifest, and a check of `extension/dist/` finds no test-only options or test identifiers.
 

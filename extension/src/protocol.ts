@@ -21,6 +21,7 @@ export type PageMessage =
           kind: "token";
           accessToken: string;
           apiBase: string;
+          refreshKey?: string;
       }
     | { app: typeof PAGE_APP; protocol: typeof PROTOCOL; kind: "failed"; reason: FailureReason };
 
@@ -51,8 +52,10 @@ export function waitingMessage(site: Site): PageMessage {
     return { app: PAGE_APP, protocol: PROTOCOL, kind: "waiting", site };
 }
 
-export function tokenMessage(accessToken: string, apiBase: string): PageMessage {
-    return { app: PAGE_APP, protocol: PROTOCOL, kind: "token", accessToken, apiBase };
+export function tokenMessage(accessToken: string, apiBase: string, refreshKey?: string): PageMessage {
+    const message: PageMessage = { app: PAGE_APP, protocol: PROTOCOL, kind: "token", accessToken, apiBase };
+    if (refreshKey !== undefined) message.refreshKey = refreshKey;
+    return message;
 }
 
 export function failedMessage(reason: FailureReason): PageMessage {

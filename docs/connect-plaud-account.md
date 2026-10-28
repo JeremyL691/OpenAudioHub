@@ -31,6 +31,8 @@ If you signed up to Plaud with Google or Apple, the browser extension is the eas
 
 You copy nothing. A sign-in lasts ten minutes. If it expires, start again.
 
+After this, the extension keeps the connection fresh by itself. See [Tokens and sign-in expiry](#tokens-and-sign-in-expiry).
+
 ## Email code
 
 1. Open the **Email code** tab and enter the email address of your Plaud account.
@@ -78,7 +80,9 @@ If a sync adds new recordings, the server sends the notifications you turned on.
 
 OpenAudioHub stores your Plaud token encrypted in the database. The token is never shown again, and it is never written to the log.
 
-- Plaud tokens expire after 24 hours. When yours expires, syncs stop until you connect again with any of the three sign-in methods.
+- Plaud tokens expire after 24 hours.
+- If you connected with the browser extension, the extension sends each new Plaud token from your browser to OpenAudioHub, so the connection does not expire. Your browser must be running and signed in to Plaud. When the token is about to expire, the extension opens Plaud in a background tab for a few seconds so Plaud renews it, then closes the tab. If the browser was closed for a day, the connection recovers when you open it again.
+- With the email code or a pasted token, nothing renews the token. When it expires, syncs stop until you connect again with any of the three sign-in methods.
 - When Plaud rejects the token anyway, the connection shows **Sign-in expired**, and syncs stop until you connect again. Your recordings stay in the library.
 - To fix it, connect again with any method. The existing recordings are kept.
 
@@ -87,4 +91,4 @@ OpenAudioHub stores your Plaud token encrypted in the database. The token is nev
 Open **Settings**, then **Plaud Account**.
 
 - **Switch account** connects a different Plaud account. Recordings you already synced stay in your library. Only future syncs use the new account.
-- **Disconnect** deletes the stored token and the device list. Recordings stay in your library. OpenAudioHub does not revoke the token with Plaud, so sign out of the Plaud web app if you want to end that session.
+- **Disconnect** deletes the stored token, the device list, and the link to your browser extension. Recordings stay in your library. OpenAudioHub does not revoke the token with Plaud, so sign out of the Plaud web app if you want to end that session.

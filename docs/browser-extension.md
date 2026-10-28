@@ -27,6 +27,18 @@ If you are already signed in to Plaud in this browser, the extension sends the s
 
 The whole exchange takes under a minute. A sign-in that is still open after five minutes ends with a timeout. Choose **Connect** again to retry.
 
+## Stay connected
+
+Plaud sign-ins expire after about 24 hours. After you connect, the extension keeps OpenAudioHub on your newest Plaud sign-in:
+
+- When Plaud renews the sign-in in your browser, the extension sends it to OpenAudioHub.
+- About every 30 minutes it checks. When the sign-in expires within six hours, it opens Plaud in a background tab, which does not take focus, and closes it again within a minute.
+- The popup lists each server it keeps connected: "Keeps Plaud connected for" and the address.
+
+This works while your browser is running and signed in to Plaud. If the browser signs in to a different Plaud account, the extension stops refreshing that server. Disconnecting in OpenAudioHub also stops it. To start again, connect again from **Settings**, then **Plaud Account**.
+
+If your server is behind a reverse proxy, let `OPTIONS` requests through to `/api/plaud/auth/refresh`.
+
 ## Permissions
 
 The extension asks for these permissions:
@@ -35,15 +47,15 @@ The extension asks for these permissions:
 |---|---|
 | `activeTab` and `scripting` | Send the result to the connect page you chose. The access is temporary and covers only that tab. |
 | `cookies` and the Plaud host permissions | Read the Plaud sign-in cookie on the Plaud site. |
-| `storage` | Remember your chosen Plaud site and the sign-in in progress. |
-| `alarms` | End a sign-in that times out. |
+| `storage` | Remember your chosen Plaud site, the sign-in in progress, and the servers to keep connected. |
+| `alarms` | End a sign-in that times out, and check the sign-in about every 30 minutes. |
 
 The extension has no content script on ordinary pages. It does not run on sites you visit and it does not read their content.
 
 ## Privacy
 
-- The Plaud sign-in value passes through memory only. It is never written to browser storage, a cookie, a log or the console.
-- The extension makes no network request. It reads the Plaud cookie and local storage entry, and sends the value to the connect page with a page message.
+- The Plaud sign-in value passes through memory only. It is never written to browser storage, a cookie, a log or the console. The extension stores a refresh key and the sign-in's expiry time.
+- The extension sends the first sign-in to the connect page with a page message. After that, its only network request sends newer sign-ins to the OpenAudioHub server you connected. It reads the Plaud cookie and local storage entry, and nothing else.
 - OpenAudioHub validates the sign-in and stores it encrypted. See [Connect your Plaud account](connect-plaud-account.md).
 
 ## Update
@@ -59,5 +71,6 @@ The extension version matches the OpenAudioHub version. A new app release can ne
 - **The icon is not on the toolbar.** Open the extensions menu, the puzzle piece icon, and pin OpenAudioHub. You can also open the popup from the extensions menu.
 - **The popup says the page is not a connect page.** Start again from **Settings**, then **Plaud Account**, and use **Open Plaud sign-in**. The popup only works on the page that opens.
 - **The sign-in timed out.** Choose **Open Plaud sign-in** again, then **Connect** in the popup.
+- **Plaud shows "Sign-in expired" anyway.** Check that your browser is signed in to Plaud, then connect once more with the extension. A connection made before automatic refresh existed needs one new connect.
 - **Your account is on the China server.** Choose **China (web.plaud.cn)** in the popup. The global site does not have your account.
 - **The popup warns about HTTPS.** The warning appears for a server that uses plain `http` and a host other than `127.0.0.1` or `localhost`. Use an HTTPS address to protect your Plaud sign-in in transit.
