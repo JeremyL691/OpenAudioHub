@@ -37,6 +37,10 @@ pub fn router() -> Router<AppState> {
             "/api/plaud/auth/handoff/complete",
             post(connect::handoff_complete),
         )
+        .route(
+            "/api/plaud/auth/refresh",
+            post(connect::refresh).options(connect::refresh_preflight),
+        )
 }
 
 /// Starts this module's background workers.
