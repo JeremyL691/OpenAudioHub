@@ -1,5 +1,8 @@
 import { CONNECT_META, FAILURE_TEXT, connectPageFromUrl, type Site } from "./protocol";
 import { readFlow, takeResult, type FlowState, type LastResult } from "./flow";
+import { readEntries } from "./refresh";
+import { choosePopupView } from "./view";
+import type { FailureReason } from "./protocol";
 
 const root = document.getElementById("popup") as HTMLElement;
 const title = document.getElementById("popup-title") as HTMLElement;
@@ -93,13 +96,18 @@ async function start(tabId: number, origin: string, site: Site): Promise<void> {
     window.close();
 }
 
-function renderHelp(): void {
+function renderHelp(origins: string[]): void {
     render("help", "OpenAudioHub");
     body.append(
         line(
             "To connect Plaud, open OpenAudioHub, go to Settings, then Plaud Account, and choose Sign in with Plaud. Then click this icon on the page that opens.",
         ),
     );
+    for (const origin of origins) {
+        const element = line(`Keeps Plaud connected for ${origin}.`);
+        element.dataset.testid = "popup-refresh";
+        body.append(element);
+    }
 }
 
 function renderWaiting(flow: FlowState): void {
@@ -123,8 +131,13 @@ function renderResult(result: LastResult): void {
     body.append(line(result.ok ? "Sent to OpenAudioHub. Check the OpenAudioHub page for the result." : FAILURE_TEXT[result.reason]));
 }
 
-function renderConfirm(url: URL, tabId: number, site: Site): void {
+function renderConfirm(url: URL, tabId: number, site: Site, failure: FailureReason | null): void {
     render("confirm", "Connect Plaud");
+    if (failure !== null) {
+        const notice = line(FAILURE_TEXT[failure], "warning");
+        notice.dataset.testid = "popup-notice";
+        body.append(notice);
+    }
     body.append(line("Send your Plaud sign-in to this OpenAudioHub server?"), originLine(url.origin));
 
     const label = document.createElement("label");
@@ -170,17 +183,28 @@ async function main(): Promise<void> {
         return;
     }
     const result = await takeResult();
-    if (result !== null) {
-        renderResult(result);
-        return;
-    }
     const tab = await activeTab();
     const page = tab === null ? null : await connectPageOf(tab);
-    if (page !== null) {
-        renderConfirm(page.url, page.tabId, await savedSite());
+    const view = choosePopupView({ hasFlow: false, result, isConnectPage: page !== null, now: Date.now() });
+    if (view.state === "confirm" && page !== null) {
+        renderConfirm(page.url, page.tabId, await savedSite(), view.failure);
         return;
     }
-    renderHelp();
+    if (view.state === "result") {
+        renderResult(view.result);
+        return;
+    }
+    await showHelp();
 }
 
-void main().catch(() => renderHelp());
+async function showHelp(): Promise<void> {
+    let origins: string[] = [];
+    try {
+        origins = (await readEntries()).map((entry) => entry.origin);
+    } catch {
+        // The help text does not depend on the list.
+    }
+    renderHelp(origins);
+}
+
+void main().catch(() => showHelp());
