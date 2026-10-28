@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-28
+
+### Added
+
+- The browser extension keeps the Plaud connection fresh. Plaud sign-ins last about 24 hours, so a connection made through the extension used to stop syncing every day or two. After you connect, the extension sends each newer Plaud sign-in from your browser to OpenAudioHub, at browser start and about every 30 minutes. When the sign-in is about to expire, it opens Plaud in a background tab for up to a minute so Plaud renews it. This needs the browser to be running and signed in to Plaud. Connect once more with the extension to turn it on.
+- `POST /api/plaud/auth/refresh` takes a newer Plaud token from the browser extension, authorized by a key the extension registers when it connects. A token for a different Plaud account is refused, and disconnecting removes the keys.
+
+### Fixed
+
+- The extension popup offers Connect on the first click on a connect page. Before, the result of an earlier sign-in took the first click, and Connect only appeared on the second.
 ## [1.3.2] - 2026-10-22
 
 ### Changed
@@ -144,7 +154,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...v1.3.2
 [1.3.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...v1.3.0
 [1.2.5]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.0...v1.2.5
