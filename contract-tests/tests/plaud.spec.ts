@@ -1,4 +1,5 @@
 import { type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { type APIRequestContext } from "@playwright/test";
 import { anonymousContext, baseURL } from "../helpers/api";
@@ -461,6 +462,84 @@ test.describe("plaud: sign-in and sync against the fake Plaud API", () => {
         expect((await again.json()).code).toBe("PLAUD_HANDOFF_EXPIRED");
         await anon.dispose();
         await owner.dispose();
+    });
+
+    test("an extension refresh key keeps the connection on the newest token", async () => {
+        const owner = await freshUser("plaud-refresh");
+        const email = uniq("refresh");
+        const key = randomBytes(32).toString("base64url");
+        const { code } = await (await owner.post("/api/plaud/auth/handoff")).json();
+        const anon = await anonymousContext();
+        const done = await anon.post("/api/plaud/auth/handoff/complete", {
+            data: { code, accessToken: await accountToken(email), apiBase: FAKE_PLAUD_URL, refreshKey: key },
+            headers: { "sec-fetch-site": "same-origin" },
+        });
+        expect(done.status()).toBe(200);
+        const first = await (await owner.get("/api/plaud/connection")).json();
+
+        const refresh = (accessToken: string, bearer = key) =>
+            anon.post("/api/plaud/auth/refresh", {
+                data: { accessToken, apiBase: FAKE_PLAUD_URL },
+                headers: { authorization: `Bearer ${bearer}` },
+            });
+
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        const newer = await accountToken(email);
+        const res = await refresh(newer);
+        expect(res.status()).toBe(200);
+        expect(res.headers()["access-control-allow-origin"]).toBe("*");
+        expect(await res.json()).toEqual({ success: true, updated: true });
+        const second = await (await owner.get("/api/plaud/connection")).json();
+        expect(second.tokenExpiresAt).not.toBe(first.tokenExpiresAt);
+
+        const same = await refresh(newer);
+        expect(same.status()).toBe(200);
+        expect(await same.json()).toEqual({ success: true, updated: false });
+
+        // A refresh after Plaud refused the stored token clears the reconnect flag.
+        await fakeControl("/account", { email, revoked: true });
+        expect((await (await owner.post("/api/plaud/sync")).json()).needsReconnect).toBe(true);
+        await fakeControl("/account", { email, revoked: false });
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        expect((await refresh(await accountToken(email))).status()).toBe(200);
+        expect(await (await owner.get("/api/plaud/connection")).json()).toMatchObject({ needsReconnect: false });
+
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        const other = await refresh(await accountToken(uniq("other")));
+        expect(other.status()).toBe(409);
+        expect((await other.json()).code).toBe("PLAUD_ACCOUNT_MISMATCH");
+
+        const unknown = await refresh(newer, randomBytes(32).toString("base64url"));
+        expect(unknown.status()).toBe(401);
+        expect((await unknown.json()).code).toBe("PLAUD_REFRESH_KEY_INVALID");
+        const bare = await anon.post("/api/plaud/auth/refresh", { data: { accessToken: newer } });
+        expect(bare.status()).toBe(401);
+        expect((await bare.json()).code).toBe("PLAUD_REFRESH_KEY_INVALID");
+
+        expect((await owner.delete("/api/plaud/connection")).status()).toBe(200);
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+        const gone = await refresh(await accountToken(email));
+        expect(gone.status()).toBe(401);
+        expect((await gone.json()).code).toBe("PLAUD_REFRESH_KEY_INVALID");
+        await anon.dispose();
+        await owner.dispose();
+    });
+
+    test("the refresh endpoint answers the extension's preflight", async () => {
+        const anon = await anonymousContext();
+        const res = await anon.fetch("/api/plaud/auth/refresh", {
+            method: "OPTIONS",
+            headers: {
+                origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+                "access-control-request-method": "POST",
+                "access-control-request-headers": "authorization, content-type",
+            },
+        });
+        expect(res.status()).toBe(204);
+        expect(res.headers()["access-control-allow-origin"]).toBe("*");
+        expect(res.headers()["access-control-allow-methods"]).toBe("POST");
+        expect(res.headers()["access-control-allow-headers"]).toBe("authorization, content-type");
+        await anon.dispose();
     });
 
     test("manual sync imports recordings with mapped fields and a workspace token", async () => {

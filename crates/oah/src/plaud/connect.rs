@@ -3,8 +3,8 @@
 use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::Html;
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::response::{Html, IntoResponse, Response};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -20,6 +20,10 @@ use crate::{AppState, ids};
 const HANDOFF_TTL_MS: i64 = 10 * 60_000;
 /// A user keeps at most this many live handoff codes.
 const HANDOFF_KEEP: i64 = 5;
+/// A user keeps at most this many extension refresh keys.
+const REFRESH_KEEP: i64 = 5;
+/// Refresh calls allowed per key and minute.
+const REFRESH_PER_MINUTE: u32 = 10;
 
 pub(super) const CONN_SQL: &str = "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
     FROM plaud_connections WHERE user_id = ?";
@@ -62,6 +66,14 @@ struct ConnectTokenBody {
 #[serde(rename_all = "camelCase")]
 struct CompleteBody {
     code: Option<String>,
+    access_token: Option<String>,
+    api_base: Option<String>,
+    refresh_key: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct RefreshBody {
     access_token: Option<String>,
     api_base: Option<String>,
 }
@@ -280,6 +292,10 @@ pub async fn disconnect(
         .execute(&mut *tx)
         .await?;
     sqlx::query("DELETE FROM plaud_connections WHERE user_id = ?")
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM plaud_refresh_keys WHERE user_id = ?")
         .bind(&user.id)
         .execute(&mut *tx)
         .await?;
@@ -543,6 +559,9 @@ pub async fn handoff_complete(
                 .bind(&code)
                 .execute(&state.db)
                 .await?;
+            if let Some(key) = b.refresh_key.as_deref().filter(|k| is_refresh_key(k)) {
+                save_refresh_key(&state, &user_id, key).await?;
+            }
             Ok(Json(json!({ "success": true })))
         }
         Err(e) => {
@@ -554,6 +573,160 @@ pub async fn handoff_complete(
             Err(e)
         }
     }
+}
+
+/// A refresh key is 32 random bytes in base64url, made by the browser extension.
+fn is_refresh_key(key: &str) -> bool {
+    key.len() == 43
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+/// Stores the key's hash for the user and drops the user's oldest keys beyond the limit.
+async fn save_refresh_key(state: &AppState, user_id: &str, key: &str) -> ApiResult<()> {
+    let mut tx = crate::db::begin_write(&state.db).await?;
+    sqlx::query(
+        "INSERT INTO plaud_refresh_keys (key_hash, user_id, created_at, last_used_at) VALUES (?, ?, ?, NULL) \
+         ON CONFLICT (key_hash) DO NOTHING",
+    )
+    .bind(crate::auth::sha256_hex(key))
+    .bind(user_id)
+    .bind(now_ms())
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "DELETE FROM plaud_refresh_keys WHERE user_id = ? AND key_hash NOT IN \
+         (SELECT key_hash FROM plaud_refresh_keys WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)",
+    )
+    .bind(user_id)
+    .bind(user_id)
+    .bind(REFRESH_KEEP)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+fn refresh_key_invalid() -> AppError {
+    AppError::new(
+        StatusCode::UNAUTHORIZED,
+        "PLAUD_REFRESH_KEY_INVALID",
+        "This browser is no longer linked to the Plaud connection. Connect Plaud again from OpenAudioHub.",
+    )
+}
+
+/// The expiry of a token in epoch milliseconds, when it has one.
+fn expiry(t: &str) -> Option<i64> {
+    token::claims(t).and_then(|c| token::expires_at_ms(&c))
+}
+
+/// Replaces the stored token of the key's owner with a newer one from the same Plaud account.
+async fn refresh_token(state: &AppState, headers: &HeaderMap, bytes: &[u8]) -> ApiResult<Value> {
+    let key = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split_once(' '))
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+        .map(|(_, k)| k.trim())
+        .filter(|k| is_refresh_key(k))
+        .ok_or_else(refresh_key_invalid)?;
+    let hash = crate::auth::sha256_hex(key);
+    let now = now_ms();
+    let decision = state.limiter.hit(
+        &format!("plaud-refresh:{hash}"),
+        REFRESH_PER_MINUTE,
+        60_000,
+        now,
+    );
+    if !decision.allowed {
+        return Err(crate::auth::too_many(&decision, now));
+    }
+    let user_id: Option<String> =
+        sqlx::query_scalar("SELECT user_id FROM plaud_refresh_keys WHERE key_hash = ?")
+            .bind(&hash)
+            .fetch_optional(&state.db)
+            .await?;
+    let user_id = user_id.ok_or_else(refresh_key_invalid)?;
+    let row: Option<ConnRow> = sqlx::query_as(CONN_SQL)
+        .bind(&user_id)
+        .fetch_optional(&state.db)
+        .await?;
+    let row = row.ok_or_else(refresh_key_invalid)?;
+
+    let b = body::<RefreshBody>(bytes);
+    let t = check_token(b.access_token)?;
+    let stored = state.config.field_key.decrypt(&row.bearer_token).ok();
+    let not_newer = match (expiry(&t), stored.as_deref().and_then(expiry)) {
+        (Some(new), Some(old)) => new <= old,
+        _ => stored.as_deref() == Some(t.as_str()),
+    };
+    if not_newer {
+        return Ok(json!({ "success": true, "updated": false }));
+    }
+    let base = match present(b.api_base) {
+        Some(raw) => allowed(state, &raw)?,
+        None => row.api_base.clone(),
+    };
+    let email = fetch_email(&base, &t).await;
+    if let (Some(new), Some(old)) = (&email, &row.plaud_email)
+        && !new.eq_ignore_ascii_case(old)
+    {
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "PLAUD_ACCOUNT_MISMATCH",
+            "This browser is signed in to a different Plaud account than the one connected to OpenAudioHub.",
+        ));
+    }
+    tracing::info!(source = "browser-extension-refresh", "plaud connect-token");
+    connect(state, &user_id, &t, &base, email.or(row.plaud_email)).await?;
+    sqlx::query("UPDATE plaud_refresh_keys SET last_used_at = ? WHERE key_hash = ?")
+        .bind(now_ms())
+        .bind(&hash)
+        .execute(&state.db)
+        .await?;
+    Ok(json!({ "success": true, "updated": true }))
+}
+
+/// The extension calls this from its service worker, so every answer allows any origin. The key
+/// is the only credential; no cookie is read.
+fn with_cors(mut response: Response) -> Response {
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    response
+}
+
+pub async fn refresh(State(state): State<AppState>, headers: HeaderMap, bytes: Bytes) -> Response {
+    with_cors(
+        refresh_token(&state, &headers, &bytes)
+            .await
+            .map(Json)
+            .into_response(),
+    )
+}
+
+pub async fn refresh_preflight() -> Response {
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        HeaderValue::from_static("POST"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("authorization, content-type"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_MAX_AGE,
+        HeaderValue::from_static("600"),
+    );
+    headers.insert(
+        "access-control-allow-private-network",
+        HeaderValue::from_static("true"),
+    );
+    with_cors(response)
 }
 
 const CONNECT_PAGE: &str = r#"<!doctype html>
@@ -690,11 +863,12 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
         return;
       }
 
-      function complete(accessToken, apiBase) {
+      function complete(accessToken, apiBase, refreshKey) {
         if (busy || done) return;
         busy = true;
         var body = { code: code, accessToken: accessToken };
         if (apiBase) body.apiBase = apiBase;
+        if (refreshKey) body.refreshKey = refreshKey;
         fetch("/api/plaud/auth/handoff/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -729,7 +903,11 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
           return;
         }
         if (data.kind === "token" && typeof data.accessToken === "string") {
-          complete(data.accessToken, typeof data.apiBase === "string" ? data.apiBase : "");
+          complete(
+            data.accessToken,
+            typeof data.apiBase === "string" ? data.apiBase : "",
+            typeof data.refreshKey === "string" ? data.refreshKey : ""
+          );
           return;
         }
         if (data.kind === "failed") {
@@ -744,4 +922,28 @@ const CONNECT_PAGE: &str = r#"<!doctype html>
 
 pub async fn page() -> Html<&'static str> {
     Html(CONNECT_PAGE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_key_shape() {
+        assert!(is_refresh_key(&token::b64url_encode(&[7u8; 32])));
+        assert!(!is_refresh_key(&token::b64url_encode(&[7u8; 31])));
+        assert!(!is_refresh_key(&format!("{}=", "a".repeat(42))));
+        assert!(!is_refresh_key(""));
+    }
+
+    #[test]
+    fn expiry_reads_the_exp_claim() {
+        let payload = token::b64url_encode(br#"{"exp":1700000000}"#.as_slice());
+        assert_eq!(
+            expiry(&format!("aaa.{payload}.bbb")),
+            Some(1_700_000_000_000)
+        );
+        let payload = token::b64url_encode(br#"{"sub":"x"}"#.as_slice());
+        assert_eq!(expiry(&format!("aaa.{payload}.bbb")), None);
+    }
 }
