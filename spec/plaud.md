@@ -8,7 +8,8 @@ Environment variables are listed in [deployment.md](deployment.md). Error envelo
 
 ## Concepts
 
-- **Connection.** One per user. It holds the encrypted long-lived Plaud user token, the API base, the Plaud account email (optional), the Plaud workspace id, a "needs reconnect" flag, and the last sync time.
+- **Connection.** One per user. It holds the encrypted Plaud user token, the API base, the Plaud account email (optional), the Plaud workspace id, a "needs reconnect" flag, and the last sync time.
+- **Refresh keys.** Keys a browser extension registered at sign-in. A key can only replace the user's Plaud token with a newer one from the same account. Only the SHA-256 of a key is stored.
 - **Devices.** The Plaud devices seen when the account was connected. Stored per user, keyed by serial number.
 - **Region.** The API base the connection talks to. Chosen at sign-in and stored with the connection.
 - **Workspace token.** A short-lived token (about 24 hours) that the app mints from the user token for each sync run. It is never stored.
@@ -70,7 +71,7 @@ Request: none
 
 Response: `200 {"success": true}`. Calling it when nothing is connected also succeeds.
 
-Side effects: deletes the connection and all device rows for the user. Synced recordings stay in the library. The app does not call Plaud to revoke the token.
+Side effects: deletes the connection, all device rows and all refresh keys for the user. Synced recordings stay in the library. The app does not call Plaud to revoke the token.
 
 Errors: `401 AUTH_SESSION_MISSING`.
 
@@ -231,6 +232,7 @@ Request body:
 | `code` | string | Required. |
 | `accessToken` | string | Required, not blank. |
 | `apiBase` | string | Optional. Same rules as connect-token. |
+| `refreshKey` | string | Optional. 43 characters from `A-Z`, `a-z`, `0-9`, `-` and `_`. Any other value is ignored. |
 
 Checks, in this order:
 
@@ -241,7 +243,33 @@ Checks, in this order:
 
 Response on success: `200 {"success": true}`. The code cannot be used again. Later status checks report `connected` until the code expires.
 
-Side effects: the connection is created or updated for the code's owner.
+Side effects: the connection is created or updated for the code's owner. When a valid `refreshKey` was sent, its SHA-256 is saved as a refresh key of the owner. Each user keeps five refresh keys; saving a sixth drops the oldest.
+
+#### POST /api/plaud/auth/refresh
+
+Auth: `Authorization: Bearer <refreshKey>`. No session is read, and no `sec-fetch-site` check is made. The browser extension calls this from its service worker to keep the connection fresh (see [browser-extension.md](browser-extension.md)).
+
+Request body:
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `accessToken` | string | Required. Same rules as connect-token. |
+| `apiBase` | string | Optional. Same rules as connect-token. The stored base is kept when it is absent. |
+
+Checks, in this order:
+
+1. The key is missing, has the wrong shape, or is unknown: `401 PLAUD_REFRESH_KEY_INVALID`.
+2. More than 10 calls for this key in the current minute: `429 RATE_LIMITED`.
+3. The key's owner has no connection: `401 PLAUD_REFRESH_KEY_INVALID`.
+4. The token checks of connect-token, steps 1 to 4.
+5. The token's expiry is not later than the stored token's expiry, or, when either has no expiry, the token equals the stored one: `200 {"success": true, "updated": false}`. Plaud is not called.
+6. `apiBase` not allowed: `400 PLAUD_INVALID_API_BASE`.
+7. The account email of the new token differs from the stored `plaudEmail` (both known, compared without case): `409 PLAUD_ACCOUNT_MISMATCH`. Nothing is saved.
+8. The connect checks and save, as connect-token. The stored email is kept when Plaud does not return one.
+
+Response on success: `200 {"success": true, "updated": true}`. The connection's needs-reconnect flag is cleared, and the key's last use time is updated. The server log records source `browser-extension-refresh`.
+
+Every answer, errors included, has `Access-Control-Allow-Origin: *`. `OPTIONS` on this path answers `204` with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: POST`, `Access-Control-Allow-Headers: authorization, content-type`, `Access-Control-Max-Age: 600` and `Access-Control-Allow-Private-Network: true`. The call carries no cookie, so the wildcard origin is safe. A reverse proxy in front of the server must pass `OPTIONS` requests on this path.
 
 ### Connect page
 
@@ -264,7 +292,7 @@ The page has one of these views. Every view uses these test ids: `connect-start`
 The page listens for messages from the extension. It accepts a message only when all of these are true: `event.source` is the page window, `event.origin` equals `location.origin`, `data.app` is `"openaudiohub-extension"`, and `data.protocol` is `1`. The message shapes and failure texts are in [browser-extension.md](browser-extension.md).
 
 - A `waiting` message shows the waiting view.
-- A `token` message posts `{ "code": "<code>", "accessToken": "<token>", "apiBase": "<base>" }` to `POST /api/plaud/auth/handoff/complete` on the same origin. The page handles one token at a time. After a success it ignores later messages.
+- A `token` message posts `{ "code": "<code>", "accessToken": "<token>", "apiBase": "<base>" }` to `POST /api/plaud/auth/handoff/complete` on the same origin. When the message has a string `refreshKey`, the body includes it. The page handles one token at a time. After a success it ignores later messages.
 - A `failed` message shows the failure view.
 
 The page's Content Security Policy is `default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'`. The page has an inline script, so it allows inline scripts. It makes no request except the handoff complete call.
@@ -278,8 +306,10 @@ The page does not talk to the extension directly. The extension posts the messag
 ## Token storage, expiry, and reconnect
 
 - The account token is encrypted at rest with the server's encryption key. No endpoint returns it, and it is not written to logs.
-- Plaud issues the account token with a 24-hour expiry (read from its `exp` claim). The server never refreshes it.
-- The desktop build refreshes it in the background while the app runs (see [desktop.md](desktop.md) section 10.3): a hidden window loads the Plaud site on the web session saved by the interactive sign-in, and the token it hands out is posted to `connect-token` with source `desktop-refresh`. Other builds do not refresh; when Plaud refuses the stored token, the user reconnects.
+- Plaud issues the account token with a 24-hour expiry (read from its `exp` claim). The server cannot renew it by itself.
+- The browser extension keeps it fresh after a sign-in through the extension: it sends each newer token from the browser to `POST /api/plaud/auth/refresh` (see [browser-extension.md](browser-extension.md), "Automatic refresh"). This needs the browser to be running and signed in to Plaud.
+- The desktop build also refreshes it in the background while the app runs (see [desktop.md](desktop.md) section 10.3): a hidden window loads the Plaud site on the web session saved by the interactive sign-in, and the token it hands out is posted to `connect-token` with source `desktop-refresh`.
+- Without either, the user reconnects when Plaud refuses the stored token.
 - A 401 during sync stamps the connection as needing reconnect. Rows and recordings are kept. Reconnecting (any sign-in path) saves a new token and clears the flag.
 - Workspace tokens are minted from the account token at the start of each sync run and kept in memory only. If minting fails for any reason, the run uses the account token instead.
 - Pasted workspace tokens are refused everywhere, because they cannot be renewed.
@@ -495,7 +525,9 @@ Every error uses the standard envelope (see [errors.md](errors.md)). Codes used 
 | `PLAUD_UPSTREAM_ERROR` | 502 | | Plaud server error or unreachable. |
 | `PLAUD_RATE_LIMITED` | 429 | `retryAfter` | Plaud rate limit after retries. |
 | `PLAUD_HANDOFF_EXPIRED` | 410 | | Handoff code unknown, expired, or used. |
-| `RATE_LIMITED` | 429 | `retryAfter`, `limit`, `remaining`, `resetAt` | Manual sync limit. |
+| `PLAUD_REFRESH_KEY_INVALID` | 401 | | Refresh key missing, unknown, or its owner has no connection. |
+| `PLAUD_ACCOUNT_MISMATCH` | 409 | | Refresh token belongs to another Plaud account. |
+| `RATE_LIMITED` | 429 | `retryAfter`, `limit`, `remaining`, `resetAt` | Manual sync limit, or refresh limit per key. |
 
 ## Test-only override: OAH_PLAUD_API_BASE
 

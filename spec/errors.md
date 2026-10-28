@@ -76,12 +76,14 @@ The table lists the status each code uses in an error response. A code can use m
 | --- | --- | --- |
 | `FORBIDDEN` | 403 | The Plaud sign-in handoff request came from another site. |
 | `PLAUD_API_ERROR` | 400 | Plaud refused a request. `details.plaudStatus` carries its status. |
+| `PLAUD_ACCOUNT_MISMATCH` | 409 | A refresh sent a token for another Plaud account than the connected one. |
 | `PLAUD_HANDOFF_EXPIRED` | 410 | The sign-in handoff code is unknown, expired, used, or already connected. |
 | `PLAUD_INVALID_API_BASE` | 400 | The Plaud API address is not allowed. |
 | `PLAUD_INVALID_TOKEN` | 400 | The Plaud token has expired at connect. |
 | `PLAUD_INVALID_TOKEN` | 401 | Plaud rejected the token. |
 | `PLAUD_OTP_INVALID` | 400 | Plaud refused the one-time code. |
 | `PLAUD_RATE_LIMITED` | 429 | Plaud kept rate limiting after retries. |
+| `PLAUD_REFRESH_KEY_INVALID` | 401 | The refresh key is missing or unknown, or its owner has no Plaud connection. |
 | `PLAUD_REGION_REDIRECT_LOOP` | 502 | Plaud sent more than three regional redirects. |
 | `PLAUD_UPSTREAM_ERROR` | 502 | Plaud returned a server error, or could not be reached, after retries. |
 | `PLAUD_WORKSPACE_TOKEN_PASTED` | 400 | A workspace token was pasted. The account token is needed instead. |
