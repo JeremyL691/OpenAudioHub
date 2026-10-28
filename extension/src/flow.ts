@@ -15,6 +15,9 @@ export interface FlowState {
 
 export type LastResult = { ok: true } | { ok: false; reason: FailureReason };
 
+/** A result as stored, with the time it was stored in epoch milliseconds. */
+export type StoredResult = LastResult & { at?: number };
+
 export async function readFlow(): Promise<FlowState | null> {
     const stored = await chrome.storage.session.get(FLOW_KEY);
     const flow = stored[FLOW_KEY] as FlowState | undefined;
@@ -30,13 +33,14 @@ export async function clearFlow(): Promise<void> {
 }
 
 export async function rememberResult(result: LastResult): Promise<void> {
-    await chrome.storage.session.set({ [RESULT_KEY]: result });
+    const stored: StoredResult = { ...result, at: Date.now() };
+    await chrome.storage.session.set({ [RESULT_KEY]: stored });
 }
 
 /** Reads and removes the result of the last flow. */
-export async function takeResult(): Promise<LastResult | null> {
+export async function takeResult(): Promise<StoredResult | null> {
     const stored = await chrome.storage.session.get(RESULT_KEY);
-    const result = stored[RESULT_KEY] as LastResult | undefined;
+    const result = stored[RESULT_KEY] as StoredResult | undefined;
     if (result === undefined) return null;
     await chrome.storage.session.remove(RESULT_KEY);
     return result;

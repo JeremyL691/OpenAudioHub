@@ -63,6 +63,17 @@ describe("messages", () => {
         });
     });
 
+    it("adds the refresh key to a token message when given", () => {
+        expect(tokenMessage("abc.def.ghi", "https://api.plaud.ai", "k".repeat(43))).toEqual({
+            app: PAGE_APP,
+            protocol: PROTOCOL,
+            kind: "token",
+            accessToken: "abc.def.ghi",
+            apiBase: "https://api.plaud.ai",
+            refreshKey: "k".repeat(43),
+        });
+    });
+
     it("builds a failed message", () => {
         expect(failedMessage("timeout")).toEqual({
             app: PAGE_APP,
