@@ -91,6 +91,28 @@ Auto export runs only in the desktop build, and only while the app is running. S
 
 Test coverage: unit tests in `crates/oah/src/export/auto.rs`. The contract tests do not cover auto export; the folder behavior needs the desktop build and a writable local folder.
 
+## ZIP archive audio auto-merge and export (desktop build only)
+
+ZIP archive auto-merge runs in the desktop build when `zipAutoMerge` is `true` and `zipWatchFolder` names a writable folder, or on demand via `POST /api/zip/merge`. Settings are in [`settings.md`](settings.md): `zipAutoMerge`, `zipWatchFolder`, `zipExportFolder`, `zipTitleMode`, and `zipDeleteAfterMerge`.
+
+- The worker scans `zipWatchFolder` (top level) for `.zip` files whose size and modification time have been stable across two checks (at least 1.5 seconds old).
+- Each `.zip` is hashed with SHA-256 and checked against `zip_imports` (`UNIQUE(user_id, zip_sha256)`). Already imported archives are skipped during background auto-merge passes.
+- Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac`, `.webm`) are extracted, ignoring `__MACOSX/` and hidden files.
+- Segments are sorted strictly in true recording chronological order using:
+  1. the earliest UTC start timestamp per file from `Export-notes.txt` when present;
+  2. the UTC start and end timestamps parsed from the filename (`<Prefix>_YYYY-MM-DD_HH-MM-SS_to_[YYYY-MM-DD_]HH-MM-SS[_UTC±HHMM]` or `YYYY-MM-DD[_T ]HH[-:]MM[-:]SS` / `YYYYMMDD[_-]HHMMSS`);
+  3. the audio container's `creation_time` metadata tag via `ffprobe`;
+  4. the ZIP entry's `last_modified` timestamp when it is not the default DOS epoch (`1980-01-01 00:00:00`);
+  5. natural numeric filename order.
+- Segments are merged into a single `.m4a` file (`ffmpeg -f concat` stream copy with `-movflags +faststart`, falling back to AAC re-encoding when segments differ in stream parameters).
+- The merged audio is stored in the user's OpenAudioHub library (`device_sn = "local"`, `plaud_file_id = "zip-<sha256>"`) and also written atomically to `zipExportFolder` (or `zipWatchFolder` when `zipExportFolder` is `null`).
+- Naming (`zipTitleMode`):
+  - `original`: derived from the chronological span of the segments (`YYYY-MM-DD_HH-MM-SS_to_HH-MM-SS` on one day, or `YYYY-MM-DD_HH-MM-SS_to_YYYY-MM-DD_HH-MM-SS` across days), or the `.zip` stem when filenames carry no timestamp span.
+  - `date`: the earliest segment's recording date in local time (`YYYY-MM-DD`).
+  - `ai`: starts with the recording date (`YYYY-MM-DD.m4a`) and renames both the library recording and the exported `.m4a` file once transcription and AI title generation complete.
+- When `zipDeleteAfterMerge` is `true`, the source `.zip` file is removed only after both the library recording and the exported `.m4a` file are committed.
+- `POST /api/zip/merge` (session auth, desktop build only) scans `zipWatchFolder` for `.zip` archives. Request JSON body (optional): `{ "duplicateAction": "ask" | "skip" | "replace" | "keep_both", "onlyFiles": ["archive.zip"] }`. When `duplicateAction` is `"ask"` (default), unmerged archives are merged at once and already merged archives are returned in `alreadyMerged` without re-merging so the UI can ask whether to replace (`"replace"`), merge and keep both (`"keep_both"`), or skip (`"skip"`). Response `200`: `{ "merged": <count>, "skipped": <count>, "alreadyMerged": [...], "errors": [...] }`.
+
 ## Removed backup routes
 
 The former full backup archives (`/api/backup`, its job routes and downloads) and scheduled backups are gone; those addresses answer `404`. Existing archive files and `export_jobs` rows are left untouched, and the retired `backupFrequency` and `backupFolder` settings are ignored.

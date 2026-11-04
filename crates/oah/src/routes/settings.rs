@@ -104,6 +104,11 @@ const RULES: &[(&str, Rule)] = &[
     ("emailNotifications", Rule::Bool),
     ("notificationEmail", Rule::StringOrNull),
     ("barkNotifications", Rule::Bool),
+    ("zipAutoMerge", Rule::Bool),
+    ("zipWatchFolder", Rule::StringOrNull),
+    ("zipExportFolder", Rule::StringOrNull),
+    ("zipTitleMode", Rule::OneOf(&["original", "date", "ai"])),
+    ("zipDeleteAfterMerge", Rule::Bool),
 ];
 
 /// Defaults for a brand-new account. Account-level and read-only fields are added in `get_user`.
@@ -151,7 +156,12 @@ const DEFAULTS_JSON: &str = r#"{
         "emailNotifications": false,
         "notificationEmail": null,
         "barkNotifications": false,
-        "marketingEmailConsent": false
+        "marketingEmailConsent": false,
+        "zipAutoMerge": false,
+        "zipWatchFolder": null,
+        "zipExportFolder": null,
+        "zipTitleMode": "original",
+        "zipDeleteAfterMerge": false
 }"#;
 
 pub fn defaults() -> Map<String, Value> {
@@ -419,6 +429,39 @@ async fn put_user(
         }
     }
 
+    if let Some(path) = input.get("zipWatchFolder").and_then(Value::as_str)
+        && (state.config.desktop.is_none() || !writable_dir(path).await)
+    {
+        return Err(invalid("zipWatchFolder"));
+    }
+
+    if let Some(path) = input.get("zipExportFolder").and_then(Value::as_str)
+        && (state.config.desktop.is_none() || !writable_dir(path).await)
+    {
+        return Err(invalid("zipExportFolder"));
+    }
+
+    if input.get("zipAutoMerge") == Some(&Value::Bool(true)) {
+        if state.config.desktop.is_none() {
+            return Err(AppError::bad_request(
+                "INVALID_INPUT",
+                "ZIP auto merge is only available in the desktop app",
+            )
+            .detail("field", "zipAutoMerge"));
+        }
+        if stored
+            .get("zipWatchFolder")
+            .and_then(Value::as_str)
+            .is_none_or(|s| s.is_empty())
+        {
+            return Err(AppError::bad_request(
+                "INVALID_INPUT",
+                "Choose a ZIP watch folder in the desktop app first",
+            )
+            .detail("field", "zipAutoMerge"));
+        }
+    }
+
     sqlx::query(
         "INSERT INTO user_settings (user_id, data, updated_at) VALUES (?, ?, ?)
          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
@@ -437,6 +480,9 @@ async fn put_user(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    if input.keys().any(|k| k.starts_with("zip")) {
+        crate::zip_merge::notify();
+    }
     Ok(Json(json!({ "success": true })))
 }
 

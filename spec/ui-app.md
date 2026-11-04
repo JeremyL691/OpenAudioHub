@@ -225,7 +225,7 @@ Navigation groups, in order:
 | Group | Sections (name, id) |
 |---|---|
 | AI | Providers (`providers`), Transcription (`transcription`), Summary (`summary`), Recording names (`naming`) |
-| Plaud & Sync | Plaud Account (`plaud-account`), Sync (`sync`) |
+| Plaud & Sync | Plaud Account (`plaud-account`), Sync (`sync`), ZIP Files (`zip-files`) |
 | Playback & Display | Playback (`playback`), Display (`display`) |
 | Data | Storage (`storage`), Export (`export`) |
 | Desktop (desktop app only) | Desktop (`desktop`) |
@@ -242,6 +242,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 | `naming` | Recording names | Choose how new recordings are named, and fix date titles written before the date mode used plain dates. |
 | `plaud-account` | Plaud Account | The Plaud cloud account OpenAudioHub pulls recordings from. |
 | `sync` | Sync | When and how OpenAudioHub pulls new recordings from your Plaud device. |
+| `zip-files` | ZIP Files | Automatically unpack, chronologically merge, and import segmented audio from ZIP archives. |
 | `playback` | Playback | Start-up settings the player applies to every recording. |
 | `display` | Display | Date and time format, list order, theme, and other interface choices. |
 | `storage` | Storage | Where OpenAudioHub keeps the audio files behind your recordings. |
@@ -305,6 +306,11 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 - "Sync on app load" (switch). Saves `syncOnMount`.
 - "Sync on tab visibility" (switch, with the description "Sync when you return to the app tab."). Saves `syncOnVisibilityChange`.
 - "Show sync notifications" (switch). Saves `syncNotifications`.
+
+### 4.8.1 ZIP Files (`zip-files`)
+
+- In the desktop app: "Auto-merge ZIP archives" (`zip-auto-merge-switch`, saves `zipAutoMerge`), "Watch folder" (`zip-watch-folder-choose`, saves `zipWatchFolder`), "Export folder" (`zip-export-folder-choose` and `zip-export-folder-clear`, saves `zipExportFolder`), "Delete original ZIP after merge" (`zip-delete-after-merge-switch`, saves `zipDeleteAfterMerge`), "File name" radio group (`zip-title-mode`, options `original`, `date`, `ai`, saves `zipTitleMode`), and "Merge now" (`zip-merge-now`, calls `POST /api/zip/merge` and opens the duplicate notification dialog `zip-duplicate-dialog` with `zip-duplicate-replace`, `zip-duplicate-keep-both`, and `zip-duplicate-skip` when an archive was already merged).
+- In a browser: the auto-merge switch is disabled and shown with "Coming soon".
 
 ### 4.9 Playback (`playback`)
 

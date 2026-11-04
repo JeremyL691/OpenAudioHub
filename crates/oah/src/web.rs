@@ -82,6 +82,7 @@ const SETTINGS_SECTIONS: &[&str] = &[
     "naming",
     "plaud-account",
     "sync",
+    "zip-files",
     "playback",
     "display",
     "notifications",

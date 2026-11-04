@@ -100,6 +100,11 @@ const DEFAULTS: Record<string, unknown> = {
     importPlaudContent: false,
     transcriptMode: "plaud_only",
     preferredTranscriptSource: "plaud",
+    zipAutoMerge: false,
+    zipWatchFolder: null,
+    zipExportFolder: null,
+    zipTitleMode: "original",
+    zipDeleteAfterMerge: false,
 };
 
 // ---------- user settings ----------
@@ -168,6 +173,7 @@ test("user settings: enum fields reject unknown values with the field name", asy
         ["transcriptMode", "both"],
         ["recordingTitleMode", "never"],
         ["preferredTranscriptSource", "bogus"],
+        ["zipTitleMode", "never"],
     ];
     for (const [field, value] of bad) {
         const res = await api.put("/api/settings/user", {
@@ -273,6 +279,12 @@ test("user settings: autoExport cannot be turned on in the web app", async () =>
     };
     expect(body.code).toBe("INVALID_INPUT");
     expect(body.details.field).toBe("autoExport");
+
+    const zipMerge = await api.put("/api/settings/user", {
+        data: { zipAutoMerge: true },
+    });
+    expect(zipMerge.status()).toBe(400);
+    expect((await zipMerge.json()).details.field).toBe("zipAutoMerge");
     await api.dispose();
 });
 
@@ -284,6 +296,18 @@ test("user settings: the export folder must exist, and retired backup keys are i
     });
     expect(exp.status()).toBe(400);
     expect((await exp.json()).details.field).toBe("autoExportFolder");
+
+    const zipWatch = await api.put("/api/settings/user", {
+        data: { zipWatchFolder: missing },
+    });
+    expect(zipWatch.status()).toBe(400);
+    expect((await zipWatch.json()).details.field).toBe("zipWatchFolder");
+
+    const zipExp = await api.put("/api/settings/user", {
+        data: { zipExportFolder: missing },
+    });
+    expect(zipExp.status()).toBe(400);
+    expect((await zipExp.json()).details.field).toBe("zipExportFolder");
 
     const retired = await api.put("/api/settings/user", {
         data: { backupFrequency: "daily", backupFolder: missing },

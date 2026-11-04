@@ -127,6 +127,11 @@ as sent, without a check.
 | `notificationEmail` | string or null | `null` | string or null, not checked as an address. When empty or unset, the account email is used |
 | `barkNotifications` | boolean | `false` | see "Notifications" |
 | `barkPushUrl` | string or null | `null` | string or null. Stored encrypted. Null or a blank string clears it. Not checked as a URL here |
+| `zipAutoMerge` | boolean | `false` | `true` only in the desktop app, and only when `zipWatchFolder` is set |
+| `zipWatchFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
+| `zipExportFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
+| `zipTitleMode` | string | `"original"` | `original`, `date`, `ai` |
+| `zipDeleteAfterMerge` | boolean | `false` | boolean |
 
 Errors for the rules above are `400 INVALID_INPUT` with `details.field` set to the field:
 
@@ -146,6 +151,9 @@ Folder and export rules (desktop app only):
   `autoExport`, message `Auto export is only available in the desktop app`.
 - `autoExport: true` on the desktop app with no export folder stored: `400`,
   `details.field` = `autoExport`, message `Choose an export folder in the desktop app first`.
+- `zipWatchFolder` or `zipExportFolder` set to a string on a server that is not the desktop app, or naming a folder that does not exist or is read-only: `400`, `details.field` set to the field name, `Invalid value for <field>`.
+- `zipAutoMerge: true` on a server that is not the desktop app: `400`, `details.field` = `zipAutoMerge`, message `ZIP auto-merge is only available in the desktop app`.
+- `zipAutoMerge: true` on the desktop app with no watch folder stored: `400`, `details.field` = `zipAutoMerge`, message `Choose a watch folder in the desktop app first`.
 - `backupFrequency` and `backupFolder` are retired. Values are ignored, never stored, and
   never returned.
 

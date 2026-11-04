@@ -89,6 +89,7 @@ const SECTION_TITLES: [id: string, title: string][] = [
     ["naming", "Recording names"],
     ["plaud-account", "Plaud Account"],
     ["sync", "Sync"],
+    ["zip-files", "ZIP Files"],
     ["playback", "Playback"],
     ["display", "Display"],
     ["storage", "Storage"],
@@ -409,6 +410,7 @@ test.describe("settings: navigation", () => {
             "Recording names settings",
             "Plaud Account settings",
             "Sync settings",
+            "ZIP Files settings",
             "Playback settings",
             "Display settings",
             "Storage settings",
@@ -645,6 +647,75 @@ test.describe("settings: saving controls (fresh account)", () => {
             await expect(page.getByRole("button", { name: "Export text" })).toBeVisible();
             await expect(page.getByTestId("backup-start")).toHaveCount(0);
             await expect(page.getByText("Backup frequency")).toHaveCount(0);
+        } finally {
+            await close();
+        }
+    });
+
+    test("zip-files: merge now scans the watch folder and prompts on already-merged archives", async ({ browser }) => {
+        const { page, close } = await freshPage(browser);
+        try {
+            await page.addInitScript(() => {
+                (window as unknown as Record<string, unknown>).__openaudiohubDesktop = {
+                    pickFolder: async () => "/tmp/watch",
+                };
+            });
+            await page.route("**/api/settings/user", async (route) => {
+                if (route.request().method() === "GET") {
+                    const res = await route.fetch();
+                    const json = (await res.json()) as Record<string, unknown>;
+                    json.zipWatchFolder = "/tmp/watch";
+                    await route.fulfill({ response: res, json });
+                    return;
+                }
+                await route.continue();
+            });
+            const mergeCalls: Record<string, unknown>[] = [];
+            await page.route("**/api/zip/merge", async (route) => {
+                const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+                mergeCalls.push(body);
+                if (body.duplicateAction === "ask") {
+                    await route.fulfill({
+                        status: 200,
+                        contentType: "application/json",
+                        body: JSON.stringify({
+                            merged: 1,
+                            skipped: 1,
+                            alreadyMerged: ["session-a.zip"],
+                            errors: [],
+                        }),
+                    });
+                } else {
+                    await route.fulfill({
+                        status: 200,
+                        contentType: "application/json",
+                        body: JSON.stringify({
+                            merged: 1,
+                            skipped: 0,
+                            alreadyMerged: [],
+                            errors: [],
+                        }),
+                    });
+                }
+            });
+
+            await page.goto("/settings/zip-files");
+            await expect(page.getByTestId("zip-merge-now")).toBeEnabled();
+            await page.getByTestId("zip-merge-now").click();
+
+            const dialog = page.getByTestId("zip-duplicate-dialog");
+            await expect(dialog).toBeVisible();
+            await expect(dialog).toContainText("session-a.zip");
+            await expect(page.getByTestId("zip-duplicate-replace")).toBeVisible();
+            await expect(page.getByTestId("zip-duplicate-keep-both")).toBeVisible();
+            await expect(page.getByTestId("zip-duplicate-skip")).toBeVisible();
+
+            await page.getByTestId("zip-duplicate-replace").click();
+            await expect(dialog).toBeHidden();
+            expect(mergeCalls).toEqual([
+                { duplicateAction: "ask" },
+                { duplicateAction: "replace", onlyFiles: ["session-a.zip"] },
+            ]);
         } finally {
             await close();
         }

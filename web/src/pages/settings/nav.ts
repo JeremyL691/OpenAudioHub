@@ -4,6 +4,7 @@ import {
     Bot,
     Download,
     FileText,
+    FolderArchive,
     HardDrive,
     Laptop,
     ListChecks,
@@ -22,6 +23,7 @@ export type SectionId =
     | "naming"
     | "plaud-account"
     | "sync"
+    | "zip-files"
     | "playback"
     | "display"
     | "storage"
@@ -111,6 +113,15 @@ export const SECTIONS: SectionDef[] = [
         descriptionKey: "settings.nav.syncDescription",
         icon: RefreshCw,
         tile: "bg-tile-green",
+        group: "plaud-sync",
+    },
+    {
+        id: "zip-files",
+        nameKey: "settings.nav.zipFilesName",
+        titleKey: "settings.nav.zipFilesName",
+        descriptionKey: "settings.nav.zipFilesDescription",
+        icon: FolderArchive,
+        tile: "bg-tile-teal",
         group: "plaud-sync",
     },
     {

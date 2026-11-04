@@ -18,6 +18,7 @@ import { SectionFrame, SettingSelect, SettingsProvider, type OptionGroup } from 
 import { ProvidersSection } from "./providers";
 import { NamingSection, SummarySection, TranscriptionSection } from "./ai-sections";
 import { PlaudAccountSection } from "./plaud-account";
+import { ZipFilesSection } from "./zip-files";
 import { DisplaySection, PlaybackSection, SyncSection } from "./sync-sections";
 import { NotificationsSection } from "./notifications";
 import { ExportSection, StorageSection } from "./storage-export";
@@ -30,6 +31,7 @@ const BODIES: Record<SectionId, ComponentType> = {
     naming: NamingSection,
     "plaud-account": PlaudAccountSection,
     sync: SyncSection,
+    "zip-files": ZipFilesSection,
     playback: PlaybackSection,
     display: DisplaySection,
     storage: StorageSection,

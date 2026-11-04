@@ -295,7 +295,24 @@ async fn auto_title(state: &AppState, user_id: &str, recording_id: &str, transcr
             return;
         }
     };
-    if settings.get("autoGenerateTitle") != Some(&Value::Bool(true)) {
+    let is_zip_import: bool = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT plaud_file_id FROM recordings WHERE id = ? AND user_id = ?",
+    )
+    .bind(recording_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .flatten()
+    .is_some_and(|fid| fid.starts_with("zip-"));
+
+    let wants_title = if is_zip_import {
+        settings.get("zipTitleMode").and_then(Value::as_str) == Some("ai")
+    } else {
+        settings.get("autoGenerateTitle") == Some(&Value::Bool(true))
+    };
+    if !wants_title {
         return;
     }
     if let Err(e) = crate::summary::title::generate(

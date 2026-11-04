@@ -98,6 +98,7 @@ pub async fn generate(
         == 1;
     if wrote {
         crate::plaud::push_title(state, user_id, recording_id, &title).await;
+        crate::zip_merge::notify();
     }
     Ok(())
 }

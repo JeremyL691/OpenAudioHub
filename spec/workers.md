@@ -34,6 +34,7 @@ Terms used below:
 | Auto-summary | Right after the transcript's follow-up runs, when the user has auto-summarize on. | Where the summary is queued by the follow-up. | Two jobs at a time. | None. Hourly cap per user (section 5). | An event `summary.failed` is emitted. The transcript is kept. |
 | Manual summary job | A request for a summary (`ai.md`). | When a job is queued | Two jobs at a time. | None. A failed job is not retried. | The job fails and its error is returned to the request. |
 | Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
+| ZIP auto-merge | Every 10 seconds, or when ZIP auto-merge settings or an AI title change. Desktop app only. | Every 10 seconds | One pass at a time, per user in turn. | Retried on the next pass if a file is still being written or fails to merge. | The failure is logged and the archive is left untouched. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
 
 Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 9 to 11.

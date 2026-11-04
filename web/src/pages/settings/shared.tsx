@@ -78,6 +78,11 @@ export interface UserSettings {
     barkPushUrl: string | null;
     barkPushUrlSet: boolean;
     marketingEmailConsent: boolean;
+    zipAutoMerge: boolean;
+    zipWatchFolder: string | null;
+    zipExportFolder: string | null;
+    zipTitleMode: "original" | "date" | "ai";
+    zipDeleteAfterMerge: boolean;
 }
 
 export type SettingsPatch = Partial<UserSettings>;

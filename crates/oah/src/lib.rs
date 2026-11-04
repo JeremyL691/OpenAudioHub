@@ -20,6 +20,7 @@ pub mod time;
 pub mod transcribe;
 pub mod web;
 pub mod webhooks;
+pub mod zip_merge;
 
 use std::sync::Arc;
 
@@ -84,6 +85,7 @@ pub fn start_workers(state: &AppState) {
     webhooks::spawn(state);
     plaud::spawn(state);
     export::spawn(state);
+    zip_merge::spawn(state);
     routes::recordings::spawn_waveform_backfill(state);
 }
 
@@ -95,6 +97,7 @@ pub fn app(state: AppState) -> Router {
         .merge(summary::router())
         .merge(plaud::router())
         .merge(export::router())
+        .merge(zip_merge::router())
         .merge(chat::routes::router())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

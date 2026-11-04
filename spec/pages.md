@@ -87,7 +87,7 @@ Server-side redirects. All are `307` with a `Location` path. On a single-account
 | `/dashboard?settings=<other>` | unknown or empty section | 200 app shell (no redirect) |
 
 Settings sections for `?settings=`: `providers`, `transcription`, `summary`, `naming`,
-`plaud-account`, `sync`, `playback`, `display`, `notifications`, `storage`, `export`.
+`plaud-account`, `sync`, `zip-files`, `playback`, `display`, `notifications`, `storage`, `export`.
 
 Browser-side forwards, done by the web app after the shell loads:
 
