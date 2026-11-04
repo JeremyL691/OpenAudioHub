@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-03
+
+### Added
+
+- ZIP Files in the Mac app unpacks `.zip` archives from a watched folder, orders the audio segments inside by their recording time (`Export-notes.txt` start times, timestamps in the file name, audio `creation_time` tags, entry modification times, or natural file name order), merges them into one `.m4a` file, imports the recording into the library, and writes the merged file to the chosen export folder.
+- Merged ZIP recordings can be named by the original recording time span, the recording date, or the AI title (which starts as the date and renames both the library entry and the exported `.m4a` file once transcription finishes), with an option to delete the source `.zip` after merge.
+- "Merge now" in the ZIP Files settings scans the watch folder for all `.zip` archives at once, merges any unmerged archives, and asks whether to replace the existing recording, keep both and merge, or keep the existing recording when an archive was already merged before.
+
+### Fixed
+
+- Scrolling up in the library recording list no longer makes the day group headers stick or overlap the rows below them.
+
 ## [1.4.0] - 2026-10-28
 
 ### Added
@@ -154,7 +166,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...v1.3.2
 [1.3.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.2.5...v1.3.0
