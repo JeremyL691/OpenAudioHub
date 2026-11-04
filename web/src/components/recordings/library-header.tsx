@@ -50,7 +50,7 @@ export function LibraryHeader(props: LibraryHeaderProps) {
     }
 
     return (
-        <div className="bg-background lg:sticky lg:top-0 lg:z-10">
+        <div className="shrink-0 bg-background">
             <div className="flex items-baseline justify-between gap-3 px-4 pt-4">
                 <h2 className="min-w-0 truncate text-[17px] font-semibold">{title}</h2>
                 <div className="flex shrink-0 items-baseline gap-3 text-xs tabular-nums text-muted-foreground">

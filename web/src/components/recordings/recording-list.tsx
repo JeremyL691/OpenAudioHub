@@ -67,83 +67,85 @@ export function RecordingList(props: RecordingListProps) {
     }, [hasMore, rowCount]);
 
     return (
-        <div
-            ref={root}
-            data-testid="recording-list"
-            className={cn("min-h-0 flex-col overflow-y-auto overscroll-contain bg-background", props.className)}
-        >
+        <div className={cn("min-h-0 flex-col bg-background md:overflow-hidden", props.className)}>
             {props.header}
 
-            <div className="flex flex-col pb-6">
-                {props.status === "loading" ? (
-                    <div className="flex justify-center py-8">
-                        <Spinner label={t("library.loading")} />
-                    </div>
-                ) : null}
-
-                {props.status === "error" ? (
-                    <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-                        <p className="text-sm text-muted-foreground" role="alert">
-                            {props.error ?? t("library.loadError")}
-                        </p>
-                        <Button variant="secondary" size="sm" onClick={props.onRetry}>
-                            {t("library.tryAgain")}
-                        </Button>
-                    </div>
-                ) : null}
-
-                {props.pending.map((upload) => (
-                    <div key={upload.key} className="mx-2 flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted-foreground">
-                        <Spinner label={t("library.uploadingProgress", { name: upload.name })} />
-                        <span className="min-w-0 truncate">{upload.name}</span>
-                    </div>
-                ))}
-
-                {groups.map((group) => (
-                    <section key={group.key} className="flex flex-col">
-                        {props.showHeadings ? (
-                            <div className="sticky top-0 z-10 flex items-baseline gap-2 bg-background/85 px-4 pt-3 pb-1 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:static">
-                                <h3 className="text-[13px] font-semibold text-foreground">{group.label}</h3>
-                                <p className="text-xs tabular-nums text-muted-foreground">{groupSummary(group.rows.length, group.totalMs)}</p>
-                            </div>
-                        ) : null}
-                        <div className="flex flex-col gap-0.5 px-2">
-                            {group.rows.map((recording) => (
-                                <Fragment key={recording.id}>{props.renderRow(recording)}</Fragment>
-                            ))}
+            <div
+                ref={root}
+                data-testid="recording-list"
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
+            >
+                <div className="flex flex-col pb-6">
+                    {props.status === "loading" ? (
+                        <div className="flex justify-center py-8">
+                            <Spinner label={t("library.loading")} />
                         </div>
-                    </section>
-                ))}
+                    ) : null}
 
-                {props.emptyText && props.status === "ready" ? (
-                    // A search that is running or that failed gets its own state, with a way to
-                    // ask again: an incomplete answer must not read as "nothing matches".
-                    <div className="flex flex-col items-center gap-3 px-4 py-8" role="status" aria-live="polite">
-                        <p className="text-center text-sm text-muted-foreground">{props.emptyText}</p>
-                        {props.searchStatus === "searching" ? <Spinner /> : null}
-                    </div>
-                ) : null}
-
-                {/* A failed search is reported whether or not the list still shows rows: the rows
-                    that are there are not the answer to the query being asked. */}
-                {props.searchStatus === "error" ? (
-                    <div
-                        className="flex flex-col items-center gap-3 px-4 py-6"
-                        role="alert"
-                        data-testid="recording-search-error"
-                    >
-                        <p className="text-center text-sm text-muted-foreground">
-                            {props.searchErrorText}
-                        </p>
-                        {props.onSearchRetry ? (
-                            <Button variant="outline" size="sm" onClick={props.onSearchRetry}>
-                                {t("library.retry")}
+                    {props.status === "error" ? (
+                        <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+                            <p className="text-sm text-muted-foreground" role="alert">
+                                {props.error ?? t("library.loadError")}
+                            </p>
+                            <Button variant="secondary" size="sm" onClick={props.onRetry}>
+                                {t("library.tryAgain")}
                             </Button>
-                        ) : null}
-                    </div>
-                ) : null}
+                        </div>
+                    ) : null}
 
-                {hasMore ? <div ref={marker} aria-hidden="true" className="h-px" /> : null}
+                    {props.pending.map((upload) => (
+                        <div key={upload.key} className="mx-2 flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted-foreground">
+                            <Spinner label={t("library.uploadingProgress", { name: upload.name })} />
+                            <span className="min-w-0 truncate">{upload.name}</span>
+                        </div>
+                    ))}
+
+                    {groups.map((group) => (
+                        <section key={group.key} className="flex flex-col">
+                            {props.showHeadings ? (
+                                <div className="flex items-baseline gap-2 px-4 pt-3 pb-1">
+                                    <h3 className="text-[13px] font-semibold text-foreground">{group.label}</h3>
+                                    <p className="text-xs tabular-nums text-muted-foreground">{groupSummary(group.rows.length, group.totalMs)}</p>
+                                </div>
+                            ) : null}
+                            <div className="flex flex-col gap-0.5 px-2">
+                                {group.rows.map((recording) => (
+                                    <Fragment key={recording.id}>{props.renderRow(recording)}</Fragment>
+                                ))}
+                            </div>
+                        </section>
+                    ))}
+
+                    {props.emptyText && props.status === "ready" ? (
+                        // A search that is running or that failed gets its own state, with a way to
+                        // ask again: an incomplete answer must not read as "nothing matches".
+                        <div className="flex flex-col items-center gap-3 px-4 py-8" role="status" aria-live="polite">
+                            <p className="text-center text-sm text-muted-foreground">{props.emptyText}</p>
+                            {props.searchStatus === "searching" ? <Spinner /> : null}
+                        </div>
+                    ) : null}
+
+                    {/* A failed search is reported whether or not the list still shows rows: the rows
+                        that are there are not the answer to the query being asked. */}
+                    {props.searchStatus === "error" ? (
+                        <div
+                            className="flex flex-col items-center gap-3 px-4 py-6"
+                            role="alert"
+                            data-testid="recording-search-error"
+                        >
+                            <p className="text-center text-sm text-muted-foreground">
+                                {props.searchErrorText}
+                            </p>
+                            {props.onSearchRetry ? (
+                                <Button variant="outline" size="sm" onClick={props.onSearchRetry}>
+                                    {t("library.retry")}
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+
+                    {hasMore ? <div ref={marker} aria-hidden="true" className="h-px" /> : null}
+                </div>
             </div>
         </div>
     );
