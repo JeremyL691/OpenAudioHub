@@ -34,7 +34,7 @@ Terms used below:
 | Auto-summary | Right after the transcript's follow-up runs, when the user has auto-summarize on. | Where the summary is queued by the follow-up. | Two jobs at a time. | None. Hourly cap per user (section 5). | An event `summary.failed` is emitted. The transcript is kept. |
 | Manual summary job | A request for a summary (`ai.md`). | When a job is queued | Two jobs at a time. | None. A failed job is not retried. | The job fails and its error is returned to the request. |
 | Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
-| ZIP auto-merge | Every 10 seconds, or when ZIP auto-merge settings or an AI title change. Desktop app only. | Every 10 seconds | One pass at a time, per user in turn. | Retried on the next pass if a file is still being written or fails to merge. | The failure is logged and the archive is left untouched. |
+| ZIP auto-merge | Every 15 seconds, or when ZIP auto-merge settings or an AI title change. Desktop app only. | Every 15 seconds | One pass at a time, per user in turn. | Retried on the next pass if a file is still being written or fails to merge. | The failure is logged and the archive is left untouched. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
 
 Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 9 to 11.
@@ -45,7 +45,7 @@ Notifications (email, Bark, browser) are not timers. They are sent inline when t
 
 ### Startup
 
-At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the auto-transcription and summary job workers, the audio pipeline worker, and, in the desktop app only, the automatic export loop.
+At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the auto-transcription and summary job workers, the audio pipeline worker, and, in the desktop app only, the automatic export loop and the ZIP auto-merge loop.
 
 Background Plaud sync can be turned off with `BACKGROUND_SYNC_ENABLED`. The audio pipeline has its own switch (`AUDIO_PIPELINE_ENABLED`).
 
@@ -220,21 +220,21 @@ Every other failure is transient and follows the backoff schedule. A delivery th
 
 ---
 
-## 8. Automatic export (desktop app only)
+## 8. Automatic export and ZIP auto-merge (desktop app only)
 
-The automatic export of new recordings is described in `export.md`. This section covers its loop.
+The automatic export of new recordings and the automatic merging of segmented `.zip` audio archives are described in `export.md`. This section covers their loops.
 
-- The loop starts only when the server runs in the desktop app. It runs once at startup and then every 30 seconds.
-- Each pass reads every user whose settings have automatic export on and a folder set, and exports the recordings that qualify.
-- A failed write is counted. After three failures the recording is left alone until the folder or format changes, which resets the count.
+- Both loops start only when the server runs in the desktop app.
+- The automatic export loop runs once at startup and then every 30 seconds. Each pass reads every user whose settings have automatic export on and a folder set, and exports the recordings that qualify. A failed write is counted; after three failures the recording is left alone until the folder or format changes, which resets the count.
+- The ZIP auto-merge loop runs once at startup, then every 15 seconds, and right away when ZIP settings or an AI title change. Each pass reads every user whose settings have `zipAutoMerge` on and `zipWatchFolder` set, and merges any unmerged `.zip` archives whose size and modification time have settled.
 - A pass error for one user is logged and does not stop the other users.
-- No notifications are sent for an automatic export.
+- No notifications are sent for an automatic export or a background ZIP merge.
 
 ---
 
 ## 9. Email notifications
 
-### 10.1 Transport
+### 9.1 Transport
 
 - Sent with SMTP. Email is configured when `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASSWORD` are set. If they are not, email is skipped and a warning is logged. The skipped send returns "not sent" to its caller.
 - Port: `SMTP_PORT` if set. Otherwise 465 when `SMTP_SECURE` is `true`, and 587 when it is not.
@@ -253,11 +253,11 @@ The automatic export of new recordings is described in `export.md`. This section
     - `Could not reach the SMTP server at <host>:<port>. Make sure SMTP_HOST and SMTP_PORT are entered correctly.` for any other connection failure.
     - `SMTP is not set up yet. Add SMTP_HOST, SMTP_USER, and SMTP_PASSWORD to the server environment.` when email is not configured.
 
-### 10.2 Sending
+### 9.2 Sending
 
 Each email is sent once for the event that triggers it. A send that fails is logged and is not retried.
 
-### 10.3 Email list
+### 9.3 Email list
 
 Layout: every email uses the same branded layout, with a preview line, a heading, body text, one button, and a footer link. The HTML is the layout; the fields below are what the content uses.
 
