@@ -11,6 +11,9 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 - [Desktop app](#desktop-app)
 - [Container image](#container-image)
 - [Continuous integration and dependency checks](#continuous-integration-and-dependency-checks)
+- [Benchmarks](#benchmarks)
+- [Interface language](#interface-language)
+- [Changing behavior](#changing-behavior)
 
 ## Project layout
 
@@ -21,16 +24,19 @@ This guide covers how to build and test OpenAudioHub from the source tree.
 | `crates/oah/src/transcribe/` | Transcription runs and provider calls. |
 | `crates/oah/src/pipeline/` | Audio pipeline for long recordings: decoding, speech detection, splitting, and joining the parts. |
 | `crates/oah/src/summary/` | Summaries and titles, and their prompts. |
+| `crates/oah/src/chat/` | Ask AI over a recording: conversation state, streaming answers, model capabilities, and citations. |
 | `crates/oah/src/plaud/` | Plaud sign-in, sync and background sync. |
 | `crates/oah/src/export/` | Transcript export and the automatic export of new recordings. |
+| `crates/oah/src/zip_merge.rs` | Unpacking, chronological merging, library import, and export of segmented `.zip` audio archives. |
 | `crates/oah/src/config.rs` | Every environment variable the server reads. |
 | `crates/oah/src/ai.rs` | Provider presets, choosing a provider, and chat calls. |
 | `crates/oah/src/crypto.rs` | Field encryption and password hashing. |
 | `crates/oah/src/jobs.rs` | The background job queue. |
 | `crates/oah/migrations/` | SQLite migrations. The server runs them when it starts. |
 | `crates/oah/models/` | The voice activity detection model that the pipeline uses. |
-| `desktop-tauri/` | The Mac app. `src/main.rs` starts it, `files.rs` handles the data folder and secrets, `bridge.rs` handles the window bridge and Plaud sign-in, `menu.rs` builds the menu bar item, and `backup.rs` makes the copy before an upgrade. |
+| `desktop-tauri/` | The Mac app. `src/main.rs` starts it, `files.rs` handles the data folder and secrets, `bridge.rs` handles the window bridge, `download.rs` saves audio and text files, `plaud_refresh.rs` refreshes the Plaud token, `menu.rs` builds the menu bar item, and `backup.rs` makes the copy before an upgrade. |
 | `desktop-tauri/binaries/` | ffmpeg and ffprobe for the Mac app. |
+| `extension/` | The Chromium browser extension for Plaud sign-in and automatic token refresh. |
 | `web/` | The web app: React, TypeScript, Tailwind and Vite. The pages are in `src/pages/`. |
 | `web/src/lib/i18n.ts` | The interface language: the four languages, detection, storage and `t()`. |
 | `web/src/locales/` | One folder per language, one JSON file per area. Every string a person sees lives here. |

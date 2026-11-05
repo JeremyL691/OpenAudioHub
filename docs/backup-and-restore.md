@@ -5,6 +5,7 @@ OpenAudioHub has several ways to get your data out, and a way to protect the ser
 - [Transcript export](#transcript-export): all transcripts and summaries in one file, in a format you choose.
 - [Audio download](#audio-download): the audio files, one at a time or in bulk.
 - [Auto export](#auto-export): Mac app only. New recordings are saved into a folder you choose as they arrive.
+- [ZIP files](#zip-files): Mac app only. Segmented `.zip` audio archives in a watched folder are merged in recording order, imported into the library, and saved as `.m4a` files.
 - [Server backup and restore](#server-backup-and-restore): copy the whole data, so the server can be rebuilt. This is for the person who runs the server.
 
 ## Transcript export
@@ -42,6 +43,23 @@ Choose a folder in **Settings**, then **Export**, then turn on **Auto-export new
 Only recordings that arrive while auto export is on are saved; recordings already in the library are not. A recording that was already exported is never written again. If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.
 
 A failed write is retried a few times and then left alone until the folder or format changes.
+
+## ZIP files
+
+ZIP files runs only in the Mac app. It unpacks `.zip` archives that hold segmented audio, orders the segments by when they were recorded, merges them into one `.m4a` file, imports the recording into your library, and writes the merged `.m4a` file to disk.
+
+Open **Settings**, then **ZIP Files**:
+
+1. Choose a **Watch folder** where your `.zip` archives arrive.
+2. Optional: choose an **Export folder** for the merged `.m4a` files. If you leave it empty, the merged `.m4a` file is written to the watch folder.
+3. Turn on **Auto-merge ZIP archives** to watch the folder in the background, or choose **Merge now** to scan the watch folder at once.
+
+How each archive is handled:
+
+- **Segment order.** Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac` and `.webm`) are ordered by their recording time: first from `Export-notes.txt` start times inside the archive, then from timestamps in the file names, then from the audio container's `creation_time` tag, then from the ZIP entry modification times, and finally in natural file name order.
+- **File name.** Choose the **original time span** (`2026-10-12_09-00-00_to_10-30-00`), the **recording date** (`2026-10-12`), or the **AI title** (which starts with the date and renames both the library recording and the exported `.m4a` file once transcription and AI title generation finish).
+- **Delete original ZIP after merge.** When turned on, the source `.zip` file is deleted only after both the library recording and the exported `.m4a` file are saved.
+- **Duplicates.** Background passes skip `.zip` files that were already merged. When you choose **Merge now** and an archive in the watch folder was already merged before, the app asks whether to replace the existing recording and exported file, keep both and merge again, or keep the existing recording only.
 
 ## Server backup and restore
 

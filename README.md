@@ -89,15 +89,16 @@ Everything runs in one process: the HTTP API, the web app, the background worker
 
 ## Features
 
-- **Plaud sync.** Connect your Plaud account with the browser extension, an email code, or a pasted token. Sync runs by hand or in the background.
+- **Plaud sync.** Connect your Plaud account with the browser extension, an email code, or a pasted token. Sync runs by hand or in the background, and the browser extension keeps the connection fresh automatically.
 - **Transcription.** Presets for OpenAI, Google Gemini, ElevenLabs, Groq, Together AI, OpenRouter, SiliconFlow, OpenCode Go, LM Studio, Ollama and any OpenAI-compatible service. See [AI providers](docs/providers.md).
 - **In-browser transcription.** Transcribe on your own device with a Whisper model, without sending audio to a provider.
 - **Long recordings.** Speech detection splits long files into parts, transcribes them and joins the results.
 - **Summaries and titles.** Summaries with key points and action items, and automatic titles, in the style you choose.
+- **Ask AI.** Ask questions about a transcribed recording. Answers stream in and cite the transcript lines they used, so you can jump straight to that moment in the audio.
 - **Library.** Search, collections, stars, merging, playback with a waveform, and keyboard shortcuts.
-- **Export.** Export recordings with their transcripts and summaries, download audio in bulk, and auto export new recordings on the Mac app.
+- **Export and ZIP archives.** Export recordings with their transcripts and summaries, download audio in bulk, auto export new recordings on the Mac app, and unpack and merge segmented `.zip` audio archives in chronological recording order.
 - **Automation.** Personal API keys, a read-only public API, and signed webhooks with a delivery log.
-- **Storage and privacy.** Keep audio on local disk or in an S3-compatible bucket. Titles, transcripts, summaries and tokens are encrypted at rest.
+- **Storage and privacy.** Keep audio on local disk or in an S3-compatible bucket. Titles, transcripts, summaries, chat conversations and tokens are encrypted at rest.
 - **Notifications.** Email and Bark push when new recordings arrive.
 
 ## Download the Mac app
@@ -126,7 +127,7 @@ Install with one command. It downloads the compose file, creates the encryption 
 curl -fsSL https://github.com/JeremyL691/OpenAudioHub/releases/latest/download/install.sh | sh
 ```
 
-To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.2.5`. The installer never overwrites an existing `.env`. To read the script before you run it, download [`install.sh`](deploy/install.sh) from the release first.
+To pin a release, set `OAH_VERSION` before the command, for example `OAH_VERSION=1.5.0`. The installer never overwrites an existing `.env`. To read the script before you run it, download [`install.sh`](deploy/install.sh) from the release first.
 
 Or set it up by hand:
 
@@ -177,6 +178,7 @@ The full guide, including running the server locally and building the Mac app, i
 | [`crates/oah/`](crates/oah) | Server library and the `oah-server` binary (Rust, axum, SQLite) |
 | [`web/`](web) | Web app (React, TypeScript, Vite, Tailwind) |
 | [`desktop-tauri/`](desktop-tauri) | Mac app shell (Tauri 2) and the ffmpeg build script |
+| [`extension/`](extension) | Browser extension for Plaud sign-in and token refresh (TypeScript, Manifest V3) |
 | [`contract-tests/`](contract-tests) | Playwright suite that checks the HTTP behavior against a running server |
 | [`spec/`](spec) | Behavior specification that the server, web app and tests follow |
 | [`docs/`](docs) | User, self-hosting and developer documentation |

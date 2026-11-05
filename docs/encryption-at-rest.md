@@ -30,10 +30,12 @@ Do not change the key after you have data. Values written with one key cannot be
 | Recording titles, including titles from Plaud | The recording row |
 | Transcripts, including Plaud transcripts you import | The transcript rows |
 | Summaries, action items and key points | The summary row |
+| Ask AI questions and answers | The recording chat turn rows |
 | AI provider API keys | The provider rows |
 | The Plaud account token | The Plaud connection |
 | Summary prompts and the title prompt you wrote | Your settings |
 | The Bark push URL | Your settings |
+| Auto-export and ZIP export file paths | The recording and ZIP import rows |
 | Webhook URLs and signing secrets | The webhook rows |
 | Webhook delivery payloads | The delivery rows |
 
@@ -65,6 +67,7 @@ These are not encrypted with the key. They are stored in a form that cannot be t
 - **Account passwords** are hashed with Argon2id.
 - **Sign-in sessions** are stored as SHA-256 hashes. The cookie holds the secret.
 - **Password reset links** are stored as SHA-256 hashes, and they expire after 1 hour.
+- **Plaud refresh keys** registered by the browser extension are stored as SHA-256 hashes.
 - **Personal API keys** are stored as HMAC-SHA256 hashes, keyed with `API_TOKEN_HASH_SECRET`. That secret is derived from `ENCRYPTION_KEY` unless you set it. See [Environment variables](environment-variables.md#required-and-common).
 
 ## What this protects against

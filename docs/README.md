@@ -15,13 +15,13 @@ Both ways run the same server code. The project is at [github.com/JeremyL691/Ope
 
 These guides cover the day-to-day features.
 
-- [Using the library](using-the-library.md): the dashboard, the library and its collections, starring, search, merging, and the recording page.
+- [Using the library](using-the-library.md): the dashboard, the library and its collections, starring, search, merging, the recording page, and Ask AI.
 - [Connect your Plaud account](connect-plaud-account.md): the three sign-in methods, regions, sync, and what happens when a sign-in expires.
-- [Browser extension](browser-extension.md): install the extension, sign in to Plaud, and review its permissions and privacy.
+- [Browser extension](browser-extension.md): install the extension, sign in to Plaud, keep the connection fresh, and review its permissions and privacy.
 - [AI providers](providers.md): add providers, choose the one used for transcription and for summaries, and use local models.
 - [Notifications](notifications.md): email and Bark push when new recordings sync.
 - [Automation API and webhooks](automation-and-webhooks.md): personal API keys, and signed webhook deliveries.
-- [Backup and restore](backup-and-restore.md): transcript exports, audio downloads, auto export, and how to protect the server.
+- [Backup and restore](backup-and-restore.md): transcript exports, audio downloads, auto export, ZIP files, and how to protect the server.
 
 ## Self-hosting
 

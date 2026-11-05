@@ -54,7 +54,7 @@ See [Personal API keys](automation-and-webhooks.md#personal-api-keys).
 - Each endpoint has its own signing secret. Each delivery is signed with HMAC-SHA256 over a timestamp and the body. Your receiver should check the signature and reject old timestamps. See [Verify a signature](automation-and-webhooks.md#verify-a-signature).
 - The server does not follow redirects. A redirect counts as a failed delivery.
 - A webhook URL cannot contain a user name or password.
-- A server refuses webhook targets that use plain `http` or resolve to private addresses, so a signed-up user cannot use the server to reach your network. It refuses local and private addresses in every form, including the IPv4 address inside a NAT64 or 6to4 address, and it connects to the address it checked without an environment proxy. The Mac app keeps allowing local targets because it is single-user. See `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` in [Environment variables](environment-variables.md#address-and-files) and [Allowed URLs](automation-and-webhooks.md#allowed-urls).
+- A server refuses webhook targets that use plain `http` or resolve to private addresses, so a signed-up user cannot use the server to reach your network. It refuses local and private addresses in every form, including the IPv4 address inside a NAT64 or 6to4 address, and it connects to the address it checked without an environment proxy. The Mac app keeps allowing local targets because it is single-user. See `WEBHOOKS_REQUIRE_PUBLIC_TARGETS` in [Environment variables](environment-variables.md#webhooks) and [Allowed URLs](automation-and-webhooks.md#allowed-urls).
 
 ## Rate limits
 
@@ -86,7 +86,7 @@ Every page carries these headers:
 ## Plaud tokens
 
 - The Plaud account token is encrypted at rest. No endpoint returns it, and it is not written to the log.
-- The server does not refresh the token. When Plaud rejects it, the connection shows that sign-in has expired and you connect again.
+- When you connect with the browser extension, the extension registers a refresh key (stored on the server as a SHA-256 hash) and sends newer tokens for the same Plaud account before the current token expires. A token for a different Plaud account is refused, and disconnecting removes the keys. Without the extension, nothing renews the token; when Plaud rejects it, the connection shows that sign-in has expired and you connect again.
 - Workspace tokens are used only in memory during a sync. They are not stored.
 - Pasted workspace tokens are refused, because they cannot be renewed.
 

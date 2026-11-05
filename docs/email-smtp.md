@@ -1,6 +1,6 @@
 # Email (SMTP) setup
 
-OpenAudioHub sends email through an SMTP mail server that you choose. Email is optional. Without it, the server sends no email, so email notifications, password reset by email and export-ready emails are unavailable.
+OpenAudioHub sends email through an SMTP mail server that you choose. Email is optional. Without it, the server sends no email, so email notifications and password reset by email are unavailable.
 
 - [What email is used for](#what-email-is-used-for)
 - [Configure SMTP](#configure-smtp)
@@ -76,7 +76,7 @@ If the test fails, the page shows the reason. A missing setting, a rejected logi
 ## When SMTP is not set
 
 - The forgot-password page says that password reset by email needs SMTP. Use the command in [Reset a password](self-hosting.md#reset-a-password).
-- Email notifications, export-ready emails and the test email send nothing. The test email shows the "SMTP is not set up yet" message on the notifications page.
+- Email notifications and the test email send nothing. The test email shows the "SMTP is not set up yet" message on the notifications page.
 
 ## Troubleshooting
 

@@ -173,7 +173,7 @@ docker compose pull
 docker compose up -d
 ```
 
-To pin a version, put `OPENAUDIOHUB_VERSION=<version>` in `.env` before you run `docker compose up -d`, for example `OPENAUDIOHUB_VERSION=1.2.5`.
+To pin a version, put `OPENAUDIOHUB_VERSION=<version>` in `.env` before you run `docker compose up -d`, for example `OPENAUDIOHUB_VERSION=1.5.0`.
 
 The server updates the database when it starts. Do not start an older image on data that a newer image has opened. If you need to go back, restore the backup you made before the upgrade.
 

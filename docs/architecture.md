@@ -54,6 +54,7 @@ Work that takes time runs in the background, not in the request:
 - **Summaries and titles.** A queue of summary jobs. Titles are generated after a transcript is saved, and summaries run after that when turned on.
 - **Webhook delivery.** Stores each event with its deliveries, and sends them with retries. See [Automation API and webhooks](automation-and-webhooks.md).
 - **Exports.** On the Mac app, saves each new recording into the user's export folder.
+- **ZIP files.** On the Mac app, watches a folder for `.zip` audio archives, orders the audio segments inside by recording time, merges them into one `.m4a` file, imports the recording into the library, and writes the merged file to the export folder.
 
 Jobs are stored in the database. A worker takes a job with a lease and renews it while it works. If the process stops, the lease runs out and another worker takes the job. So a job can run twice after a crash, and each job is written to be safe to repeat.
 
@@ -103,7 +104,7 @@ Differences from the self-hosted server:
 - Audio is always stored on disk.
 - Sign-up is off, and the local account signs in for you.
 - The server listens only on the Mac.
-- Auto export is available.
+- Auto export and automatic ZIP archive merging are available.
 
 ## Command-line tools
 

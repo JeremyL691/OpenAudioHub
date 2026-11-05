@@ -37,7 +37,11 @@ The URL is stored encrypted for your account only. A notification shows the coun
 
 ## Browser notifications
 
-The **Browser notifications** switch is saved with your settings, but browser notifications are not available yet. Use email or Bark for alerts.
+While the app is open in a browser or the Mac app window, a sync that adds new recordings shows an in-app notice, plays a short chime, and sends a browser notification if you allowed notifications for the site.
+
+- The browser asks for notification permission only when you start a sync by hand. Background syncs use an existing permission grant.
+- Turn the in-app notice on or off in **Settings**, then **Sync**, with **Show sync notifications**.
+- Turn **Browser notifications** and the notification sound on or off on `/settings/notifications`.
 
 ## When a notification fails
 
