@@ -5,7 +5,7 @@ This file specifies the macOS desktop app: what it does at start and quit, what 
 ## 1. Scope
 
 - Platform: macOS on Apple Silicon (`aarch64-apple-darwin`), minimum macOS 11.0. The app is distributed as an app bundle and a disk image, signed ad hoc (signing identity `-`).
-- Product name `OpenAudioHub`. Bundle identifier `io.github.jeremyl691.openaudiohub`. Version `1.5.0` (the workspace version, which is also the value written to `config.json` as `lastVersion`).
+- Product name `OpenAudioHub`. Bundle identifier `io.github.jeremyl691.openaudiohub`. Version `1.6.0` (the workspace version, which is also the value written to `config.json` as `lastVersion`).
 - One copy of the app runs at a time, on one data folder. It signs in as one local account (section 4).
 - The server listens on 127.0.0.1 only. The app has no automatic update check.
 - The app bundles two programs, `ffmpeg` and `ffprobe`, placed next to the app executable. The server uses them to decode and convert audio, compute waveforms and prepare files for transcription. They are built with GPL, nonfree and version 3 components disabled (`desktop-tauri/scripts/build-ffmpeg.sh`).
