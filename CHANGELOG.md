@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-06
+
+### Added
+
+- Local-only mode (`plaudEnabled: false` in user settings and in the Plaud Account settings page) lets you use OpenAudioHub without connecting a Plaud account. Turning it on disconnects any active Plaud session and hides Plaud sync controls and status indicators across the dashboard, sidebar, account menu, command palette, and library empty state.
+- Custom local storage folder (`localStorageFolder` in Storage settings) syncs existing audio files from a chosen local directory into the library in chronological order (`POST /api/settings/storage/sync` and a 10-second background scanner), stores newly uploaded and merged audio directly in that folder without duplicating files in internal app storage, and keeps file deletions synchronized in both directions.
+- AI Providers settings now split Transcription and Enhancement into two side-by-side columns with pre-filled official base URLs and current model catalogs for each preset, live model fetching from upstream `/models` endpoints, and one-click default provider and model selection (`PUT /api/settings/ai/providers/default-transcription` and `PUT /api/settings/ai/providers/default-enhancement`).
+- Google Gemini transcription supports `gemini-3.5-transcribe` and Gemini 3 and 4 models through the Interactions API (`/v1beta/interactions`) with automatic diarization and word timestamps, automatic Opus compression for files over 20 MB, and automatic fallback across Gemini model quotas on rate limits.
+
+### Fixed
+
+- Generating a waveform in the recording player or importing recordings now refreshes the middle library list immediately without requiring a page navigation, and multi-hour recordings generate waveforms on the server via subsampled `ffmpeg` extraction (`POST /api/recordings/{id}/peaks` with `{ "generate": true }`) instead of failing in browser memory.
+- Long-recording pipeline runs treat silent or ambient-noise chunks as empty completed segments and rotate across Gemini model quotas on rate limits, preventing stalls on short speech fragments.
+
 ## [1.5.0] - 2026-11-03
 
 ### Added
@@ -166,7 +180,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.0...v1.3.2
