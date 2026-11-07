@@ -10,6 +10,66 @@ use crate::AppState;
 use crate::error::{ApiResult, AppError};
 
 pub const OPENAI_BASE: &str = "https://api.openai.com/v1";
+pub const GEMINI_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
+
+fn is_public_gemini_url(url: &reqwest::Url) -> bool {
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return false;
+    }
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let lower = host.trim_matches(['[', ']']).to_ascii_lowercase();
+    if lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") {
+        return false;
+    }
+    if let Ok(ip) = lower.parse::<std::net::IpAddr>() {
+        return match ip {
+            std::net::IpAddr::V4(v4) => {
+                !v4.is_loopback()
+                    && !v4.is_private()
+                    && !v4.is_link_local()
+                    && !v4.is_unspecified()
+                    && !v4.is_broadcast()
+                    && !v4.is_documentation()
+            }
+            std::net::IpAddr::V6(v6) => {
+                !v6.is_loopback()
+                    && !v6.is_unspecified()
+                    && !v6.is_unique_local()
+                    && !v6.is_unicast_link_local()
+            }
+        };
+    }
+    true
+}
+
+pub fn gemini_endpoint(base_url: &str, model: &str, action: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    let base = if trimmed.is_empty() || trimmed == OPENAI_BASE {
+        GEMINI_BASE.to_owned()
+    } else if let Ok(url) = reqwest::Url::parse(trimmed)
+        && is_public_gemini_url(&url)
+    {
+        if url.path().is_empty() || url.path() == "/" {
+            format!("{trimmed}/v1beta")
+        } else {
+            trimmed.to_owned()
+        }
+    } else {
+        GEMINI_BASE.to_owned()
+    };
+    let safe_model: String = model
+        .trim()
+        .trim_start_matches("models/")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        .collect();
+    format!("{base}/models/{safe_model}:{action}")
+}
 
 pub struct Preset {
     pub name: &'static str,
@@ -44,6 +104,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         chat_model: Some("gemini-2.0-flash"),
         lists_audio: true,
+        lists_chat: true,
         ..preset("Google Gemini", None, Some("gemini-2.0-flash"))
     },
     Preset {
@@ -54,20 +115,33 @@ pub const PRESETS: &[Preset] = &[
             Some("scribe_v2"),
         )
     },
-    preset("OpenAI", None, Some("whisper-1")),
-    preset(
-        "Groq",
-        Some("https://api.groq.com/openai/v1"),
-        Some("whisper-large-v3-turbo"),
-    ),
-    preset(
-        "Together AI",
-        Some("https://api.together.xyz/v1"),
-        Some("openai/whisper-large-v3"),
-    ),
+    Preset {
+        chat_model: Some("gpt-4o-mini"),
+        lists_chat: true,
+        ..preset("OpenAI", None, Some("whisper-1"))
+    },
+    Preset {
+        chat_model: Some("llama-3.1-8b-instant"),
+        lists_chat: true,
+        ..preset(
+            "Groq",
+            Some("https://api.groq.com/openai/v1"),
+            Some("whisper-large-v3-turbo"),
+        )
+    },
+    Preset {
+        chat_model: Some("meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"),
+        lists_chat: true,
+        ..preset(
+            "Together AI",
+            Some("https://api.together.xyz/v1"),
+            Some("openai/whisper-large-v3"),
+        )
+    },
     Preset {
         chat_transcription: true,
         lists_audio: true,
+        lists_chat: true,
         ..preset(
             "OpenRouter",
             Some("https://openrouter.ai/api/v1"),
@@ -167,7 +241,7 @@ pub fn client() -> &'static reqwest::Client {
 }
 
 /// A configured provider with its key decrypted, ready to call.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Provider {
     pub id: String,
     pub name: String,
@@ -175,6 +249,10 @@ pub struct Provider {
     pub api_key: String,
     /// The stored default model, if any.
     pub model: Option<String>,
+    pub transcription_model: Option<String>,
+    pub enhancement_model: Option<String>,
+    pub transcription_models: Vec<String>,
+    pub enhancement_models: Vec<String>,
 }
 
 impl Provider {
@@ -182,67 +260,100 @@ impl Provider {
         preset_named(&self.name)
     }
 
-    /// The model for chat: the stored one unless it is a transcription model, else the preset's
-    /// chat model, else a fallback picked from the base URL.
+    /// The model for chat: the stored enhancement model or default model unless it is a
+    /// transcription model, else the preset's chat model, else a fallback picked from the base URL.
     pub fn chat_model(&self) -> String {
-        if let Some(model) = self
-            .model
+        if let Some(m) = self
+            .enhancement_model
             .as_deref()
-            .filter(|m| !m.is_empty() && !is_transcription_model(m))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            && !is_transcription_model(m)
         {
-            return model.to_owned();
+            return m.to_owned();
         }
-        if let Some(model) = self.preset().and_then(|p| p.chat_model) {
-            return model.to_owned();
-        }
-        let url = self.base_url.to_lowercase();
-        let fallback = if url.contains("groq") {
-            "llama-3.1-8b-instant"
-        } else if url.contains("together") {
-            "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
-        } else if url.contains("openrouter") {
-            "openai/gpt-4o-mini"
-        } else {
-            "gpt-4o-mini"
-        };
-        fallback.to_owned()
+        chat_model_of(&self.name, self.model.as_deref(), &self.base_url)
     }
 
-    /// The model for transcription: the stored one, else the preset's, else `whisper-1`.
+    /// The model for transcription: the stored transcription model, else default model, else the
+    /// preset's, else `whisper-1`.
     pub fn transcription_model(&self) -> String {
-        self.model
-            .clone()
-            .filter(|m| !m.is_empty())
-            .or_else(|| self.preset().and_then(|p| p.model).map(str::to_owned))
-            .unwrap_or_else(|| "whisper-1".into())
+        self.transcription_model_or(None)
+    }
+
+    /// Resolves a transcription model from an explicit override or the provider's stored defaults.
+    pub fn transcription_model_or(&self, given: Option<&str>) -> String {
+        given
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                self.transcription_model
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            })
+            .or_else(|| {
+                self.model
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            })
+            .or_else(|| self.preset().and_then(|p| p.model))
+            .unwrap_or("whisper-1")
+            .to_owned()
+    }
+
+    fn from_row(state: &AppState, row: CredRow) -> ApiResult<Self> {
+        let preset = preset_named(&row.provider);
+        let transcription_models = parse_models(row.transcription_models.as_deref());
+        let enhancement_models = parse_models(row.enhancement_models.as_deref());
+        let transcription_model =
+            trim_model(row.transcription_model).or_else(|| transcription_models.first().cloned());
+        let enhancement_model =
+            trim_model(row.enhancement_model).or_else(|| enhancement_models.first().cloned());
+        Ok(Self {
+            base_url: base_url(row.base_url, preset),
+            api_key: state
+                .config
+                .field_key
+                .decrypt(&row.api_key)
+                .map_err(AppError::internal)?,
+            id: row.id,
+            name: row.provider,
+            model: trim_model(row.default_model),
+            transcription_model,
+            enhancement_model,
+            transcription_models,
+            enhancement_models,
+        })
     }
 }
 
+fn trim_model(value: Option<String>) -> Option<String> {
+    value.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty())
+}
+
+fn parse_models(raw: Option<&str>) -> Vec<String> {
+    raw.and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 #[derive(sqlx::FromRow)]
-struct Row {
+struct CredRow {
     id: String,
     provider: String,
     api_key: String,
     base_url: Option<String>,
     default_model: Option<String>,
+    transcription_model: Option<String>,
+    enhancement_model: Option<String>,
+    transcription_models: Option<String>,
+    enhancement_models: Option<String>,
 }
-
-fn open(state: &AppState, row: Row) -> ApiResult<Provider> {
-    let preset = preset_named(&row.provider);
-    Ok(Provider {
-        base_url: base_url(row.base_url, preset),
-        api_key: state
-            .config
-            .field_key
-            .decrypt(&row.api_key)
-            .map_err(AppError::internal)?,
-        id: row.id,
-        name: row.provider,
-        model: row.default_model,
-    })
-}
-
-const COLUMNS: &str = "id, provider, api_key, base_url, default_model";
 
 fn no_transcription_provider() -> AppError {
     AppError::bad_request(
@@ -258,52 +369,68 @@ pub async fn transcription_provider(
     user_id: &str,
     provider_id: Option<&str>,
 ) -> ApiResult<Provider> {
-    let row: Option<Row> = match provider_id {
+    let row: Option<CredRow> = match provider_id {
         Some(id) => {
-            sqlx::query_as(&format!("SELECT {COLUMNS} FROM api_credentials WHERE id = ? AND user_id = ?"))
-                .bind(id)
-                .bind(user_id)
-                .fetch_optional(&state.db)
-                .await?
+            sqlx::query_as(
+                "SELECT id, provider, api_key, base_url, default_model, transcription_model, enhancement_model, transcription_models, enhancement_models FROM api_credentials WHERE id = ? AND user_id = ?",
+            )
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?
         }
         None => {
-            sqlx::query_as(&format!("SELECT {COLUMNS} FROM api_credentials WHERE user_id = ? AND is_default_transcription = 1 LIMIT 1"))
-                .bind(user_id)
-                .fetch_optional(&state.db)
-                .await?
+            sqlx::query_as(
+                "SELECT id, provider, api_key, base_url, default_model, transcription_model, enhancement_model, transcription_models, enhancement_models FROM api_credentials WHERE user_id = ? AND is_default_transcription = 1 LIMIT 1",
+            )
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?
         }
     };
     let row = row
         .filter(|r| can_transcribe(&r.provider))
         .ok_or_else(no_transcription_provider)?;
-    open(state, row)
+    Provider::from_row(state, row)
 }
 
 /// The provider for summaries and titles: the enhancement default if it can
 /// enhance, else the oldest provider that can. `None` when there is none.
 pub async fn enhancement_provider(state: &AppState, user_id: &str) -> ApiResult<Option<Provider>> {
-    let rows: Vec<Row> = sqlx::query_as(&format!(
-        "SELECT {COLUMNS} FROM api_credentials WHERE user_id = ? ORDER BY is_default_enhancement DESC, created_at, id"
-    ))
+    let rows: Vec<CredRow> = sqlx::query_as(
+        "SELECT id, provider, api_key, base_url, default_model, transcription_model, enhancement_model, transcription_models, enhancement_models FROM api_credentials WHERE user_id = ? ORDER BY is_default_enhancement DESC, created_at, id",
+    )
     .bind(user_id)
     .fetch_all(&state.db)
     .await?;
     rows.into_iter()
         .find(|r| can_enhance(&r.provider))
-        .map(|r| open(state, r))
+        .map(|r| Provider::from_row(state, r))
         .transpose()
 }
 
 /// The chat model a stored provider would use, by the same rules as `Provider::chat_model`.
 pub fn chat_model_of(name: &str, model: Option<&str>, base_url: &str) -> String {
-    Provider {
-        id: String::new(),
-        name: name.to_owned(),
-        base_url: base_url.to_owned(),
-        api_key: String::new(),
-        model: model.map(str::to_owned),
+    if let Some(model) = model
+        .map(str::trim)
+        .filter(|m| !m.is_empty() && !is_transcription_model(m))
+    {
+        return model.to_owned();
     }
-    .chat_model()
+    if let Some(model) = preset_named(name).and_then(|p| p.chat_model) {
+        return model.to_owned();
+    }
+    let url = base_url.to_lowercase();
+    let fallback = if url.contains("groq") {
+        "llama-3.1-8b-instant"
+    } else if url.contains("together") {
+        "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+    } else if url.contains("openrouter") {
+        "openai/gpt-4o-mini"
+    } else {
+        "gpt-4o-mini"
+    };
+    fallback.to_owned()
 }
 
 /// One saved provider of the user, by id. `None` when it is not theirs.
@@ -312,14 +439,14 @@ pub async fn provider_by_id(
     user_id: &str,
     provider_id: &str,
 ) -> ApiResult<Option<Provider>> {
-    let row: Option<Row> = sqlx::query_as(&format!(
-        "SELECT {COLUMNS} FROM api_credentials WHERE id = ? AND user_id = ?"
-    ))
+    let row: Option<CredRow> = sqlx::query_as(
+        "SELECT id, provider, api_key, base_url, default_model, transcription_model, enhancement_model, transcription_models, enhancement_models FROM api_credentials WHERE id = ? AND user_id = ?",
+    )
     .bind(provider_id)
     .bind(user_id)
     .fetch_optional(&state.db)
     .await?;
-    row.map(|row| open(state, row)).transpose()
+    row.map(|row| Provider::from_row(state, row)).transpose()
 }
 
 /// Why a provider call failed. The message is safe to store and show.
@@ -444,13 +571,70 @@ async fn gemini_chat(
     if !system.is_empty() {
         body["systemInstruction"] = json!({"parts": system});
     }
-    let url =
-        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
+    let url = gemini_endpoint(&provider.base_url, model, "generateContent");
+    for attempt in 0..2 {
+        let res = client()
+            .post(&url)
+            .header("x-goog-api-key", &provider.api_key)
+            .timeout(options.timeout)
+            .json(&body)
+            .send()
+            .await
+            .map_err(upstream_error)?;
+        if res.status().is_success() {
+            let value: Value = res.json().await.map_err(upstream_error)?;
+            let answer = value["candidates"][0]["content"]["parts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|part| part["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("")
+                .trim()
+                .to_owned();
+            if answer.is_empty() {
+                return Err(AiError {
+                    code: "AI_EMPTY_RESPONSE",
+                    message: "The provider returned an empty answer.".into(),
+                    retryable: false,
+                });
+            }
+            return Ok(answer);
+        }
+        let code = res.status();
+        if matches!(code.as_u16(), 429 | 500 | 502 | 503 | 504) && attempt == 0 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+        if matches!(code.as_u16(), 400 | 404 | 503) {
+            break;
+        }
+        return Err(status_error(code));
+    }
+
+    let mut prompt_lines = Vec::new();
+    for message in messages.as_array().into_iter().flatten() {
+        let content = &message["content"];
+        if let Some(text) = content.as_str() {
+            prompt_lines.push(text.to_owned());
+        } else if let Some(items) = content.as_array() {
+            for item in items {
+                if let Some(text) = item["text"].as_str() {
+                    prompt_lines.push(text.to_owned());
+                }
+            }
+        }
+    }
+    let interaction_body = json!({
+        "model": model,
+        "input": prompt_lines.join("\n\n"),
+    });
     let res = client()
-        .post(url)
+        .post("https://generativelanguage.googleapis.com/v1beta/interactions")
         .header("x-goog-api-key", &provider.api_key)
+        .header("Api-Revision", "2026-05-20")
         .timeout(options.timeout)
-        .json(&body)
+        .json(&interaction_body)
         .send()
         .await
         .map_err(upstream_error)?;
@@ -458,22 +642,30 @@ async fn gemini_chat(
         return Err(status_error(res.status()));
     }
     let value: Value = res.json().await.map_err(upstream_error)?;
-    let answer = value["candidates"][0]["content"]["parts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|part| part["text"].as_str())
-        .collect::<Vec<_>>()
-        .join("")
-        .trim()
-        .to_owned();
-    if answer.is_empty() {
-        return Err(AiError {
+    let answer = value["output_text"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            let text = value["steps"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|s| s["content"].as_array())
+                .flatten()
+                .filter_map(|c| c["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_owned();
+            (!text.is_empty()).then_some(text)
+        })
+        .ok_or_else(|| AiError {
             code: "AI_EMPTY_RESPONSE",
             message: "The provider returned an empty answer.".into(),
             retryable: false,
-        });
-    }
+        })?;
     Ok(answer)
 }
 
@@ -518,7 +710,49 @@ mod tests {
             base_url: base.into(),
             api_key: "k".into(),
             model: model.map(Into::into),
+            ..Default::default()
         }
+    }
+
+    #[test]
+    fn gemini_endpoint_resolves_default_and_custom_proxy_urls() {
+        assert_eq!(
+            gemini_endpoint("", "gemini-2.5-flash", "generateContent"),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        );
+        assert_eq!(
+            gemini_endpoint(OPENAI_BASE, "gemini-2.5-flash", "generateContent"),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        );
+        assert_eq!(
+            gemini_endpoint(
+                "https://my-proxy.example.com/",
+                "gemini-2.5-flash",
+                "generateContent"
+            ),
+            "https://my-proxy.example.com/v1beta/models/gemini-2.5-flash:generateContent"
+        );
+        assert_eq!(
+            gemini_endpoint(
+                "https://my-proxy.example.com/custom/v1beta/",
+                "gemini-2.5-flash",
+                "streamGenerateContent"
+            ),
+            "https://my-proxy.example.com/custom/v1beta/models/gemini-2.5-flash:streamGenerateContent"
+        );
+    }
+
+    #[test]
+    fn dual_models_take_precedence_over_default_model() {
+        let mut p = provider("Google Gemini", "", Some("gemini-2.0-flash"));
+        p.transcription_model = Some("gemini-3.5-transcribe".into());
+        p.enhancement_model = Some("gemini-2.5-pro".into());
+        assert_eq!(p.transcription_model(), "gemini-3.5-transcribe");
+        assert_eq!(
+            p.transcription_model_or(Some("gemini-2.5-flash")),
+            "gemini-2.5-flash"
+        );
+        assert_eq!(p.chat_model(), "gemini-2.5-pro");
     }
 
     #[test]

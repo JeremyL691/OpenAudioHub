@@ -475,6 +475,11 @@ function TranscriptMeta({ transcript }: { transcript: TranscriptRecord }) {
 // Transcribe dialog: provider and model choice
 // ---------------------------------------------------------------------------
 
+interface ProviderOption extends ProviderRow {
+    transcriptionModel?: string | null;
+    transcriptionModels?: string[];
+}
+
 export interface TranscribeDialogProps {
     open: boolean;
     onOpenChange(open: boolean): void;
@@ -485,14 +490,14 @@ export interface TranscribeDialogProps {
 /** Choice of provider and model for a transcription run. Empty choices use the defaults. */
 export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }: TranscribeDialogProps) {
     const { t } = useI18n();
-    const [providers, setProviders] = useState<ProviderRow[] | null>(null);
+    const [providers, setProviders] = useState<ProviderOption[] | null>(null);
     const [providerId, setProviderId] = useState("default");
     const [model, setModel] = useState("");
 
     useEffect(() => {
         if (!open || providers) return;
         let alive = true;
-        api<{ providers: ProviderRow[] }>("/api/settings/ai/providers")
+        api<{ providers: ProviderOption[] }>("/api/settings/ai/providers")
             .then((body) => alive && setProviders(body.providers.filter((p) => p.provider !== "OpenCode Go")))
             .catch(() => alive && setProviders([]));
         return () => {
@@ -502,6 +507,9 @@ export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }
 
     const chosen = providers?.find((p) => p.id === providerId);
     const defaultRow = providers?.find((p) => p.isDefaultTranscription);
+    const activeProvider = chosen ?? defaultRow;
+    const chosenDefaultModel = activeProvider?.transcriptionModel ?? activeProvider?.defaultModel ?? null;
+    const availableModels = activeProvider?.transcriptionModels ?? [];
     const options = [
         {
             value: "default",
@@ -526,10 +534,51 @@ export function TranscribeDialog({ open, onOpenChange, hasTranscript, onSubmit }
                     }}
                 >
                     <Field label={t("recording.transcribe.provider")}>
-                        <Select value={providerId} onValueChange={setProviderId} options={options} />
+                        <Select
+                            value={providerId}
+                            onValueChange={(nextId) => {
+                                setProviderId(nextId);
+                                if (nextId === "default") {
+                                    setModel("");
+                                } else {
+                                    const found = providers?.find((p) => p.id === nextId);
+                                    setModel(found?.transcriptionModel ?? found?.defaultModel ?? "");
+                                }
+                            }}
+                            options={options}
+                        />
                     </Field>
-                    <Field label={t("recording.transcribe.model")} hint={t("recording.transcribe.modelHint", { model: chosen?.defaultModel ?? t("recording.transcribe.defaultModel") })}>
-                        <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder={chosen?.defaultModel ?? ""} autoComplete="off" />
+                    <Field
+                        id="transcribe-model"
+                        label={t("recording.transcribe.model")}
+                        hint={t("recording.transcribe.modelHint", { model: chosenDefaultModel ?? t("recording.transcribe.defaultModel") })}
+                    >
+                        {availableModels.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5" data-testid="transcribe-model-options">
+                                {availableModels.map((item) => (
+                                    <button
+                                        key={item}
+                                        type="button"
+                                        onClick={() => setModel(item)}
+                                        className={cn(
+                                            "rounded-md border px-2 py-0.5 font-mono text-xs transition-colors",
+                                            model === item
+                                                ? "border-primary bg-primary/10 text-link"
+                                                : "border-border bg-muted text-muted-foreground hover:text-foreground",
+                                        )}
+                                    >
+                                        {item}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
+                        <Input
+                            id="transcribe-model"
+                            value={model}
+                            onChange={(e) => setModel(e.target.value)}
+                            placeholder={chosenDefaultModel ?? ""}
+                            autoComplete="off"
+                        />
                     </Field>
                     <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <Button variant="secondary" onClick={() => onOpenChange(false)}>

@@ -105,6 +105,8 @@ const DEFAULTS: Record<string, unknown> = {
     zipExportFolder: null,
     zipTitleMode: "original",
     zipDeleteAfterMerge: false,
+    plaudEnabled: true,
+    localStorageFolder: null,
 };
 
 // ---------- user settings ----------

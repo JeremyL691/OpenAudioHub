@@ -14,6 +14,7 @@
     "loadingRecordings": "녹음 불러오는 중",
     "emptyTitle": "아직 녹음이 없습니다",
     "emptyBody": "Plaud 계정에서 동기화하거나 오디오 파일을 업로드하여 라이브러리를 시작하세요.",
+    "emptyBodyLocal": "오디오 파일을 업로드하여 라이브러리를 시작하세요.",
     "uploadAudio": "오디오 업로드",
     "addProvider": "AI 제공자 추가",
     "atAGlance": "한눈에 보기",

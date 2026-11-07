@@ -90,7 +90,17 @@ pub async fn compute_peaks(ffmpeg: &Path, src: &Path, count: usize) -> Option<Ve
     let out = Command::new(ffmpeg)
         .args(["-v", "error", "-i"])
         .arg(src)
-        .args(["-ac", "1", "-filter:a", "aresample=500", "-f", "s16le", "-"])
+        .args([
+            "-map",
+            "0:a:0",
+            "-ac",
+            "1",
+            "-filter:a",
+            "aselect='lt(mod(t,10),1)',asetpts=N/SR/TB,aresample=200,asetnsamples=n=16384",
+            "-f",
+            "s16le",
+            "-",
+        ])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -9,9 +9,11 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
-import { Loading } from "./shared";
+import { useShellData } from "@/components/shell/shell-data";
+import { Loading, useSettings } from "./shared";
 import { useI18n } from "@/lib/i18n";
 
 export interface PlaudConnection {
@@ -50,6 +52,9 @@ interface HandoffStatus {
 /** Loads the connection state and offers the sign-in and disconnect actions. */
 export function PlaudAccountSection() {
     const { t } = useI18n();
+    const { settings, save, isSaving } = useSettings();
+    const { reload: reloadShell } = useShellData();
+    const localOnlyId = useId();
     const [conn, setConn] = useState<PlaudConnection | null>(null);
     const [loadError, setLoadError] = useState<unknown>(null);
     const [signIn, setSignIn] = useState(false);
@@ -74,7 +79,7 @@ export function PlaudAccountSection() {
         try {
             await api("/api/plaud/connection", { method: "DELETE" });
             if (!thenSignIn) toast.success(t("settings.plaud.disconnected"));
-            await load();
+            await Promise.all([load(), reloadShell()]);
             if (thenSignIn) setSignIn(true);
         } catch (err) {
             toast.error(errorMessage(err, t("settings.plaud.disconnectFailed")));
@@ -86,63 +91,98 @@ export function PlaudAccountSection() {
     const connectedNow = async () => {
         setSignIn(false);
         toast.success(t("settings.plaud.connectedToast"));
-        await load();
+        await Promise.all([load(), reloadShell()]);
     };
 
+    const plaudEnabled = settings.plaudEnabled !== false;
+    const localOnly = !plaudEnabled;
     const connected = conn?.connected === true;
+
+    const toggleLocalOnly = async (nextLocalOnly: boolean) => {
+        const ok = await save({ plaudEnabled: !nextLocalOnly });
+        if (ok) {
+            await Promise.all([reloadShell(), load()]);
+        }
+    };
 
     return (
         <div className="grid gap-4">
             <p className="text-xs text-muted-foreground">{t("settings.plaud.intro")}</p>
-            {conn === null && !loadError ? <Loading label={t("settings.plaud.loading")} /> : null}
-            {loadError ? (
-                <p role="alert" className="text-sm text-destructive">
-                    {errorMessage(loadError, t("settings.plaud.loadFailed"))}
-                </p>
-            ) : null}
 
-            {conn && !connected ? (
-                <div className="grid gap-3 rounded-xl bg-muted px-4 py-3">
-                    <p className="text-xs text-muted-foreground">{t("settings.plaud.notConnected")}</p>
-                    <PlaudSignInPanel onConnected={connectedNow} />
+            <div className="flex min-h-11 items-center justify-between gap-4 rounded-xl bg-muted px-4 py-3">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                    <label htmlFor={localOnlyId} className="block text-[13px] font-medium text-foreground">
+                        {t("settings.plaud.localOnlyTitle")}
+                    </label>
+                    <p className="text-xs text-muted-foreground">{t("settings.plaud.localOnlyHint")}</p>
                 </div>
-            ) : null}
+                <Switch
+                    id={localOnlyId}
+                    data-testid="plaud-local-only-switch"
+                    aria-label={t("settings.plaud.localOnlyTitle")}
+                    checked={localOnly}
+                    disabled={isSaving("plaudEnabled") || busy}
+                    onCheckedChange={(next) => void toggleLocalOnly(next)}
+                />
+            </div>
 
-            {conn && connected ? (
-                <div className="divide-y divide-border rounded-xl bg-muted px-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3 py-3">
-                        <div className="min-w-0 space-y-0.5">
-                            <p className="text-xs text-muted-foreground">{t("settings.plaud.connectedAccount")}</p>
-                            <p className="truncate text-[13px] font-medium">{conn.plaudEmail ?? t("settings.plaud.emailUnavailable")}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {t("settings.plaud.regionLine", { region: t(REGION_KEYS[conn.server ?? "global"] ?? "settings.plaud.regionGlobal") })}
-                                {conn.tokenExpiresAt ? t("settings.plaud.tokenValidUntil", { date: formatDate(conn.tokenExpiresAt) }) : ""}
-                            </p>
+            {localOnly ? (
+                <div data-testid="plaud-local-only-active" className="rounded-xl bg-muted px-4 py-3">
+                    <p className="text-sm text-muted-foreground">{t("settings.plaud.localOnlyActive")}</p>
+                </div>
+            ) : (
+                <>
+                    {conn === null && !loadError ? <Loading label={t("settings.plaud.loading")} /> : null}
+                    {loadError ? (
+                        <p role="alert" className="text-sm text-destructive">
+                            {errorMessage(loadError, t("settings.plaud.loadFailed"))}
+                        </p>
+                    ) : null}
+
+                    {conn && !connected ? (
+                        <div className="grid gap-3 rounded-xl bg-muted px-4 py-3">
+                            <p className="text-xs text-muted-foreground">{t("settings.plaud.notConnected")}</p>
+                            <PlaudSignInPanel onConnected={connectedNow} />
                         </div>
-                        {conn.needsReconnect ? <StatusBadge tone="warning">{t("settings.plaud.signInExpired")}</StatusBadge> : <StatusBadge tone="success">{t("settings.plaud.connected")}</StatusBadge>}
-                    </div>
+                    ) : null}
 
-                    {conn.needsReconnect ? (
-                        <div className="grid gap-2 py-3">
-                            <p className="text-sm">{t("settings.plaud.reconnectBody")}</p>
-                            <div>
-                                <Button variant="primary" onClick={() => setSignIn(true)}>
-                                    {t("settings.plaud.reconnect")}
+                    {conn && connected ? (
+                        <div className="divide-y divide-border rounded-xl bg-muted px-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3 py-3">
+                                <div className="min-w-0 space-y-0.5">
+                                    <p className="text-xs text-muted-foreground">{t("settings.plaud.connectedAccount")}</p>
+                                    <p className="truncate text-[13px] font-medium">{conn.plaudEmail ?? t("settings.plaud.emailUnavailable")}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {t("settings.plaud.regionLine", { region: t(REGION_KEYS[conn.server ?? "global"] ?? "settings.plaud.regionGlobal") })}
+                                        {conn.tokenExpiresAt ? t("settings.plaud.tokenValidUntil", { date: formatDate(conn.tokenExpiresAt) }) : ""}
+                                    </p>
+                                </div>
+                                {conn.needsReconnect ? <StatusBadge tone="warning">{t("settings.plaud.signInExpired")}</StatusBadge> : <StatusBadge tone="success">{t("settings.plaud.connected")}</StatusBadge>}
+                            </div>
+
+                            {conn.needsReconnect ? (
+                                <div className="grid gap-2 py-3">
+                                    <p className="text-sm">{t("settings.plaud.reconnectBody")}</p>
+                                    <div>
+                                        <Button variant="primary" onClick={() => setSignIn(true)}>
+                                            {t("settings.plaud.reconnect")}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : null}
+
+                            <div className="flex flex-wrap gap-2 py-3">
+                                <Button variant="secondary" disabled={busy} onClick={() => setConfirm("switch")}>
+                                    {t("settings.plaud.switchAccount")}
+                                </Button>
+                                <Button variant="destructive" disabled={busy} onClick={() => setConfirm("disconnect")}>
+                                    {t("settings.plaud.disconnect")}
                                 </Button>
                             </div>
                         </div>
                     ) : null}
-
-                    <div className="flex flex-wrap gap-2 py-3">
-                        <Button variant="secondary" disabled={busy} onClick={() => setConfirm("switch")}>
-                            {t("settings.plaud.switchAccount")}
-                        </Button>
-                        <Button variant="destructive" disabled={busy} onClick={() => setConfirm("disconnect")}>
-                            {t("settings.plaud.disconnect")}
-                        </Button>
-                    </div>
-                </div>
-            ) : null}
+                </>
+            )}
 
             <PlaudSignInDialog open={signIn} onClose={() => setSignIn(false)} onConnected={connectedNow} />
 

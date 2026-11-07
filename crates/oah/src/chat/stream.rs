@@ -371,7 +371,8 @@ async fn gemini(
         body["systemInstruction"] = json!({ "parts": system });
     }
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+        "{}?alt=sse",
+        crate::ai::gemini_endpoint(&provider.base_url, &model, "streamGenerateContent")
     );
     let response = client()
         .post(url)

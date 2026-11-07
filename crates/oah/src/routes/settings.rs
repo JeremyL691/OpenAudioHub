@@ -109,6 +109,8 @@ const RULES: &[(&str, Rule)] = &[
     ("zipExportFolder", Rule::StringOrNull),
     ("zipTitleMode", Rule::OneOf(&["original", "date", "ai"])),
     ("zipDeleteAfterMerge", Rule::Bool),
+    ("plaudEnabled", Rule::Bool),
+    ("localStorageFolder", Rule::StringOrNull),
 ];
 
 /// Defaults for a brand-new account. Account-level and read-only fields are added in `get_user`.
@@ -161,7 +163,9 @@ const DEFAULTS_JSON: &str = r#"{
         "zipWatchFolder": null,
         "zipExportFolder": null,
         "zipTitleMode": "original",
-        "zipDeleteAfterMerge": false
+        "zipDeleteAfterMerge": false,
+        "plaudEnabled": true,
+        "localStorageFolder": null
 }"#;
 
 pub fn defaults() -> Map<String, Value> {
@@ -462,6 +466,41 @@ async fn put_user(
         }
     }
 
+    if let Some(raw_path) = input.get("localStorageFolder").and_then(Value::as_str) {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            stored.insert("localStorageFolder".into(), Value::Null);
+        } else {
+            let p = std::path::Path::new(trimmed);
+            let safe = p.is_absolute()
+                && !p
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir));
+            if !safe
+                || (state.config.desktop.is_none() && state.config.multi_user)
+                || !writable_dir(trimmed).await
+            {
+                return Err(invalid("localStorageFolder"));
+            }
+            stored.insert("localStorageFolder".into(), Value::String(trimmed.into()));
+        }
+    }
+
+    if input.get("plaudEnabled") == Some(&Value::Bool(false)) {
+        sqlx::query("DELETE FROM plaud_devices WHERE user_id = ?")
+            .bind(&user.id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM plaud_connections WHERE user_id = ?")
+            .bind(&user.id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM plaud_refresh_keys WHERE user_id = ?")
+            .bind(&user.id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
     sqlx::query(
         "INSERT INTO user_settings (user_id, data, updated_at) VALUES (?, ?, ?)
          ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
@@ -482,6 +521,9 @@ async fn put_user(
     tx.commit().await?;
     if input.keys().any(|k| k.starts_with("zip")) {
         crate::zip_merge::notify();
+    }
+    if input.contains_key("localStorageFolder") {
+        crate::local_folder::notify();
     }
     Ok(Json(json!({ "success": true })))
 }
@@ -525,8 +567,15 @@ async fn get_storage(user: CurrentUser, State(state): State<AppState>) -> ApiRes
             "startTime": iso(row.start_time),
         }));
     }
+    let eff = effective(&state, &user.id).await?;
+    let local_folder = eff
+        .get("localStorageFolder")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
     let storage_type = state.storage.active_type();
-    let disk_free = state.storage.disk_free_bytes();
+    let disk_free = state
+        .storage
+        .disk_free_bytes_at(local_folder.map(std::path::Path::new));
     Ok(Json(json!({
         "storageType": storage_type,
         "usedBytes": used,
@@ -535,6 +584,8 @@ async fn get_storage(user: CurrentUser, State(state): State<AppState>) -> ApiRes
         "largest": largest,
         "diskFreeBytes": disk_free,
         "quotaBytes": null,
+        "localStorageFolder": local_folder,
+        "defaultStoragePath": state.config.storage_root.to_string_lossy(),
     })))
 }
 

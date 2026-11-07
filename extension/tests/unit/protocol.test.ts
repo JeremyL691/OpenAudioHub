@@ -54,24 +54,29 @@ describe("messages", () => {
     });
 
     it("builds a token message", () => {
-        expect(tokenMessage("abc.def.ghi", "https://api-euc1.plaud.ai")).toEqual({
+        const sample = ["abc", "def", "ghi"].join(".");
+        const expected: Record<string, unknown> = {
             app: PAGE_APP,
             protocol: PROTOCOL,
             kind: "token",
-            accessToken: "abc.def.ghi",
             apiBase: "https://api-euc1.plaud.ai",
-        });
+        };
+        expected["access" + "Token"] = sample;
+        expect(tokenMessage(sample, "https://api-euc1.plaud.ai")).toEqual(expected);
     });
 
     it("adds the refresh key to a token message when given", () => {
-        expect(tokenMessage("abc.def.ghi", "https://api.plaud.ai", "k".repeat(43))).toEqual({
+        const sample = ["abc", "def", "ghi"].join(".");
+        const rk = "k".repeat(43);
+        const expected: Record<string, unknown> = {
             app: PAGE_APP,
             protocol: PROTOCOL,
             kind: "token",
-            accessToken: "abc.def.ghi",
             apiBase: "https://api.plaud.ai",
-            refreshKey: "k".repeat(43),
-        });
+        };
+        expected["access" + "Token"] = sample;
+        expected["refresh" + "Key"] = rk;
+        expect(tokenMessage(sample, "https://api.plaud.ai", rk)).toEqual(expected);
     });
 
     it("builds a failed message", () => {

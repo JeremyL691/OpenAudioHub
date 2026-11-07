@@ -102,16 +102,30 @@ impl Storage {
         }
     }
 
-    /// A path for local objects only. The key must be a safe relative object path.
-    pub fn local_path(&self, kind: &str, key: &str) -> Result<Option<PathBuf>, StorageError> {
-        validate_key(key)?;
+    fn resolve_local_path(&self, kind: &str, key: &str) -> Result<Option<PathBuf>, StorageError> {
         if kind == "local" {
+            validate_key(key)?;
             Ok(Some(self.local_root.join(key)))
+        } else if kind == "local_folder" {
+            let path = Path::new(key);
+            if key.is_empty()
+                || !path.is_absolute()
+                || path.components().any(|c| matches!(c, Component::ParentDir))
+            {
+                return Err(StorageError::InvalidKey);
+            }
+            Ok(Some(PathBuf::from(key)))
         } else if kind == "s3" {
+            validate_key(key)?;
             Ok(None)
         } else {
             Err(StorageError::Operation)
         }
+    }
+
+    /// A path for local objects only.
+    pub fn local_path(&self, kind: &str, key: &str) -> Result<Option<PathBuf>, StorageError> {
+        self.resolve_local_path(kind, key)
     }
 
     /// Store a staged file using the server's active backend. File bytes are streamed;
@@ -174,14 +188,13 @@ impl Storage {
         key: &str,
         destination: &Path,
     ) -> Result<u64, StorageError> {
-        validate_key(key)?;
+        let local = self.resolve_local_path(kind, key)?;
         if let Some(parent) = destination.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|_| StorageError::Operation)?;
         }
-        if kind == "local" {
-            let source = self.local_root.join(key);
+        if let Some(source) = local {
             let size = tokio::fs::metadata(&source)
                 .await
                 .map_err(|e| {
@@ -262,17 +275,14 @@ impl Storage {
         start: u64,
         end: Option<u64>,
     ) -> Result<AudioReader, StorageError> {
-        validate_key(key)?;
-        if kind == "local" {
-            let mut file = tokio::fs::File::open(self.local_root.join(key))
-                .await
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        StorageError::NotFound
-                    } else {
-                        StorageError::Operation
-                    }
-                })?;
+        if let Some(local) = self.resolve_local_path(kind, key)? {
+            let mut file = tokio::fs::File::open(local).await.map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    StorageError::NotFound
+                } else {
+                    StorageError::Operation
+                }
+            })?;
             if start > 0 {
                 file.seek(std::io::SeekFrom::Start(start))
                     .await
@@ -304,9 +314,8 @@ impl Storage {
     }
 
     pub async fn delete(&self, kind: &str, key: &str) -> Result<(), StorageError> {
-        validate_key(key)?;
-        if kind == "local" {
-            return match tokio::fs::remove_file(self.local_root.join(key)).await {
+        if let Some(local) = self.resolve_local_path(kind, key)? {
+            return match tokio::fs::remove_file(local).await {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(_) => Err(StorageError::Operation),
@@ -324,9 +333,8 @@ impl Storage {
     }
 
     pub async fn head_size(&self, kind: &str, key: &str) -> Result<u64, StorageError> {
-        validate_key(key)?;
-        if kind == "local" {
-            return tokio::fs::metadata(self.local_root.join(key))
+        if let Some(local) = self.resolve_local_path(kind, key)? {
+            return tokio::fs::metadata(local)
                 .await
                 .map(|m| m.len())
                 .map_err(|e| {
@@ -358,8 +366,7 @@ impl Storage {
         kind: &str,
         key: &str,
     ) -> Result<Option<String>, StorageError> {
-        validate_key(key)?;
-        if kind == "local" {
+        if self.resolve_local_path(kind, key)?.is_some() {
             return Ok(None);
         }
         let s3 = self.s3.as_ref().ok_or(StorageError::NotConfigured)?;
@@ -382,9 +389,7 @@ impl Storage {
     /// Return the existing local object, or stream an S3 object into a managed temporary
     /// file. Disk space is checked before the S3 transfer starts.
     pub async fn materialize(&self, kind: &str, key: &str) -> Result<LocalFile, StorageError> {
-        validate_key(key)?;
-        if kind == "local" {
-            let path = self.local_root.join(key);
+        if let Some(path) = self.resolve_local_path(kind, key)? {
             tokio::fs::metadata(&path).await.map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     StorageError::NotFound
@@ -415,8 +420,17 @@ impl Storage {
     }
 
     pub fn disk_free_bytes(&self) -> Option<u64> {
+        self.disk_free_bytes_at(None)
+    }
+
+    pub fn disk_free_bytes_at(&self, dir: Option<&Path>) -> Option<u64> {
         if self.active != StorageType::Local {
             return None;
+        }
+        if let Some(d) = dir
+            && let Ok(free) = fs4::available_space(d)
+        {
+            return Some(free);
         }
         fs4::available_space(&self.local_root).ok()
     }
@@ -662,6 +676,48 @@ mod tests {
         assert_eq!(tokio::fs::read(read).await.unwrap(), b"local audio");
         storage.delete("local", "user/recording.mp3").await.unwrap();
         assert!(storage.local_path("local", "../private").is_err());
+
+        let folder = dir.path().join("custom_folder");
+        tokio::fs::create_dir_all(&folder).await.unwrap();
+        let folder_file = folder.join("clip.mp3");
+        tokio::fs::write(&folder_file, b"folder audio")
+            .await
+            .unwrap();
+        let key = folder_file.to_string_lossy().into_owned();
+        assert_eq!(storage.head_size("local_folder", &key).await.unwrap(), 12);
+        assert_eq!(
+            read_all(
+                storage
+                    .open_range("local_folder", &key, 0, Some(5))
+                    .await
+                    .unwrap()
+            )
+            .await,
+            b"folder"
+        );
+        assert!(
+            storage
+                .presigned_get("local_folder", &key)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let mat = storage.materialize("local_folder", &key).await.unwrap();
+        assert_eq!(mat.path(), folder_file.as_path());
+        drop(mat);
+        assert!(folder_file.exists());
+        storage.delete("local_folder", &key).await.unwrap();
+        assert!(!folder_file.exists());
+        assert!(
+            storage
+                .local_path("local_folder", "relative/path.mp3")
+                .is_err()
+        );
+        assert!(
+            storage
+                .local_path("local_folder", "/tmp/../etc/passwd")
+                .is_err()
+        );
     }
 
     #[tokio::test]

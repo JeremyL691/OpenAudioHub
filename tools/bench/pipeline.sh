@@ -51,7 +51,7 @@ curl -sf -o /dev/null "$base/api/health" || { echo "server did not start" >&2; e
 
 # One account, configured to use the local provider.
 email="bench-$(date +%s)@openaudiohub.test"
-password="bench-password-1"
+password="${OAH_BENCH_PW:-$(openssl rand -hex 12)}"
 jar="$artifact/cookies.txt"
 rm -f "$jar"
 api() { curl -sS -b "$jar" -c "$jar" -H "origin: $base" -H "content-type: application/json" "$@"; }

@@ -42,7 +42,7 @@ pub async fn transcribe_file(
         .await
         .map_err(|_| failed("Could not create a work folder."))?;
     if provider.name == "Google Gemini" {
-        gemini_style(provider, path, options, timeout).await
+        gemini_style(state, provider, path, options, timeout, &work).await
     } else if provider.name == "ElevenLabs" {
         eleven_style(provider, path, options, timeout).await
     } else if provider.preset().is_some_and(|p| p.chat_transcription) {
@@ -55,71 +55,270 @@ pub async fn transcribe_file(
 }
 
 async fn gemini_style(
+    state: &AppState,
     provider: &Provider,
     path: &Path,
     options: &Options,
     timeout: Duration,
+    work: &Workdir,
 ) -> Result<Transcript, AiError> {
     let size = file_size(path).await?;
-    if size > GEMINI_MAX_BYTES {
-        return Err(failed("Audio over 20 MB cannot be sent to Google Gemini."));
-    }
-    let mime = match mime_for(path) {
-        "application/octet-stream" => {
-            return Err(failed("Google Gemini does not support this audio type."));
-        }
-        "audio/mpeg" => "audio/mp3",
-        m => m,
+    let (send_path, mime) = if size > GEMINI_MAX_BYTES {
+        let Some(compressed) = gemini_compress(state, path, work).await else {
+            return Err(failed("Audio over 20 MB cannot be sent to Google Gemini."));
+        };
+        (compressed, "audio/ogg")
+    } else {
+        let mime = match mime_for(path) {
+            "application/octet-stream" => {
+                return Err(failed("Google Gemini does not support this audio type."));
+            }
+            "audio/mpeg" => "audio/mp3",
+            m => m,
+        };
+        (path.to_path_buf(), mime)
     };
-    let bytes = tokio::fs::read(path)
+    let bytes = tokio::fs::read(&send_path)
         .await
         .map_err(|_| failed("Could not read the audio file."))?;
-    let mut prompt =
-        String::from("Transcribe the attached audio verbatim. Output only the transcript text.");
-    if let Some(language) = &options.language {
-        prompt.push_str(&format!(" The audio language is {language}."));
-    }
-    let body = json!({"contents":[{"parts":[{"text":prompt},{"inlineData":{"mimeType":mime,"data":base64(&bytes)}}]}]});
+    let encoded = base64(&bytes);
     let model = if options.model.is_empty() {
-        "gemini-2.0-flash"
+        "gemini-2.5-flash"
     } else {
         &options.model
     };
-    let endpoint =
-        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
+    let req_timeout = timeout.min(Duration::from_secs(60));
+
+    if model.contains("transcribe")
+        || model.starts_with("gemini-3")
+        || model.starts_with("gemini-4")
+    {
+        for interaction_model in [model, "gemini-3.8-flash", "gemini-3.5-flash-lite"] {
+            match gemini_interactions(
+                provider,
+                interaction_model,
+                mime,
+                &encoded,
+                options,
+                req_timeout,
+            )
+            .await
+            {
+                Ok(transcript) => return Ok(transcript),
+                Err(e) if e.code == "AI_AUTH_FAILED" => return Err(e),
+                Err(_) => {}
+            }
+        }
+    }
+
+    let mut prompt = String::from(
+        "Transcribe the attached audio verbatim. Output only the transcript text. If there is no speech, output nothing.",
+    );
+    if let Some(language) = &options.language {
+        prompt.push_str(&format!(" The audio language is {language}."));
+    }
+    let body = json!({"contents":[{"parts":[{"text":prompt},{"inlineData":{"mimeType":mime,"data":encoded}}]}]});
+    let mut candidates: Vec<&str> = Vec::new();
+    if !model.contains("transcribe") {
+        candidates.push(model);
+    }
+    for fallback in ["gemini-2.5-flash", "gemini-2.5-flash-lite"] {
+        if !candidates.contains(&fallback) {
+            candidates.push(fallback);
+        }
+    }
+
+    let mut last_err: Option<AiError> = None;
+    for candidate in candidates {
+        let endpoint = ai::gemini_endpoint(&provider.base_url, candidate, "generateContent");
+        let res = ai::client()
+            .post(&endpoint)
+            .header("x-goog-api-key", &provider.api_key)
+            .timeout(req_timeout)
+            .json(&body)
+            .send()
+            .await;
+        match res {
+            Ok(resp) if resp.status().is_success() => {
+                let value: Value = resp.json().await.map_err(ai::upstream_error)?;
+                let raw_text = value["candidates"][0]["content"]["parts"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|part| part["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("")
+                    .trim()
+                    .to_owned();
+                let text = if matches!(
+                    raw_text.as_str(),
+                    "(Silence)" | "[Silence]" | "(silence)" | "[silence]"
+                ) {
+                    String::new()
+                } else {
+                    raw_text
+                };
+                return Ok(Transcript {
+                    text,
+                    language: options.language.clone(),
+                    segments: Vec::new(),
+                });
+            }
+            Ok(resp) => {
+                last_err = Some(ai::status_error(resp.status()));
+            }
+            Err(e) => {
+                last_err = Some(ai::upstream_error(e));
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| failed("Google Gemini transcription failed.")))
+}
+
+async fn gemini_interactions(
+    provider: &Provider,
+    model: &str,
+    mime: &str,
+    encoded_audio: &str,
+    options: &Options,
+    timeout: Duration,
+) -> Result<Transcript, AiError> {
+    let model_id = if model.contains("transcribe") && !model.starts_with("models/") {
+        format!("models/{model}")
+    } else {
+        model.to_owned()
+    };
+    let body = if model.contains("transcribe") {
+        let lang_codes: Vec<&str> = options.language.as_deref().into_iter().collect();
+        let mode = if options.diarize {
+            json!({
+                "type": "verbatim",
+                "diarization_mode": "speaker",
+                "timestamp_granularities": ["word"]
+            })
+        } else {
+            json!({
+                "type": "verbatim",
+                "timestamp_granularities": ["word"]
+            })
+        };
+        json!({
+            "model": model_id,
+            "input": [
+                {
+                    "type": "audio",
+                    "data": encoded_audio,
+                    "mime_type": mime
+                }
+            ],
+            "generation_config": {
+                "transcription_config": {
+                    "language_codes": lang_codes,
+                    "mode": mode
+                }
+            }
+        })
+    } else {
+        let mut prompt = String::from(
+            "Transcribe the attached audio verbatim. Output only the transcript text.",
+        );
+        if let Some(language) = &options.language {
+            prompt.push_str(&format!(" The audio language is {language}."));
+        }
+        json!({
+            "model": model_id,
+            "input": [
+                { "type": "text", "text": prompt },
+                { "type": "audio", "data": encoded_audio, "mime_type": mime }
+            ]
+        })
+    };
+
     let res = ai::client()
-        .post(endpoint)
+        .post("https://generativelanguage.googleapis.com/v1beta/interactions")
         .header("x-goog-api-key", &provider.api_key)
+        .header("Api-Revision", "2026-05-20")
         .timeout(timeout)
         .json(&body)
         .send()
         .await
         .map_err(ai::upstream_error)?;
-    if !res.status().is_success() {
-        return Err(ai::status_error(res.status()));
+
+    if res.status().is_success() {
+        let value: Value = res.json().await.map_err(ai::upstream_error)?;
+        return parse_gemini_interaction(&value, options);
     }
-    let value: Value = res.json().await.map_err(ai::upstream_error)?;
-    let text = value["candidates"][0]["content"]["parts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|part| part["text"].as_str())
-        .collect::<Vec<_>>()
-        .join("")
-        .trim()
-        .to_owned();
-    if text.is_empty() {
-        return Err(AiError {
-            code: "AI_EMPTY_RESPONSE",
-            message: "The provider returned an empty answer.".into(),
-            retryable: false,
-        });
+    Err(ai::status_error(res.status()))
+}
+
+fn parse_gemini_interaction(value: &Value, options: &Options) -> Result<Transcript, AiError> {
+    let mut text_parts: Vec<String> = Vec::new();
+    let mut segments: Vec<Segment> = Vec::new();
+    let mut speakers = Speakers::default();
+    let mut prev_start = 0.0f64;
+
+    if let Some(steps) = value["steps"].as_array() {
+        for step in steps {
+            if let Some(contents) = step["content"].as_array() {
+                for item in contents {
+                    if let Some(t) = item["text"].as_str()
+                        && !t.trim().is_empty()
+                    {
+                        text_parts.push(t.trim().to_owned());
+                    }
+                    if let Some(annotations) = item["annotations"].as_array() {
+                        for ann in annotations {
+                            if ann["type"].as_str() == Some("word_info")
+                                && let Some(word) = ann["text"].as_str()
+                                && !word.trim().is_empty()
+                            {
+                                let raw_start = parse_sec_offset(ann["start_offset"].as_str())
+                                    .unwrap_or(prev_start);
+                                let start = raw_start.max(prev_start);
+                                let raw_end = parse_sec_offset(ann["end_offset"].as_str())
+                                    .unwrap_or(start + 0.01);
+                                let end = raw_end.max(start + 0.01);
+                                prev_start = start;
+                                let speaker = if options.diarize {
+                                    ann["speaker"]
+                                        .as_str()
+                                        .filter(|s| !s.is_empty())
+                                        .map(|s| speakers.label(s))
+                                } else {
+                                    None
+                                };
+                                segments.push(Segment {
+                                    start,
+                                    end,
+                                    text: word.to_owned(),
+                                    speaker,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    if text_parts.is_empty()
+        && let Some(out) = value["output_text"].as_str()
+        && !out.trim().is_empty()
+    {
+        text_parts.push(out.trim().to_owned());
+    }
+
+    let text = text_parts.join("\n").trim().to_owned();
     Ok(Transcript {
         text,
         language: options.language.clone(),
-        segments: Vec::new(),
+        segments,
     })
+}
+
+fn parse_sec_offset(raw: Option<&str>) -> Option<f64> {
+    let s = raw?.trim().trim_end_matches('s');
+    s.parse::<f64>().ok()
 }
 
 async fn eleven_style(
@@ -578,6 +777,7 @@ async fn chat_style(
     }]);
     let mut chat_provider = provider.clone();
     chat_provider.model = Some(options.model.clone());
+    chat_provider.enhancement_model = Some(options.model.clone());
     let text = ai::chat(
         &chat_provider,
         messages,
@@ -668,6 +868,33 @@ fn mime_for(path: &Path) -> &'static str {
         Some("flac") => "audio/flac",
         Some("aac") => "audio/aac",
         _ => "application/octet-stream",
+    }
+}
+
+async fn gemini_compress(state: &AppState, src: &Path, work: &Workdir) -> Option<PathBuf> {
+    let mut kbps = config::number("WHISPER_COMPRESS_BITRATE_KBPS", 12, 1, u64::MAX).unwrap_or(12);
+    loop {
+        let out = work.0.join("gemini-compressed.ogg");
+        let mut cmd = Command::new(&state.config.ffmpeg);
+        cmd.args(["-y", "-v", "error", "-i"])
+            .arg(src)
+            .args([
+                "-map", "0:a:0", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a",
+            ])
+            .arg(format!("{kbps}k"))
+            .args(["-f", "ogg"])
+            .arg(&out);
+        if !media::run(&mut cmd).await {
+            return None;
+        }
+        let size = file_size(&out).await.ok()?;
+        if size > 0 && size <= GEMINI_MAX_BYTES {
+            return Some(out);
+        }
+        if kbps <= MIN_BITRATE_KBPS {
+            return None;
+        }
+        kbps = (kbps / 2).max(MIN_BITRATE_KBPS);
     }
 }
 
@@ -886,8 +1113,9 @@ mod tests {
             id: "p".into(),
             name: "OpenAI".into(),
             base_url: format!("http://{addr}"),
-            api_key: "fake-local-key".into(),
+            api_key: crate::ids::new_id(),
             model: Some("gpt-4o-transcribe-diarize".into()),
+            ..Default::default()
         };
         let options = Options {
             filename: "Fixture".into(),
@@ -959,12 +1187,14 @@ mod tests {
         tokio::fs::write(&path, b"safe test audio bytes")
             .await
             .unwrap();
+        let expected_cred = crate::ids::new_id();
         let provider = Provider {
             id: "p".into(),
             name: "ElevenLabs".into(),
             base_url: format!("http://{addr}/v1"),
-            api_key: "fake-local-key".into(),
+            api_key: expected_cred.clone(),
             model: Some("scribe_v2".into()),
+            ..Default::default()
         };
         let options = Options {
             filename: "Fixture".into(),
@@ -977,7 +1207,7 @@ mod tests {
             .await
             .unwrap();
         let (key, body) = rx.await.unwrap();
-        assert_eq!(key, "fake-local-key");
+        assert_eq!(key, expected_cred);
         for field in [
             "model_id",
             "scribe_v2",

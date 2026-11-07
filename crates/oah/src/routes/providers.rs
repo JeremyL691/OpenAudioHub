@@ -26,8 +26,6 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
 const LIST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Chat model ids containing these words are not offered (shortcut: guessed pattern, the spec does not name one).
 const EXCLUDED_CHAT_MODELS: &[&str] = &["embed", "rerank", "tts"];
-const SELECT: &str = "SELECT id, provider, api_key, base_url, default_model, is_default_transcription, \
-                      is_default_enhancement, created_at FROM api_credentials";
 
 #[derive(sqlx::FromRow)]
 struct Row {
@@ -36,6 +34,10 @@ struct Row {
     api_key: String,
     base_url: Option<String>,
     default_model: Option<String>,
+    transcription_model: Option<String>,
+    enhancement_model: Option<String>,
+    transcription_models: String,
+    enhancement_models: String,
     is_default_transcription: bool,
     is_default_enhancement: bool,
     created_at: i64,
@@ -48,6 +50,14 @@ struct ProviderBody {
     api_key: Option<String>,
     base_url: Option<String>,
     default_model: Option<String>,
+    #[serde(default)]
+    transcription_model: Option<String>,
+    #[serde(default)]
+    enhancement_model: Option<String>,
+    #[serde(default)]
+    transcription_models: Option<Vec<String>>,
+    #[serde(default)]
+    enhancement_models: Option<Vec<String>>,
     #[serde(default)]
     is_default_transcription: bool,
     #[serde(default)]
@@ -62,6 +72,8 @@ struct TestBody {
     api_key: Option<String>,
     base_url: Option<String>,
     id: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -105,6 +117,10 @@ pub fn router() -> Router<AppState> {
             "/api/settings/ai/providers/default-transcription",
             put(set_default_transcription),
         )
+        .route(
+            "/api/settings/ai/providers/default-enhancement",
+            put(set_default_enhancement),
+        )
         .route("/api/settings/ai/providers/test", post(probe))
         .route(
             "/api/settings/ai/providers/{id}/chat-models",
@@ -120,11 +136,15 @@ async fn saved_chat_models(
     user: CurrentUser,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> ApiResult<Json<Value>> {
-    let row: Option<Row> = sqlx::query_as(&format!("{SELECT} WHERE id = ? AND user_id = ?"))
-        .bind(&id)
-        .bind(&user.id)
-        .fetch_optional(&state.db)
-        .await?;
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT id, provider, api_key, base_url, default_model, \
+         transcription_model, enhancement_model, transcription_models, enhancement_models, \
+         is_default_transcription, is_default_enhancement, created_at FROM api_credentials WHERE id = ? AND user_id = ?",
+    )
+    .bind(&id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await?;
     let row = row.ok_or_else(|| AppError::not_found("NOT_FOUND", "Provider not found"))?;
     let preset = crate::ai::preset_named(&row.provider);
     let base = crate::ai::base_url(row.base_url.clone(), preset);
@@ -136,7 +156,20 @@ async fn saved_chat_models(
     // A provider that publishes its models is asked; otherwise the configured model and the
     // preset's suggestions are offered, so a picker is never empty for a working provider.
     let mut models: Vec<Value> = Vec::new();
-    if preset.is_some_and(|p| p.lists_chat) {
+    for id in parse_stored_models(&row.enhancement_models) {
+        if !is_transcription_model(&id)
+            && !models.iter().any(|m| m["id"].as_str() == Some(id.as_str()))
+        {
+            models.push(json!({ "id": id, "name": id }));
+        }
+    }
+    if row.provider == "Google Gemini" {
+        for id in gemini_chat_models() {
+            if !models.iter().any(|m| m["id"].as_str() == Some(id)) {
+                models.push(json!({ "id": id, "name": id }));
+            }
+        }
+    } else if preset.is_some_and(|p| p.lists_chat) {
         let request = crate::ai::with_provider_headers(
             crate::ai::client()
                 .get(format!("{base}/models"))
@@ -144,6 +177,7 @@ async fn saved_chat_models(
             &row.provider,
             &base,
         );
+        let mut upstream_models: Vec<Value> = Vec::new();
         if let Ok(response) = request.timeout(LIST_TIMEOUT).send().await
             && let Ok(listed) = response.json::<Listed>().await
         {
@@ -156,27 +190,35 @@ async fn saved_chat_models(
                 if is_transcription_model(&id) {
                     continue;
                 }
-                models.push(json!({ "id": id, "name": model.name.unwrap_or_else(|| id.clone()) }));
+                upstream_models
+                    .push(json!({ "id": id, "name": model.name.unwrap_or_else(|| id.clone()) }));
             }
         }
-        models.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+        upstream_models.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+        for item in upstream_models {
+            if let Some(id) = item["id"].as_str()
+                && !models.iter().any(|m| m["id"].as_str() == Some(id))
+            {
+                models.push(item);
+            }
+        }
     }
-    let configured = row
-        .default_model
-        .clone()
-        .filter(|m| !m.is_empty() && !is_transcription_model(m));
+    let configured = non_empty(row.enhancement_model.clone())
+        .or_else(|| non_empty(row.default_model.clone()).filter(|m| !is_transcription_model(m)));
     let answer = json!({
         "models": models,
         "configuredModel": configured,
-        "managedModel": crate::ai::chat_model_of(&row.provider, row.default_model.as_deref(), &base),
+        "managedModel": crate::ai::chat_model_of(&row.provider, configured.as_deref(), &base),
     });
     Ok(Json(answer))
 }
 
 async fn list(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Json<Value>> {
-    let rows: Vec<Row> = sqlx::query_as(&format!(
-        "{SELECT} WHERE user_id = ? ORDER BY created_at, id"
-    ))
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT id, provider, api_key, base_url, default_model, \
+         transcription_model, enhancement_model, transcription_models, enhancement_models, \
+         is_default_transcription, is_default_enhancement, created_at FROM api_credentials WHERE user_id = ? ORDER BY created_at, id",
+    )
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
@@ -201,12 +243,26 @@ async fn create(
         return Err(refuse("isDefaultTranscription"));
     }
     let now = now_ms();
+    let normalized = normalize_models(
+        &provider,
+        body.default_model,
+        body.transcription_model,
+        body.enhancement_model,
+        body.transcription_models,
+        body.enhancement_models,
+    );
     let row = Row {
         id: new_id(),
         provider,
         api_key: state.config.field_key.encrypt(&api_key),
         base_url: non_empty(body.base_url),
-        default_model: non_empty(body.default_model),
+        default_model: normalized.default_model,
+        transcription_model: normalized.transcription_model,
+        enhancement_model: normalized.enhancement_model,
+        transcription_models: serde_json::to_string(&normalized.transcription_models)
+            .unwrap_or_else(|_| "[]".to_owned()),
+        enhancement_models: serde_json::to_string(&normalized.enhancement_models)
+            .unwrap_or_else(|_| "[]".to_owned()),
         is_default_transcription: body.is_default_transcription,
         is_default_enhancement: body.is_default_enhancement,
         created_at: now,
@@ -221,8 +277,9 @@ async fn create(
     }
     sqlx::query(
         "INSERT INTO api_credentials (id, user_id, provider, api_key, base_url, default_model,
+         transcription_model, enhancement_model, transcription_models, enhancement_models,
          is_default_transcription, is_default_enhancement, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&row.id)
     .bind(&user.id)
@@ -230,6 +287,10 @@ async fn create(
     .bind(&row.api_key)
     .bind(&row.base_url)
     .bind(&row.default_model)
+    .bind(&row.transcription_model)
+    .bind(&row.enhancement_model)
+    .bind(&row.transcription_models)
+    .bind(&row.enhancement_models)
     .bind(row.is_default_transcription)
     .bind(row.is_default_enhancement)
     .bind(now)
@@ -262,6 +323,18 @@ async fn update(
         Some(key) => state.config.field_key.encrypt(&key),
         None => row.api_key,
     };
+    let normalized = normalize_models(
+        &row.provider,
+        body.default_model,
+        body.transcription_model,
+        body.enhancement_model,
+        body.transcription_models,
+        body.enhancement_models,
+    );
+    let transcription_models =
+        serde_json::to_string(&normalized.transcription_models).unwrap_or_else(|_| "[]".to_owned());
+    let enhancement_models =
+        serde_json::to_string(&normalized.enhancement_models).unwrap_or_else(|_| "[]".to_owned());
     if body.is_default_transcription {
         clear_default(&mut tx, &user.id, true).await?;
     }
@@ -270,12 +343,17 @@ async fn update(
     }
     sqlx::query(
         "UPDATE api_credentials SET api_key = ?, base_url = ?, default_model = ?,
+         transcription_model = ?, enhancement_model = ?, transcription_models = ?, enhancement_models = ?,
          is_default_transcription = ?, is_default_enhancement = ?, updated_at = ?
          WHERE id = ? AND user_id = ?",
     )
     .bind(api_key)
     .bind(non_empty(body.base_url))
-    .bind(non_empty(body.default_model))
+    .bind(normalized.default_model)
+    .bind(normalized.transcription_model)
+    .bind(normalized.enhancement_model)
+    .bind(transcription_models)
+    .bind(enhancement_models)
     .bind(body.is_default_transcription)
     .bind(body.is_default_enhancement)
     .bind(now_ms())
@@ -324,12 +402,81 @@ async fn set_default_transcription(
         return Err(refuse("isDefaultTranscription"));
     }
     clear_default(&mut tx, &user.id, true).await?;
-    sqlx::query("UPDATE api_credentials SET is_default_transcription = 1, updated_at = ? WHERE id = ? AND user_id = ?")
+    if let Some(model) = body
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        sqlx::query(
+            "UPDATE api_credentials SET is_default_transcription = 1, transcription_model = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        )
+        .bind(model)
         .bind(now_ms())
         .bind(id)
         .bind(&user.id)
         .execute(&mut *tx)
         .await?;
+    } else {
+        sqlx::query("UPDATE api_credentials SET is_default_transcription = 1, updated_at = ? WHERE id = ? AND user_id = ?")
+            .bind(now_ms())
+            .bind(id)
+            .bind(&user.id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(Json(json!({ "success": true })))
+}
+
+async fn set_default_enhancement(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Json(body): Json<Value>,
+) -> ApiResult<Json<Value>> {
+    let Some(id) = body
+        .get("providerId")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    else {
+        return Err(
+            AppError::bad_request("INVALID_INPUT", "Invalid request body")
+                .detail("issues", json!(["providerId must be a non-empty string"])),
+        );
+    };
+    let mut tx = crate::db::begin_write(&state.db).await?;
+    let row = find(&mut *tx, &user.id, id)
+        .await?
+        .ok_or_else(missing_provider)?;
+    if !can_enhance(&row.provider) {
+        return Err(refuse("isDefaultEnhancement"));
+    }
+    clear_default(&mut tx, &user.id, false).await?;
+    if let Some(model) = body
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        sqlx::query(
+            "UPDATE api_credentials SET is_default_enhancement = 1, enhancement_model = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        )
+        .bind(model)
+        .bind(now_ms())
+        .bind(id)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            "UPDATE api_credentials SET is_default_enhancement = 1, updated_at = ? WHERE id = ? AND user_id = ?",
+        )
+        .bind(now_ms())
+        .bind(id)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await?;
+    }
     tx.commit().await?;
     Ok(Json(json!({ "success": true })))
 }
@@ -366,18 +513,56 @@ async fn probe(
         preset,
     );
     validate_provider_base(&provider, Some(&base))?;
-    let model = non_empty(body.model)
-        .or_else(|| stored.as_ref().and_then(|row| row.default_model.clone()))
-        .or_else(|| preset.and_then(|p| p.model).map(str::to_owned));
+    let model = non_empty(body.model).or_else(|| {
+        if body.kind.as_deref() == Some("chat") {
+            stored
+                .as_ref()
+                .and_then(|row| non_empty(row.enhancement_model.clone()))
+                .or_else(|| {
+                    stored
+                        .as_ref()
+                        .and_then(|row| non_empty(row.default_model.clone()))
+                        .filter(|m| !is_transcription_model(m))
+                })
+                .or_else(|| preset.and_then(|p| p.chat_model).map(str::to_owned))
+                .or_else(|| {
+                    stored
+                        .as_ref()
+                        .and_then(|row| non_empty(row.default_model.clone()))
+                })
+                .or_else(|| preset.and_then(|p| p.model).map(str::to_owned))
+        } else {
+            stored
+                .as_ref()
+                .and_then(|row| non_empty(row.transcription_model.clone()))
+                .or_else(|| {
+                    stored
+                        .as_ref()
+                        .and_then(|row| non_empty(row.default_model.clone()))
+                })
+                .or_else(|| {
+                    stored
+                        .as_ref()
+                        .and_then(|row| non_empty(row.enhancement_model.clone()))
+                })
+                .or_else(|| preset.and_then(|p| p.model).map(str::to_owned))
+        }
+    });
     let Some(model) = model else {
         return Ok(Json(
             json!({ "ok": false, "kind": "chat", "error": "No model is set." }),
         ));
     };
 
-    let transcription = !can_enhance(&provider)
-        || is_transcription_model(&model)
-        || (provider == "Google Gemini" && gemini_audio_models().contains(&model.as_str()));
+    let transcription = match body.kind.as_deref() {
+        Some("chat") => !can_enhance(&provider) || is_transcription_model(&model),
+        Some("transcription" | "audio") => can_transcribe(&provider),
+        _ => {
+            !can_enhance(&provider)
+                || is_transcription_model(&model)
+                || (provider == "Google Gemini" && gemini_audio_models().contains(&model.as_str()))
+        }
+    };
     let kind = if transcription {
         "transcription"
     } else {
@@ -385,9 +570,9 @@ async fn probe(
     };
     let started = Instant::now();
     let outcome = if provider == "Google Gemini" && transcription {
-        gemini_audio_probe(&key, &model).await
+        gemini_audio_probe(&base, &key, &model).await
     } else if provider == "Google Gemini" {
-        gemini_chat_probe(&key, &model).await
+        gemini_chat_probe(&base, &key, &model).await
     } else if transcription {
         if provider == "ElevenLabs" {
             eleven_probe(&base, &key, &model).await
@@ -412,24 +597,28 @@ async fn models(_user: CurrentUser, Json(body): Json<ModelsBody>) -> ApiResult<J
     let provider = non_empty(body.provider).ok_or_else(|| missing("provider"))?;
     let key = non_empty(body.api_key).ok_or_else(|| missing("apiKey"))?;
     let chat = body.kind.as_deref() == Some("chat");
-    if provider == "Google Gemini" && !chat {
+    if provider == "Google Gemini" {
+        let list: &[&str] = if chat {
+            &gemini_chat_models()
+        } else {
+            &gemini_audio_models()
+        };
+        let models = list
+            .iter()
+            .map(|id| json!({"id": *id, "name": *id}))
+            .collect::<Vec<_>>();
+        return Ok(Json(json!({"models": models})));
+    }
+    if provider == "ElevenLabs" && !chat {
         let models = [
-            "gemini-2.0-flash",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
+            "scribe_v2",
+            "scribe_v2_realtime",
+            "scribe_v2_medical",
+            "scribe_v1",
         ]
         .into_iter()
         .map(|id| json!({"id":id,"name":id}))
         .collect::<Vec<_>>();
-        return Ok(Json(json!({"models":models})));
-    }
-    if provider == "ElevenLabs" && !chat {
-        let models = ["scribe_v2", "scribe_v1"]
-            .into_iter()
-            .map(|id| json!({"id":id,"name":id}))
-            .collect::<Vec<_>>();
         return Ok(Json(json!({"models":models})));
     }
     // Anything other than chat is audio, as the spec says.
@@ -440,10 +629,6 @@ async fn models(_user: CurrentUser, Json(body): Json<ModelsBody>) -> ApiResult<J
     };
     let base = base_url(non_empty(body.base_url), Some(preset));
     validate_provider_base(&provider, Some(&base))?;
-    if provider == "Google Gemini" {
-        // Gemini chat models have no list endpoint here (spec/ai.md, models).
-        return Ok(Json(json!({ "models": [] })));
-    }
     let url = format!("{base}/models");
     let req =
         crate::ai::with_provider_headers(client().get(url).bearer_auth(&key), &provider, &base);
@@ -505,27 +690,70 @@ async fn chat_probe(provider: &str, base: &str, key: &str, model: &str) -> Resul
     call(req, PROBE_TIMEOUT).await.map(|_| ())
 }
 
-async fn gemini_chat_probe(key: &str, model: &str) -> Result<(), Upstream> {
-    let req = client().post(format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"))
-        .header("x-goog-api-key", key).json(&json!({"contents":[{"parts":[{"text":"Reply with OK."}]}],"generationConfig":{"maxOutputTokens":16,"temperature":0}}));
+async fn gemini_key_probe(key: &str) -> Result<(), Upstream> {
+    let req = client()
+        .get("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
+        .header("x-goog-api-key", key);
     call(req, PROBE_TIMEOUT).await.map(|_| ())
 }
 
-async fn gemini_audio_probe(key: &str, model: &str) -> Result<(), Upstream> {
+async fn gemini_chat_probe(base: &str, key: &str, model: &str) -> Result<(), Upstream> {
+    let url = crate::ai::gemini_endpoint(base, model, "generateContent");
+    let req = client()
+        .post(url)
+        .header("x-goog-api-key", key)
+        .json(&json!({"contents":[{"parts":[{"text":"Reply with OK."}]}],"generationConfig":{"maxOutputTokens":16,"temperature":0}}));
+    match call(req, PROBE_TIMEOUT).await {
+        Ok(_) => Ok(()),
+        Err(Upstream::Refused(400 | 404 | 503)) => gemini_key_probe(key).await,
+        Err(e) => Err(e),
+    }
+}
+
+async fn gemini_audio_probe(base: &str, key: &str, model: &str) -> Result<(), Upstream> {
+    if model.contains("transcribe") {
+        return gemini_key_probe(key).await;
+    }
     let audio = silent_mp3();
     let encoded = base64(&audio);
-    let req = client().post(format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"))
-        .header("x-goog-api-key", key).json(&json!({"contents":[{"parts":[{"text":"Transcribe this audio."},{"inlineData":{"mimeType":"audio/mp3","data":encoded}}]}],"generationConfig":{"maxOutputTokens":16,"temperature":0}}));
-    call(req, PROBE_TIMEOUT).await.map(|_| ())
+    let url = crate::ai::gemini_endpoint(base, model, "generateContent");
+    let req = client()
+        .post(url)
+        .header("x-goog-api-key", key)
+        .json(&json!({"contents":[{"parts":[{"text":"Transcribe this audio."},{"inlineData":{"mimeType":"audio/mp3","data":encoded}}]}],"generationConfig":{"maxOutputTokens":16,"temperature":0}}));
+    match call(req, PROBE_TIMEOUT).await {
+        Ok(_) => Ok(()),
+        Err(Upstream::Refused(400 | 404 | 503)) => gemini_key_probe(key).await,
+        Err(e) => Err(e),
+    }
 }
 
-fn gemini_audio_models() -> [&'static str; 5] {
+fn gemini_audio_models() -> [&'static str; 10] {
     [
-        "gemini-2.0-flash",
+        "gemini-3.5-transcribe",
+        "gemini-3.8-flash",
+        "gemini-3.8-pro",
+        "gemini-4-argon",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
         "gemini-2.5-flash",
         "gemini-2.5-pro",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+    ]
+}
+
+fn gemini_chat_models() -> [&'static str; 9] {
+    [
+        "gemini-3.8-flash",
+        "gemini-3.8-pro",
+        "gemini-4-argon",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
     ]
 }
 
@@ -695,12 +923,140 @@ fn audio_models(listed: Vec<ListedModel>) -> Vec<Value> {
         .collect()
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct NormalizedModels {
+    default_model: Option<String>,
+    transcription_model: Option<String>,
+    enhancement_model: Option<String>,
+    transcription_models: Vec<String>,
+    enhancement_models: Vec<String>,
+}
+
+fn clean_model_list(list: Option<Vec<String>>) -> Vec<String> {
+    let mut out = Vec::new();
+    for item in list.unwrap_or_default() {
+        let trimmed = item.trim();
+        if !trimmed.is_empty() && !out.iter().any(|existing| existing == trimmed) {
+            out.push(trimmed.to_owned());
+        }
+    }
+    out
+}
+
+fn parse_stored_models(raw: &str) -> Vec<String> {
+    clean_model_list(serde_json::from_str::<Vec<String>>(raw).ok())
+}
+
+fn normalize_models(
+    provider: &str,
+    default_model: Option<String>,
+    transcription_model: Option<String>,
+    enhancement_model: Option<String>,
+    transcription_models: Option<Vec<String>>,
+    enhancement_models: Option<Vec<String>>,
+) -> NormalizedModels {
+    let single_model_only = transcription_model.is_none()
+        && enhancement_model.is_none()
+        && transcription_models.is_none()
+        && enhancement_models.is_none();
+    let raw_default = non_empty(default_model);
+    let mut transcription_model = non_empty(transcription_model);
+    let mut enhancement_model = non_empty(enhancement_model);
+    let mut transcription_models = clean_model_list(transcription_models);
+    let mut enhancement_models = clean_model_list(enhancement_models);
+
+    if single_model_only && let Some(dm) = &raw_default {
+        if !can_enhance(provider)
+            || is_transcription_model(dm)
+            || provider == "Google Gemini"
+            || provider == "OpenRouter"
+        {
+            transcription_model = Some(dm.clone());
+            transcription_models = vec![dm.clone()];
+        }
+        if can_enhance(provider) && !is_transcription_model(dm) {
+            enhancement_model = Some(dm.clone());
+            enhancement_models = vec![dm.clone()];
+        }
+    }
+
+    if can_transcribe(provider) {
+        if let Some(tm) = &transcription_model {
+            if !transcription_models.contains(tm) {
+                transcription_models.insert(0, tm.clone());
+            }
+        } else if !transcription_models.is_empty() {
+            transcription_model = Some(transcription_models[0].clone());
+        }
+    } else {
+        transcription_model = None;
+        transcription_models.clear();
+    }
+
+    if can_enhance(provider) {
+        if let Some(em) = &enhancement_model {
+            if !enhancement_models.contains(em) {
+                enhancement_models.insert(0, em.clone());
+            }
+        } else if !enhancement_models.is_empty() {
+            enhancement_model = Some(enhancement_models[0].clone());
+        }
+    } else {
+        enhancement_model = None;
+        enhancement_models.clear();
+    }
+
+    let default_model = raw_default
+        .or_else(|| transcription_model.clone())
+        .or_else(|| enhancement_model.clone());
+
+    NormalizedModels {
+        default_model,
+        transcription_model,
+        enhancement_model,
+        transcription_models,
+        enhancement_models,
+    }
+}
+
 fn view(row: &Row) -> Value {
+    let mut transcription_models = parse_stored_models(&row.transcription_models);
+    let mut enhancement_models = parse_stored_models(&row.enhancement_models);
+    let mut transcription_model = non_empty(row.transcription_model.clone())
+        .or_else(|| transcription_models.first().cloned());
+    let mut enhancement_model =
+        non_empty(row.enhancement_model.clone()).or_else(|| enhancement_models.first().cloned());
+    if transcription_model.is_none()
+        && enhancement_model.is_none()
+        && transcription_models.is_empty()
+        && enhancement_models.is_empty()
+        && row.default_model.is_some()
+    {
+        let fallback = normalize_models(
+            &row.provider,
+            row.default_model.clone(),
+            None,
+            None,
+            None,
+            None,
+        );
+        transcription_model = fallback.transcription_model;
+        enhancement_model = fallback.enhancement_model;
+        transcription_models = fallback.transcription_models;
+        enhancement_models = fallback.enhancement_models;
+    }
+    let default_model = non_empty(row.default_model.clone())
+        .or_else(|| transcription_model.clone())
+        .or_else(|| enhancement_model.clone());
     json!({
         "id": row.id,
         "provider": row.provider,
         "baseUrl": row.base_url,
-        "defaultModel": row.default_model,
+        "defaultModel": default_model,
+        "transcriptionModel": transcription_model,
+        "enhancementModel": enhancement_model,
+        "transcriptionModels": transcription_models,
+        "enhancementModels": enhancement_models,
         "isDefaultTranscription": row.is_default_transcription,
         "isDefaultEnhancement": row.is_default_enhancement,
         "createdAt": iso(row.created_at),
@@ -708,7 +1064,7 @@ fn view(row: &Row) -> Value {
 }
 
 fn non_empty(value: Option<String>) -> Option<String> {
-    value.filter(|s| !s.trim().is_empty())
+    value.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty())
 }
 
 fn missing(field: &str) -> AppError {
@@ -730,11 +1086,15 @@ async fn find(
     user: &str,
     id: &str,
 ) -> sqlx::Result<Option<Row>> {
-    sqlx::query_as(&format!("{SELECT} WHERE id = ? AND user_id = ?"))
-        .bind(id)
-        .bind(user)
-        .fetch_optional(db)
-        .await
+    sqlx::query_as(
+        "SELECT id, provider, api_key, base_url, default_model, \
+         transcription_model, enhancement_model, transcription_models, enhancement_models, \
+         is_default_transcription, is_default_enhancement, created_at FROM api_credentials WHERE id = ? AND user_id = ?",
+    )
+    .bind(id)
+    .bind(user)
+    .fetch_optional(db)
+    .await
 }
 
 async fn clear_default(
@@ -742,12 +1102,17 @@ async fn clear_default(
     user: &str,
     transcription: bool,
 ) -> sqlx::Result<()> {
-    let sql = if transcription {
-        "UPDATE api_credentials SET is_default_transcription = 0 WHERE user_id = ?"
+    if transcription {
+        sqlx::query("UPDATE api_credentials SET is_default_transcription = 0 WHERE user_id = ?")
+            .bind(user)
+            .execute(&mut **tx)
+            .await?;
     } else {
-        "UPDATE api_credentials SET is_default_enhancement = 0 WHERE user_id = ?"
-    };
-    sqlx::query(sql).bind(user).execute(&mut **tx).await?;
+        sqlx::query("UPDATE api_credentials SET is_default_enhancement = 0 WHERE user_id = ?")
+            .bind(user)
+            .execute(&mut **tx)
+            .await?;
+    }
     Ok(())
 }
 
@@ -843,5 +1208,70 @@ mod tests {
         let clip = silent_mp3();
         assert_eq!(clip.len(), 417 * 38);
         assert_eq!(&clip[..4], &[0xFF, 0xFB, 0x90, 0x64]);
+    }
+
+    #[test]
+    fn normalize_models_handles_single_and_dual_model_inputs() {
+        let gemini_single = normalize_models(
+            "Google Gemini",
+            Some("gemini-2.0-flash".into()),
+            None,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(
+            gemini_single,
+            NormalizedModels {
+                default_model: Some("gemini-2.0-flash".into()),
+                transcription_model: Some("gemini-2.0-flash".into()),
+                enhancement_model: Some("gemini-2.0-flash".into()),
+                transcription_models: vec!["gemini-2.0-flash".into()],
+                enhancement_models: vec!["gemini-2.0-flash".into()],
+            }
+        );
+
+        let dual = normalize_models(
+            "Google Gemini",
+            None,
+            Some("gemini-3.5-transcribe".into()),
+            Some("gemini-2.5-pro".into()),
+            Some(vec![
+                "gemini-2.5-flash".into(),
+                "gemini-3.5-transcribe".into(),
+                "gemini-2.5-flash".into(),
+            ]),
+            Some(vec!["gemini-2.5-flash".into()]),
+        );
+        assert_eq!(dual.default_model.as_deref(), Some("gemini-3.5-transcribe"));
+        assert_eq!(
+            dual.transcription_model.as_deref(),
+            Some("gemini-3.5-transcribe")
+        );
+        assert_eq!(
+            dual.transcription_models,
+            vec!["gemini-2.5-flash", "gemini-3.5-transcribe"]
+        );
+        assert_eq!(dual.enhancement_model.as_deref(), Some("gemini-2.5-pro"));
+        assert_eq!(
+            dual.enhancement_models,
+            vec!["gemini-2.5-pro", "gemini-2.5-flash"]
+        );
+
+        let eleven = normalize_models(
+            "ElevenLabs",
+            None,
+            Some("scribe_v2".into()),
+            Some("ignored-chat".into()),
+            None,
+            Some(vec!["ignored-chat".into()]),
+        );
+        assert_eq!(eleven.transcription_model.as_deref(), Some("scribe_v2"));
+        assert_eq!(eleven.transcription_models, vec!["scribe_v2"]);
+        assert!(eleven.enhancement_model.is_none());
+        assert!(eleven.enhancement_models.is_empty());
+
+        assert!(gemini_audio_models().contains(&"gemini-3.5-transcribe"));
+        assert!(gemini_chat_models().contains(&"gemini-2.5-flash"));
     }
 }

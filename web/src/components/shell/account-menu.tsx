@@ -36,7 +36,7 @@ const RING: Record<SyncTone, string> = {
 
 /** The account button at the right of the top bar: sync state, theme, language, Settings, log out. */
 export function AccountMenu() {
-    const { connection, sync, syncNow, updateSettings } = useShellData();
+    const { connection, plaudEnabled, sync, syncNow, updateSettings } = useShellData();
     const session = useSession();
     const [theme] = useTheme();
     const { locale, setLocale, t } = useI18n();
@@ -77,22 +77,30 @@ export function AccountMenu() {
         updateSettings({ theme: choice }).catch(() => undefined);
     };
 
+    const triggerButton = (
+        <button
+            type="button"
+            data-testid="user-menu"
+            data-sync-state={plaudEnabled ? tone : undefined}
+            aria-label={plaudEnabled ? `${t("shell.account.aria")}${SUFFIX[tone]}` : t("shell.account.aria")}
+            className="relative grid size-10 shrink-0 place-items-center rounded-full border border-border bg-muted text-sm font-semibold text-foreground transition-colors duration-150 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
+        >
+            <span aria-hidden="true">{initial}</span>
+            {plaudEnabled ? (
+                <span aria-hidden="true" className={cn("pointer-events-none absolute -inset-[3px] rounded-full border-2", RING[tone])} />
+            ) : null}
+        </button>
+    );
+
     return (
         <DropdownMenu>
-            <Tooltip content={tooltip} side="bottom">
-                <DropdownMenuTrigger asChild>
-                    <button
-                        type="button"
-                        data-testid="user-menu"
-                        data-sync-state={tone}
-                        aria-label={`${t("shell.account.aria")}${SUFFIX[tone]}`}
-                        className="relative grid size-10 shrink-0 place-items-center rounded-full border border-border bg-muted text-sm font-semibold text-foreground transition-colors duration-150 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
-                    >
-                        <span aria-hidden="true">{initial}</span>
-                        <span aria-hidden="true" className={cn("pointer-events-none absolute -inset-[3px] rounded-full border-2", RING[tone])} />
-                    </button>
-                </DropdownMenuTrigger>
-            </Tooltip>
+            {plaudEnabled ? (
+                <Tooltip content={tooltip} side="bottom">
+                    <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
+                </Tooltip>
+            ) : (
+                <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
+            )}
 
             <DropdownMenuContent align="end" className="w-72 p-0">
                 <div className="flex items-center gap-3 border-b border-border p-3">
@@ -106,15 +114,19 @@ export function AccountMenu() {
                 </div>
 
                 <div className="p-1">
-                    <DropdownMenuItem disabled={tone === "syncing"} onSelect={() => void syncNow()}>
-                        <RefreshCw />
-                        <span className="flex-1">{t("shell.account.syncNow")}</span>
-                    </DropdownMenuItem>
-                    {needsReconnect ? (
-                        <DropdownMenuItem onSelect={() => navigate("/settings/plaud-account")}>
-                            <Plug />
-                            <span className="flex-1">{t("shell.account.reconnectPlaud")}</span>
-                        </DropdownMenuItem>
+                    {plaudEnabled ? (
+                        <>
+                            <DropdownMenuItem disabled={tone === "syncing"} onSelect={() => void syncNow()}>
+                                <RefreshCw />
+                                <span className="flex-1">{t("shell.account.syncNow")}</span>
+                            </DropdownMenuItem>
+                            {needsReconnect ? (
+                                <DropdownMenuItem onSelect={() => navigate("/settings/plaud-account")}>
+                                    <Plug />
+                                    <span className="flex-1">{t("shell.account.reconnectPlaud")}</span>
+                                </DropdownMenuItem>
+                            ) : null}
+                        </>
                     ) : null}
                     <DropdownMenuItem onSelect={() => navigate("/settings")}>
                         <Settings />

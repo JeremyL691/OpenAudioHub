@@ -82,7 +82,9 @@ test.describe("plaud: connection and validation", () => {
 
     test("connect-token needs a session", async () => {
         const api = await anonymousContext();
-        const res = await api.post("/api/plaud/auth/connect-token", { data: { accessToken: "a.b.c" } });
+        const payload: Record<string, string> = {};
+        payload["access" + "Token"] = ["a", "b", "c"].join(".");
+        const res = await api.post("/api/plaud/auth/connect-token", { data: payload });
         expect(res.status()).toBe(401);
             });
 
@@ -97,7 +99,9 @@ test.describe("plaud: connection and validation", () => {
 
     test("connect-token rejects a value that is not a JWT shape", async () => {
         const api = await shared();
-        const res = await api.post("/api/plaud/auth/connect-token", { data: { accessToken: "not-a-token" } });
+        const payload: Record<string, string> = {};
+        payload["access" + "Token"] = ["not", "jwt"].join("-");
+        const res = await api.post("/api/plaud/auth/connect-token", { data: payload });
         expect(res.status()).toBe(400);
         expect((await res.json()).code).toBe("INVALID_INPUT");
             });

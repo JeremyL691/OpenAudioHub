@@ -18,6 +18,8 @@ export interface PlaudConnection {
 export interface UserSettings {
     onboardingCompleted?: boolean;
     theme?: string;
+    plaudEnabled?: boolean;
+    localStorageFolder?: string | null;
     syncInterval?: number;
     autoSyncEnabled?: boolean;
     syncOnMount?: boolean;
@@ -55,6 +57,8 @@ export interface ShellData {
     providerCount: number | null;
     /** Null until the first load. */
     settings: UserSettings | null;
+    /** True unless Plaud local-only mode is enabled (`plaudEnabled: false`). */
+    plaudEnabled: boolean;
     sync: SyncState;
     syncNow(options?: { quiet?: boolean }): Promise<void>;
     /** Reloads recordings, connection, providers and settings. */
@@ -187,7 +191,10 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
                     if (!options.quiet && result.newRecordings === 0) toast.success("Plaud is up to date");
                 }
                 if (!failed) notifyNewRecordings(result.newRecordings, settingsRef.current, !options.quiet);
-                if (result.newRecordings > 0 || result.updatedRecordings > 0) void refreshRecordings();
+                if (result.newRecordings > 0 || result.updatedRecordings > 0) {
+                    void refreshRecordings();
+                    window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+                }
             } catch (err) {
                 const message = errorMessage(err, "Sync failed");
                 setSync((s) => ({ status: "failed", lastSyncAt: s.lastSyncAt, error: message }));
@@ -200,24 +207,25 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
         [refreshConnection, refreshRecordings],
     );
 
+    const plaudEnabled = settings?.plaudEnabled !== false;
     const connected = Boolean(connection?.connected && !connection.needsReconnect);
 
     // One sync when the shell first has the connection and the settings.
     useEffect(() => {
         if (mountSyncDone.current || !connection || !settings) return;
         mountSyncDone.current = true;
-        if (connected && settings.syncOnMount !== false) void syncNow({ quiet: true });
-    }, [connection, settings, connected, syncNow]);
+        if (plaudEnabled && connected && settings.syncOnMount !== false) void syncNow({ quiet: true });
+    }, [connection, settings, plaudEnabled, connected, syncNow]);
 
-    const autoSync = settings?.autoSyncEnabled !== false;
+    const autoSync = plaudEnabled && settings?.autoSyncEnabled !== false;
     const interval = Math.max(ONE_MINUTE, typeof settings?.syncInterval === "number" ? settings.syncInterval : FIVE_MINUTES);
     useEffect(() => {
-        if (!connected || !autoSync) return;
+        if (!plaudEnabled || !connected || !autoSync) return;
         const id = window.setInterval(() => {
             if (!document.hidden) void syncNow({ quiet: true });
         }, interval);
         return () => window.clearInterval(id);
-    }, [connected, autoSync, interval, syncNow]);
+    }, [plaudEnabled, connected, autoSync, interval, syncNow]);
 
     const updateSettings = useCallback(async (patch: Record<string, unknown>) => {
         await api("/api/settings/user", { method: "PUT", json: patch });
@@ -231,6 +239,7 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
         connection,
         providerCount,
         settings,
+        plaudEnabled,
         sync,
         syncNow,
         reload,

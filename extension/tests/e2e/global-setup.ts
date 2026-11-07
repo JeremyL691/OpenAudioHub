@@ -1,4 +1,5 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
@@ -62,7 +63,7 @@ export default async function globalSetup(): Promise<void> {
     if (await ready(`${baseUrl}/api/health`)) {
         throw new Error(`a server is already listening on ${baseUrl}`);
     }
-    const server = spawn(resolve(repoRoot, "target/debug/oah-server"), {
+    const server = spawn("./target/debug/oah-server", [], {
         cwd: repoRoot,
         env: {
             ...process.env,
@@ -70,7 +71,7 @@ export default async function globalSetup(): Promise<void> {
             PORT: String(serverPort),
             HOST: "127.0.0.1",
             APP_URL: baseUrl,
-            ENCRYPTION_KEY: "6e9d3c2b8a745f01c3d5e7a9b2c4d6e8f0a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9",
+            ENCRYPTION_KEY: randomBytes(32).toString("hex"),
             OAH_SESSION_COOKIE: "oah_session",
             OAH_PLAUD_API_BASE: `http://127.0.0.1:${fakePort}`,
             AUDIO_PIPELINE_ENABLED: "false",

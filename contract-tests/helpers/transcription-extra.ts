@@ -24,8 +24,9 @@ export async function addProvider(
     api: APIRequestContext,
     body: ProviderBody,
 ): Promise<string> {
+    const fallbackCred = process.env.OAH_FAKE_AI_KEY ?? `local-${Date.now()}`;
     const res = await api.post("/api/settings/ai/providers", {
-        data: { apiKey: "contract-local-key", ...body },
+        data: { apiKey: fallbackCred, ...body },
     });
     expect(res.ok(), `add provider ${body.provider}`).toBeTruthy();
     const json = (await res.json()) as { provider: { id: string } };

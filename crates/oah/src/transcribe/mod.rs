@@ -737,6 +737,7 @@ mod tests {
             base_url: "http://127.0.0.1:1".into(),
             api_key: "k".into(),
             model: Some("whisper-1".into()),
+            ..Default::default()
         };
         let options = Options {
             filename: "Fixture".into(),

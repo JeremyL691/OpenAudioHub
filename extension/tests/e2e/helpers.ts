@@ -78,7 +78,7 @@ async function retryingPost(
 export async function createAccount(context: BrowserContext): Promise<Account> {
     const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const email = `extension.${stamp}@example.test`;
-    const password = "extension-password-1";
+    const password = process.env.OAH_TEST_PW ?? `ext-${stamp}`;
     const headers = apiHeaders();
     const signUp = await retryingPost(context, "/api/auth/sign-up/email", { name: "Extension Test", email, password }, headers);
     if (!signUp.ok()) throw new Error(`sign-up failed: ${signUp.status()} ${await signUp.text()}`);

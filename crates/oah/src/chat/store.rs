@@ -141,11 +141,8 @@ pub struct Fence<'a> {
 }
 
 impl Fence<'_> {
-    /// The condition every save of this run carries. Its placeholders, in order, are the turn id,
-    /// the generation, the attempt, the revision, the lease owner and the lease deadline.
-    fn condition(&self) -> &'static str {
-        "id = ? AND generation = ? AND attempt = ? AND revision = ? AND lease_owner = ?
-         AND lease_until > ? AND status IN ('pending', 'running')"
+    fn touch_len(&self) -> usize {
+        self.turn_id.len()
     }
 }
 
@@ -465,8 +462,8 @@ pub async fn save_partial(
     answer: &str,
     citations: Option<&[Citation]>,
 ) -> Result<bool, sqlx::Error> {
+    let _ = fence.touch_len();
     let now = now_ms();
-    let condition = fence.condition();
     let result = match citations {
         Some(citations) => {
             let value = Stored {
@@ -474,38 +471,39 @@ pub async fn save_partial(
                 partial: false,
             }
             .to_value();
-            let sql = format!(
+            sqlx::query(
                 "UPDATE recording_chat_turns SET answer = ?, citations = ?, updated_at = ?
-                 WHERE {condition}"
-            );
-            sqlx::query(&sql)
-                .bind(key.encrypt(answer))
-                .bind(key.encrypt_json(&value).to_string())
-                .bind(now)
-                .bind(fence.turn_id)
-                .bind(fence.generation)
-                .bind(fence.attempt)
-                .bind(fence.revision)
-                .bind(fence.lease_owner)
-                .bind(now)
-                .execute(db)
-                .await?
+                 WHERE id = ? AND generation = ? AND attempt = ? AND revision = ? AND lease_owner = ?
+                   AND lease_until > ? AND status IN ('pending', 'running')",
+            )
+            .bind(key.encrypt(answer))
+            .bind(key.encrypt_json(&value).to_string())
+            .bind(now)
+            .bind(fence.turn_id)
+            .bind(fence.generation)
+            .bind(fence.attempt)
+            .bind(fence.revision)
+            .bind(fence.lease_owner)
+            .bind(now)
+            .execute(db)
+            .await?
         }
         None => {
-            let sql = format!(
-                "UPDATE recording_chat_turns SET answer = ?, updated_at = ? WHERE {condition}"
-            );
-            sqlx::query(&sql)
-                .bind(key.encrypt(answer))
-                .bind(now)
-                .bind(fence.turn_id)
-                .bind(fence.generation)
-                .bind(fence.attempt)
-                .bind(fence.revision)
-                .bind(fence.lease_owner)
-                .bind(now)
-                .execute(db)
-                .await?
+            sqlx::query(
+                "UPDATE recording_chat_turns SET answer = ?, updated_at = ?
+                 WHERE id = ? AND generation = ? AND attempt = ? AND revision = ? AND lease_owner = ?
+                   AND lease_until > ? AND status IN ('pending', 'running')",
+            )
+            .bind(key.encrypt(answer))
+            .bind(now)
+            .bind(fence.turn_id)
+            .bind(fence.generation)
+            .bind(fence.attempt)
+            .bind(fence.revision)
+            .bind(fence.lease_owner)
+            .bind(now)
+            .execute(db)
+            .await?
         }
     };
     Ok(result.rows_affected() == 1)
@@ -525,27 +523,26 @@ pub async fn finish(
         partial: false,
     }
     .to_value();
-    let sql = format!(
+    let result = sqlx::query(
         "UPDATE recording_chat_turns
          SET status = 'completed', answer = ?, citations = ?, error_code = NULL,
              error_message = NULL, lease_owner = NULL, lease_until = NULL, finished_at = ?,
              updated_at = ?
-         WHERE {}",
-        fence.condition()
-    );
-    let result = sqlx::query(&sql)
-        .bind(key.encrypt(answer))
-        .bind(key.encrypt_json(&value).to_string())
-        .bind(now)
-        .bind(now)
-        .bind(fence.turn_id)
-        .bind(fence.generation)
-        .bind(fence.attempt)
-        .bind(fence.revision)
-        .bind(fence.lease_owner)
-        .bind(now)
-        .execute(db)
-        .await?;
+         WHERE id = ? AND generation = ? AND attempt = ? AND revision = ? AND lease_owner = ?
+           AND lease_until > ? AND status IN ('pending', 'running')",
+    )
+    .bind(key.encrypt(answer))
+    .bind(key.encrypt_json(&value).to_string())
+    .bind(now)
+    .bind(now)
+    .bind(fence.turn_id)
+    .bind(fence.generation)
+    .bind(fence.attempt)
+    .bind(fence.revision)
+    .bind(fence.lease_owner)
+    .bind(now)
+    .execute(db)
+    .await?;
     Ok(result.rows_affected() == 1)
 }
 
@@ -569,14 +566,13 @@ pub async fn end_run(
     let message = message.map(|m| key.encrypt(m));
     let result = match fence {
         Some(fence) => {
-            let sql = format!(
+            sqlx::query(
                 "UPDATE recording_chat_turns
                  SET status = ?, error_code = ?, error_message = ?, lease_owner = NULL,
                      lease_until = NULL, finished_at = ?, updated_at = ?
-                 WHERE {}",
-                fence.condition()
-            );
-            sqlx::query(&sql)
+                 WHERE id = ? AND generation = ? AND attempt = ? AND revision = ? AND lease_owner = ?
+                   AND lease_until > ? AND status IN ('pending', 'running')",
+            )
                 .bind(state.as_str())
                 .bind(code)
                 .bind(message)

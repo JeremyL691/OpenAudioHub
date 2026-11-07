@@ -117,6 +117,12 @@
         "finishTitle": "You are ready",
         "finishBody": "Upload a recording or sync from Plaud to see it on the Dashboard. You can change any of this later in Settings.",
         "getStarted": "Get Started",
-        "completeFailed": "Failed to complete onboarding"
+        "completeFailed": "Failed to complete onboarding",
+        "useLocalOnly": "Use local audio only (do not connect Plaud)",
+        "localOnlyEnabled": "Local-only mode is enabled.",
+        "plaud": {
+            "useLocalOnly": "Use local audio only (do not connect Plaud)",
+            "localOnlyEnabled": "Local-only mode is enabled."
+        }
     }
 }

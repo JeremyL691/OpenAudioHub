@@ -20,7 +20,7 @@ const STEPS: MessageKey[] = ["shell.onboarding.stepWelcome", "shell.onboarding.s
  * dismissed. Get Started sends onboardingCompleted: true.
  */
 export function OnboardingDialog() {
-    const { settings, connection, providerCount, updateSettings, reload } = useShellData();
+    const { settings, connection, providerCount, plaudEnabled, updateSettings, reload } = useShellData();
     const { t } = useI18n();
     const required = settings?.onboardingCompleted === false;
     const [open, setOpen] = useState(false);
@@ -42,8 +42,20 @@ export function OnboardingDialog() {
 
     if (!open) return null;
 
-    const plaudDone = Boolean(connection?.connected);
+    const plaudDone = !plaudEnabled || Boolean(connection?.connected);
     const providerDone = (providerCount ?? 0) > 0;
+
+    const toggleLocalOnly = async (useLocalOnly: boolean) => {
+        setSaving(true);
+        try {
+            await updateSettings({ plaudEnabled: !useLocalOnly });
+            await reload();
+        } catch (err) {
+            toast.error(errorMessage(err, t("shell.onboarding.completeFailed")));
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const finish = async () => {
         setSaving(true);
@@ -107,10 +119,27 @@ export function OnboardingDialog() {
                     {step === 2 ? (
                         <StepBody title={t("shell.onboarding.plaudTitle")}>
                             {t("shell.onboarding.plaudBody")}
-                            <StepStatus done={plaudDone} doneText={t("shell.onboarding.plaudDone")} todoText={t("shell.onboarding.plaudTodo")} />
-                            <Link to="/settings/plaud-account" className="text-sm font-medium text-link hover:underline">
-                                {t("shell.onboarding.openPlaud")}
-                            </Link>
+                            <StepStatus
+                                done={plaudDone}
+                                doneText={!plaudEnabled ? t("shell.onboarding.plaud.localOnlyEnabled") : t("shell.onboarding.plaudDone")}
+                                todoText={t("shell.onboarding.plaudTodo")}
+                            />
+                            {plaudEnabled ? (
+                                <Link to="/settings/plaud-account" className="text-sm font-medium text-link hover:underline">
+                                    {t("shell.onboarding.openPlaud")}
+                                </Link>
+                            ) : null}
+                            <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                                <input
+                                    type="checkbox"
+                                    data-testid="onboarding-use-local-only"
+                                    checked={!plaudEnabled}
+                                    disabled={saving}
+                                    onChange={(e) => void toggleLocalOnly(e.target.checked)}
+                                    className="size-4 rounded border-input accent-primary"
+                                />
+                                <span>{t("shell.onboarding.plaud.useLocalOnly")}</span>
+                            </label>
                         </StepBody>
                     ) : null}
                     {step === 3 ? (

@@ -14,6 +14,7 @@
     "loadingRecordings": "正在加载录音",
     "emptyTitle": "还没有录音",
     "emptyBody": "从 Plaud 账户同步，或上传音频文件来建立你的资料库。",
+    "emptyBodyLocal": "上传音频文件以开始构建你的录音库。",
     "uploadAudio": "上传音频",
     "addProvider": "添加 AI 服务商",
     "atAGlance": "概览",

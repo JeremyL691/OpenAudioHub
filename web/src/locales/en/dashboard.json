@@ -14,6 +14,7 @@
     "loadingRecordings": "Loading recordings",
     "emptyTitle": "No recordings yet",
     "emptyBody": "Sync from your Plaud account, or upload an audio file to start your library.",
+    "emptyBodyLocal": "Upload an audio file to start your library.",
     "uploadAudio": "Upload audio",
     "addProvider": "Add an AI provider",
     "atAGlance": "At a glance",

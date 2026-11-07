@@ -9,6 +9,7 @@ import { downloadRecordings } from "@/lib/downloads";
 import { formatBytes, formatClock } from "@/lib/format";
 import { intlLocale, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
+import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { PLAYBACK_RATES, usePlayer } from "./player-context";
 
 /** Recordings longer than this are not decoded automatically (the user starts it with a button). */
@@ -151,22 +152,40 @@ function WaveformStatus({
         setFailed(false);
         let ctx: AudioContext | null = null;
         try {
-            const res = await fetch(`/api/recordings/${encodeURIComponent(id)}/audio`, { credentials: "same-origin" });
-            if (!res.ok) throw new Error(`audio ${res.status}`);
-            const data = await res.arrayBuffer();
-            ctx = new AudioContext();
-            const buffer = await ctx.decodeAudioData(data);
-            const values = computePeaks(buffer.getChannelData(0), PEAK_COUNT);
+            let values: number[] | null = null;
+            if (duration <= 5 * 60 * 1000) {
+                try {
+                    const res = await fetch(`/api/recordings/${encodeURIComponent(id)}/audio`, { credentials: "same-origin" });
+                    if (!res.ok) throw new Error(`audio ${res.status}`);
+                    const data = await res.arrayBuffer();
+                    ctx = new AudioContext();
+                    const buffer = await ctx.decodeAudioData(data);
+                    values = computePeaks(buffer.getChannelData(0), PEAK_COUNT);
+                    await api(`/api/recordings/${encodeURIComponent(id)}/peaks`, { method: "POST", json: { peaks: values } });
+                } catch {
+                    values = null;
+                }
+            }
+            if (!values || values.length === 0) {
+                const generated = await api<{ stored: boolean; peaks?: number[] }>(
+                    `/api/recordings/${encodeURIComponent(id)}/peaks`,
+                    { method: "POST", json: { generate: true } },
+                );
+                if (!generated.peaks || generated.peaks.length === 0) {
+                    throw new Error("empty peaks");
+                }
+                values = generated.peaks;
+            }
             onPeaksDecoded(values);
-            await api(`/api/recordings/${encodeURIComponent(id)}/peaks`, { method: "POST", json: { peaks: values } });
             onChanged();
+            window.dispatchEvent(new Event(RECORDINGS_CHANGED));
         } catch {
             setFailed(true);
         } finally {
             setDecoding(false);
             if (ctx) void ctx.close().catch(() => undefined);
         }
-    }, [id, onChanged, onPeaksDecoded]);
+    }, [duration, id, onChanged, onPeaksDecoded]);
 
     useEffect(() => {
         if (hasPeaks || !autoDecode || attempted.current) return;

@@ -61,7 +61,7 @@ export default function Dashboard() {
 
 function DashboardContent() {
     const { t: tr } = useI18n();
-    const { recordings, connection, providerCount, sync, syncNow, openUploadPicker } = useShellData();
+    const { recordings, connection, providerCount, plaudEnabled, sync, syncNow, openUploadPicker } = useShellData();
     const { busy: uploading } = useUploads();
     const connected = Boolean(connection?.connected);
     const needsReconnect = Boolean(connection?.needsReconnect);
@@ -74,19 +74,23 @@ function DashboardContent() {
                 <h1 className="text-[28px] font-bold tracking-tight">{tr("dashboard.title")}</h1>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                     <span>{today}</span>
-                    <span aria-hidden="true">·</span>
-                    <section aria-label={tr("dashboard.plaudSync")} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span>{plaudStatusText(connection, sync.lastSyncAt)}</span>
-                        {connected && !needsReconnect ? (
-                            <Button data-testid="overview-sync-now" variant="secondary" size="sm" disabled={syncing} onClick={() => void syncNow()}>
-                                {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
-                            </Button>
-                        ) : null}
-                    </section>
+                    {plaudEnabled ? (
+                        <>
+                            <span aria-hidden="true">·</span>
+                            <section aria-label={tr("dashboard.plaudSync")} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span>{plaudStatusText(connection, sync.lastSyncAt)}</span>
+                                {connected && !needsReconnect ? (
+                                    <Button data-testid="overview-sync-now" variant="secondary" size="sm" disabled={syncing} onClick={() => void syncNow()}>
+                                        {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
+                                    </Button>
+                                ) : null}
+                            </section>
+                        </>
+                    ) : null}
                 </div>
             </header>
 
-            {needsReconnect ? (
+            {plaudEnabled && needsReconnect ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/15 px-4 py-3 text-sm text-foreground">
                     <span>{tr("dashboard.reconnectStrip")}</span>
                     <Link to="/settings/plaud-account" className="font-medium text-link hover:underline">
@@ -103,15 +107,17 @@ function DashboardContent() {
                 <div className="flex flex-col gap-7">
                     <EmptyState
                         title={tr("dashboard.emptyTitle")}
-                        description={tr("dashboard.emptyBody")}
+                        description={plaudEnabled ? tr("dashboard.emptyBody") : tr("dashboard.emptyBodyLocal")}
                         action={
                             <>
                                 <Button data-testid="overview-upload" variant="primary" disabled={uploading} onClick={openUploadPicker}>
                                     {tr("dashboard.uploadAudio")}
                                 </Button>
-                                <Button data-testid="overview-sync" variant="secondary" disabled={syncing} onClick={() => void syncNow()}>
-                                    {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
-                                </Button>
+                                {plaudEnabled ? (
+                                    <Button data-testid="overview-sync" variant="secondary" disabled={syncing} onClick={() => void syncNow()}>
+                                        {syncing ? tr("dashboard.syncing") : tr("dashboard.syncNow")}
+                                    </Button>
+                                ) : null}
                                 {providerCount === 0 ? (
                                     <Link to="/settings/providers" className="inline-flex h-10 items-center text-sm font-medium text-link hover:underline sm:h-8">
                                         {tr("dashboard.addProvider")}
@@ -120,14 +126,14 @@ function DashboardContent() {
                             </>
                         }
                     />
-                    <SetUp plaudDone={connected} providerDone={(providerCount ?? 0) > 0} />
+                    <SetUp plaudDone={!plaudEnabled || connected} providerDone={(providerCount ?? 0) > 0} />
                 </div>
             ) : (
                 <>
                     <AtAGlance recordings={recordings} />
                     <LatestRecording recording={newestFirst(recordings)[0]} />
                     <RecentRecordings recordings={newestFirst(recordings).slice(0, RECENT_LIMIT)} />
-                    <SetUp plaudDone={connected} providerDone={(providerCount ?? 0) > 0} />
+                    <SetUp plaudDone={!plaudEnabled || connected} providerDone={(providerCount ?? 0) > 0} />
                 </>
             )}
         </div>

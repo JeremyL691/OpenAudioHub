@@ -117,6 +117,12 @@
         "finishTitle": "準備完了",
         "finishBody": "録音をアップロードするか Plaud から同期すると、ダッシュボードに表示されます。あとから設定で変更できます。",
         "getStarted": "はじめる",
-        "completeFailed": "セットアップを完了できませんでした"
+        "completeFailed": "セットアップを完了できませんでした",
+        "useLocalOnly": "ローカル音声のみを使用（Plaud を接続しない）",
+        "localOnlyEnabled": "ローカル専用モードが有効になっています。",
+        "plaud": {
+            "useLocalOnly": "ローカル音声のみを使用（Plaud を接続しない）",
+            "localOnlyEnabled": "ローカル専用モードが有効になっています。"
+        }
     }
 }
