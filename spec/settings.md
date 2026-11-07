@@ -132,6 +132,8 @@ as sent, without a check.
 | `zipExportFolder` | string or null | `null` | desktop app only. A string must name an existing, writable folder |
 | `zipTitleMode` | string | `"original"` | `original`, `date`, `ai` |
 | `zipDeleteAfterMerge` | boolean | `false` | boolean |
+| `plaudEnabled` | boolean | `true` | setting `false` enables local-only mode and removes stored Plaud connections, devices, and refresh keys |
+| `localStorageFolder` | string or null | `null` | desktop app or single-account local mode only. A string must name an existing, writable folder. A blank or whitespace-only string clears it to null |
 
 Errors for the rules above are `400 INVALID_INPUT` with `details.field` set to the field:
 
@@ -154,6 +156,8 @@ Folder and export rules (desktop app only):
 - `zipWatchFolder` or `zipExportFolder` set to a string on a server that is not the desktop app, or naming a folder that does not exist or is read-only: `400`, `details.field` set to the field name, `Invalid value for <field>`.
 - `zipAutoMerge: true` on a server that is not the desktop app: `400`, `details.field` = `zipAutoMerge`, message `ZIP auto-merge is only available in the desktop app`.
 - `zipAutoMerge: true` on the desktop app with no watch folder stored: `400`, `details.field` = `zipAutoMerge`, message `Choose a watch folder in the desktop app first`.
+- `localStorageFolder` set to a string on a multi-user server outside the desktop app: `400`, `details.field` = `localStorageFolder`, message `Invalid value for localStorageFolder`.
+- `localStorageFolder` set to a path that does not exist or is not a writable directory: `400`, `details.field` = `localStorageFolder`, message `Invalid value for localStorageFolder`. Setting `localStorageFolder` wakes the local storage folder sync worker immediately.
 - `backupFrequency` and `backupFolder` are retired. Values are ignored, never stored, and
   never returned.
 
@@ -181,7 +185,9 @@ Auth: session. Response `200`:
     }
   ],
   "diskFreeBytes": 123456789,
-  "quotaBytes": null
+  "quotaBytes": null,
+  "localStorageFolder": "/Users/person/Audio",
+  "defaultStoragePath": "/Users/person/Library/Application Support/OpenAudioHub/storage"
 }
 ```
 
@@ -191,12 +197,39 @@ Auth: session. Response `200`:
   durations in milliseconds.
 - `largest` lists up to 5 of those recordings, largest file first (ties by id, descending).
   `filename` is decrypted. `startTime` is ISO 8601.
-- `diskFreeBytes` is the free space on the local storage volume. It is `null` for `s3`,
+- `diskFreeBytes` is the free space on the active storage volume. When `localStorageFolder` is configured, it reports the free space on that folder's filesystem. It is `null` for `s3`,
   and also when the free space cannot be read.
 - `quotaBytes` is always `null`.
+- `localStorageFolder` is the user's custom audio directory when configured, or `null`.
+- `defaultStoragePath` is the server's default storage root path string.
 - An account with no recordings reads zero counts, `largest: []`.
 
 Side effects: none.
+
+### POST /api/settings/storage/sync
+
+Auth: session. Manually synchronizes the user's configured `localStorageFolder` with Library recordings.
+
+Request body: none (or empty JSON `{}`).
+
+Response: `200`:
+
+```json
+{
+  "success": true,
+  "synced": 2,
+  "removed": 0,
+  "errors": []
+}
+```
+
+- If `localStorageFolder` is unset or empty, the response returns `synced: 0`, `removed: 0`, and `errors: []` immediately.
+- Audio files in the folder with extensions `.mp3`, `.mp4`, `.m4a`, `.wav`, `.ogg`, `.opus`, `.webm`, `.aac`, `.flac` are scanned and added to the library if not already present.
+- Waveform peaks are computed on import and stored directly.
+- Existing recordings backed by files that were removed from the folder are cleaned up accordingly.
+- `errors` lists any individual file failure messages encountered during the scan.
+
+Errors: `401 AUTH_SESSION_MISSING`.
 
 ### Storage configuration
 

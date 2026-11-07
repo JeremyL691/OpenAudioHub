@@ -10,6 +10,7 @@ OpenAudioHub pulls your recordings from one Plaud account. You connect the accou
 - [How sync works](#how-sync-works)
 - [Tokens and sign-in expiry](#tokens-and-sign-in-expiry)
 - [Switch or disconnect](#switch-or-disconnect)
+- [Local-only mode](#local-only-mode)
 
 ## Where to connect
 
@@ -92,3 +93,14 @@ Open **Settings**, then **Plaud Account**.
 
 - **Switch account** connects a different Plaud account. Recordings you already synced stay in your library. Only future syncs use the new account.
 - **Disconnect** deletes the stored token, the device list, and the link to your browser extension. Recordings stay in your library. OpenAudioHub does not revoke the token with Plaud, so sign out of the Plaud web app if you want to end that session.
+
+## Local-only mode
+
+If you do not use Plaud hardware or want to run without connecting to Plaud services, you can switch to local-only mode:
+
+1. Open **Settings**, then **Plaud Account**.
+2. Under **Local-Only Mode**, choose **Switch to Local-Only Mode**.
+
+Switching to local-only mode removes any stored Plaud connection, paired devices, and extension refresh keys. In local-only mode, Plaud sync controls are hidden across the Dashboard, Library empty state, account menu, and sidebar. You can manage recordings through manual uploads or by configuring a custom local audio folder in **Settings**, then **Storage**.
+
+To re-enable Plaud at any time, return to **Settings**, then **Plaud Account**, and choose **Enable Plaud Sync**.

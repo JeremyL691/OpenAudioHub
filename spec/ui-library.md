@@ -236,12 +236,15 @@ player card.
 ### 1.10 Empty state
 
 Shown when the account has no non-deleted recordings and no upload is running
-(`empty-state`). Heading "No recordings yet", text "Run a sync to pull your recordings
-down from Plaud, then transcribe them here.", and two buttons:
+(`empty-state`). Heading "No recordings yet".
 
-- "Sync Device" (disabled with the label "Syncing…" while a sync runs). Starts a
-  Plaud sync (see [plaud.md](plaud.md)).
-- "Upload Audio" (see 1.08).
+- When `plaudEnabled` is true (default): description reads "Run a sync to pull your recordings
+  down from Plaud, then transcribe them here." with two buttons:
+  - "Sync Device" (disabled with the label "Syncing…" while a sync runs). Starts a
+    Plaud sync (see [plaud.md](plaud.md)).
+  - "Upload Audio" (see 1.08).
+- When `plaudEnabled` is false (local-only mode): description reads "Upload audio files or place them in your local storage folder to get started." with one button:
+  - "Upload Audio" (primary variant). The "Sync Device" button is omitted.
 
 The top-bar upload and the command trigger stay available.
 

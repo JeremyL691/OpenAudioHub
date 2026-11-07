@@ -18,10 +18,10 @@ Most providers offer the OpenAI API: chat completions and audio transcriptions, 
 
 1. Open **Settings**, then **Providers**.
 2. Choose **Add Provider**.
-3. Choose a **Provider** from the list. A preset fills in the base address and the model. Choose **Custom** for any other service.
+3. Choose a **Provider** from the list. A preset fills in the base address and suggested models. Choose **Custom** for any other service.
 4. Enter the **API key**. The key is stored encrypted, and it is never shown again.
 5. Optional: change the **Base URL**. Leave it empty to use the preset's address.
-6. Optional: choose a **Default Model** from the list the preset offers, or pick **Custom (type model name)…** to type one.
+6. Optional: configure a **Transcription Model** and an **Enhancement Model** from the lists or by typing a custom model name.
 7. Turn on **Use for transcription** to use this provider to transcribe audio.
 8. Turn on **Use for AI enhancements** to use this provider for summaries and titles.
 9. Choose **Save**.
@@ -33,7 +33,7 @@ You can turn on **Use for transcription** for only one provider at a time. The s
 | Provider | Base address | Default transcription model | Transcription | Summaries |
 |---|---|---|---|---|
 | OpenAI | `https://api.openai.com/v1` | `whisper-1` | Yes | Yes |
-| Google Gemini | Google's own API | `gemini-2.0-flash` | Yes. Audio up to 20 MB. | Yes |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta` | `gemini-2.0-flash` | Yes. Audio over 20 MB is automatically compressed with Opus. Base URL override supported. | Yes |
 | ElevenLabs | `https://api.elevenlabs.io/v1` | `scribe_v2` | Yes. Audio up to 128 MB. Speaker labels are supported. | No |
 | Groq | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo` | Yes | Yes |
 | Together AI | `https://api.together.xyz/v1` | `openai/whisper-large-v3` | Yes | Yes |

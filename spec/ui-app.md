@@ -48,7 +48,7 @@ The sidebar is a navigation landmark labelled "Main navigation". From top to bot
 4. Group label "Collections".
 5. `nav-collection-starred`, "Starred", to `/recordings?collection=starred`, with a count.
 6. `nav-collection-recent`, "Last 7 days", to `/recordings?collection=recent`, with a count.
-7. `nav-collection-plaud`, "From Plaud", to `/recordings?collection=plaud`, with a count.
+7. `nav-collection-plaud`, "From Plaud", to `/recordings?collection=plaud`, with a count. When local-only mode is active (`plaudEnabled: false`), this item is hidden.
 8. `nav-collection-uploaded`, "Uploaded", to `/recordings?collection=uploaded`, with a count.
 9. At the bottom: `nav-settings`, "Settings", to `/settings`, and `nav-docs`, "Docs", to `/docs`.
 
@@ -96,9 +96,9 @@ Right side, in order:
 ### 2.1 Trigger
 
 - A round button with the first letter of the account email in capitals, or "?" when there is no email.
-- Attribute `data-sync-state` holds one of `ok`, `failed`, `syncing`, `idle`. A coloured ring around the button shows the same state.
-- Accessible name "Account menu" followed by a suffix: ", synced" (`ok`), ", sync failed" (`failed`), ", syncing" (`syncing`), or ", not synced yet" (`idle`).
-- Tooltip, in this order of precedence: "Plaud needs reconnecting"; "Syncing…"; "Sync failed: <reason>"; "Last synced <relative time>" after a successful sync; "Not synced yet".
+- Attribute `data-sync-state` holds one of `ok`, `failed`, `syncing`, `idle`. A coloured ring around the button shows the same state. In local-only mode (`plaudEnabled: false`), `data-sync-state` and the coloured ring are omitted.
+- Accessible name "Account menu" followed by a suffix: ", synced" (`ok`), ", sync failed" (`failed`), ", syncing" (`syncing`), or ", not synced yet" (`idle`). In local-only mode the suffix is omitted.
+- Tooltip, in this order of precedence: "Plaud needs reconnecting"; "Syncing…"; "Sync failed: <reason>"; "Last synced <relative time>" after a successful sync; "Not synced yet". In local-only mode the tooltip is "Account menu".
 
 ### 2.2 Menu content
 
@@ -110,8 +110,8 @@ Header row: a circle with the email initial, a title and a subtitle.
 
 Items, in order:
 
-1. "Sync now". Starts a manual sync (see `plaud.md`). Disabled while a sync runs.
-2. "Reconnect Plaud". Shown only when the Plaud sign-in has expired. It opens `/settings/plaud-account`.
+1. "Sync now". Starts a manual sync (see `plaud.md`). Disabled while a sync runs. Omitted in local-only mode (`plaudEnabled: false`).
+2. "Reconnect Plaud". Shown only when the Plaud sign-in has expired and `plaudEnabled` is true. It opens `/settings/plaud-account`.
 3. "Settings", with the key hint ",". It opens `/settings`.
 4. "Keyboard shortcuts", with the key hint "?". It opens the keyboard shortcuts dialog.
 
@@ -137,23 +137,23 @@ Redirect: `/dashboard?settings=<section>` goes to `/settings/<section>` when `<s
 
 - A level 1 heading "Dashboard".
 - Today's date, written in the interface language as weekday, month and day.
-- A region named "Plaud sync" with the status text:
+- A region named "Plaud sync" with the status text (omitted in local-only mode when `plaudEnabled: false`):
   - "Plaud not connected" when no Plaud account is connected;
   - "Plaud sign-in expired" when the stored Plaud sign-in was rejected;
   - "Not synced yet" when connected and no sync has run in this session;
   - "Last synced <relative time>" otherwise;
   - "Checking Plaud…" while the connection state is loading.
-- When connected and not expired: a button `overview-sync-now`, "Sync now", or "Syncing…" while a sync runs.
-- When Plaud needs reconnecting: a strip with the text "Reconnect Plaud to keep recordings syncing." and a link "Reconnect" to `/settings/plaud-account`.
+- When connected and not expired (and `plaudEnabled` is true): a button `overview-sync-now`, "Sync now", or "Syncing…" while a sync runs.
+- When Plaud needs reconnecting (and `plaudEnabled` is true): a strip with the text "Reconnect Plaud to keep recordings syncing." and a link "Reconnect" to `/settings/plaud-account`.
 
 ### 3.2 Empty library
 
 When the account has no recordings, the page shows, after the header:
 
-- An empty state with the title "No recordings yet" and the text "Sync from your Plaud account, or upload an audio file to start your library.".
-- Buttons: `overview-upload`, "Upload audio" (opens the file picker), and `overview-sync`, "Sync now" (or "Syncing…" while busy).
+- An empty state with the title "No recordings yet". In default mode, the description is "Sync from your Plaud account, or upload an audio file to start your library.". In local-only mode (`plaudEnabled: false`), the description is "Upload audio files or place them into your local storage folder to start your library.".
+- Buttons: `overview-upload`, "Upload audio" (opens the file picker), and, when `plaudEnabled` is true, `overview-sync`, "Sync now" (or "Syncing…" while busy).
 - A link "Add an AI provider" to `/settings/providers`, shown only when the account has no AI provider.
-- The Set up section (3.6).
+- The Set up section (3.6), where Plaud setup is treated as completed when local-only mode is active.
 
 ### 3.3 Library present
 
@@ -261,7 +261,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 ### 4.3 Providers (`providers`)
 
 - Button "Add Provider" opens the dialog "Add AI Provider". Each saved provider is a row with the buttons "Edit provider" (dialog "Edit AI Provider") and "Delete provider". The row also has a "Test connection" button. Its result reads "Connected · <n> ms" on success, or the failure text.
-- The dialog holds: "Provider" (a select), "API Key", "Base URL (Optional)", and "Default Model". A "Test connection" button runs `POST /api/settings/ai/providers/test`. Saving calls `POST` or `PUT /api/settings/ai/providers[/<id>]`. The model picker uses `POST /api/settings/ai/providers/models`. See `ai.md`.
+- The dialog holds: "Provider" (a select), "API Key", "Base URL (Optional)", "Transcription Model" (select with preset/custom options for providers that can transcribe), and "Enhancement Model" (select with preset/custom options for providers that can enhance). For backwards compatibility `defaultModel` is maintained. A "Test connection" button runs `POST /api/settings/ai/providers/test`. Saving calls `POST` or `PUT /api/settings/ai/providers[/<id>]`. The model picker uses `POST /api/settings/ai/providers/models`. See `ai.md`.
 - Adding a provider needs a provider and an API key. Otherwise the toast "Provider and API key are required" appears.
 - Deleting asks for confirmation in a dialog titled "Delete this provider?". Toast "Provider deleted successfully".
 - The transcription default is set with `PUT /api/settings/ai/providers/default-transcription`.
@@ -294,6 +294,8 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 
 ### 4.7 Plaud Account (`plaud-account`)
 
+- In local-only mode (`plaudEnabled: false`), the page presents the local-only mode description and an "Enable Plaud Sync" button.
+- In default mode (`plaudEnabled: true`), the page includes a "Local-Only Mode" control with a "Switch to Local-Only Mode" button. Enabling local-only mode sets `plaudEnabled: false`, disconnecting Plaud and clearing stored devices and refresh keys.
 - Shows the connected account's email with a status badge ("Connected" or "Sign-in expired"), or a connect area when not connected. The state comes from `GET /api/plaud/connection`.
 - When the sign-in has expired: the text "Reconnect Plaud to keep recordings syncing." and a "Reconnect" button, which opens the Plaud sign-in.
 - Other actions: "Switch account" (confirmation "Switch Plaud account?") and "Disconnect". Both call `DELETE /api/plaud/connection`. Disconnecting shows "Plaud account disconnected".
@@ -330,6 +332,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 
 - "Auto-delete old recordings" (switch). Saves `autoDeleteRecordings`. Turning it on also saves `retentionDays` with its current value; turning it off saves `retentionDays: null`.
 - "Retention period" (`retention-days`): whole days from 1 to 365. Empty text saves `retentionDays: null`. Other invalid values are ignored.
+- "Local audio folder": lets the user configure `localStorageFolder`. Includes "Choose folder" (`choose-local-storage-folder`), "Clear" (`clear-local-storage-folder`), and "Sync now" (`sync-local-storage-folder`, calling `POST /api/settings/storage/sync`). In desktop and single-account modes, audio files placed in this directory are synchronized with the Library automatically and on demand.
 - Storage usage comes from `GET /api/settings/storage` (see `settings.md`).
 
 ### 4.12 Export (`export`)

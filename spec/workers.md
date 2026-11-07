@@ -35,6 +35,7 @@ Terms used below:
 | Manual summary job | A request for a summary (`ai.md`). | When a job is queued | Two jobs at a time. | None. A failed job is not retried. | The job fails and its error is returned to the request. |
 | Auto export | Every 30 seconds. Desktop app only. | Every 30 seconds | Per user, in turn. | A failed export is retried on the next pass, up to three times. | The failure is logged. The recording is exported on a later pass, or left alone once the limit is reached until the folder or format changes. |
 | ZIP auto-merge | Every 15 seconds, or when ZIP auto-merge settings or an AI title change. Desktop app only. | Every 15 seconds | One pass at a time, per user in turn. | Retried on the next pass if a file is still being written or fails to merge. | The failure is logged and the archive is left untouched. |
+| Local storage folder sync | Starts at boot, runs every 10 seconds, or immediately when storage folder settings change (`notify`). Desktop app and single-account local mode only. | Every 10 seconds | One pass across users with a configured `localStorageFolder`. | Scans audio files, imports new recordings with peaks, and cleans up removed files. | Errors are logged for that user or file. Other files still process. |
 | Audio pipeline worker | Starts at boot. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. | See `audio-pipeline.md`. |
 
 Notifications (email, Bark, browser) are not timers. They are sent inline when their trigger happens. See sections 9 to 11.
@@ -45,7 +46,7 @@ Notifications (email, Bark, browser) are not timers. They are sent inline when t
 
 ### Startup
 
-At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the auto-transcription and summary job workers, the audio pipeline worker, and, in the desktop app only, the automatic export loop and the ZIP auto-merge loop.
+At startup the server starts these background workers: the webhook delivery worker, the background Plaud sync worker, the auto-transcription and summary job workers, the audio pipeline worker, the local storage folder sync worker (desktop app and single-account local mode only), and, in the desktop app only, the automatic export loop and the ZIP auto-merge loop.
 
 Background Plaud sync can be turned off with `BACKGROUND_SYNC_ENABLED`. The audio pipeline has its own switch (`AUDIO_PIPELINE_ENABLED`).
 
@@ -229,6 +230,17 @@ The automatic export of new recordings and the automatic merging of segmented `.
 - The ZIP auto-merge loop runs once at startup, then every 15 seconds, and right away when ZIP settings or an AI title change. Each pass reads every user whose settings have `zipAutoMerge` on and `zipWatchFolder` set, and merges any unmerged `.zip` archives whose size and modification time have settled.
 - A pass error for one user is logged and does not stop the other users.
 - No notifications are sent for an automatic export or a background ZIP merge.
+
+---
+
+## 8.1 Local storage folder sync worker
+
+This worker monitors the user's custom `localStorageFolder` on disk (in the desktop app or on a single-account server):
+
+- Starts at boot and runs a pass every 10 seconds.
+- Changing `localStorageFolder` in user settings notifies the worker to wake immediately.
+- Discovers supported audio files (`.mp3`, `.mp4`, `.m4a`, `.wav`, `.ogg`, `.opus`, `.webm`, `.aac`, `.flac`), computes 256-point waveform peaks, and imports them directly into the Library.
+- Recordings whose underlying audio files have been deleted from the directory are removed from the Library.
 
 ---
 
