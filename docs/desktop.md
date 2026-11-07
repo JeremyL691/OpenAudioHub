@@ -145,6 +145,8 @@ The app makes one kind of backup itself. For what you can export, see [Backup an
 
 If you change the format later, files this app exported in the old format are written again in the new one and the old copy is removed. A file you renamed yourself is left alone.
 
+**Local storage folder.** In **Settings**, then **Storage**, choose a folder on your Mac. OpenAudioHub synchronizes supported audio files in this directory with your library automatically every 10 seconds and lets you trigger an immediate sync with **Sync now**. Uploaded and merged audio files can also be stored directly inside this directory.
+
 **ZIP files.** In **Settings**, then **ZIP Files**, watch a folder for `.zip` archives that contain segmented audio. The app orders the audio segments by their recording time, merges them into one `.m4a` file, imports the recording into your library, and writes the merged file to your export folder (or to the watch folder when no export folder is set). See [ZIP files](backup-and-restore.md#zip-files).
 
 The upgrade copy does not hold `secrets.json`. To move to another Mac, quit the app and copy the whole data folder. The copy includes `secrets.json`, so keep it private.

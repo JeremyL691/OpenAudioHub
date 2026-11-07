@@ -15,7 +15,7 @@ A preset is a built-in definition. A provider whose `provider` name equals a pre
 
 | Name | Default base URL | Default model | Transcription | Enhancement | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `Google Gemini` | Google Generative Language API (fixed) | `gemini-2.0-flash` | yes, native audio | yes, native API | Stored base URL is ignored. Model list is fixed (see [Model list](#post-apisettingsaiprovidersmodels)). |
+| `Google Gemini` | `https://generativelanguage.googleapis.com/v1beta` | `gemini-2.0-flash` | yes, native audio | yes, native API | Custom base URL override is supported (proxies and custom gateways append `/models/{model}:{action}`). Audio larger than 20 MB is automatically compressed with Opus. Lists audio models and chat models. |
 | `ElevenLabs` | `https://api.elevenlabs.io/v1` | `scribe_v2` | yes, Scribe | no | Model list is fixed: `scribe_v2`, `scribe_v1`. |
 | `OpenAI` | `https://api.openai.com/v1` | `whisper-1` | yes | yes | |
 | `Groq` | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo` | yes | yes | |
@@ -59,6 +59,10 @@ Response: `200 OK`
       "provider": "Custom",
       "baseUrl": "https://ai.example.test/v1",
       "defaultModel": "chat-model",
+      "transcriptionModel": "whisper-1",
+      "enhancementModel": "chat-model",
+      "transcriptionModels": ["whisper-1"],
+      "enhancementModels": ["chat-model"],
       "isDefaultTranscription": true,
       "isDefaultEnhancement": false,
       "createdAt": "2026-10-16T10:00:00.000Z"
@@ -68,7 +72,8 @@ Response: `200 OK`
 ```
 
 - Lists only the caller's providers, oldest first (by creation time, then id).
-- `baseUrl` and `defaultModel` are `null` when not set.
+- `baseUrl`, `defaultModel`, `transcriptionModel`, and `enhancementModel` are `null` when not set.
+- `transcriptionModels` and `enhancementModels` are arrays of stored model id strings (empty array `[]` when none are stored).
 
 Side effects: none.
 
@@ -83,7 +88,11 @@ Request body (JSON):
 | `provider` | string | yes | A preset name or any other name. |
 | `apiKey` | string | yes | Non-empty. Stored encrypted. |
 | `baseUrl` | string | no | Empty or missing means none stored. |
-| `defaultModel` | string | no | Empty or missing means none stored. |
+| `defaultModel` | string | no | Empty or missing means none stored. Kept for backwards compatibility; resolves into transcription and enhancement models. |
+| `transcriptionModel` | string | no | Model selected for audio transcription. |
+| `enhancementModel` | string | no | Model selected for summaries and titles. |
+| `transcriptionModels` | array of strings | no | Available transcription model options for this provider. |
+| `enhancementModels` | array of strings | no | Available enhancement model options for this provider. |
 | `isDefaultTranscription` | boolean | no | Default `false`. |
 | `isDefaultEnhancement` | boolean | no | Default `false`. |
 
@@ -96,6 +105,10 @@ Response: `200 OK` (not `201`). The response never includes the key.
     "provider": "Custom",
     "baseUrl": "https://ai.example.test/v1",
     "defaultModel": "chat-model",
+    "transcriptionModel": "whisper-1",
+    "enhancementModel": "chat-model",
+    "transcriptionModels": ["whisper-1"],
+    "enhancementModels": ["chat-model"],
     "isDefaultTranscription": true,
     "isDefaultEnhancement": true,
     "createdAt": "2026-10-16T10:00:00.000Z"
@@ -123,9 +136,9 @@ Side effects:
 
 Auth: session. `id` must be one of the caller's providers.
 
-Request body (JSON): `baseUrl`, `defaultModel`, `isDefaultTranscription`, `isDefaultEnhancement`, and `apiKey`. `provider` in the body is ignored. The provider name of a stored row cannot change.
+Request body (JSON): `baseUrl`, `defaultModel`, `transcriptionModel`, `enhancementModel`, `transcriptionModels`, `enhancementModels`, `isDefaultTranscription`, `isDefaultEnhancement`, and `apiKey`. `provider` in the body is ignored. The provider name of a stored row cannot change.
 
-- `baseUrl`, `defaultModel` and the two flags replace the stored values. Missing `baseUrl` or `defaultModel` becomes none. Missing flags become `false`.
+- `baseUrl`, `defaultModel`, `transcriptionModel`, `enhancementModel`, `transcriptionModels`, `enhancementModels`, and the two flags replace the stored values. Missing `baseUrl` or model fields become none or empty arrays. Missing flags become `false`.
 - A non-empty `apiKey` replaces the stored key. A missing or blank `apiKey` keeps the stored key.
 
 Response: `200 OK` with `{ "success": true }`.
@@ -186,14 +199,15 @@ Request body (JSON):
 | `apiKey` | string | Required unless `id` is given. Used instead of the stored key when non-empty. |
 | `baseUrl` | string | Taken from the saved row, then the preset, when empty. |
 | `model` | string | Taken from the saved row, then the preset, when empty. |
+| `kind` | string | Optional probe kind override: `"chat"` or `"transcription"` / `"audio"`. When unset, inferred from the provider and model. |
 
 Behaviour:
 
 - With `id`, the stored key is used unless `apiKey` is non-empty. Non-empty body values override the stored ones.
 - If no model is found, the answer is `{ "ok": false, "kind": "chat", "error": "No model is set." }`.
-- The kind is `transcription` when the provider cannot enhance, when the model is a transcription model, or when the model is in the Google Gemini audio list. Otherwise it is `chat`.
+- When `kind` is `"chat"`, a chat probe is performed. When `kind` is `"transcription"` or `"audio"`, a transcription probe is performed if the provider can transcribe. When `kind` is omitted, the kind is `transcription` when the provider cannot enhance, when the model is a transcription model, or when the model is in the Google Gemini audio list. Otherwise it is `chat`.
 - A transcription probe sends one second of silent MP3 (38 frames of 417 bytes). A chat probe sends `Reply with OK.` with a 16-token output limit.
-- Upstream routes: Google Gemini uses its native `generateContent` API. ElevenLabs uses `POST {base}/speech-to-text`. Other transcription models use `POST {base}/audio/transcriptions`. Other chat models use `POST {base}/chat/completions`.
+- Upstream routes: Google Gemini uses its native `generateContent` API at `{base}/models/{model}:generateContent`. ElevenLabs uses `POST {base}/speech-to-text`. Other transcription models use `POST {base}/audio/transcriptions`. Other chat models use `POST {base}/chat/completions`.
 - The upstream call has a 20-second timeout.
 
 Response: `200 OK` in every case where the request itself was valid. Upstream failures are reported in the body.
@@ -245,9 +259,9 @@ Response: `200 OK` with `{ "models": [ { "id": "model-id", "name": "Model name" 
 
 Rules:
 
-- `audio` on `Google Gemini` returns the fixed list `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash`, `gemini-1.5-pro`. No upstream call.
+- `audio` on `Google Gemini` returns the fixed list `gemini-3.5-transcribe`, `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`. No upstream call.
+- `chat` on `Google Gemini` returns the fixed list `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`. No upstream call.
 - `audio` on `ElevenLabs` returns the fixed list `scribe_v2`, `scribe_v1`. No upstream call.
-- `chat` on `Google Gemini` returns an empty list. No upstream call.
 - `audio` on `OpenRouter` lists `{baseUrl}/models`, keeps the models whose `architecture.input_modalities` includes `audio`, and sorts them by name, then id. `name` is the model name, or the id when there is none.
 - `chat` on a preset that lists chat models (`SiliconFlow (China)`, `OpenCode Go`) lists `{baseUrl}/models`, removes ids containing `embed`, `rerank` or `tts` (case-insensitive), sorts by id, and sets `name` to the id.
 - Other combinations, including any custom provider name, return `{ "models": [] }` without an upstream call.

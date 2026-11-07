@@ -79,10 +79,10 @@ Each provider has one transcription style. The style comes from the provider nam
 | --- | --- | --- |
 | `OpenAI`, `Groq`, `Together AI`, `SiliconFlow (China)`, `LM Studio`, `Ollama`, `Custom` | whisper | preset URL, or the stored base URL |
 | `OpenRouter` | chat | preset URL |
-| `Google Gemini` | gemini | Google's own API address (no override) |
+| `Google Gemini` | gemini | `https://generativelanguage.googleapis.com/v1beta`, or custom base URL |
 | `ElevenLabs` | elevenlabs | `https://api.elevenlabs.io/v1` |
 
-A provider name that is not a preset uses the whisper style. A stored base URL overrides the preset URL for the whisper and chat styles. For ElevenLabs it must be an `http` or `https` URL without credentials in it. `OpenCode Go` is not a transcription provider and cannot be chosen for transcription.
+A provider name that is not a preset uses the whisper style. A stored base URL overrides the preset URL for the whisper, chat, and gemini styles. For ElevenLabs it must be an `http` or `https` URL without credentials in it. `OpenCode Go` is not a transcription provider and cannot be chosen for transcription.
 
 Settings that affect every run (from the user's settings):
 
@@ -146,14 +146,12 @@ Request, sent as JSON to `{baseUrl}/chat/completions`:
 
 ## Gemini style
 
-Request: a generate-content call to Google's Generative Language API, with the instruction text and the audio as base64 `inlineData`. The MIME type is mapped from the audio content type (mp3, mp4, wav, ogg, opus, flac, aac, webm).
+Request: a generate-content call to `{baseUrl}/models/{model}:generateContent` (defaulting to Google's Generative Language API, or custom base URL override), with the instruction text and the audio as base64 `inlineData`. The MIME type is mapped from the audio content type (mp3, mp4, wav, ogg, opus, flac, aac, webm).
 
-- Audio over 20 MB is refused with a failure (no file upload path yet).
+- Audio over 20 MB is automatically compressed to mono Opus in an Ogg container (`audio/ogg`) using `ffmpeg`, starting at `WHISPER_COMPRESS_BITRATE_KBPS` (12 kbps) down to 6 kbps until it fits under 20 MB. If it still exceeds 20 MB after compression, the run fails.
 - Unsupported audio types are refused.
 - An empty answer fails the run.
 - `detectedLanguage` is the language hint, or `null`.
-
-Gemini calls the official endpoint directly and does not use the stored base URL.
 
 ## ElevenLabs style
 

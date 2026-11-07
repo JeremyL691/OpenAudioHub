@@ -191,11 +191,12 @@ Errors:
 - `422` `INVALID_FILE_FORMAT`, message `File does not contain a valid audio stream`: the audio has no readable duration.
 - `401` `AUTH_SESSION_MISSING`.
 
-Side effects: the audio is stored under the user's storage area with the file's own extension (lower case). A recording row is created with:
+Side effects: the audio is stored under the user's storage area with the file's own extension (lower case). When `localStorageFolder` is configured in user settings, the audio file is stored directly in that folder with a sanitized title stem (or numbered duplicate if a collision occurs) using `storage_type = "local_folder"`, and 256 waveform peaks are computed on import. A recording row is created with:
 - `deviceSn` `"local"`, `plaudFileId` `"uploaded-<id>"`, `plaudVersion` `"1"`, `isTrash` false.
 - `duration` from the probe, `startTime` set to the upload time, `endTime` = `startTime` + `duration`.
 - `filesize` and `fileMd5` of the bytes received.
 - `downloadedAt` set to the upload time.
+- `waveformPeaks` `null` (or the 256-point array when stored in `localStorageFolder`).
 
 If the row cannot be saved, the stored audio is removed and the error is returned. Otherwise the recording is queued for automatic transcription when that setting is on. Automatic export picks it up on the desktop build (see [export.md](export.md)).
 
@@ -325,7 +326,7 @@ Errors:
 - `422` `INVALID_FILE_FORMAT`, message `"<title>" has no readable audio`: an input has no readable duration. Not covered by tests.
 - `422` `INVALID_INPUT`, message `Merged recording would be longer than 24 hours`. Not covered by tests.
 - `401` `AUTH_SESSION_MISSING`.
-Side effects: a new recording row and a new stored audio file. Automatic export picks the merged recording up on the desktop build (see [export.md](export.md)). The original recordings are not changed.
+Side effects: a new recording row and a new stored audio file. When `localStorageFolder` is configured in user settings, the merged audio is stored directly in that folder with `storage_type = "local_folder"`. Waveform peaks are computed during merge and stored directly in `waveformPeaks`. Automatic export picks the merged recording up on the desktop build (see [export.md](export.md)). The original recordings are not changed.
 
 The option to delete the originals is not part of this route. A client that wants it calls DELETE for each original after the merge succeeds.
 
