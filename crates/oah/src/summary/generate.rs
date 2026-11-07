@@ -487,6 +487,7 @@ mod guard_tests {
             base_url: "http://127.0.0.1:1/v1".into(),
             api_key: "k".into(),
             model: Some("gpt-4o-mini".into()),
+            ..Default::default()
         }
     }
 

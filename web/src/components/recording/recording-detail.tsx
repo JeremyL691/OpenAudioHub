@@ -18,7 +18,7 @@ import { SummaryPanel } from "./summary-panel";
 import { TranscribeDialog, TranscriptCard } from "./transcript-card";
 import { ChatPanel } from "./chat/chat-panel";
 import type { ChatCitation, CitationFocus, CitationPlace, CitationTarget } from "./chat/types";
-import { chatCitationPath, hasPlace } from "./chat/types";
+import { hasPlace } from "./chat/types";
 import type { TranscriptRecord } from "./types";
 import { useI18n } from "@/lib/i18n";
 
@@ -30,7 +30,18 @@ export interface RecordingDetailProps {
 
 type Tab = "transcript" | "summary" | "details";
 
-/** The recording view: header, player, transcript, summary, details and Ask AI split view. */
+/**The recording view: header, player, transcript, summary, details and Ask AI split view. */
+async function loadCitationTarget(recordingId: string, turnId: string, sourceId: string): Promise<CitationTarget | null> {
+    if (!/^[\w-]+$/.test(recordingId) || !/^[\w-]+$/.test(turnId) || !/^[\w-]+$/.test(sourceId)) {
+        return null;
+    }
+    const url = new URL("/api/recordings", window.location.origin);
+    url.pathname = `/api/recordings/${encodeURIComponent(recordingId)}/chat/turns/${encodeURIComponent(turnId)}/citations/${encodeURIComponent(sourceId)}`;
+    const res = await window.fetch(url.pathname, { credentials: "same-origin" });
+    if (!res.ok) throw new Error(`citation ${res.status}`);
+    return (await res.json()) as CitationTarget;
+}
+
 export function RecordingDetail(props: RecordingDetailProps) {
     return <RecordingDetailView key={props.id} {...props} />;
 }
@@ -140,7 +151,12 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
                 return;
             }
             try {
-                const target = await api<CitationTarget>(chatCitationPath(id, turnId, citation.sourceId));
+                const target = await loadCitationTarget(id, turnId, citation.sourceId);
+                if (!target) {
+                    setCitationFocus(null);
+                    toast.info(t("recording.chat.citationStale"));
+                    return;
+                }
                 if (target.source) setSource(target.source);
                 if (target.current && hasPlace(target)) {
                     focusOn(target);
@@ -165,8 +181,8 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
 
         const parts = hash.slice("#citation=".length).split(":");
         if (parts.length !== 2) return;
-        const [turnId, sourceId] = parts.map(decodeURIComponent);
-        api<CitationTarget>(chatCitationPath(id, turnId, sourceId))
+        const [rawTurnId, rawSourceId] = parts;
+        loadCitationTarget(id, rawTurnId, rawSourceId)
             .then((target) => {
                 if (!target) return;
                 setTab("transcript");
@@ -291,7 +307,10 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
                 >
                     <PlayerCard
                         recording={recording}
-                        onChanged={() => void reload()}
+                        onChanged={() => {
+                            void reload();
+                            window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+                        }}
                         sectionRef={setPlayerEl}
                         showHeader={!page}
                         className="rounded-2xl bg-card p-5 shadow-card lg:order-last lg:shrink-0 lg:rounded-none lg:border-t lg:border-border lg:bg-background/85 lg:px-8 lg:py-3 lg:shadow-none lg:backdrop-blur"

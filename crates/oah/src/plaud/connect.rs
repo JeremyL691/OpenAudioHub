@@ -25,9 +25,6 @@ const REFRESH_KEEP: i64 = 5;
 /// Refresh calls allowed per key and minute.
 const REFRESH_PER_MINUTE: u32 = 10;
 
-pub(super) const CONN_SQL: &str = "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
-    FROM plaud_connections WHERE user_id = ?";
-
 #[derive(sqlx::FromRow)]
 pub(super) struct ConnRow {
     pub bearer_token: String,
@@ -251,10 +248,13 @@ async fn fetch_email(base: &str, token: &str) -> Option<String> {
 }
 
 pub async fn status(State(state): State<AppState>, user: CurrentUser) -> ApiResult<Json<Value>> {
-    let row: Option<ConnRow> = sqlx::query_as(CONN_SQL)
-        .bind(&user.id)
-        .fetch_optional(&state.db)
-        .await?;
+    let row: Option<ConnRow> = sqlx::query_as(
+        "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
+         FROM plaud_connections WHERE user_id = ?",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await?;
     let Some(row) = row else {
         return Ok(Json(json!({ "connected": false })));
     };
@@ -648,10 +648,13 @@ async fn refresh_token(state: &AppState, headers: &HeaderMap, bytes: &[u8]) -> A
             .fetch_optional(&state.db)
             .await?;
     let user_id = user_id.ok_or_else(refresh_key_invalid)?;
-    let row: Option<ConnRow> = sqlx::query_as(CONN_SQL)
-        .bind(&user_id)
-        .fetch_optional(&state.db)
-        .await?;
+    let row: Option<ConnRow> = sqlx::query_as(
+        "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
+         FROM plaud_connections WHERE user_id = ?",
+    )
+    .bind(&user_id)
+    .fetch_optional(&state.db)
+    .await?;
     let row = row.ok_or_else(refresh_key_invalid)?;
 
     let b = body::<RefreshBody>(bytes);

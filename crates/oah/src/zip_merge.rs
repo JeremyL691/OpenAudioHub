@@ -146,11 +146,11 @@ async fn merge_route(
 }
 
 async fn auto_pass(state: &AppState) -> ApiResult<()> {
-    const ON: &str = "json_extract(data, '$.zipAutoMerge') = 1";
-    let users: Vec<String> =
-        sqlx::query_scalar(&format!("SELECT user_id FROM user_settings WHERE {ON}"))
-            .fetch_all(&state.db)
-            .await?;
+    let users: Vec<String> = sqlx::query_scalar(
+        "SELECT user_id FROM user_settings WHERE json_extract(data, '$.zipAutoMerge') = 1",
+    )
+    .fetch_all(&state.db)
+    .await?;
     for user_id in users {
         let settings = effective(state, &user_id).await?;
         let Some(watch_folder) = settings
@@ -332,6 +332,20 @@ pub fn parse_segment_filename(file_name: &str) -> Option<SegmentMeta> {
         return Some(meta);
     }
     parse_single_timestamp_stem(stem)
+}
+
+pub(crate) fn parse_segment_meta(stem: &str, _fallback_offset_mins: i64) -> Option<SegmentMeta> {
+    parse_range_stem(stem)
+}
+
+pub(crate) fn parse_generic_filename_timestamp(stem: &str) -> Option<SegmentMeta> {
+    parse_single_timestamp_stem(stem)
+}
+
+pub(crate) fn system_time_ms(t: SystemTime) -> Option<i64> {
+    let dur = t.duration_since(SystemTime::UNIX_EPOCH).ok()?;
+    let ms = i64::try_from(dur.as_millis()).ok()?;
+    (ms > 0).then_some(ms)
 }
 
 fn parse_range_stem(stem: &str) -> Option<SegmentMeta> {
@@ -604,7 +618,7 @@ impl ExtractedSegment {
 }
 
 /// Natural string comparison that compares contiguous ASCII digit runs by numeric value.
-fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub(crate) fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     let mut ia = a.as_bytes().iter().peekable();
     let mut ib = b.as_bytes().iter().peekable();
 
@@ -666,6 +680,10 @@ pub fn sort_segments(segments: &mut [ExtractedSegment]) {
             })
             .then_with(|| natural_cmp(&a.basename, &b.basename))
     });
+}
+
+pub(crate) async fn probe_creation_time(ffprobe: &Path, file: &Path) -> Option<i64> {
+    probe_creation_time_ms(ffprobe, file).await
 }
 
 async fn probe_creation_time_ms(ffprobe: &Path, file: &Path) -> Option<i64> {
@@ -908,6 +926,9 @@ async fn process_zip(
     }
 
     // 2. Store the merged audio in OpenAudioHub storage and insert the recording + import rows.
+    let peaks = media::compute_peaks(&state.config.ffmpeg, &merged_temp, 256)
+        .await
+        .and_then(|p| serde_json::to_string(&p).ok());
     let rec_id = ids::new_id();
     let plaud_file_id = format!("zip-{rec_id}");
     let stored_key = format!("{user_id}/{plaud_file_id}.m4a");
@@ -939,8 +960,8 @@ async fn process_zip(
     let insert_rec = sqlx::query(
         "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, \
          end_time, filesize, file_md5, storage_type, storage_path, downloaded_at, plaud_version, is_trash, \
-         created_at, updated_at, title_source, auto_export_eligible) \
-         VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?, ?, 0)",
+         waveform_peaks, created_at, updated_at, title_source, auto_export_eligible) \
+         VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?, ?, ?, 0)",
     )
     .bind(&rec_id)
     .bind(user_id)
@@ -954,6 +975,7 @@ async fn process_zip(
     .bind(storage_type)
     .bind(&stored_key)
     .bind(now)
+    .bind(peaks.as_deref())
     .bind(now)
     .bind(now)
     .bind(title_source)

@@ -11,7 +11,7 @@ use futures_util::future::{BoxFuture, FutureExt, Shared, join_all};
 use serde_json::{Value, json};
 
 use super::api::{self, Client, PlaudError, Recording};
-use super::connect::{CONN_SQL, ConnRow};
+use super::connect::ConnRow;
 use super::import;
 use crate::auth::CurrentUser;
 use crate::db::now_ms;
@@ -198,10 +198,13 @@ async fn run(state: &AppState, user_id: &str) -> Report {
 }
 
 async fn sync_inner(state: &AppState, user_id: &str, report: &mut Report) -> Result<(), Stop> {
-    let conn: Option<ConnRow> = sqlx::query_as(CONN_SQL)
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await?;
+    let conn: Option<ConnRow> = sqlx::query_as(
+        "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
+         FROM plaud_connections WHERE user_id = ?",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
     let conn = conn.ok_or_else(|| Stop::Message("No Plaud connection found".into()))?;
 
     let settings = settings::effective(state, user_id).await?;
@@ -657,11 +660,14 @@ pub async fn push_title(state: &AppState, user_id: &str, recording_id: &str, tit
         else {
             return Ok(());
         };
-        let conn: Option<ConnRow> = sqlx::query_as(CONN_SQL)
-            .bind(user_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|e| e.to_string())?;
+        let conn: Option<ConnRow> = sqlx::query_as(
+            "SELECT bearer_token, api_base, plaud_email, workspace_id, invalidated_at, created_at, updated_at \
+             FROM plaud_connections WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
         let Some(conn) = conn else { return Ok(()) };
         let (client, _) = client_for(state, &conn)
             .await
@@ -703,7 +709,10 @@ async fn tick(state: &AppState) {
     let cutoff = now_ms() - WORKER_CUTOFF_MS;
     let users: Vec<String> = match sqlx::query_scalar(
         "SELECT p.user_id FROM plaud_connections p JOIN users u ON u.id = p.user_id \
-         WHERE u.suspended_at IS NULL AND p.invalidated_at IS NULL AND (p.last_sync IS NULL OR p.last_sync < ?) \
+         LEFT JOIN user_settings s ON s.user_id = p.user_id \
+         WHERE u.suspended_at IS NULL AND p.invalidated_at IS NULL \
+         AND COALESCE(json_extract(s.data, '$.plaudEnabled'), 1) != 0 \
+         AND (p.last_sync IS NULL OR p.last_sync < ?) \
          ORDER BY p.last_sync IS NOT NULL, p.last_sync LIMIT ?",
     )
     .bind(cutoff)

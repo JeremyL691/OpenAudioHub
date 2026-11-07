@@ -52,12 +52,10 @@ impl KeyRow {
         "lastUsedAt":self.last_used_at.map(iso),"expiresAt":self.expires_at.map(iso),"revokedAt":self.revoked_at.map(iso),"createdAt":iso(self.created_at)})
     }
 }
-const KEY_COLUMNS: &str =
-    "id,name,key_prefix,source,scopes,last_used_at,expires_at,revoked_at,created_at";
 async fn list_keys(user: CurrentUser, State(state): State<AppState>) -> ApiResult<Json<Value>> {
-    let rows: Vec<KeyRow> = sqlx::query_as(&format!(
-        "SELECT {KEY_COLUMNS} FROM api_keys WHERE user_id=? ORDER BY created_at DESC,id DESC"
-    ))
+    let rows: Vec<KeyRow> = sqlx::query_as(
+        "SELECT id,name,key_prefix,source,scopes,last_used_at,expires_at,revoked_at,created_at FROM api_keys WHERE user_id=? ORDER BY created_at DESC,id DESC",
+    )
     .bind(user.id)
     .fetch_all(&state.db)
     .await?;
@@ -102,7 +100,7 @@ async fn create_key(
     let id = ids::new_id();
     sqlx::query("INSERT INTO api_keys (id,user_id,name,key_hash,key_prefix,source,scopes,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,'manual','[\"read\"]',?,?,?)")
         .bind(&id).bind(&user.id).bind(name).bind(hash_key(&state,&key)?).bind(&key[..12]).bind(expiry).bind(now).bind(now).execute(&state.db).await?;
-    let row: KeyRow = sqlx::query_as(&format!("SELECT {KEY_COLUMNS} FROM api_keys WHERE id=?"))
+    let row: KeyRow = sqlx::query_as("SELECT id,name,key_prefix,source,scopes,last_used_at,expires_at,revoked_at,created_at FROM api_keys WHERE id=?")
         .bind(id)
         .fetch_one(&state.db)
         .await?;
@@ -266,7 +264,6 @@ struct RecordingRow {
     has_transcription: bool,
     has_summary: bool,
 }
-const RECORD_SELECT: &str = "SELECT r.id,r.filename,r.created_at,r.updated_at,r.start_time,r.duration,r.filesize,r.device_sn,d.name AS device_name,d.model AS device_model,EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id) AS has_transcription,EXISTS(SELECT 1 FROM ai_enhancements a WHERE a.recording_id=r.id AND a.user_id=r.user_id AND a.has_content=1) AS has_summary FROM recordings r LEFT JOIN plaud_devices d ON d.user_id=r.user_id AND d.serial_number=r.device_sn";
 fn recording_json(state: &AppState, row: &RecordingRow) -> ApiResult<Value> {
     let device = if row.device_name.is_some() || row.device_model.is_some() {
         json!({"serial_number":row.device_sn,"name":row.device_name,"model":row.device_model})
@@ -279,9 +276,9 @@ fn recording_json(state: &AppState, row: &RecordingRow) -> ApiResult<Value> {
     )
 }
 async fn find(state: &AppState, user: &str, id: &str) -> ApiResult<RecordingRow> {
-    sqlx::query_as(&format!(
-        "{RECORD_SELECT} WHERE r.user_id=? AND r.id=? AND r.deleted_at IS NULL"
-    ))
+    sqlx::query_as(
+        "SELECT r.id,r.filename,r.created_at,r.updated_at,r.start_time,r.duration,r.filesize,r.device_sn,d.name AS device_name,d.model AS device_model,EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id) AS has_transcription,EXISTS(SELECT 1 FROM ai_enhancements a WHERE a.recording_id=r.id AND a.user_id=r.user_id AND a.has_content=1) AS has_summary FROM recordings r LEFT JOIN plaud_devices d ON d.user_id=r.user_id AND d.serial_number=r.device_sn WHERE r.user_id=? AND r.id=? AND r.deleted_at IS NULL",
+    )
     .bind(user)
     .bind(id)
     .fetch_optional(&state.db)
@@ -333,7 +330,7 @@ async fn list_recordings(
         })
         .transpose()?;
     let (cursor_time, cursor_id) = cursor.unwrap_or((i64::MAX, String::new()));
-    let rows:Vec<RecordingRow>=sqlx::query_as(&format!("{RECORD_SELECT} WHERE r.user_id=? AND r.deleted_at IS NULL AND (? IS NULL OR r.created_at>=?) AND (? IS NULL OR r.updated_at>=?) AND (? IS NULL OR EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id)=?) AND (r.updated_at<? OR (r.updated_at=? AND r.id<?)) ORDER BY r.updated_at DESC,r.id DESC LIMIT ?"))
+    let rows:Vec<RecordingRow>=sqlx::query_as("SELECT r.id,r.filename,r.created_at,r.updated_at,r.start_time,r.duration,r.filesize,r.device_sn,d.name AS device_name,d.model AS device_model,EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id) AS has_transcription,EXISTS(SELECT 1 FROM ai_enhancements a WHERE a.recording_id=r.id AND a.user_id=r.user_id AND a.has_content=1) AS has_summary FROM recordings r LEFT JOIN plaud_devices d ON d.user_id=r.user_id AND d.serial_number=r.device_sn WHERE r.user_id=? AND r.deleted_at IS NULL AND (? IS NULL OR r.created_at>=?) AND (? IS NULL OR r.updated_at>=?) AND (? IS NULL OR EXISTS(SELECT 1 FROM transcriptions t WHERE t.recording_id=r.id AND t.user_id=r.user_id)=?) AND (r.updated_at<? OR (r.updated_at=? AND r.id<?)) ORDER BY r.updated_at DESC,r.id DESC LIMIT ?")
         .bind(user.id).bind(created).bind(created).bind(updated).bind(updated).bind(transcribed).bind(transcribed).bind(cursor_time).bind(cursor_time).bind(cursor_id).bind(limit+1).fetch_all(&state.db).await?;
     let has_more = rows.len() > limit as usize;
     let rows = &rows[..rows.len().min(limit as usize)];

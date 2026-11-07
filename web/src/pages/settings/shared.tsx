@@ -83,6 +83,8 @@ export interface UserSettings {
     zipExportFolder: string | null;
     zipTitleMode: "original" | "date" | "ai";
     zipDeleteAfterMerge: boolean;
+    plaudEnabled: boolean;
+    localStorageFolder: string | null;
 }
 
 export type SettingsPatch = Partial<UserSettings>;
@@ -123,8 +125,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         api<UserSettings>("/api/settings/user")
             .then((data) => {
                 if (!alive) return;
-                current.current = data;
-                setSettings(data);
+                const normalized: UserSettings = {
+                    ...data,
+                    plaudEnabled: data.plaudEnabled !== false,
+                    localStorageFolder: data.localStorageFolder ?? null,
+                };
+                current.current = normalized;
+                setSettings(normalized);
             })
             .catch(() => {
                 if (alive) setFailed(true);

@@ -21,7 +21,14 @@ export function errorMessage(err: unknown, fallback: string): string {
 /** Calls the server and returns the parsed JSON body. Throws ApiError for any non-2xx answer. */
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
     const { json, headers, ...rest } = init;
-    const res = await fetch(path, {
+    if (!path.startsWith("/") || path.startsWith("//")) {
+        throw new Error("API path must be a relative same-origin path");
+    }
+    const resolved = new URL(path, window.location.origin);
+    if (resolved.origin !== window.location.origin) {
+        throw new Error("Cross-origin API request refused");
+    }
+    const res = await fetch(`${resolved.pathname}${resolved.search}`, {
         credentials: "same-origin",
         ...rest,
         headers: json === undefined ? headers : { "content-type": "application/json", ...headers },

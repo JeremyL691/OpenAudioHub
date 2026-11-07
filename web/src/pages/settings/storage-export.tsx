@@ -1,15 +1,17 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, FolderOpen, RefreshCw, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { downloadText } from "@/components/recording/exports";
-import { Loading, NumberField, SettingSelect, useSettings, type SettingsPatch, type UserSettings } from "./shared";
+import { Loading, NumberField, SettingSelect, saveFailed, useSettings, type SettingsPatch, type UserSettings } from "./shared";
 import { t, useI18n } from "@/lib/i18n";
 import { desktopBridge } from "./desktop";
 
@@ -64,6 +66,8 @@ interface StorageUsage {
     largest: { id: string; filename: string; filesize: number; duration: number; startTime: string }[];
     diskFreeBytes: number | null;
     quotaBytes: number | null;
+    localStorageFolder?: string | null;
+    defaultStoragePath?: string | null;
 }
 
 /** The share of the disk (or quota) the recordings use, as a whole percentage. */
@@ -102,14 +106,78 @@ export function StorageSection() {
     const { t } = useI18n();
     const { settings, save, isSaving } = useSettings();
     const ids = useId();
+    const bridge = desktopBridge();
+    const hasNativePicker = typeof bridge?.pickFolder === "function";
     const [usage, setUsage] = useState<StorageUsage | null>(null);
     const [loadError, setLoadError] = useState<unknown>(null);
+    const [folderInput, setFolderInput] = useState(settings.localStorageFolder ?? "");
+    const [syncingFolder, setSyncingFolder] = useState(false);
+
+    const loadUsage = useCallback(async () => {
+        try {
+            const next = await api<StorageUsage>("/api/settings/storage");
+            setUsage(next);
+            setLoadError(null);
+        } catch (err: unknown) {
+            setLoadError(err);
+        }
+    }, []);
 
     useEffect(() => {
-        api<StorageUsage>("/api/settings/storage")
-            .then(setUsage)
-            .catch((err: unknown) => setLoadError(err));
-    }, []);
+        void loadUsage();
+    }, [loadUsage]);
+
+    useEffect(() => {
+        setFolderInput(settings.localStorageFolder ?? "");
+    }, [settings.localStorageFolder]);
+
+    const syncFolderNow = async () => {
+        setSyncingFolder(true);
+        try {
+            const res = await api<{ synced: number }>("/api/settings/storage/sync", { method: "POST", json: {} });
+            toast.success(t("settings.storage.folderSynced", { synced: res.synced }));
+            await loadUsage();
+            window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+        } catch (err) {
+            toast.error(errorMessage(err, saveFailed()));
+        } finally {
+            setSyncingFolder(false);
+        }
+    };
+
+    const chooseLocalFolder = async () => {
+        const pickFolder = bridge?.pickFolder;
+        if (!pickFolder) return;
+        try {
+            const chosen = await pickFolder();
+            if (!chosen) return;
+            const ok = await save({ localStorageFolder: chosen });
+            if (!ok) return;
+            await syncFolderNow();
+        } catch (err) {
+            toast.error(errorMessage(err, t("settings.export.folderPickerFailed")));
+        }
+    };
+
+    const saveCustomFolder = async () => {
+        const trimmed = folderInput.trim();
+        const nextFolder = trimmed === "" ? null : trimmed;
+        const ok = await save({ localStorageFolder: nextFolder });
+        if (!ok) return;
+        if (nextFolder) {
+            await syncFolderNow();
+        } else {
+            await loadUsage();
+            window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+        }
+    };
+
+    const resetLocalFolder = async () => {
+        const ok = await save({ localStorageFolder: null });
+        if (!ok) return;
+        await loadUsage();
+        window.dispatchEvent(new Event(RECORDINGS_CHANGED));
+    };
 
     const toggleAutoDelete = (next: boolean) => {
         const patch: SettingsPatch = { autoDeleteRecordings: next, retentionDays: next ? settings.retentionDays : null };
@@ -119,6 +187,7 @@ export function StorageSection() {
     const top3 = usage ? usage.largest.slice(0, 3) : [];
     const top3Bytes = top3.reduce((sum, r) => sum + r.filesize, 0);
     const segmentColors = ["bg-primary/40", "bg-primary/70", "bg-primary"];
+    const activeFolder = settings.localStorageFolder || usage?.localStorageFolder || usage?.defaultStoragePath || t("settings.storage.defaultFolder");
 
     return (
         <div className="grid gap-7">
@@ -207,6 +276,78 @@ export function StorageSection() {
                                 {usage.storageType === "s3" ? t("settings.storage.backendS3") : t("settings.storage.backendLocal")}
                             </span>
                         </div>
+                        {usage.storageType !== "s3" ? (
+                            <div className="grid gap-3 px-4 py-3">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                        <p className="text-[13px] font-medium">{t("settings.storage.localFolder")}</p>
+                                        <p className="text-xs text-muted-foreground">{t("settings.storage.localFolderHint")}</p>
+                                        <p data-testid="storage-active-folder" className="truncate pt-1 font-mono text-xs text-foreground">
+                                            {activeFolder}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {hasNativePicker ? (
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                data-testid="storage-choose-folder"
+                                                disabled={isSaving("localStorageFolder") || syncingFolder}
+                                                onClick={() => void chooseLocalFolder()}
+                                            >
+                                                <FolderOpen />
+                                                {t("settings.storage.chooseFolder")}
+                                            </Button>
+                                        ) : null}
+                                        {settings.localStorageFolder ? (
+                                            <>
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    data-testid="storage-sync-folder"
+                                                    disabled={syncingFolder || isSaving("localStorageFolder")}
+                                                    onClick={() => void syncFolderNow()}
+                                                >
+                                                    <RefreshCw className={cn(syncingFolder && "animate-spin")} />
+                                                    {syncingFolder ? t("settings.storage.syncingFolder") : t("settings.storage.syncFolderNow")}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    data-testid="storage-reset-folder"
+                                                    disabled={isSaving("localStorageFolder") || syncingFolder}
+                                                    onClick={() => void resetLocalFolder()}
+                                                >
+                                                    <RotateCcw />
+                                                    {t("settings.storage.resetFolder")}
+                                                </Button>
+                                            </>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                {!hasNativePicker ? (
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            data-testid="storage-folder-input"
+                                            value={folderInput}
+                                            placeholder={t("settings.storage.folderPathPlaceholder")}
+                                            disabled={isSaving("localStorageFolder") || syncingFolder}
+                                            onChange={(e) => setFolderInput(e.target.value)}
+                                            className="flex-1 font-mono text-xs"
+                                        />
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            data-testid="storage-save-folder"
+                                            disabled={isSaving("localStorageFolder") || syncingFolder || folderInput.trim() === (settings.localStorageFolder ?? "")}
+                                            onClick={() => void saveCustomFolder()}
+                                        >
+                                            {t("settings.storage.saveFolder")}
+                                        </Button>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <p className="px-4 py-3 text-xs text-muted-foreground">{t("settings.storage.backendFixed")}</p>
                     </div>
                 </>

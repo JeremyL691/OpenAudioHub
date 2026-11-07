@@ -49,6 +49,7 @@ export const catalogs = {
     en: {
         common: enCommon,
         shell: enShell,
+        onboarding: enShell.onboarding,
         dashboard: enDashboard,
         library: enLibrary,
         recording: enRecording,
@@ -61,6 +62,7 @@ export const catalogs = {
     "zh-CN": {
         common: zhCommon,
         shell: zhShell,
+        onboarding: zhShell.onboarding,
         dashboard: zhDashboard,
         library: zhLibrary,
         recording: zhRecording,
@@ -73,6 +75,7 @@ export const catalogs = {
     ja: {
         common: jaCommon,
         shell: jaShell,
+        onboarding: jaShell.onboarding,
         dashboard: jaDashboard,
         library: jaLibrary,
         recording: jaRecording,
@@ -85,6 +88,7 @@ export const catalogs = {
     ko: {
         common: koCommon,
         shell: koShell,
+        onboarding: koShell.onboarding,
         dashboard: koDashboard,
         library: koLibrary,
         recording: koRecording,
@@ -103,6 +107,7 @@ type Leaves<T, Prefix extends string = ""> = {
 export type MessageKey =
     | Leaves<typeof enCommon, "common.">
     | Leaves<typeof enShell, "shell.">
+    | Leaves<typeof enShell.onboarding, "onboarding.">
     | Leaves<typeof enDashboard, "dashboard.">
     | Leaves<typeof enLibrary, "library.">
     | Leaves<typeof enRecording, "recording.">

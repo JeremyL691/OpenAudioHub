@@ -118,7 +118,7 @@ export async function configureAccount(api: APIRequestContext): Promise<void> {
     const add = await api.post("/api/settings/ai/providers", {
         data: {
             provider: "Custom",
-            apiKey: "contract-local-key",
+            apiKey: process.env.OAH_FAKE_AI_KEY ?? `local-${Date.now()}`,
             baseUrl: fakeAiBaseUrl,
             defaultModel: "fake-whisper-1",
             isDefaultTranscription: true,

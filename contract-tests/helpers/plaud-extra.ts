@@ -15,8 +15,10 @@ export const nowSec = () => Math.floor(Date.now() / 1000);
 /** Starts the fake Plaud API unless one already answers. Returns the child process to stop, or null. */
 export async function ensureFakePlaud(): Promise<ChildProcess | null> {
     if (await fakeUp()) return null;
-    const port = new URL(FAKE_PLAUD_URL).port;
-    const child = spawn(process.execPath, [resolve(__dirname, "../fakes/fake-plaud.mjs"), port], { stdio: "ignore" });
+    const child = spawn("node", ["fakes/fake-plaud.mjs", "3298"], {
+        cwd: resolve(__dirname, ".."),
+        stdio: "ignore",
+    });
     for (let i = 0; i < 60; i++) {
         if (await fakeUp()) return child;
         await new Promise((r) => setTimeout(r, 250));

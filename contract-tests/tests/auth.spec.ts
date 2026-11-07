@@ -277,10 +277,11 @@ test.describe("auth", () => {
         expect((await signUp(who)).status).toBe(200);
         // The sign-in limiter allows 10 requests per minute per IP.
         const ip = randomIp();
+        const wrongInput = `wrong-${Date.now()}`;
         let last: Res | undefined;
         for (let i = 0; i < 12 && last?.status !== 429; i++) {
             last = await call("POST", "/api/auth/sign-in/email", {
-                body: { email: who.email, password: "wrong-password-1" },
+                body: { email: who.email, password: wrongInput },
                 ip,
             });
         }

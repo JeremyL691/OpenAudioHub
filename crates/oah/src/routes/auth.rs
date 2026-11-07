@@ -52,13 +52,13 @@ impl UserRow {
     }
 }
 
-const USER_COLUMNS: &str = "id, email, name, email_verified, created_at, updated_at";
-
 async fn user_by_id(state: &AppState, id: &str) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as(&format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?"))
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await
+    sqlx::query_as(
+        "SELECT id, email, name, email_verified, created_at, updated_at FROM users WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
 }
 
 fn limit(state: &AppState, name: &str, ip: &str, max: u32) -> ApiResult<()> {
@@ -499,24 +499,31 @@ pub async fn request_password_reset(
     }
     if state.config.smtp.configured() {
         let callback = callback_url(body.redirect_to.as_deref());
-        let worker = state.clone();
-        tokio::spawn(async move {
-            if let Err(error) = issue_reset(&worker, &email, &callback).await {
-                tracing::warn!(code = error.code, "password reset email not prepared");
-            }
-        });
+        if let Ok(Some(link)) = prepare_reset_link(&state, &email, &callback).await {
+            let config = state.config.clone();
+            let mail = notify::reset_password_email(&link);
+            tokio::spawn(async move {
+                notify::send_soft(&config, &email, &mail).await;
+            });
+        } else {
+            tracing::warn!("password reset email not prepared");
+        }
     }
     Ok(Json(json!({ "status": true, "message": RESET_SENT })))
 }
 
-/// Creates a reset token for the account with this email and sends the link. Unknown emails do nothing.
-async fn issue_reset(state: &AppState, email: &str, callback: &str) -> ApiResult<()> {
+/// Creates a reset token for the account with this email and returns the reset link. Unknown emails return `None`.
+async fn prepare_reset_link(
+    state: &AppState,
+    email: &str,
+    callback: &str,
+) -> ApiResult<Option<String>> {
     let row: Option<(String,)> = sqlx::query_as("SELECT id FROM users WHERE email = ?")
         .bind(email)
         .fetch_optional(&state.db)
         .await?;
     let Some((user_id,)) = row else {
-        return Ok(());
+        return Ok(None);
     };
     let token = create_reset_token(state, &user_id).await?;
     let link = format!(
@@ -524,8 +531,7 @@ async fn issue_reset(state: &AppState, email: &str, callback: &str) -> ApiResult
         state.config.app_url,
         encode_query(callback)
     );
-    notify::send_soft(&state.config, email, &notify::reset_password_email(&link)).await;
-    Ok(())
+    Ok(Some(link))
 }
 
 /// Stores a new one-time token (hashed) valid for one hour and returns the token itself.

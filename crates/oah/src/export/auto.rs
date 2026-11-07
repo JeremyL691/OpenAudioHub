@@ -110,11 +110,11 @@ async fn write_audio(
 
 /// Runs auto export for every user that has it on and a folder set.
 async fn auto_export(state: &AppState) -> ApiResult<()> {
-    const ON: &str = "json_extract(data, '$.autoExport') = 1";
-    let users: Vec<String> =
-        sqlx::query_scalar(&format!("SELECT user_id FROM user_settings WHERE {ON}"))
-            .fetch_all(&state.db)
-            .await?;
+    let users: Vec<String> = sqlx::query_scalar(
+        "SELECT user_id FROM user_settings WHERE json_extract(data, '$.autoExport') = 1",
+    )
+    .fetch_all(&state.db)
+    .await?;
     for user_id in users {
         let settings = effective(state, &user_id).await?;
         let Some(folder) = settings

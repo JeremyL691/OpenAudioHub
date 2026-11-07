@@ -22,7 +22,7 @@ use crate::routes::recordings::media;
 use crate::transcribe::{self, Options, Saved};
 
 /// Chunk sends that run at once (stt_concurrency).
-const STT_CONCURRENCY: usize = 2;
+const STT_CONCURRENCY: usize = 3;
 /// Tries per chunk before it fails.
 const CHUNK_ATTEMPTS: u32 = 6;
 /// The provider's per-chunk limits (170 s and 50 MIB).
@@ -70,12 +70,6 @@ type Step<T> = Result<T, Stop>;
 fn guard(wrote: bool) -> Step<()> {
     if wrote { Ok(()) } else { Err(Stop::LeaseLost) }
 }
-
-/// The condition every chunk write carries: the job is still running under the generation
-/// this worker claimed. A chunk is shared state, so a worker whose lease was taken over must
-/// not touch it: the run that replaced it would read the old result as its own.
-const STILL_OURS: &str =
-    "EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)";
 
 impl From<sqlx::Error> for Stop {
     fn from(e: sqlx::Error) -> Self {
@@ -807,6 +801,16 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
                 store_success(db, ctx.lease, index, &response).await?;
                 break;
             }
+            Err(e) if e.code == "AI_EMPTY_RESPONSE" => {
+                let response = serde_json::to_string(&merge::Stored {
+                    text: String::new(),
+                    language: ctx.options.language.clone(),
+                    segments: Vec::new(),
+                })
+                .map_err(|e| Stop::Retry(e.to_string()))?;
+                store_success(db, ctx.lease, index, &response).await?;
+                break;
+            }
             Err(e) if e.retryable && attempt < CHUNK_ATTEMPTS => {
                 tokio::time::sleep(retry_delay(attempt)).await;
                 check_cancel(db, &ctx.lease.id).await?;
@@ -824,10 +828,10 @@ async fn transcribe_one(ctx: &Ctx<'_>, index: i64, start: u64, end: u64) -> Step
 /// Marks a chunk as being sent. Only the worker that holds the lease can start a send, so a
 /// replaced run cannot make a chunk look busy to the run that owns it.
 async fn mark_running(db: &SqlitePool, lease: &Lease, index: i64, attempt: u32) -> Step<()> {
-    let wrote = sqlx::query(&format!(
+    let wrote = sqlx::query(
         "UPDATE pipeline_chunks SET state = 'running', attempts = ? \
-         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
-    ))
+         WHERE job_id = ? AND idx = ? AND EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)",
+    )
     .bind(i64::from(attempt))
     .bind(&lease.id)
     .bind(index)
@@ -843,10 +847,10 @@ async fn mark_running(db: &SqlitePool, lease: &Lease, index: i64, attempt: u32) 
 /// Stores a finished chunk. The response is what the next run would reuse, so it is written
 /// only while this worker still holds the lease.
 async fn store_success(db: &SqlitePool, lease: &Lease, index: i64, response: &str) -> Step<()> {
-    let wrote = sqlx::query(&format!(
+    let wrote = sqlx::query(
         "UPDATE pipeline_chunks SET state = 'completed', response = ?, error_code = NULL, error_message = NULL \
-         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
-    ))
+         WHERE job_id = ? AND idx = ? AND EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)",
+    )
     .bind(response)
     .bind(&lease.id)
     .bind(index)
@@ -866,10 +870,10 @@ async fn record_failure(
     code: &str,
     message: &str,
 ) -> Step<()> {
-    let wrote = sqlx::query(&format!(
+    let wrote = sqlx::query(
         "UPDATE pipeline_chunks SET state = 'failed', error_code = ?, error_message = ? \
-         WHERE job_id = ? AND idx = ? AND {STILL_OURS}"
-    ))
+         WHERE job_id = ? AND idx = ? AND EXISTS (SELECT 1 FROM jobs WHERE id = ? AND state = 'running' AND lease_gen = ?)",
+    )
     .bind(code)
     .bind(truncate(message.to_owned()))
     .bind(&lease.id)

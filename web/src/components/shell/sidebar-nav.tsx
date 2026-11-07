@@ -49,19 +49,21 @@ export interface SidebarNavProps {
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
     const { pathname } = useLocation();
     const [params] = useSearchParams();
-    const { recordings } = useShellData();
+    const { recordings, plaudEnabled } = useShellData();
     const { t } = useI18n();
     const counts = recordings ? collectionCounts(recordings) : null;
     const collection = params.get("collection");
     const onLibrary = pathname === "/recordings";
     const libraryActive = onLibrary && !collection;
 
-    const collections: { id: "starred" | "recent" | "plaud" | "uploaded"; label: string; icon: LucideIcon; count: number | null }[] = [
-        { id: "starred", label: t("shell.nav.starred"), icon: Star, count: counts?.starred ?? null },
-        { id: "recent", label: t("shell.nav.last7Days"), icon: Clock, count: counts?.recent ?? null },
-        { id: "plaud", label: t("shell.nav.fromPlaud"), icon: Mic, count: counts?.plaud ?? null },
-        { id: "uploaded", label: t("shell.nav.uploaded"), icon: Upload, count: counts?.uploaded ?? null },
-    ];
+    const collections: { id: "starred" | "recent" | "plaud" | "uploaded"; label: string; icon: LucideIcon; count: number | null }[] = (
+        [
+            { id: "starred", label: t("shell.nav.starred"), icon: Star, count: counts?.starred ?? null },
+            { id: "recent", label: t("shell.nav.last7Days"), icon: Clock, count: counts?.recent ?? null },
+            { id: "plaud", label: t("shell.nav.fromPlaud"), icon: Mic, count: counts?.plaud ?? null },
+            { id: "uploaded", label: t("shell.nav.uploaded"), icon: Upload, count: counts?.uploaded ?? null },
+        ] as { id: "starred" | "recent" | "plaud" | "uploaded"; label: string; icon: LucideIcon; count: number | null }[]
+    ).filter((item) => plaudEnabled || item.id !== "plaud");
 
     return (
         <nav aria-label={t("shell.nav.mainNavigation")} data-testid="app-sidebar" className="flex h-full min-h-0 flex-col overflow-y-auto">

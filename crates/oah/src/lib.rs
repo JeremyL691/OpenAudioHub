@@ -9,6 +9,7 @@ pub mod error;
 pub mod export;
 pub mod ids;
 pub mod jobs;
+pub mod local_folder;
 pub mod notify;
 pub mod pipeline;
 pub mod plaud;
@@ -86,6 +87,7 @@ pub fn start_workers(state: &AppState) {
     plaud::spawn(state);
     export::spawn(state);
     zip_merge::spawn(state);
+    local_folder::spawn(state);
     routes::recordings::spawn_waveform_backfill(state);
 }
 
@@ -98,6 +100,7 @@ pub fn app(state: AppState) -> Router {
         .merge(plaud::router())
         .merge(export::router())
         .merge(zip_merge::router())
+        .merge(local_folder::router())
         .merge(chat::routes::router())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

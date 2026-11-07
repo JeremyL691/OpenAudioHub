@@ -117,6 +117,12 @@
         "finishTitle": "一切就绪",
         "finishBody": "上传一条录音或从 Plaud 同步，即可在仪表盘看到它。之后可以随时在设置中修改。",
         "getStarted": "开始使用",
-        "completeFailed": "无法完成引导"
+        "completeFailed": "无法完成引导",
+        "useLocalOnly": "纯本地使用（不连接 Plaud 账户）",
+        "localOnlyEnabled": "已启用纯本地模式。",
+        "plaud": {
+            "useLocalOnly": "纯本地使用（不连接 Plaud 账户）",
+            "localOnlyEnabled": "已启用纯本地模式。"
+        }
     }
 }

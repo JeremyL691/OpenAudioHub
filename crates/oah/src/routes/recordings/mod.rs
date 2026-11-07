@@ -59,10 +59,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/recordings/{id}/peaks", post(peaks))
 }
 
-const COLUMNS: &str = "id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
-    filesize, file_md5, storage_type, storage_path, auto_export_path, downloaded_at, plaud_version, \
-    timezone, zonemins, scene, is_trash, waveform_peaks, starred_at, created_at, updated_at";
-
 #[derive(sqlx::FromRow)]
 struct Row {
     id: String,
@@ -173,14 +169,16 @@ fn transcript_json(key: &FieldKey, t: TranscriptRow) -> ApiResult<Value> {
 }
 
 async fn list_rows(db: &SqlitePool, key: &FieldKey, user_id: &str) -> ApiResult<Vec<Value>> {
-    let sql = format!(
-        "SELECT {COLUMNS} FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
-         ORDER BY start_time DESC, id DESC"
-    );
-    let rows = sqlx::query_as::<_, Row>(&sql)
-        .bind(user_id)
-        .fetch_all(db)
-        .await?;
+    let rows = sqlx::query_as::<_, Row>(
+        "SELECT id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+         filesize, file_md5, storage_type, storage_path, auto_export_path, downloaded_at, plaud_version, \
+         timezone, zonemins, scene, is_trash, waveform_peaks, starred_at, created_at, updated_at \
+         FROM recordings WHERE user_id = ? AND deleted_at IS NULL \
+         ORDER BY start_time DESC, id DESC",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await?;
     // Status for the list pills and filters, in three queries rather than one per row.
     let transcribed: HashSet<String> =
         sqlx::query_scalar("SELECT DISTINCT recording_id FROM transcriptions WHERE user_id = ?")
@@ -223,28 +221,33 @@ async fn list_rows(db: &SqlitePool, key: &FieldKey, user_id: &str) -> ApiResult<
 }
 
 async fn find(state: &AppState, user_id: &str, id: &str) -> ApiResult<Row> {
-    let sql = format!(
-        "SELECT {COLUMNS} FROM recordings WHERE id = ? AND user_id = ? AND deleted_at IS NULL"
-    );
-    sqlx::query_as::<_, Row>(&sql)
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or_else(not_found)
+    sqlx::query_as::<_, Row>(
+        "SELECT id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+         filesize, file_md5, storage_type, storage_path, auto_export_path, downloaded_at, plaud_version, \
+         timezone, zonemins, scene, is_trash, waveform_peaks, starred_at, created_at, updated_at \
+         FROM recordings WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(not_found)
 }
 
 /// Live recordings among `ids`, in no particular order.
 async fn fetch_many(db: &SqlitePool, user_id: &str, ids: &[String]) -> ApiResult<Vec<Row>> {
-    let marks = vec!["?"; ids.len()].join(", ");
-    let sql = format!(
-        "SELECT {COLUMNS} FROM recordings WHERE user_id = ? AND deleted_at IS NULL AND id IN ({marks})"
-    );
-    let mut query = sqlx::query_as::<_, Row>(&sql).bind(user_id);
-    for id in ids {
-        query = query.bind(id.as_str());
-    }
-    Ok(query.fetch_all(db).await?)
+    let ids_json = serde_json::to_string(ids).map_err(AppError::internal)?;
+    let rows = sqlx::query_as::<_, Row>(
+        "SELECT id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+         filesize, file_md5, storage_type, storage_path, auto_export_path, downloaded_at, plaud_version, \
+         timezone, zonemins, scene, is_trash, waveform_peaks, starred_at, created_at, updated_at \
+         FROM recordings WHERE user_id = ? AND deleted_at IS NULL AND id IN (SELECT value FROM json_each(?))",
+    )
+    .bind(user_id)
+    .bind(ids_json)
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
 }
 
 /// Keeps the requested order and drops ids that were not found.
@@ -436,27 +439,29 @@ impl Drop for Scratch {
     }
 }
 
-struct NewRecording<'a> {
-    id: &'a str,
-    user_id: &'a str,
-    plaud_file_id: &'a str,
-    title: &'a str,
-    duration: i64,
-    start: i64,
-    filesize: i64,
-    file_md5: &'a str,
-    storage_type: &'a str,
-    storage_path: &'a str,
-    title_source: &'a str,
-    auto_export_eligible: bool,
+pub(crate) struct NewRecording<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) user_id: &'a str,
+    pub(crate) plaud_file_id: &'a str,
+    pub(crate) title: &'a str,
+    pub(crate) duration: i64,
+    pub(crate) start: i64,
+    pub(crate) filesize: i64,
+    pub(crate) file_md5: &'a str,
+    pub(crate) storage_type: &'a str,
+    pub(crate) storage_path: &'a str,
+    pub(crate) title_source: &'a str,
+    pub(crate) auto_export_eligible: bool,
+    pub(crate) waveform_peaks: Option<&'a str>,
 }
 
-async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResult<()> {
+pub(crate) async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResult<()> {
     let now = now_ms();
     sqlx::query(
         "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, \
          end_time, filesize, file_md5, storage_type, storage_path, downloaded_at, plaud_version, is_trash, \
-         created_at, updated_at, title_source, auto_export_eligible) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?, ?, ?)",
+         waveform_peaks, created_at, updated_at, title_source, auto_export_eligible) \
+         VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', 0, ?, ?, ?, ?, ?)",
     )
     .bind(r.id)
     .bind(r.user_id)
@@ -470,6 +475,7 @@ async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResu
     .bind(r.storage_type)
     .bind(r.storage_path)
     .bind(now)
+    .bind(r.waveform_peaks)
     .bind(now)
     .bind(now)
     .bind(r.title_source)
@@ -477,6 +483,65 @@ async fn insert(db: &SqlitePool, key: &FieldKey, r: NewRecording<'_>) -> ApiResu
     .execute(db)
     .await?;
     Ok(())
+}
+
+fn sanitize_local_folder_stem(title: &str) -> String {
+    let mut mapped = String::with_capacity(title.len());
+    for c in title.chars() {
+        if c.is_control() || "/\\:*?\"<>|".contains(c) {
+            mapped.push('_');
+        } else {
+            mapped.push(c);
+        }
+    }
+    let trimmed = mapped.trim_matches(|c: char| c.is_whitespace() || c == '.');
+    let capped: String = trimmed.chars().take(200).collect();
+    let capped = capped.trim_matches(|c: char| c.is_whitespace() || c == '.');
+    if capped.is_empty() {
+        "recording".to_owned()
+    } else {
+        capped.to_owned()
+    }
+}
+
+pub(crate) async fn store_in_local_folder(
+    folder: &Path,
+    title: &str,
+    ext: &str,
+    staged: &Path,
+) -> Result<PathBuf, AppError> {
+    tokio::fs::create_dir_all(folder)
+        .await
+        .map_err(AppError::internal)?;
+    let stem = sanitize_local_folder_stem(title);
+    let stem = stem
+        .strip_suffix(&format!(".{ext}"))
+        .or_else(|| stem.strip_suffix(&format!(".{}", ext.to_ascii_uppercase())))
+        .unwrap_or(&stem);
+    let mut n = 1usize;
+    let dest = loop {
+        let name = if n == 1 {
+            format!("{stem}.{ext}")
+        } else {
+            format!("{stem} ({n}).{ext}")
+        };
+        let candidate = folder.join(name);
+        if !tokio::fs::try_exists(&candidate).await.unwrap_or(false) {
+            break candidate;
+        }
+        n += 1;
+    };
+    let tmp = folder.join(format!(".local-{}.partial", ids::new_id()));
+    if let Err(e) = tokio::fs::copy(staged, &tmp).await {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(AppError::internal(e));
+    }
+    if let Err(e) = tokio::fs::rename(&tmp, &dest).await {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        return Err(AppError::internal(e));
+    }
+    let _ = tokio::fs::remove_file(staged).await;
+    Ok(dest)
 }
 
 // ---- list, detail, edit, delete, star ----
@@ -929,12 +994,40 @@ async fn upload(
     let title_source = if by_date { "date" } else { "original" };
     let eligible = crate::export::auto::auto_export_eligible(&state, &user.id).await;
     let plaud_file_id = format!("uploaded-{id}");
-    let stored = format!("{}/{plaud_file_id}.{ext}", user.id);
-    let storage_type = state.storage.active_type();
-    state
-        .storage
-        .store_staged(&stored, &temp, Some(mime_for(&ext)))
-        .await?;
+    let local_folder = if state.storage.active_type() == "local" {
+        if let Some(f) = settings
+            .get("localStorageFolder")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            && tokio::fs::metadata(f).await.is_ok_and(|m| m.is_dir())
+        {
+            Some(PathBuf::from(f))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let peaks = if local_folder.is_some() {
+        media::compute_peaks(&state.config.ffmpeg, &temp, 256)
+            .await
+            .and_then(|p| serde_json::to_string(&p).ok())
+    } else {
+        None
+    };
+    let (storage_type, stored, eligible) = if let Some(folder) = local_folder {
+        let dest = store_in_local_folder(&folder, &title, &ext, &temp).await?;
+        ("local_folder", dest.to_string_lossy().into_owned(), false)
+    } else {
+        let stored = format!("{}/{plaud_file_id}.{ext}", user.id);
+        let storage_type = state.storage.active_type();
+        state
+            .storage
+            .store_staged(&stored, &temp, Some(mime_for(&ext)))
+            .await?;
+        (storage_type, stored, eligible)
+    };
 
     let file_md5 = hex::encode(md5::Digest::finalize(md5));
     let saved = insert(
@@ -953,6 +1046,7 @@ async fn upload(
             storage_path: &stored,
             title_source,
             auto_export_eligible: eligible,
+            waveform_peaks: peaks.as_deref(),
         },
     )
     .await;
@@ -1057,6 +1151,38 @@ async fn peaks(
 ) -> ApiResult<Json<Value>> {
     const SHAPE: &str = "Expected { peaks: number[] }";
     let parsed: Value = serde_json::from_slice(&body).map_err(|_| invalid(SHAPE))?;
+    if parsed.get("generate") == Some(&Value::Bool(true)) {
+        let row = find(&state, &user.id, &id).await?;
+        if let Some(existing) = row
+            .waveform_peaks
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<Vec<f64>>(s).ok())
+            .filter(|v| !v.is_empty())
+        {
+            return Ok(Json(json!({ "stored": false, "peaks": existing })));
+        }
+        let source = state
+            .storage
+            .materialize(&row.storage_type, &row.storage_path)
+            .await?;
+        let computed = media::compute_peaks(&state.config.ffmpeg, source.path(), 256)
+            .await
+            .ok_or_else(|| AppError::internal("Could not generate waveform"))?;
+        let stored = sqlx::query(
+            "UPDATE recordings SET waveform_peaks = ?, updated_at = ? \
+             WHERE id = ? AND user_id = ? AND deleted_at IS NULL AND waveform_peaks IS NULL",
+        )
+        .bind(serde_json::to_string(&computed).map_err(AppError::internal)?)
+        .bind(now_ms())
+        .bind(id.as_str())
+        .bind(user.id.as_str())
+        .execute(&state.db)
+        .await?;
+        return Ok(Json(json!({
+            "stored": stored.rows_affected() == 1,
+            "peaks": computed,
+        })));
+    }
     let values = parsed
         .get("peaks")
         .and_then(Value::as_array)
@@ -1547,16 +1673,41 @@ async fn merge(
         .await
         .map_err(AppError::internal)?
         .len();
+    let peaks = media::compute_peaks(&state.config.ffmpeg, &temp, 256)
+        .await
+        .and_then(|p| serde_json::to_string(&p).ok());
     let name = match title {
         Some(t) => t,
         None => format!("{} (merged)", title_of(&state, &rows[0])?),
     };
-    let stored = format!("{}/merged-{id}.ogg", user.id);
-    let storage_type = state.storage.active_type();
-    state
-        .storage
-        .store_staged(&stored, &temp, Some("audio/ogg"))
-        .await?;
+    let settings = crate::routes::settings::effective(&state, &user.id).await?;
+    let local_folder = if state.storage.active_type() == "local" {
+        if let Some(f) = settings
+            .get("localStorageFolder")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            && tokio::fs::metadata(f).await.is_ok_and(|m| m.is_dir())
+        {
+            Some(PathBuf::from(f))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let (storage_type, stored) = if let Some(folder) = local_folder {
+        let dest = store_in_local_folder(&folder, &name, "ogg", &temp).await?;
+        ("local_folder", dest.to_string_lossy().into_owned())
+    } else {
+        let stored = format!("{}/merged-{id}.ogg", user.id);
+        let storage_type = state.storage.active_type();
+        state
+            .storage
+            .store_staged(&stored, &temp, Some("audio/ogg"))
+            .await?;
+        (storage_type, stored)
+    };
 
     let start = rows
         .iter()
@@ -1583,6 +1734,7 @@ async fn merge(
             storage_path: &stored,
             title_source,
             auto_export_eligible: eligible,
+            waveform_peaks: peaks.as_deref(),
         },
     )
     .await;
@@ -1833,6 +1985,7 @@ mod tests {
                 storage_path: &storage,
                 title_source: "original",
                 auto_export_eligible: false,
+                waveform_peaks: None,
             };
             insert(&db, &key, new).await.unwrap();
         }
@@ -1916,6 +2069,7 @@ mod tests {
                     storage_path: key,
                     title_source: "original",
                     auto_export_eligible: false,
+                    waveform_peaks: None,
                 },
             )
             .await

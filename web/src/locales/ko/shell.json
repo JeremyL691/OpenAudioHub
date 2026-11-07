@@ -117,6 +117,12 @@
         "finishTitle": "준비 완료",
         "finishBody": "녹음을 업로드하거나 Plaud에서 동기화하면 대시보드에 표시됩니다. 나중에 설정에서 언제든 변경할 수 있습니다.",
         "getStarted": "시작하기",
-        "completeFailed": "설정을 완료하지 못했습니다"
+        "completeFailed": "설정을 완료하지 못했습니다",
+        "useLocalOnly": "로컬 오디오만 사용(Plaud 연결 안 함)",
+        "localOnlyEnabled": "로컬 전용 모드가 활성화되었습니다.",
+        "plaud": {
+            "useLocalOnly": "로컬 오디오만 사용(Plaud 연결 안 함)",
+            "localOnlyEnabled": "로컬 전용 모드가 활성화되었습니다."
+        }
     }
 }

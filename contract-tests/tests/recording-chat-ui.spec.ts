@@ -10,7 +10,7 @@ async function preparedAccount(browser: Browser): Promise<{ page: Page; id: stri
     const created = await api.post("/api/settings/ai/providers", {
         data: {
             provider: "Custom",
-            apiKey: "contract-chat-ui-key",
+            apiKey: randomUUID(),
             baseUrl: fakeAiBaseUrl,
             defaultModel: "fake-chat-1",
             isDefaultTranscription: true,

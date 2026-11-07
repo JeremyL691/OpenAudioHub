@@ -17,7 +17,7 @@ export function CommandPalette() {
     const { pathname } = useLocation();
     const [params] = useSearchParams();
     const navigate = useNavigate();
-    const { recordings, syncNow, updateSettings, openUploadPicker } = useShellData();
+    const { recordings, plaudEnabled, syncNow, updateSettings, openUploadPicker } = useShellData();
     const selectedId = params.get("id");
     const [themeNow] = useTheme();
     const { t } = useI18n();
@@ -96,9 +96,11 @@ export function CommandPalette() {
                             <PaletteItem icon={Upload} value="upload audio" onSelect={() => run(openUploadPicker)}>
                                 {t("shell.palette.uploadAudio")}
                             </PaletteItem>
-                            <PaletteItem icon={RefreshCw} value="sync device" onSelect={() => run(() => void syncNow())}>
-                                {t("shell.palette.syncDevice")}
-                            </PaletteItem>
+                            {plaudEnabled ? (
+                                <PaletteItem icon={RefreshCw} value="sync device" onSelect={() => run(() => void syncNow())}>
+                                    {t("shell.palette.syncDevice")}
+                                </PaletteItem>
+                            ) : null}
                             <PaletteItem
                                 icon={Settings}
                                 value="open settings settings"
