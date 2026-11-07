@@ -35,6 +35,8 @@ ignore = [
     "RUSTSEC-2026-0387", # timing variability in constant-time operations
     # Build-time only, through a macro expansion.
     "RUSTSEC-2024-0370", # proc-macro-error is unmaintained
+    # pin-utils 0.1.1 is archived upstream and pulled in transitively by aws-smithy-http and futures-util.
+    "RUSTSEC-2026-0441", # pin-utils is unmaintained
 ]
 
 [licenses]
