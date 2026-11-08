@@ -105,7 +105,7 @@ ZIP archive auto-merge runs in the desktop build when `zipAutoMerge` is `true` a
   4. the ZIP entry's `last_modified` timestamp when it is not the default DOS epoch (`1980-01-01 00:00:00`);
   5. natural numeric filename order.
 - Segments are merged into a single `.m4a` file (`ffmpeg -f concat` stream copy with `-movflags +faststart`, falling back to AAC re-encoding when segments differ in stream parameters).
-- The merged audio is stored in the user's OpenAudioHub library (`device_sn = "local"`, `plaud_file_id = "zip-<sha256>"`) and also written atomically to `zipExportFolder` (or `zipWatchFolder` when `zipExportFolder` is `null`).
+- The merged audio is stored in the user's OpenAudioHub library (`device_sn = "local"`, `plaud_file_id = "zip-<sha256>"`) and also written atomically to `zipExportFolder` (or `zipWatchFolder` when `zipExportFolder` is `null`). When the target export folder is the user's `localStorageFolder`, the merged `.m4a` file in that folder backs the Library recording directly (`storage_type = "local_folder"`) instead of storing a second copy, and AI title renames update both the exported file and the recording's storage path.
 - Naming (`zipTitleMode`):
   - `original`: derived from the chronological span of the segments (`YYYY-MM-DD_HH-MM-SS_to_HH-MM-SS` on one day, or `YYYY-MM-DD_HH-MM-SS_to_YYYY-MM-DD_HH-MM-SS` across days), or the `.zip` stem when filenames carry no timestamp span.
   - `date`: the earliest segment's recording date in local time (`YYYY-MM-DD`).

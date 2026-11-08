@@ -147,22 +147,35 @@ async fn merge_route(
 
 async fn auto_pass(state: &AppState) -> ApiResult<()> {
     let users: Vec<String> = sqlx::query_scalar(
-        "SELECT user_id FROM user_settings WHERE json_extract(data, '$.zipAutoMerge') = 1",
+        "SELECT user_id FROM user_settings WHERE json_extract(data, '$.zipAutoMerge') = 1 OR json_extract(data, '$.zipTitleMode') = 'ai'",
     )
     .fetch_all(&state.db)
     .await?;
     for user_id in users {
         let settings = effective(state, &user_id).await?;
-        let Some(watch_folder) = settings
+        let auto_merge = settings.get("zipAutoMerge") == Some(&Value::Bool(true));
+        let watch_folder = settings
             .get("zipWatchFolder")
             .and_then(Value::as_str)
             .filter(|f| !f.is_empty())
-            .map(PathBuf::from)
-        else {
-            continue;
-        };
-        if let Err(e) = scan_user(state, &user_id, &watch_folder, &settings).await {
-            tracing::warn!(user = %user_id, error = %e.message, "zip auto-merge pass failed for user");
+            .map(PathBuf::from);
+        if auto_merge {
+            if let Some(watch_folder) = watch_folder
+                && let Err(e) = scan_user(state, &user_id, &watch_folder, &settings).await
+            {
+                tracing::warn!(user = %user_id, error = %e.message, "zip auto-merge pass failed for user");
+            }
+        } else if settings.get("zipTitleMode").and_then(Value::as_str) == Some("ai") {
+            let export_folder = settings
+                .get("zipExportFolder")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .or(watch_folder);
+            if let Some(export_folder) = export_folder {
+                let _guard = SCAN_LOCK.lock().await;
+                let _ = rename_ai_exports(state, &user_id, &export_folder).await;
+            }
         }
     }
     Ok(())
@@ -204,6 +217,16 @@ pub async fn scan_user_with_options(
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| watch_folder.to_path_buf());
+    let local_storage_folder = if state.storage.active_type() == "local" {
+        settings
+            .get("localStorageFolder")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+    } else {
+        None
+    };
     let title_mode = settings
         .get("zipTitleMode")
         .and_then(Value::as_str)
@@ -276,6 +299,7 @@ pub async fn scan_user_with_options(
             user_id,
             &zip_path,
             &export_folder,
+            local_storage_folder.as_deref(),
             title_mode,
             delete_zip,
             duplicate_action,
@@ -740,6 +764,20 @@ async fn remove_existing_import(
     old_rec_id: Option<&str>,
     old_encrypted_export_path: Option<&str>,
 ) {
+    let _folder_guard = crate::local_folder::lock().await;
+    if let Some(enc_path) = old_encrypted_export_path {
+        let plain = state
+            .config
+            .field_key
+            .decrypt(enc_path)
+            .unwrap_or_else(|_| enc_path.to_owned());
+        if !plain.is_empty() {
+            let p = Path::new(&plain);
+            if p.is_file() {
+                let _ = tokio::fs::remove_file(p).await;
+            }
+        }
+    }
     if let Some(rec_id) = old_rec_id {
         if let Ok(Some((storage_type, storage_path))) = sqlx::query_as::<_, (String, String)>(
             "SELECT storage_type, storage_path FROM recordings WHERE id = ? AND user_id = ?",
@@ -765,19 +803,6 @@ async fn remove_existing_import(
             .execute(&state.db)
             .await;
     }
-    if let Some(enc_path) = old_encrypted_export_path {
-        let plain = state
-            .config
-            .field_key
-            .decrypt(enc_path)
-            .unwrap_or_else(|_| enc_path.to_owned());
-        if !plain.is_empty() {
-            let p = Path::new(&plain);
-            if p.is_file() {
-                let _ = tokio::fs::remove_file(p).await;
-            }
-        }
-    }
     let _ = sqlx::query("DELETE FROM zip_imports WHERE user_id = ? AND zip_sha256 = ?")
         .bind(user_id)
         .bind(zip_sha)
@@ -785,11 +810,13 @@ async fn remove_existing_import(
         .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_zip(
     state: &AppState,
     user_id: &str,
     zip_path: &Path,
     export_folder: &Path,
+    local_storage_folder: Option<&Path>,
     title_mode: &str,
     delete_zip: bool,
     duplicate_action: DuplicateAction,
@@ -909,38 +936,53 @@ async fn process_zip(
         _ => (orig_title, "original"),
     };
 
-    // 1. Write the merged file to the target export folder first via atomic rename.
+    let peaks = media::compute_peaks(&state.config.ffmpeg, &merged_temp, 256)
+        .await
+        .and_then(|p| serde_json::to_string(&p).ok());
+
     tokio::fs::create_dir_all(export_folder)
         .await
         .map_err(|e| format!("Could not create export folder: {e}"))?;
-    let export_stem = strip_m4a_ext(&safe_name(&title, &work_id));
-    let export_dest = unique_path(export_folder, &export_stem, "m4a").await;
+    let use_local_folder = state.storage.active_type() == "local"
+        && local_storage_folder.is_some_and(|lf| crate::local_folder::same_dir(export_folder, lf));
+    let rec_id = ids::new_id();
+    let plaud_file_id = format!("zip-{rec_id}");
+    let default_stored_key = format!("{user_id}/{plaud_file_id}.m4a");
     let export_tmp = export_folder.join(format!(".zip-{}.partial", ids::new_id()));
     if let Err(e) = tokio::fs::copy(&merged_temp, &export_tmp).await {
         let _ = tokio::fs::remove_file(&export_tmp).await;
         return Err(format!("Could not write exported file: {e}"));
     }
+    if !use_local_folder
+        && let Err(e) = state
+            .storage
+            .store_staged(&default_stored_key, &merged_temp, Some("audio/mp4"))
+            .await
+    {
+        let _ = tokio::fs::remove_file(&export_tmp).await;
+        return Err(e.to_string());
+    }
+
+    // 1. Finalize the exported file in the target export folder and insert the DB rows under the folder lock.
+    let _folder_guard = crate::local_folder::lock().await;
+    let export_stem = strip_m4a_ext(&safe_name(&title, &work_id));
+    let export_dest = unique_path(export_folder, &export_stem, "m4a").await;
     if let Err(e) = tokio::fs::rename(&export_tmp, &export_dest).await {
         let _ = tokio::fs::remove_file(&export_tmp).await;
+        if !use_local_folder {
+            let _ = state
+                .storage
+                .delete(state.storage.active_type(), &default_stored_key)
+                .await;
+        }
         return Err(format!("Could not finalize exported file: {e}"));
     }
 
-    // 2. Store the merged audio in OpenAudioHub storage and insert the recording + import rows.
-    let peaks = media::compute_peaks(&state.config.ffmpeg, &merged_temp, 256)
-        .await
-        .and_then(|p| serde_json::to_string(&p).ok());
-    let rec_id = ids::new_id();
-    let plaud_file_id = format!("zip-{rec_id}");
-    let stored_key = format!("{user_id}/{plaud_file_id}.m4a");
-    let storage_type = state.storage.active_type();
-    if let Err(e) = state
-        .storage
-        .store_staged(&stored_key, &merged_temp, Some("audio/mp4"))
-        .await
-    {
-        let _ = tokio::fs::remove_file(&export_dest).await;
-        return Err(e.to_string());
-    }
+    let (storage_type, stored_key) = if use_local_folder {
+        ("local_folder", export_dest.to_string_lossy().into_owned())
+    } else {
+        (state.storage.active_type(), default_stored_key)
+    };
 
     let now = now_ms();
     let zip_filename = zip_path
@@ -954,9 +996,16 @@ async fn process_zip(
         .field_key
         .encrypt(&export_dest.to_string_lossy());
 
-    let mut tx = crate::db::begin_write(&state.db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut tx = match crate::db::begin_write(&state.db).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            if !use_local_folder {
+                let _ = state.storage.delete(storage_type, &stored_key).await;
+            }
+            let _ = tokio::fs::remove_file(&export_dest).await;
+            return Err(e.to_string());
+        }
+    };
     let insert_rec = sqlx::query(
         "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, \
          end_time, filesize, file_md5, storage_type, storage_path, downloaded_at, plaud_version, is_trash, \
@@ -984,7 +1033,9 @@ async fn process_zip(
 
     if let Err(e) = insert_rec {
         let _ = tx.rollback().await;
-        let _ = state.storage.delete(storage_type, &stored_key).await;
+        if !use_local_folder {
+            let _ = state.storage.delete(storage_type, &stored_key).await;
+        }
         let _ = tokio::fs::remove_file(&export_dest).await;
         return Err(e.to_string());
     }
@@ -1009,16 +1060,21 @@ async fn process_zip(
 
     if let Err(e) = insert_imp {
         let _ = tx.rollback().await;
-        let _ = state.storage.delete(storage_type, &stored_key).await;
+        if !use_local_folder {
+            let _ = state.storage.delete(storage_type, &stored_key).await;
+        }
         let _ = tokio::fs::remove_file(&export_dest).await;
         return Err(e.to_string());
     }
 
     if let Err(e) = tx.commit().await {
-        let _ = state.storage.delete(storage_type, &stored_key).await;
+        if !use_local_folder {
+            let _ = state.storage.delete(storage_type, &stored_key).await;
+        }
         let _ = tokio::fs::remove_file(&export_dest).await;
         return Err(e.to_string());
     }
+    drop(_folder_guard);
 
     // 3. Delete the source zip only after both library import and export file are committed on disk.
     if delete_zip && let Err(e) = tokio::fs::remove_file(zip_path).await {
@@ -1219,8 +1275,9 @@ pub async fn rename_ai_exports(
     user_id: &str,
     export_folder: &Path,
 ) -> Result<(), String> {
-    let rows: Vec<(String, String, i64, String, String)> = sqlx::query_as(
-        "SELECT i.id, i.export_path, r.start_time, r.filename, r.id \
+    let _folder_guard = crate::local_folder::lock().await;
+    let rows: Vec<(String, String, i64, String, String, String, String)> = sqlx::query_as(
+        "SELECT i.id, i.export_path, r.start_time, r.filename, r.id, r.storage_type, r.storage_path \
          FROM zip_imports i \
          JOIN recordings r ON r.id = i.recording_id \
          WHERE i.user_id = ? AND r.deleted_at IS NULL AND r.title_source = 'ai' AND i.export_path IS NOT NULL",
@@ -1230,7 +1287,16 @@ pub async fn rename_ai_exports(
     .await
     .map_err(|e| e.to_string())?;
 
-    for (import_id, encrypted_path, start_ms, encrypted_title, rec_id) in rows {
+    for (
+        import_id,
+        encrypted_path,
+        start_ms,
+        encrypted_title,
+        rec_id,
+        rec_storage_type,
+        rec_storage_path,
+    ) in rows
+    {
         let Ok(stored_path) = state.config.field_key.decrypt(&encrypted_path) else {
             continue;
         };
@@ -1259,15 +1325,32 @@ pub async fn rename_ai_exports(
         }
         let parent = path.parent().unwrap_or(export_folder);
         let dest = unique_path(parent, &desired, "m4a").await;
+        let old_norm = crate::local_folder::normalize_path(&path);
+        let rec_norm = crate::local_folder::normalize_path(Path::new(&rec_storage_path));
         if tokio::fs::rename(&path, &dest).await.is_err() {
             continue;
         }
+        let dest_str = dest.to_string_lossy().into_owned();
         sqlx::query("UPDATE zip_imports SET export_path = ? WHERE id = ?")
-            .bind(state.config.field_key.encrypt(&dest.to_string_lossy()))
+            .bind(state.config.field_key.encrypt(&dest_str))
             .bind(&import_id)
             .execute(&state.db)
             .await
             .map_err(|e| e.to_string())?;
+        if rec_storage_type == "local_folder"
+            && (rec_storage_path == stored_path || rec_norm == old_norm)
+        {
+            sqlx::query(
+                "UPDATE recordings SET storage_path = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            )
+            .bind(&dest_str)
+            .bind(now_ms())
+            .bind(&rec_id)
+            .bind(user_id)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -1519,6 +1602,7 @@ Rec_2026-10-29_12-00-00_to_13-00-00_UTC-0700.m4a | file +0.000s | 2026-10-29T19:
         }
         let f = zip.finish().unwrap();
         f.sync_all().unwrap();
+        f.set_modified(filetime_minus_5s()).unwrap();
     }
 
     #[tokio::test]
@@ -1553,8 +1637,6 @@ Rec_2026-10-29_12-00-00_to_13-00-00_UTC-0700.m4a | file +0.000s | 2026-10-29T19:
                 ("Export-notes.txt", notes),
             ],
         );
-        let past = filetime_minus_5s();
-        let _ = std::fs::File::open(&zip_path).and_then(|f| f.set_modified(past));
 
         let settings = effective(&state, "u").await.unwrap();
         let r1 = scan_user(&state, "u", watch_dir.path(), &settings)
@@ -1651,7 +1733,6 @@ Rec_2026-10-29_12-00-00_to_13-00-00_UTC-0700.m4a | file +0.000s | 2026-10-29T19:
             &zip2_path,
             &[("Rec_2026-10-30_14-00-00_to_15-00-00_UTC-0700.m4a", &b1)],
         );
-        let _ = std::fs::File::open(&zip2_path).and_then(|f| f.set_modified(past));
 
         let settings2 = effective(&state, "u").await.unwrap();
         let r3 = scan_user(&state, "u", watch_dir.path(), &settings2)

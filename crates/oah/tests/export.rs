@@ -455,6 +455,141 @@ async fn custom_local_storage_folder_and_bidirectional_sync() {
 }
 
 #[tokio::test]
+async fn zip_merge_into_local_storage_folder_does_not_duplicate_recording() {
+    use std::io::Write;
+
+    let (app, state, cookie) = signed_in().await;
+    let watch_dir = tempfile::tempdir().unwrap();
+    let storage_dir = tempfile::tempdir().unwrap();
+    let watch_str = watch_dir.path().to_string_lossy().into_owned();
+    let storage_str = storage_dir.path().to_string_lossy().into_owned();
+
+    let (status, res) = request_json(
+        &app,
+        &cookie,
+        "PUT",
+        "/api/settings/user",
+        Some(json!({
+            "localStorageFolder": storage_str,
+            "zipWatchFolder": watch_str,
+            "zipExportFolder": storage_dir.path().to_string_lossy(),
+            "zipTitleMode": "ai",
+            "zipDeleteAfterMerge": false
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{res}");
+
+    let wav = tone_wav();
+    let zip_path = watch_dir.path().join("Batch_Segments.zip");
+    {
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for name in [
+            "Rec_2026-10-29_12-00-00_to_13-00-00_UTC-0700.wav",
+            "Rec_2026-10-29_13-00-00_to_14-00-00_UTC-0700.wav",
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(&wav).unwrap();
+        }
+        zip.finish().unwrap().sync_all().unwrap();
+    }
+
+    let (status, merge_res) =
+        request_json(&app, &cookie, "POST", "/api/zip/merge", Some(json!({}))).await;
+    assert_eq!(status, StatusCode::OK, "{merge_res}");
+    assert_eq!(merge_res["merged"], 1);
+    assert_eq!(merge_res["skipped"], 0);
+    assert_eq!(merge_res["errors"], json!([]));
+    assert!(storage_dir.path().join("2026-10-29.m4a").exists());
+
+    let (status, sync_res) = request_json(
+        &app,
+        &cookie,
+        "POST",
+        "/api/settings/storage/sync",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{sync_res}");
+    assert_eq!(sync_res["synced"], 0);
+    assert_eq!(sync_res["removed"], 0);
+
+    let (status, list_res) = request_json(&app, &cookie, "GET", "/api/recordings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let recs = list_res["recordings"].as_array().unwrap();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0]["storageType"], "local_folder");
+    assert_eq!(recs[0]["filename"], "2026-10-29");
+    assert!(
+        recs[0]["waveformPeaks"]
+            .as_array()
+            .is_some_and(|p| !p.is_empty())
+    );
+    let rec_id = recs[0]["id"].as_str().unwrap().to_owned();
+
+    let user_id: String = sqlx::query_scalar("SELECT id FROM users LIMIT 1")
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE recordings SET filename = ?, title_source = 'ai' WHERE id = ?")
+        .bind(state.config.field_key.encrypt("AI Generated Meeting Title"))
+        .bind(&rec_id)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    oah::zip_merge::rename_ai_exports(&state, &user_id, storage_dir.path())
+        .await
+        .unwrap();
+    assert!(!storage_dir.path().join("2026-10-29.m4a").exists());
+    assert!(
+        storage_dir
+            .path()
+            .join("AI Generated Meeting Title.m4a")
+            .exists()
+    );
+
+    let (status, sync_res) = request_json(
+        &app,
+        &cookie,
+        "POST",
+        "/api/settings/storage/sync",
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{sync_res}");
+    assert_eq!(sync_res["synced"], 0);
+    assert_eq!(sync_res["removed"], 0);
+
+    let (status, list_res) = request_json(&app, &cookie, "GET", "/api/recordings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let recs = list_res["recordings"].as_array().unwrap();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0]["id"], rec_id);
+    assert_eq!(recs[0]["filename"], "AI Generated Meeting Title");
+
+    let audio_res = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/api/recordings/{rec_id}/audio"))
+                .header(header::HOST, "localhost:3000")
+                .header(header::COOKIE, &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(audio_res.status(), StatusCode::OK);
+    let audio_bytes = to_bytes(audio_res.into_body(), 4 * 1024 * 1024)
+        .await
+        .unwrap();
+    assert!(!audio_bytes.is_empty());
+}
+
+#[tokio::test]
 async fn disabling_plaud_disconnects_active_connection() {
     let (app, state, cookie) = signed_in().await;
     let user_id: String = sqlx::query_scalar("SELECT id FROM users LIMIT 1")
