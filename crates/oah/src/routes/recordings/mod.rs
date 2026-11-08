@@ -1016,7 +1016,9 @@ async fn upload(
     } else {
         None
     };
+    let mut _folder_guard = None;
     let (storage_type, stored, eligible) = if let Some(folder) = local_folder {
+        _folder_guard = Some(crate::local_folder::lock().await);
         let dest = store_in_local_folder(&folder, &title, &ext, &temp).await?;
         ("local_folder", dest.to_string_lossy().into_owned(), false)
     } else {
@@ -1054,6 +1056,7 @@ async fn upload(
         let _ = state.storage.delete(storage_type, &stored).await;
         return Err(e);
     }
+    drop(_folder_guard);
     scratch.0.clear();
     if let Err(e) = crate::transcribe::queue_auto(&state, &user.id, &id).await {
         tracing::warn!(recording = id, error = %e.message, "queueing automatic transcription failed");
@@ -1696,7 +1699,10 @@ async fn merge(
     } else {
         None
     };
+    let eligible = crate::export::auto::auto_export_eligible(&state, &user.id).await;
+    let mut _folder_guard = None;
     let (storage_type, stored) = if let Some(folder) = local_folder {
+        _folder_guard = Some(crate::local_folder::lock().await);
         let dest = store_in_local_folder(&folder, &name, "ogg", &temp).await?;
         ("local_folder", dest.to_string_lossy().into_owned())
     } else {
@@ -1717,7 +1723,6 @@ async fn merge(
     let plaud_file_id = format!("merged-{id}");
     // A merged recording is made here, so its title is the user's and sync never rewrites it.
     let title_source = "manual";
-    let eligible = crate::export::auto::auto_export_eligible(&state, &user.id).await;
     let saved = insert(
         &state.db,
         key,
@@ -1742,6 +1747,7 @@ async fn merge(
         let _ = state.storage.delete(storage_type, &stored).await;
         return Err(e);
     }
+    drop(_folder_guard);
     if let Some(parts) = parts {
         // The merge already succeeded; a failed transcript copy is logged, not returned.
         if let Err(e) = store_joined(&state, &user.id, &id, &join_parts(&parts)).await {

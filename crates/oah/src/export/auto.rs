@@ -140,6 +140,7 @@ async fn export_new(
     folder: &Path,
     settings: &Map<String, Value>,
 ) -> Result<(), String> {
+    let _folder_guard = crate::local_folder::lock().await;
     let mode = settings
         .get("autoExportTitleMode")
         .and_then(Value::as_str)

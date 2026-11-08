@@ -225,6 +225,7 @@ Response: `200`:
 
 - If `localStorageFolder` is unset or empty, the response returns `synced: 0`, `removed: 0`, and `errors: []` immediately.
 - Audio files in the folder with extensions `.mp3`, `.mp4`, `.m4a`, `.wav`, `.ogg`, `.opus`, `.webm`, `.aac`, `.flac` are scanned and added to the library if not already present.
+- Files already tracked by an active Library recording (including ZIP merge exports and auto-exported files) are not imported a second time, and in-folder file renames update the existing recording's path in place.
 - Waveform peaks are computed on import and stored directly.
 - Existing recordings backed by files that were removed from the folder are cleaned up accordingly.
 - `errors` lists any individual file failure messages encountered during the scan.
