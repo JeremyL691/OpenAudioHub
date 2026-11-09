@@ -882,14 +882,63 @@ async fn process_zip(
 
     sort_segments(&mut segments);
 
-    // Probe every segment and check total duration.
-    let mut probes = Vec::with_capacity(segments.len());
+    // Probe every segment, repairing unfinalized MP4/M4A containers or skipping unreadable entries when other valid segments exist.
+    let mut raw_probes: Vec<Option<media::Probe>> = Vec::with_capacity(segments.len());
     for seg in &segments {
-        let probe = media::probe(&state.config.ffprobe, &seg.path)
-            .await
-            .ok_or_else(|| format!("\"{}\" has no readable audio", seg.basename))?;
-        probes.push(probe);
+        raw_probes.push(media::probe(&state.config.ffprobe, &seg.path).await);
     }
+
+    let donor = if raw_probes.iter().any(Option::is_none) {
+        segments
+            .iter()
+            .zip(raw_probes.iter())
+            .filter_map(|(seg, probe)| probe.as_ref().and(Some(&seg.path)))
+            .find_map(|path| extract_mp4_audio_donor(path))
+    } else {
+        None
+    };
+
+    let mut valid_segments = Vec::with_capacity(segments.len());
+    let mut probes = Vec::with_capacity(segments.len());
+    let mut first_unreadable_basename: Option<String> = None;
+
+    for (idx, (mut seg, maybe_probe)) in segments.into_iter().zip(raw_probes).enumerate() {
+        if let Some(probe) = maybe_probe {
+            valid_segments.push(seg);
+            probes.push(probe);
+        } else if let Some((repaired_path, probe)) = repair_unfinalized_mp4(
+            &state.config.ffmpeg,
+            &state.config.ffprobe,
+            &seg.path,
+            donor.as_ref(),
+            &work_dir,
+            idx,
+        )
+        .await
+        {
+            tracing::info!(
+                segment = %seg.basename,
+                duration_ms = probe.duration_ms,
+                "repaired unfinalized mp4/m4a audio segment in zip archive"
+            );
+            seg.path = repaired_path;
+            valid_segments.push(seg);
+            probes.push(probe);
+        } else {
+            tracing::warn!(
+                segment = %seg.basename,
+                "skipping unreadable audio segment in zip archive"
+            );
+            first_unreadable_basename.get_or_insert_with(|| seg.basename.clone());
+        }
+    }
+
+    if valid_segments.is_empty() {
+        let bad = first_unreadable_basename.unwrap_or_else(|| "segment".to_owned());
+        return Err(format!("\"{bad}\" has no readable audio"));
+    }
+    let segments = valid_segments;
+
     let total_ms: i64 = probes.iter().map(|p| p.duration_ms).sum();
     if total_ms > MAX_MERGE_MS {
         return Err("Merged recording would be longer than 24 hours".into());
@@ -1118,10 +1167,17 @@ fn extract_zip(zip_path: &Path, work_dir: &Path) -> Result<Vec<ExtractedSegment>
     let notes_map = parse_export_notes(&notes_text);
 
     let mut raw_entries: Vec<(usize, String, Option<i64>)> = Vec::new();
+    let mut first_extract_err: Option<String> = None;
     for i in 0..archive.len() {
-        let entry = archive
-            .by_index(i)
-            .map_err(|e| format!("Corrupt zip entry: {e}"))?;
+        let entry = match archive.by_index(i) {
+            Ok(e) => e,
+            Err(e) => {
+                let msg = format!("Corrupt zip entry: {e}");
+                tracing::warn!(index = i, error = %e, "skipping corrupt zip entry");
+                first_extract_err.get_or_insert(msg);
+                continue;
+            }
+        };
         if entry.is_dir() {
             continue;
         }
@@ -1162,18 +1218,32 @@ fn extract_zip(zip_path: &Path, work_dir: &Path) -> Result<Vec<ExtractedSegment>
 
     let mut segments = Vec::with_capacity(raw_entries.len());
     for (idx, (entry_idx, base, zip_mtime_ms)) in raw_entries.into_iter().enumerate() {
-        let mut entry = archive
-            .by_index(entry_idx)
-            .map_err(|e| format!("Corrupt zip entry {base}: {e}"))?;
+        let mut entry = match archive.by_index(entry_idx) {
+            Ok(e) => e,
+            Err(e) => {
+                let msg = format!("Corrupt zip entry {base}: {e}");
+                tracing::warn!(segment = %base, error = %e, "skipping corrupt zip entry");
+                first_extract_err.get_or_insert(msg);
+                continue;
+            }
+        };
         let ext = Path::new(&base)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("m4a");
         let dest = work_dir.join(format!("seg-{idx:04}.{ext}"));
-        let mut out =
-            std::fs::File::create(&dest).map_err(|e| format!("Could not extract {base}: {e}"))?;
-        std::io::copy(&mut entry, &mut out)
-            .map_err(|e| format!("Failed extracting {base}: {e}"))?;
+        let copy_res = std::fs::File::create(&dest)
+            .map_err(|e| format!("Could not extract {base}: {e}"))
+            .and_then(|mut out| {
+                std::io::copy(&mut entry, &mut out)
+                    .map_err(|e| format!("Failed extracting {base}: {e}"))
+            });
+        if let Err(err) = copy_res {
+            let _ = std::fs::remove_file(&dest);
+            tracing::warn!(segment = %base, error = %err, "skipping failed zip entry extraction");
+            first_extract_err.get_or_insert(err);
+            continue;
+        }
         let meta = parse_segment_filename(&base);
         let notes_start_ms = notes_map.get(&base).copied();
         segments.push(ExtractedSegment {
@@ -1186,7 +1256,487 @@ fn extract_zip(zip_path: &Path, work_dir: &Path) -> Result<Vec<ExtractedSegment>
         });
     }
 
+    if segments.is_empty()
+        && let Some(err) = first_extract_err
+    {
+        return Err(err);
+    }
+
     Ok(segments)
+}
+
+#[derive(Clone)]
+struct DonorAudioConfig {
+    stsd_payload: Vec<u8>,
+    sample_rate: u32,
+    channels: u16,
+}
+
+fn scan_mp4_boxes(
+    data: &[u8],
+    depth: u8,
+    mdhd_timescale: &mut Option<u32>,
+    stsd_info: &mut Option<(Vec<u8>, u16, u32)>,
+) {
+    if depth > 8 || stsd_info.is_some() {
+        return;
+    }
+    let mut pos = 0usize;
+    while pos + 8 <= data.len() && stsd_info.is_none() {
+        let size32 = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+        let btype = &data[pos + 4..pos + 8];
+        let (hdr_len, box_size) = if size32 == 1 {
+            if pos + 16 > data.len() {
+                break;
+            }
+            let s64 = u64::from_be_bytes([
+                data[pos + 8],
+                data[pos + 9],
+                data[pos + 10],
+                data[pos + 11],
+                data[pos + 12],
+                data[pos + 13],
+                data[pos + 14],
+                data[pos + 15],
+            ]);
+            (16usize, usize::try_from(s64).unwrap_or(0))
+        } else if size32 == 0 {
+            (8usize, data.len() - pos)
+        } else {
+            (8usize, size32 as usize)
+        };
+        if box_size < hdr_len || pos.saturating_add(box_size) > data.len() {
+            break;
+        }
+        let payload = &data[pos + hdr_len..pos + box_size];
+        match btype {
+            b"trak" => {
+                let mut trak_ts = None;
+                let mut trak_stsd = None;
+                scan_mp4_boxes(payload, depth + 1, &mut trak_ts, &mut trak_stsd);
+                if trak_stsd.is_some() {
+                    *mdhd_timescale = trak_ts;
+                    *stsd_info = trak_stsd;
+                    return;
+                }
+            }
+            b"moov" | b"mdia" | b"minf" | b"stbl" => {
+                scan_mp4_boxes(payload, depth + 1, mdhd_timescale, stsd_info);
+            }
+            b"mdhd" => {
+                if payload.len() >= 16 && payload[0] == 0 {
+                    let ts =
+                        u32::from_be_bytes([payload[12], payload[13], payload[14], payload[15]]);
+                    if ts > 0 {
+                        *mdhd_timescale = Some(ts);
+                    }
+                } else if payload.len() >= 24 && payload[0] == 1 {
+                    let ts =
+                        u32::from_be_bytes([payload[20], payload[21], payload[22], payload[23]]);
+                    if ts > 0 {
+                        *mdhd_timescale = Some(ts);
+                    }
+                }
+            }
+            b"stsd" if payload.len() >= 44 && &payload[12..16] == b"mp4a" => {
+                let channels = u16::from_be_bytes([payload[32], payload[33]]);
+                let sr_fixed =
+                    u32::from_be_bytes([payload[40], payload[41], payload[42], payload[43]]);
+                let sr = sr_fixed >> 16;
+                *stsd_info = Some((payload.to_vec(), channels, sr));
+            }
+            _ => {}
+        }
+        pos += box_size;
+    }
+}
+
+fn extract_mp4_audio_donor(path: &Path) -> Option<DonorAudioConfig> {
+    use std::io::{Seek, SeekFrom};
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let file_len = file.metadata().ok()?.len();
+    let mut pos = 0u64;
+    let mut hdr = [0u8; 8];
+    let mut hdr64 = [0u8; 8];
+
+    while pos.checked_add(8)? <= file_len {
+        file.seek(SeekFrom::Start(pos)).ok()?;
+        file.read_exact(&mut hdr).ok()?;
+        let size32 = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
+        let btype = &hdr[4..8];
+        let (hdr_len, box_size) = if size32 == 1 {
+            if pos.checked_add(16)? > file_len {
+                break;
+            }
+            file.read_exact(&mut hdr64).ok()?;
+            (16u64, u64::from_be_bytes(hdr64))
+        } else if size32 == 0 {
+            (8u64, file_len - pos)
+        } else {
+            (8u64, u64::from(size32))
+        };
+        if box_size < hdr_len || pos.checked_add(box_size)? > file_len {
+            break;
+        }
+        if btype == b"moov" {
+            let payload_len = usize::try_from(box_size - hdr_len).ok()?;
+            if payload_len == 0 || payload_len > 32 * 1024 * 1024 {
+                return None;
+            }
+            let mut moov_payload = vec![0u8; payload_len];
+            file.read_exact(&mut moov_payload).ok()?;
+            let mut mdhd_timescale = None;
+            let mut stsd_info = None;
+            scan_mp4_boxes(&moov_payload, 0, &mut mdhd_timescale, &mut stsd_info);
+            let (stsd_payload, channels, stsd_sr) = stsd_info?;
+            let sample_rate = mdhd_timescale.filter(|&sr| sr > 0).unwrap_or(stsd_sr);
+            if sample_rate > 0 && channels > 0 {
+                return Some(DonorAudioConfig {
+                    stsd_payload,
+                    sample_rate,
+                    channels,
+                });
+            }
+            return None;
+        }
+        pos = pos.checked_add(box_size)?;
+    }
+    None
+}
+
+fn mp4_box(btype: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    let size = (8 + payload.len()) as u32;
+    let mut out = Vec::with_capacity(size as usize);
+    out.extend_from_slice(&size.to_be_bytes());
+    out.extend_from_slice(btype);
+    out.extend_from_slice(payload);
+    out
+}
+
+fn mp4_fullbox(btype: &[u8; 4], version: u8, flags: u32, body: &[u8]) -> Vec<u8> {
+    let size = (12 + body.len()) as u32;
+    let mut out = Vec::with_capacity(size as usize);
+    out.extend_from_slice(&size.to_be_bytes());
+    out.extend_from_slice(btype);
+    let vf = (u32::from(version) << 24) | (flags & 0x00FF_FFFF);
+    out.extend_from_slice(&vf.to_be_bytes());
+    out.extend_from_slice(body);
+    out
+}
+
+fn synthesize_aac_stsd_payload(sample_rate: u32, channels: u16) -> Vec<u8> {
+    let freq_idx: u8 = match sample_rate {
+        96000 => 0,
+        88200 => 1,
+        64000 => 2,
+        48000 => 3,
+        44100 => 4,
+        32000 => 5,
+        24000 => 6,
+        22050 => 7,
+        16000 => 8,
+        12000 => 9,
+        11025 => 10,
+        8000 => 11,
+        7350 => 12,
+        _ => 8,
+    };
+    let asc: u16 = (2 << 11) | (u16::from(freq_idx) << 7) | ((channels & 0xF) << 3);
+    let asc_bytes = asc.to_be_bytes();
+    let esds_body = [
+        0x03,
+        0x19,
+        0x00,
+        0x01,
+        0x00,
+        0x04,
+        0x11,
+        0x40,
+        0x15,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x01,
+        0xF4,
+        0x00,
+        0x00,
+        0x00,
+        0xFA,
+        0x00,
+        0x05,
+        0x02,
+        asc_bytes[0],
+        asc_bytes[1],
+        0x06,
+        0x01,
+        0x02,
+    ];
+    let esds = mp4_fullbox(b"esds", 0, 0, &esds_body);
+
+    let mut mp4a_body = Vec::with_capacity(28 + esds.len());
+    mp4a_body.extend_from_slice(&[0u8; 6]);
+    mp4a_body.extend_from_slice(&1u16.to_be_bytes());
+    mp4a_body.extend_from_slice(&[0u8; 8]);
+    mp4a_body.extend_from_slice(&channels.to_be_bytes());
+    mp4a_body.extend_from_slice(&16u16.to_be_bytes());
+    mp4a_body.extend_from_slice(&[0u8; 4]);
+    mp4a_body.extend_from_slice(&(sample_rate.min(65535) << 16).to_be_bytes());
+    mp4a_body.extend_from_slice(&esds);
+    let mp4a = mp4_box(b"mp4a", &mp4a_body);
+
+    let mut stsd_payload = Vec::with_capacity(8 + mp4a.len());
+    stsd_payload.extend_from_slice(&0u32.to_be_bytes());
+    stsd_payload.extend_from_slice(&1u32.to_be_bytes());
+    stsd_payload.extend_from_slice(&mp4a);
+    stsd_payload
+}
+
+fn build_minimal_moov(
+    stsd_payload: &[u8],
+    mdat_data_offset: u64,
+    mdat_data_len: u32,
+    sample_rate: u32,
+) -> Vec<u8> {
+    let stsd = mp4_box(b"stsd", stsd_payload);
+
+    let mut stts_body = Vec::with_capacity(12);
+    stts_body.extend_from_slice(&1u32.to_be_bytes());
+    stts_body.extend_from_slice(&1u32.to_be_bytes());
+    stts_body.extend_from_slice(&1024u32.to_be_bytes());
+    let stts = mp4_fullbox(b"stts", 0, 0, &stts_body);
+
+    let mut stsc_body = Vec::with_capacity(16);
+    stsc_body.extend_from_slice(&1u32.to_be_bytes());
+    stsc_body.extend_from_slice(&1u32.to_be_bytes());
+    stsc_body.extend_from_slice(&1u32.to_be_bytes());
+    stsc_body.extend_from_slice(&1u32.to_be_bytes());
+    let stsc = mp4_fullbox(b"stsc", 0, 0, &stsc_body);
+
+    let mut stsz_body = Vec::with_capacity(8);
+    stsz_body.extend_from_slice(&mdat_data_len.to_be_bytes());
+    stsz_body.extend_from_slice(&1u32.to_be_bytes());
+    let stsz = mp4_fullbox(b"stsz", 0, 0, &stsz_body);
+
+    let mut co64_body = Vec::with_capacity(12);
+    co64_body.extend_from_slice(&1u32.to_be_bytes());
+    co64_body.extend_from_slice(&mdat_data_offset.to_be_bytes());
+    let co64 = mp4_fullbox(b"co64", 0, 0, &co64_body);
+
+    let stbl = mp4_box(b"stbl", &[stsd, stts, stsc, stsz, co64].concat());
+    let smhd = mp4_fullbox(b"smhd", 0, 0, &[0u8; 4]);
+    let url = mp4_fullbox(b"url ", 0, 1, &[]);
+    let mut dref_body = Vec::with_capacity(4 + url.len());
+    dref_body.extend_from_slice(&1u32.to_be_bytes());
+    dref_body.extend_from_slice(&url);
+    let dref = mp4_fullbox(b"dref", 0, 0, &dref_body);
+    let dinf = mp4_box(b"dinf", &dref);
+    let minf = mp4_box(b"minf", &[smhd, dinf, stbl].concat());
+
+    let mut mdhd_body = Vec::with_capacity(20);
+    mdhd_body.extend_from_slice(&0u32.to_be_bytes());
+    mdhd_body.extend_from_slice(&0u32.to_be_bytes());
+    mdhd_body.extend_from_slice(&sample_rate.to_be_bytes());
+    mdhd_body.extend_from_slice(&1024u32.to_be_bytes());
+    mdhd_body.extend_from_slice(&0x55c4u16.to_be_bytes());
+    mdhd_body.extend_from_slice(&0u16.to_be_bytes());
+    let mdhd = mp4_fullbox(b"mdhd", 0, 0, &mdhd_body);
+
+    let mut hdlr_body = Vec::with_capacity(20 + 12);
+    hdlr_body.extend_from_slice(&0u32.to_be_bytes());
+    hdlr_body.extend_from_slice(b"soun");
+    hdlr_body.extend_from_slice(&[0u8; 12]);
+    hdlr_body.extend_from_slice(b"SoundHandle\0");
+    let hdlr = mp4_fullbox(b"hdlr", 0, 0, &hdlr_body);
+    let mdia = mp4_box(b"mdia", &[mdhd, hdlr, minf].concat());
+
+    let unity_matrix: [u32; 9] = [0x0001_0000, 0, 0, 0, 0x0001_0000, 0, 0, 0, 0x4000_0000];
+    let mut matrix_bytes = [0u8; 36];
+    for (i, v) in unity_matrix.iter().enumerate() {
+        matrix_bytes[i * 4..(i + 1) * 4].copy_from_slice(&v.to_be_bytes());
+    }
+
+    let mut tkhd_body = Vec::with_capacity(80);
+    tkhd_body.extend_from_slice(&0u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&0u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&1u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&0u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&1024u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&[0u8; 8]);
+    tkhd_body.extend_from_slice(&0u16.to_be_bytes());
+    tkhd_body.extend_from_slice(&0u16.to_be_bytes());
+    tkhd_body.extend_from_slice(&0x0100u16.to_be_bytes());
+    tkhd_body.extend_from_slice(&0u16.to_be_bytes());
+    tkhd_body.extend_from_slice(&matrix_bytes);
+    tkhd_body.extend_from_slice(&0u32.to_be_bytes());
+    tkhd_body.extend_from_slice(&0u32.to_be_bytes());
+    let tkhd = mp4_fullbox(b"tkhd", 0, 3, &tkhd_body);
+    let trak = mp4_box(b"trak", &[tkhd, mdia].concat());
+
+    let mut mvhd_body = Vec::with_capacity(96);
+    mvhd_body.extend_from_slice(&0u32.to_be_bytes());
+    mvhd_body.extend_from_slice(&0u32.to_be_bytes());
+    mvhd_body.extend_from_slice(&sample_rate.to_be_bytes());
+    mvhd_body.extend_from_slice(&1024u32.to_be_bytes());
+    mvhd_body.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+    mvhd_body.extend_from_slice(&0x0100u16.to_be_bytes());
+    mvhd_body.extend_from_slice(&0u16.to_be_bytes());
+    mvhd_body.extend_from_slice(&[0u8; 8]);
+    mvhd_body.extend_from_slice(&matrix_bytes);
+    mvhd_body.extend_from_slice(&[0u8; 24]);
+    mvhd_body.extend_from_slice(&2u32.to_be_bytes());
+    let mvhd = mp4_fullbox(b"mvhd", 0, 0, &mvhd_body);
+
+    mp4_box(b"moov", &[mvhd, trak].concat())
+}
+
+fn find_unfinalized_mdat(data: &[u8]) -> Option<(usize, usize, usize)> {
+    if data.len() < 8 || &data[4..8] != b"ftyp" {
+        return None;
+    }
+    let mut pos = 0usize;
+    while pos + 8 <= data.len() {
+        let size32 = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
+        let btype = &data[pos + 4..pos + 8];
+        let (hdr_len, box_size) = if size32 == 1 {
+            if pos + 16 > data.len() {
+                return None;
+            }
+            let s64 = u64::from_be_bytes([
+                data[pos + 8],
+                data[pos + 9],
+                data[pos + 10],
+                data[pos + 11],
+                data[pos + 12],
+                data[pos + 13],
+                data[pos + 14],
+                data[pos + 15],
+            ]);
+            (16usize, s64)
+        } else if size32 == 0 {
+            (8usize, (data.len() - pos) as u64)
+        } else {
+            (8usize, u64::from(size32))
+        };
+
+        if btype == b"mdat" {
+            let data_start = pos.checked_add(hdr_len)?;
+            if data_start >= data.len() {
+                return None;
+            }
+            let data_end = if box_size < hdr_len as u64 {
+                data.len()
+            } else {
+                (pos as u64).saturating_add(box_size).min(data.len() as u64) as usize
+            };
+            let data_len = data_end.checked_sub(data_start)?;
+            if data_len == 0 {
+                return None;
+            }
+            return Some((pos, hdr_len, data_len));
+        }
+
+        if box_size < hdr_len as u64 {
+            return None;
+        }
+        let step = usize::try_from(box_size).ok()?;
+        pos = pos.checked_add(step)?;
+    }
+    None
+}
+
+async fn repair_unfinalized_mp4(
+    ffmpeg: &Path,
+    ffprobe: &Path,
+    seg_path: &Path,
+    donor: Option<&DonorAudioConfig>,
+    work_dir: &Path,
+    idx: usize,
+) -> Option<(PathBuf, media::Probe)> {
+    let mut raw = tokio::fs::read(seg_path).await.ok()?;
+    let (mdat_offset, mdat_hdr_len, mdat_data_len) = find_unfinalized_mdat(&raw)?;
+    let mdat_data_len_u32 = u32::try_from(mdat_data_len).ok()?;
+    let mdat_data_start = mdat_offset + mdat_hdr_len;
+    let mdat_data_end = mdat_data_start + mdat_data_len;
+
+    let mut candidates: Vec<DonorAudioConfig> = Vec::new();
+    if let Some(d) = donor {
+        candidates.push(d.clone());
+    }
+    let first_byte = raw[mdat_data_start];
+    let guessed_channels = if (first_byte >> 5) == 1 { 2u16 } else { 1u16 };
+    for sr in [16000u32, 48000, 44100, 32000, 24000, 8000] {
+        if !candidates
+            .iter()
+            .any(|c| c.sample_rate == sr && c.channels == guessed_channels)
+        {
+            candidates.push(DonorAudioConfig {
+                stsd_payload: synthesize_aac_stsd_payload(sr, guessed_channels),
+                sample_rate: sr,
+                channels: guessed_channels,
+            });
+        }
+    }
+
+    raw.truncate(mdat_data_end);
+    if mdat_hdr_len == 16 {
+        let new_mdat_size = (16 + mdat_data_len) as u64;
+        raw[mdat_offset + 8..mdat_offset + 16].copy_from_slice(&new_mdat_size.to_be_bytes());
+    } else {
+        let new_mdat_size = u32::try_from(8 + mdat_data_len).ok()?;
+        raw[mdat_offset..mdat_offset + 4].copy_from_slice(&new_mdat_size.to_be_bytes());
+    }
+
+    for cfg in &candidates {
+        raw.truncate(mdat_data_end);
+        let moov = build_minimal_moov(
+            &cfg.stsd_payload,
+            mdat_data_start as u64,
+            mdat_data_len_u32,
+            cfg.sample_rate,
+        );
+        raw.extend_from_slice(&moov);
+
+        let patched_path = work_dir.join(format!("patched-{idx:04}.m4a"));
+        let repaired_path = work_dir.join(format!("repaired-{idx:04}.m4a"));
+        if tokio::fs::write(&patched_path, &raw).await.is_err() {
+            let _ = tokio::fs::remove_file(&patched_path).await;
+            continue;
+        }
+
+        let mut cmd = Command::new(ffmpeg);
+        cmd.args(["-y", "-v", "error", "-i"])
+            .arg(&patched_path)
+            .args([
+                "-vn",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-ar",
+                &cfg.sample_rate.to_string(),
+                "-ac",
+                &cfg.channels.to_string(),
+                "-movflags",
+                "+faststart",
+                "-f",
+                "ipod",
+            ])
+            .arg(&repaired_path);
+        let ok = media::run(&mut cmd).await;
+        let _ = tokio::fs::remove_file(&patched_path).await;
+        if ok
+            && let Some(probe) = media::probe(ffprobe, &repaired_path).await
+            && probe.duration_ms > 0
+        {
+            let _ = tokio::fs::remove_file(seg_path).await;
+            return Some((repaired_path, probe));
+        }
+        let _ = tokio::fs::remove_file(&repaired_path).await;
+    }
+
+    None
 }
 
 async fn merge_segments(
@@ -1765,6 +2315,167 @@ Rec_2026-10-29_12-00-00_to_13-00-00_UTC-0700.m4a | file +0.000s | 2026-10-29T19:
             .unwrap();
         assert!(!date_exported.exists());
         assert!(export_dir.path().join("Morning Watch Notes.m4a").exists());
+    }
+
+    fn make_unfinalized_m4a(valid_m4a: &[u8]) -> Vec<u8> {
+        let mut pos = 0usize;
+        let mut ftyp_box: &[u8] = &[];
+        let mut mdat_payload: &[u8] = &[];
+        while pos + 8 <= valid_m4a.len() {
+            let sz = u32::from_be_bytes([
+                valid_m4a[pos],
+                valid_m4a[pos + 1],
+                valid_m4a[pos + 2],
+                valid_m4a[pos + 3],
+            ]) as usize;
+            if sz < 8 || pos + sz > valid_m4a.len() {
+                break;
+            }
+            let btype = &valid_m4a[pos + 4..pos + 8];
+            if btype == b"ftyp" {
+                ftyp_box = &valid_m4a[pos..pos + sz];
+            } else if btype == b"mdat" {
+                mdat_payload = &valid_m4a[pos + 8..pos + sz];
+            }
+            pos += sz;
+        }
+        assert!(!ftyp_box.is_empty() && !mdat_payload.is_empty());
+        let mut out = Vec::with_capacity(ftyp_box.len() + 16 + mdat_payload.len());
+        out.extend_from_slice(ftyp_box);
+        out.extend_from_slice(&1u32.to_be_bytes());
+        out.extend_from_slice(b"mdat");
+        out.extend_from_slice(b"????????");
+        out.extend_from_slice(mdat_payload);
+        out
+    }
+
+    #[tokio::test]
+    async fn repairs_unfinalized_m4a_segments_and_skips_empty_corrupt_entries() {
+        let watch_dir = tempfile::tempdir().unwrap();
+        let export_dir = tempfile::tempdir().unwrap();
+        let (state, work) = desktop_state(json!({
+            "zipAutoMerge": true,
+            "zipWatchFolder": watch_dir.path().to_string_lossy(),
+            "zipExportFolder": export_dir.path().to_string_lossy(),
+            "zipTitleMode": "original",
+            "zipDeleteAfterMerge": false,
+        }))
+        .await;
+
+        let seg1 = work.path().join("s1_16k.m4a");
+        let seg2 = work.path().join("s2_16k.m4a");
+        for (dst, freq) in [(&seg1, 440u32), (&seg2, 660u32)] {
+            let mut cmd = Command::new(&state.config.ffmpeg);
+            cmd.args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency={freq}:sample_rate=16000:duration=1"),
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-f",
+                "ipod",
+            ])
+            .arg(dst);
+            assert!(media::run(&mut cmd).await);
+        }
+
+        let b1 = std::fs::read(&seg1).unwrap();
+        let b2 = std::fs::read(&seg2).unwrap();
+        let unfinalized_b1 = make_unfinalized_m4a(&b1);
+
+        let raw_check = work.path().join("raw_unfinalized.m4a");
+        std::fs::write(&raw_check, &unfinalized_b1).unwrap();
+        assert!(
+            media::probe(&state.config.ffprobe, &raw_check)
+                .await
+                .is_none(),
+            "unfinalized m4a without moov is unreadable before repair"
+        );
+
+        let zip1 = watch_dir.path().join("Interrupted_Session.zip");
+        write_test_zip(
+            &zip1,
+            &[
+                (
+                    "Empty_2026-11-08_08-00-00_to_2026-11-08_08-00-01_UTC-0800.m4a",
+                    b"",
+                ),
+                (
+                    "Recording_3_2026-11-08_09-00-21_to_2026-11-08_09-21-51_UTC-0800.m4a",
+                    &unfinalized_b1,
+                ),
+                (
+                    "Recording_3_2026-11-08_09-21-51_to_2026-11-08_09-39-19_UTC-0800.m4a",
+                    &b2,
+                ),
+            ],
+        );
+
+        let settings = effective(&state, "u").await.unwrap();
+        let r1 = scan_user(&state, "u", watch_dir.path(), &settings)
+            .await
+            .unwrap();
+        assert_eq!(r1.merged, 1);
+        assert!(r1.errors.is_empty(), "errors: {:?}", r1.errors);
+
+        let exported1 = export_dir
+            .path()
+            .join("2026-11-08_09-00-21_to_09-39-19.m4a");
+        assert!(exported1.exists());
+        let probe1 = media::probe(&state.config.ffprobe, &exported1)
+            .await
+            .unwrap();
+        assert!(
+            probe1.duration_ms >= 1800,
+            "both repaired unfinalized segment and valid segment are merged: {}",
+            probe1.duration_ms
+        );
+
+        let zip2 = watch_dir.path().join("Standalone_Unfinalized.zip");
+        write_test_zip(
+            &zip2,
+            &[(
+                "Standalone_2026-11-08_10-00-00_to_2026-11-08_10-15-00_UTC-0800.m4a",
+                &unfinalized_b1,
+            )],
+        );
+        let r2 = scan_user(&state, "u", watch_dir.path(), &settings)
+            .await
+            .unwrap();
+        assert_eq!(r2.merged, 1);
+        assert!(r2.errors.is_empty(), "errors: {:?}", r2.errors);
+        let exported2 = export_dir
+            .path()
+            .join("2026-11-08_10-00-00_to_10-15-00.m4a");
+        assert!(exported2.exists());
+        let probe2 = media::probe(&state.config.ffprobe, &exported2)
+            .await
+            .unwrap();
+        assert!(
+            probe2.duration_ms >= 800,
+            "standalone unfinalized segment repaired without donor: {}",
+            probe2.duration_ms
+        );
+
+        let zip3 = watch_dir.path().join("All_Garbage.zip");
+        write_test_zip(
+            &zip3,
+            &[(
+                "Broken_2026-11-08_11-00-00_to_2026-11-08_11-05-00_UTC-0800.m4a",
+                b"not audio",
+            )],
+        );
+        let r3 = scan_user(&state, "u", watch_dir.path(), &settings)
+            .await
+            .unwrap();
+        assert_eq!(r3.merged, 0);
+        assert_eq!(r3.errors.len(), 1);
+        assert!(r3.errors[0].contains("has no readable audio"));
     }
 
     fn filetime_minus_5s() -> SystemTime {

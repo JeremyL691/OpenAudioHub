@@ -97,7 +97,8 @@ ZIP archive auto-merge runs in the desktop build when `zipAutoMerge` is `true` a
 
 - The worker scans `zipWatchFolder` (top level) for `.zip` files whose size and modification time have been stable across two checks (at least 1.5 seconds old).
 - Each `.zip` is hashed with SHA-256 and checked against `zip_imports` (`UNIQUE(user_id, zip_sha256)`). Already imported archives are skipped during background auto-merge passes.
-- Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac`, `.webm`) are extracted, ignoring `__MACOSX/` and hidden files.
+- Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac`, `.webm`) are extracted, ignoring `__MACOSX/` and hidden files. Empty or unreadable audio entries are skipped when the archive holds at least one readable segment; an archive fails only when no readable audio segments remain.
+- If an `.m4a` or `.mp4` segment was interrupted before its `moov` index was written, the worker reconstructs the container header from the raw `mdat` audio stream before merging.
 - Segments are sorted strictly in true recording chronological order using:
   1. the earliest UTC start timestamp per file from `Export-notes.txt` when present;
   2. the UTC start and end timestamps parsed from the filename (`<Prefix>_YYYY-MM-DD_HH-MM-SS_to_[YYYY-MM-DD_]HH-MM-SS[_UTC±HHMM]` or `YYYY-MM-DD[_T ]HH[-:]MM[-:]SS` / `YYYYMMDD[_-]HHMMSS`);
