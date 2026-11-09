@@ -56,7 +56,7 @@ Open **Settings**, then **ZIP Files**:
 
 How each archive is handled:
 
-- **Segment order.** Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac` and `.webm`) are ordered by their recording time: first from `Export-notes.txt` start times inside the archive, then from timestamps in the file names, then from the audio container's `creation_time` tag, then from the ZIP entry modification times, and finally in natural file name order.
+- **Segment order.** Audio entries (`.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.opus`, `.flac` and `.webm`) are ordered by their recording time: first from `Export-notes.txt` start times inside the archive, then from timestamps in the file names, then from the audio container's `creation_time` tag, then from the ZIP entry modification times, and finally in natural file name order. Interrupted `.m4a` segments with missing container indexes are repaired automatically during the merge, and empty segments are skipped.
 - **File name.** Choose the **original time span** (`2026-10-12_09-00-00_to_10-30-00`), the **recording date** (`2026-10-12`), or the **AI title** (which starts with the date and renames both the library recording and the exported `.m4a` file once transcription and AI title generation finish).
 - **Delete original ZIP after merge.** When turned on, the source `.zip` file is deleted only after both the library recording and the exported `.m4a` file are saved.
 - **Duplicates.** Background passes skip `.zip` files that were already merged. When you choose **Merge now** and an archive in the watch folder was already merged before, the app asks whether to replace the existing recording and exported file, keep both and merge again, or keep the existing recording only.
