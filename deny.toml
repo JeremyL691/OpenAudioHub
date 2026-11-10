@@ -37,6 +37,12 @@ ignore = [
     "RUSTSEC-2024-0370", # proc-macro-error is unmaintained
     # pin-utils 0.1.1 is archived upstream and pulled in transitively by aws-smithy-http and futures-util.
     "RUSTSEC-2026-0441", # pin-utils is unmaintained
+    # libsqlite3-sys 0.30.1, pulled in by sqlx-sqlite 0.8.6. The fix requires
+    # libsqlite3-sys >=0.39.0 (SQLite 3.54.0), which no published sqlx release
+    # supports yet. Exposure requires opening a database file and sibling -wal
+    # written by an untrusted party; OpenAudioHub only opens its own internal
+    # database. Remove once sqlx-sqlite moves to libsqlite3-sys 0.39.
+    "RUSTSEC-2026-0459", # uninitialized page-cache memory on mismatched WAL page size
 ]
 
 [licenses]
