@@ -36,20 +36,28 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
     // One copy per data folder, decided before anything is logged or written.
-    let Some(_lock) = files::instance_lock(&data_dir) else {
-        // macOS hands a relaunch from Finder or the Dock to the running copy itself, so a
-        // second process only comes from a shell; it leaves quietly without touching anything.
-        return ExitCode::SUCCESS;
+    let _lock = match files::instance_lock(&data_dir) {
+        Ok(Some(lock)) => lock,
+        // macOS hands a relaunch from Finder or the Dock to the running copy itself.
+        Ok(None) => return ExitCode::SUCCESS,
+        Err(e) => {
+            return startup_error(
+                &data_dir,
+                &i18n::tf("error.instanceLockFailed", &[("reason", &e.to_string())]),
+            );
+        }
     };
     files::log(&data_dir, "main process started");
     match run(data_dir.clone()) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            files::log(&data_dir, &format!("could not start: {e}"));
-            files::fatal_dialog(&i18n::t("dialog.startFailedTitle"), &e);
-            ExitCode::FAILURE
-        }
+        Err(e) => startup_error(&data_dir, &e),
     }
+}
+
+fn startup_error(data_dir: &std::path::Path, reason: &str) -> ExitCode {
+    files::log(data_dir, &format!("could not start: {reason}"));
+    files::fatal_dialog(&i18n::t("dialog.startFailedTitle"), reason);
+    ExitCode::FAILURE
 }
 
 fn run(data_dir: PathBuf) -> Result<(), String> {

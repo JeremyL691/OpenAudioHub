@@ -23,6 +23,7 @@
         "startFailedTitle": "OpenAudioHub could not start"
     },
     "error": {
+        "instanceLockFailed": "cannot lock the data folder: {reason}",
         "downloadInProgress": "A download is already in progress",
         "formatInvalid": "format must be mp3 or original",
         "idsInvalid": "ids must be 1 to 100 recording ids",

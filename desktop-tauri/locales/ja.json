@@ -23,6 +23,7 @@
         "startFailedTitle": "OpenAudioHub を起動できませんでした"
     },
     "error": {
+        "instanceLockFailed": "データフォルダーをロックできません: {reason}",
         "downloadInProgress": "ダウンロードはすでに実行中です",
         "formatInvalid": "format は mp3 または original である必要があります",
         "idsInvalid": "ids は 1〜100 件の録音 ID である必要があります",
