@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Launch at Login keeps its tray check mark in sync after an interface-language change rebuilds the menu.
+- Changing the Mac app's locale through desktop preferences no longer hangs while rebuilding the tray menu.
+- Native Mac menu labels and dialogs now change language immediately instead of keeping the language selected at startup.
+- The Mac app grants its own page permission to save an interface-language choice through the desktop bridge.
 - The Mac app builds its bundled ffmpeg, ffprobe and their C dependencies for the app's minimum macOS version, and rejects sidecars that require a newer system.
 
 ## [1.6.0] - 2026-11-06

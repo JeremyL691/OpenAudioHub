@@ -163,7 +163,7 @@ npx @tauri-apps/cli@2 build
 
 The bundle is written under `target/release/bundle/` in the repository root.
 
-To run the Mac app from a development build without touching your real data, point it at a test folder:
+To run the Mac app from a development build without touching your real data, point it at a test folder. Set `OAH_DESKTOP_SELFTEST=1` on a debug build to exercise both locale bridge commands and restore the original language; `main.log` records the native labels and `localeFlow: "ok"` on completion:
 
 ```sh
 cd desktop-tauri

@@ -4,7 +4,7 @@
 //! picks the language saved in `config.json`, so the tray menu and the native dialogs follow the
 //! choice made in the page, and a fresh install follows the system language.
 
-use std::sync::OnceLock;
+use std::sync::RwLock;
 
 use serde_json::{Map, Value};
 
@@ -14,7 +14,7 @@ const JA: &str = include_str!("../locales/ja.json");
 const KO: &str = include_str!("../locales/ko.json");
 
 /// Holds the language chosen for this process. Set at start and on every change.
-static CURRENT: OnceLock<&'static str> = OnceLock::new();
+static CURRENT: RwLock<&'static str> = RwLock::new("en");
 
 /// The language tag the page understands for a saved or system value, or `None` when it names
 /// no language this build speaks.
@@ -56,18 +56,19 @@ pub fn init(saved: Option<&str>) -> &'static str {
         .and_then(normalize)
         .or_else(system_locale)
         .unwrap_or("en");
-    CURRENT.get_or_init(|| chosen)
+    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = chosen;
+    chosen
 }
 
 /// The language in use. `init` runs before any window exists, so this is always set.
 pub fn current() -> &'static str {
-    CURRENT.get().copied().unwrap_or("en")
+    *CURRENT.read().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Switches the language for this process. The next text read uses it.
 pub fn set(tag: &str) -> Option<&'static str> {
     let chosen = normalize(tag)?;
-    let _ = CURRENT.set(chosen);
+    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = chosen;
     Some(chosen)
 }
 
@@ -107,6 +108,19 @@ pub fn tf(key: &str, params: &[(&str, &str)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_language_can_change_after_initialization() {
+        assert_eq!(init(Some("en")), "en");
+        assert_eq!(set("ja"), Some("ja"));
+        assert_eq!(current(), "ja");
+        assert_eq!(t("menu.open"), text_in("ja", "menu.open").unwrap());
+        for invalid in ["", "fr-FR"] {
+            assert_eq!(set(invalid), None);
+            assert_eq!(current(), "ja");
+        }
+        assert_eq!(set("en"), Some("en"));
+    }
 
     #[test]
     fn every_catalog_has_the_same_keys() {

@@ -174,7 +174,25 @@ fn run(data_dir: PathBuf) -> Result<(), String> {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(4));
                     let _ = window.eval(
-                        "Promise.resolve().then(() => window.__openaudiohubDesktop.getPreferences()).then(p => window.__TAURI_INTERNALS__.invoke('selftest_report', { value: JSON.stringify({ preferences: p, bridgeVersion: window.__openaudiohubDesktop.version, pickFolder: typeof window.__openaudiohubDesktop.pickFolder }) })).catch(e => window.__TAURI_INTERNALS__.invoke('selftest_report', { value: 'error ' + e }))",
+                        r#"(async () => {
+                            const bridge = window.__openaudiohubDesktop;
+                            const report = (value) => window.__TAURI_INTERNALS__.invoke('selftest_report', { value });
+                            try {
+                                const original = await bridge.getPreferences();
+                                try {
+                                    if (await bridge.setLocale('ja') !== 'ja') throw new Error('setLocale did not apply ja');
+                                    await report('setLocale ja ok');
+                                    const changed = await bridge.setPreferences({ locale: 'ko' });
+                                    if (changed.locale !== 'ko') throw new Error('setPreferences did not apply ko');
+                                    await report('setPreferences ko ok');
+                                } finally {
+                                    await bridge.setLocale(original.locale);
+                                }
+                                await report(JSON.stringify({ preferences: await bridge.getPreferences(), bridgeVersion: bridge.version, pickFolder: typeof bridge.pickFolder, localeFlow: 'ok' }));
+                            } catch (e) {
+                                await report('error ' + e);
+                            }
+                        })()"#,
                     );
                 });
             }
