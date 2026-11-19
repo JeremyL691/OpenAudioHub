@@ -247,6 +247,7 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
     const { recording } = data;
     const transcripts: TranscriptRecord[] = data.transcriptions ?? (data.transcription ? [data.transcription] : []);
     const transcript = transcripts.find((tr) => tr.source === source) ?? transcripts[0] ?? null;
+    const selectedSource = transcript?.source ?? null;
     const busy = transcribing || pipe.active;
 
     const runTranscribe = async (body: { providerId?: string; model?: string }) => {
@@ -353,7 +354,7 @@ function RecordingDetailView({ id, variant }: RecordingDetailProps) {
                                     recordingTitle={recording.filename}
                                     transcript={transcript}
                                     transcripts={transcripts}
-                                    selectedSource={source}
+                                    selectedSource={selectedSource}
                                     onSelectSource={setSource}
                                     pipeline={pipe.pipeline}
                                     pipelineActive={pipe.active}

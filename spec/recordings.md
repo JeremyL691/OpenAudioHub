@@ -3,8 +3,8 @@
 This file covers recordings as a client sees them over HTTP: the list, one
 recording, edits, deletion, starring, upload, audio streaming, waveform peaks,
 batch download, and merge. Transcripts and summaries live in
-`transcription.md` and `ai.md`. The detail response includes a `transcription`
-field; its shape is described there.
+`transcription.md` and `ai.md`. The detail response includes `transcriptions`
+and a compatible singular `transcription` field; their row shape is described there.
 
 Tests: `contract-tests/tests/recordings.spec.ts`.
 
@@ -106,12 +106,17 @@ Response: `200`
 ```json
 {
   "recording": { "id": "abc", "filename": "Standup", "duration": 3096 },
-  "transcription": null
+  "transcription": null,
+  "transcriptions": []
 }
 ```
-`recording` has the full field set above. `transcription` is the caller's
-transcript row for this recording, with its text in plaintext, or `null` when
-none exists. See `transcription.md` for its fields.
+`recording` has the full field set above. `transcriptions` contains all of the
+caller's transcript rows for this recording, with text and timelines decrypted.
+Rows matching the caller's `preferredTranscriptSource` setting (default `plaud`)
+come first, then rows are ordered by `created_at` descending and `id` descending
+to break ties. If the preferred source is absent, the newest available row comes
+first. `transcription` is the first row, or `null` when the array is empty, for
+clients that read only one transcript. See `transcription.md` for row fields.
 Errors: `401` `AUTH_SESSION_MISSING`; `404` `RECORDING_NOT_FOUND` (unknown, deleted, or not the caller's)
 Side effects: none
 
