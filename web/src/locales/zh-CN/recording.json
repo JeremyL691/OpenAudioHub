@@ -73,6 +73,13 @@
         "defaultModel": "服务商的默认模型"
     },
     "browser": {
+        "decode": "正在解码音频…",
+        "model": "正在加载模型… {percent}%",
+        "transcribe": "正在转写…",
+        "save": "正在保存…",
+        "loading": "正在浏览器中转写…",
+        "success": "已在浏览器中完成转写",
+        "failed": "浏览器转写失败",
         "action": "在浏览器中转写",
         "title": "直接在浏览器中运行 Whisper。无需 API 密钥，音频不会离开你的设备。"
     },

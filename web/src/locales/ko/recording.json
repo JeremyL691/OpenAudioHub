@@ -73,6 +73,13 @@
         "defaultModel": "제공자의 기본 모델"
     },
     "browser": {
+        "decode": "오디오 디코딩 중…",
+        "model": "모델 로딩 중… {percent}%",
+        "transcribe": "스크립트 작성 중…",
+        "save": "저장 중…",
+        "loading": "브라우저에서 스크립트 작성 중…",
+        "success": "브라우저에서 스크립트 작성 완료",
+        "failed": "브라우저 스크립트 작성 실패",
         "action": "브라우저에서 스크립트 작성",
         "title": "브라우저에서 바로 Whisper를 실행합니다. API 키가 필요 없고 오디오는 기기를 떠나지 않습니다."
     },
