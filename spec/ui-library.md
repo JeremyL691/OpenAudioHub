@@ -334,6 +334,7 @@ The player card has `data-testid="player"`. It contains:
 - Starting values come from the user's defaults: playback speed, volume (default 75),
   and auto-play next (when a recording ends, the next row in the list is selected
   if there is one).
+  With `autoPlayNext` enabled while the library is open, ending audio selects and plays the next recording in the current filtered and sorted list, including rows beyond the loaded page. The last row stops without wrapping; an ended recording outside that list does not advance. Turning the setting off or leaving the library removes the end listener.
 - Download menu (the download icon in the header on the library preview; hidden on the
   detail page, where the actions menu does this): "Download MP3" and "Download original"
   (`download-original`). "Download MP3" saves the converted file; "Download original"

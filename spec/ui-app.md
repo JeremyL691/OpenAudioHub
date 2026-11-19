@@ -324,6 +324,7 @@ Each section page has a visually hidden level 1 heading "Settings", and its own 
 ### 4.10 Display (`display`)
 
 - "Date/time format" (`date-time-format`): "Relative", "Absolute", "ISO". Saves `dateTimeFormat`.
+  Library row dates (including accessible names), recording detail dates and the player's recorded range share one formatter: Relative uses the interface locale's relative time, Absolute uses the locale's date and time, and ISO uses UTC ISO 8601. Invalid dates render empty; an unset or unknown format falls back to Relative.
 - "Recording list sort order" (`sort-order`): "Newest first", "Oldest first", "By name". Saves `recordingListSortOrder`.
 - "Items per page" (`items-per-page`): a whole number from 10 to 100. Values outside the range are ignored and nothing is saved. Saves `itemsPerPage`.
 - "Theme" (`theme`): "Light", "Dark", "System". Applies at once and is saved (section 6).

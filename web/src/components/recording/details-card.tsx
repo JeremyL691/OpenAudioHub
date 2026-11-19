@@ -1,15 +1,17 @@
 import { type ReactNode, useState } from "react";
 import { ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatClock } from "@/lib/format";
+import { formatBytes, formatClock, formatRecordingDate } from "@/lib/format";
+import { useShellData } from "@/components/shell/shell-data";
 import type { Recording } from "@/lib/recordings";
-import { intlLocale, t, useI18n } from "@/lib/i18n";
+import { t, useI18n } from "@/lib/i18n";
 
 /** Read-only facts about the recording file */
 export function DetailsCard({ recording }: { recording: Recording }) {
     const { t } = useI18n();
     const [expanded, setExpanded] = useState(true);
-    const date = new Date(recording.startTime).toLocaleDateString(intlLocale());
+    const { settings } = useShellData();
+    const date = formatRecordingDate(recording.startTime, settings?.dateTimeFormat);
     const rows: [string, ReactNode][] = [
         [t("recording.details.duration"), formatClock(recording.duration / 1000)],
         [t("recording.details.fileSize"), fileSize(recording)],

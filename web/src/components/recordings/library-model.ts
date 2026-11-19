@@ -1,5 +1,5 @@
 import { recordingStage, RECORDING_STAGE_LABELS, type RecordingStage } from "@/components/recording/pipeline-labels";
-import { formatDate, formatDuration, formatTime } from "@/lib/format";
+import { formatDate, formatDuration, formatRecordingDate } from "@/lib/format";
 import { sourceOf, type Recording } from "@/lib/recordings";
 import { t, tn, type MessageKey } from "@/lib/i18n";
 
@@ -187,25 +187,10 @@ export function statusOf(r: Recording): RowStatus {
     return { stage, label: t(RECORDING_STAGE_LABELS[stage]) };
 }
 
-/** Relative time in the row's meta line, for example "less than a minute ago" or "12 minutes ago". */
-export function formatAgo(value: string, now: number = Date.now()): string {
-    const time = Date.parse(value);
-    if (Number.isNaN(time)) return "";
-    const seconds = Math.max(0, (now - time) / 1000);
-    if (seconds < 60) return t("library.lessThanMinute");
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return tn("library.minutesAgo", minutes);
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return tn("library.hoursAgo", hours);
-    const days = Math.floor(hours / 24);
-    if (days < 30) return tn("library.daysAgo", days);
-    return formatDate(value, { dateStyle: "medium" });
-}
-
 /** The row's full accessible name: name, starred, date, duration, source and status. */
-export function rowLabel(r: Recording): string {
+export function rowLabel(r: Recording, dateTimeFormat?: unknown): string {
     const status = statusOf(r);
-    const when = `${formatDate(r.startTime, { month: "short", day: "numeric", year: "numeric" })}, ${formatTime(r.startTime)}`;
+    const when = formatRecordingDate(r.startTime, dateTimeFormat);
     return [r.filename, r.starredAt ? t("library.starred") : null, `${formatClipDuration(r.duration)}`, when, sourceLabel(r), status.label]
         .filter(Boolean)
         .join(", ");
