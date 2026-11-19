@@ -125,7 +125,9 @@ pub fn spawn(state: AppState, job: Job) {
                 "This answer took longer than this app allows.",
             ),
         };
-        save(&state, &job, outcome, hub).await;
+        if let Err(error) = save(&state, &job, outcome, hub).await {
+            tracing::error!(turn_id, %error, "saving chat outcome failed");
+        }
         super::hub::unregister(&turn_id);
         unregister(&turn_id);
     });
@@ -580,13 +582,17 @@ fn answer_messages(job: &Job, material: &Material) -> Value {
 }
 
 /// Saves how a run ended.
-async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub::TurnHub>) {
+async fn save(
+    state: &AppState,
+    job: &Job,
+    outcome: Outcome,
+    hub: Arc<super::hub::TurnHub>,
+) -> Result<(), sqlx::Error> {
     let key = &state.config.field_key;
     let turn_id = &job.turn_id;
     if outcome.stopped {
-        hub.send(super::hub::HubEvent::State(TurnState::Cancelled));
         // A stop keeps the text written so far and is final, whichever run asks.
-        let _ = store::end_run(
+        store::end_run(
             &state.db,
             key,
             None,
@@ -595,10 +601,11 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             None,
             None,
         )
-        .await;
+        .await?;
+        hub.send(super::hub::HubEvent::State(TurnState::Cancelled));
         // `done` follows the write, so a client that reloads on it reads the final turn.
         hub.send(super::hub::HubEvent::Done);
-        return;
+        return Ok(());
     }
     if let Some((code, message)) = outcome.failure {
         let name = if code == "CHAT_INTERRUPTED" {
@@ -606,8 +613,7 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
         } else {
             TurnState::Failed
         };
-        hub.send(super::hub::HubEvent::State(name));
-        let _ = store::end_run(
+        store::end_run(
             &state.db,
             key,
             None,
@@ -616,9 +622,10 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             Some(code),
             Some(&message),
         )
-        .await;
+        .await?;
+        hub.send(super::hub::HubEvent::State(name));
         hub.send(super::hub::HubEvent::Done);
-        return;
+        return Ok(());
     }
     // The answer is checked against the units of this revision, so only real lines are cited.
     let citations = verify(&outcome.answer, &job.units);
@@ -636,9 +643,9 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             partial: outcome.partial,
         },
     )
-    .await;
-    if !matches!(saved, Ok(true)) {
-        let _ = store::end_run(
+    .await?;
+    if !saved {
+        store::end_run(
             &state.db,
             key,
             None,
@@ -647,9 +654,10 @@ async fn save(state: &AppState, job: &Job, outcome: Outcome, hub: Arc<super::hub
             Some("CHAT_INTERRUPTED"),
             Some("This answer was replaced before it finished."),
         )
-        .await;
+        .await?;
     }
     hub.send(super::hub::HubEvent::Done);
+    Ok(())
 }
 
 /// A rough token count. A character of a script written without spaces counts as a token and other
@@ -706,6 +714,123 @@ pub fn asks_about_whole(question: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future;
+    use std::task::Poll;
+
+    async fn pending_turn() -> (AppState, Job, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::Config::for_tests(dir.path()),
+            crate::db::open_memory().await.unwrap(),
+        );
+        sqlx::raw_sql(
+            "INSERT INTO users (id, email, created_at, updated_at) VALUES ('u', 'u@test', 0, 0);
+             INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration,
+                 start_time, end_time, filesize, file_md5, storage_type, storage_path, plaud_version,
+                 created_at, updated_at)
+                 VALUES ('r', 'u', 'd', 'p', 'name', 0, 0, 0, 0, '', 'local', 'r', '1', 0, 0);
+             INSERT INTO recording_chats (id, recording_id, user_id, created_at, updated_at)
+                 VALUES ('chat', 'r', 'u', 0, 0);
+             INSERT INTO recording_chat_turns (id, chat_id, recording_id, user_id, request_id, seq,
+                 status, generation, question, revision, created_at, updated_at)
+                 VALUES ('turn', 'chat', 'r', 'u', 'request', 1, 'running', 0, 'question', 'rev', 0, 0);",
+        )
+        .execute(&state.db)
+        .await
+        .unwrap();
+        let job = Job {
+            recording_id: "r".into(),
+            user_id: "u".into(),
+            turn_id: "turn".into(),
+            generation: 0,
+            attempt: 1,
+            revision: Revision {
+                hash: "rev".into(),
+                transcript_id: "tr".into(),
+                source: "openaudiohub".into(),
+                timing: super::super::revision::Timing::None,
+            },
+            question: "question".into(),
+            history: Vec::new(),
+            provider: crate::ai::Provider::default(),
+            effort_choice: EffortChoice::Default,
+            effort: EffortDecision::Default,
+            units: Vec::new(),
+            whole: false,
+        };
+        (state, job, dir)
+    }
+
+    #[tokio::test]
+    async fn terminal_events_follow_the_saved_outcome() {
+        for (status, code) in [
+            (TurnState::Failed, Some("AI_PROVIDER_ERROR")),
+            (TurnState::Interrupted, Some("CHAT_INTERRUPTED")),
+            (TurnState::Cancelled, None),
+        ] {
+            let (state, job, _dir) = pending_turn().await;
+            let hub = Arc::new(super::super::hub::TurnHub::new(&job.turn_id));
+            let mut events = hub.subscribe();
+            let outcome = Outcome {
+                answer: String::new(),
+                partial: false,
+                failure: code.map(|code| (code, "failed".into())),
+                stopped: status == TurnState::Cancelled,
+            };
+            let connection = state.db.acquire().await.unwrap();
+            let saving = save(&state, &job, outcome, hub.clone());
+            tokio::pin!(saving);
+            std::future::poll_fn(|cx| {
+                assert!(saving.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            assert!(matches!(
+                events.try_recv(),
+                Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+            ));
+            assert!(!hub.is_finished());
+            drop(connection);
+            saving.await.unwrap();
+            assert!(
+                matches!(events.recv().await.unwrap(), super::super::hub::HubEvent::State(saved) if saved == status)
+            );
+            let saved: (String, Option<String>) = sqlx::query_as(
+                "SELECT status, error_code FROM recording_chat_turns WHERE id = 'turn'",
+            )
+            .fetch_one(&state.db)
+            .await
+            .unwrap();
+            assert_eq!(saved, (status.as_str().into(), code.map(str::to_owned)));
+            assert!(matches!(
+                events.recv().await.unwrap(),
+                super::super::hub::HubEvent::Done
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_save_does_not_announce_a_terminal_outcome() {
+        let (state, job, _dir) = pending_turn().await;
+        let hub = Arc::new(super::super::hub::TurnHub::new(&job.turn_id));
+        let mut events = hub.subscribe();
+        state.db.close().await;
+        assert!(
+            save(
+                &state,
+                &job,
+                Outcome::failed("AI_PROVIDER_ERROR", "failed"),
+                hub.clone()
+            )
+            .await
+            .is_err()
+        );
+        assert!(!hub.is_finished());
+        assert!(matches!(
+            events.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+    }
 
     #[test]
     fn a_whole_recording_question_is_recognised() {

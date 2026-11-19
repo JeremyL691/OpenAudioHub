@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Failed and stopped Ask AI answers save their final status before notifying clients, so reloading an ended stream cannot leave the answer busy.
 - Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
 - Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
 

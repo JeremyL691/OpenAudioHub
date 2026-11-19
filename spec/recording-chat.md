@@ -105,6 +105,7 @@ Server-sent events for one turn. Auth: session. The response is `private, no-sto
 - When an upstream provider answers with a complete JSON body instead of an event stream, the content is parsed and delivered as a completed answer.
 - `version` grows with each saved change. A client that loses events reconnects and reads the new snapshot instead of asking the provider again.
 - The web client retries network failures and an EOF before a terminal event up to five total connection attempts, waiting 500, 1000, 2000 and 4000 milliseconds between attempts. A snapshot replaces the displayed answer before new deltas are appended. After the last failure it reports "The connection to the answer was lost." Closing the view cancels pending retries; a final snapshot, final state or `done` ends the watch.
+- Terminal state events and `done` are broadcast only after the final turn is persisted, so a client reloading on either observes a final status. A persistence error is logged rather than announcing an unsaved outcome.
 - Opening the stream never starts a provider call. A finished turn answers a single snapshot and `done`.
 - The stream ends after `done`, after 15 minutes without a change to the turn, or when the client disconnects.
 
