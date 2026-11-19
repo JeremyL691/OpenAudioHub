@@ -145,7 +145,7 @@ Tests create their own data. Do not depend on counts or on data from another tes
 
 ## Desktop app
 
-Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options. A download is retried with a connection and a transfer deadline, and a download failure is reported apart from a checksum mismatch:
+Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options. It reads the minimum macOS version from `desktop-tauri/tauri.conf.json`, uses it for the sidecars and their C dependencies, and checks the resulting executables with `vtool`. Node.js is needed to read the configuration and run that check. A download is retried with a connection and a transfer deadline, and a download failure is reported apart from a checksum mismatch:
 
 ```sh
 cd desktop-tauri

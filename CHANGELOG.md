@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The Mac app builds its bundled ffmpeg, ffprobe and their C dependencies for the app's minimum macOS version, and rejects sidecars that require a newer system.
+
 ## [1.6.0] - 2026-11-06
 
 ### Added
