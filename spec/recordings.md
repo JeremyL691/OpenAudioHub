@@ -80,9 +80,9 @@ Response: `200`
 ```json
 { "recordingIds": ["abc", "def"] }
 ```
-The caller's non-deleted recordings whose name, or whose newest transcript text, contains
-`q`. A recording appears once, whether the name or the text matched. Only the newest
-transcript of a recording is searched: it is the one the detail page shows. The ids are
+The caller's non-deleted recordings whose name, or any of the caller's transcript sources, contains
+`q`. A recording appears once, whether its name or one or more transcripts matched. Every
+source available in the detail switcher is searched, not only the newest or preferred one. The ids are
 returned in no particular order, and the list the client already has is what sorts and
 filters them.
 
