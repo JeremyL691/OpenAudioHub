@@ -14,6 +14,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Auto-play next starts the next recording in the current library order and stops at the end. Recording dates now follow the selected relative, absolute or ISO format across library rows, detail and player views.
 - Returning to the app tab syncs a connected Plaud account when enabled, with a one-minute throttle to avoid repeated syncs during rapid tab switches.
 
+- A failure to open or lock the Mac app's instance-lock file now shows a startup error instead of silently exiting as if another copy were running.
+- Launch at Login keeps its tray check mark in sync after an interface-language change rebuilds the menu.
+- Changing the Mac app's locale through desktop preferences no longer hangs while rebuilding the tray menu.
+- Native Mac menu labels and dialogs now change language immediately instead of keeping the language selected at startup.
+- The Mac app grants its own page permission to save an interface-language choice through the desktop bridge.
+- The Mac app builds its bundled ffmpeg, ffprobe and their C dependencies for the app's minimum macOS version, and rejects sidecars that require a newer system.
+
 ### Security
 
 - Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
