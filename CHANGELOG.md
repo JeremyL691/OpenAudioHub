@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Recordings with multiple transcript sources show every source in the transcript switcher, with the preferred source first. The detail API includes all transcripts while keeping the singular `transcription` field for existing clients.
 - Library text search matches every transcript source available for a recording, including older sources, without duplicate results.
 
+### Security
+
+- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
+
 ## [1.6.0] - 2026-11-06
 
 ### Added
