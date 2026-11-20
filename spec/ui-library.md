@@ -366,6 +366,7 @@ Body:
 - Source switcher (`source-switcher`): one button per transcript source ("Plaud",
   "Mix", "Your provider"). Shown only when there is more than one transcript.
   Selecting one switches the text. The primary source comes first.
+  The detail response's `transcriptions` array supplies every source in preferred-source order. With no explicit selection, the first transcript is shown; if a selected source is removed, the view and active switcher button fall back to the first remaining transcript. Older servers returning only `transcription` remain supported.
 - Toolbar (`transcript-toolbar`): "Download transcript as TXT", "Download transcript as JSON"
   (both download a file built in the browser), and "Delete" (`DELETE /api/recordings/{id}/transcription?source=<source>`
   after a confirmation titled "Delete this transcript?"; the summary is removed with it).

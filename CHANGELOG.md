@@ -8,12 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Failed and stopped Ask AI answers save their final status before notifying clients, so reloading an ended stream cannot leave the answer busy.
+- Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
+- Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
+- Recordings with multiple transcript sources show every source in the transcript switcher, with the preferred source first. The detail API includes all transcripts while keeping the singular `transcription` field for existing clients.
+- Library text search matches every transcript source available for a recording, including older sources, without duplicate results.
 - The Dashboard marks Plaud setup as skipped in local-only mode instead of incorrectly showing it as completed.
 - Saved playback, date/time and sync-on-return preferences take effect immediately without navigating away from Settings.
-
 - Auto-play next starts the next recording in the current library order and stops at the end. Recording dates now follow the selected relative, absolute or ISO format across library rows, detail and player views.
 - Returning to the app tab syncs a connected Plaud account when enabled, with a one-minute throttle to avoid repeated syncs during rapid tab switches.
-
 - A failure to open or lock the Mac app's instance-lock file now shows a startup error instead of silently exiting as if another copy were running.
 - Launch at Login keeps its tray check mark in sync after an interface-language change rebuilds the menu.
 - Changing the Mac app's locale through desktop preferences no longer hangs while rebuilding the tray menu.
