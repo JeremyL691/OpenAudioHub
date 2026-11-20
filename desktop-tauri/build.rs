@@ -3,6 +3,7 @@ fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "prefs_get",
         "prefs_set",
+        "set_locale",
         "open_plaud_browser",
         "pick_folder",
         "save_text_file",

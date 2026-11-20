@@ -12,6 +12,8 @@ DOWNLOADS="$CACHE/downloads"
 WORK="$CACHE/work"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}"
 TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
+NODE="$(command -v node)"
+export MACOSX_DEPLOYMENT_TARGET="$("$NODE" -p "require('$HERE/tauri.conf.json').bundle.macOS.minimumSystemVersion")"
 
 # shellcheck source=./fetch-source.sh
 . "$HERE/scripts/fetch-source.sh"
@@ -32,7 +34,7 @@ OPUS_TAR="$(fetch_source "$OPUS_URL" "$OPUS_SHA" "$DOWNLOADS")"
 LAME_TAR="$(fetch_source "$LAME_URL" "$LAME_SHA" "$DOWNLOADS")"
 FFMPEG_TAR="$(fetch_source "$FFMPEG_URL" "$FFMPEG_SHA" "$DOWNLOADS")"
 
-KEY="$( { echo "$FFMPEG_SHA $OPUS_SHA $LAME_SHA $TRIPLE"; cat "$0"; } | shasum -a 256 | cut -c1-16)"
+KEY="$( { echo "$FFMPEG_SHA $OPUS_SHA $LAME_SHA $TRIPLE $MACOSX_DEPLOYMENT_TARGET"; cat "$0"; } | shasum -a 256 | cut -c1-16)"
 PREFIX="$CACHE/ffmpeg-$KEY"
 if [ ! -x "$PREFIX/bin/ffmpeg" ] || [ ! -x "$PREFIX/bin/ffprobe" ]; then
     rm -rf "$WORK" "$PREFIX"
@@ -59,6 +61,7 @@ fi
 mkdir -p "$HERE/binaries" "$HERE/binaries/source"
 cp "$PREFIX/bin/ffmpeg" "$HERE/binaries/ffmpeg-$TRIPLE"
 cp "$PREFIX/bin/ffprobe" "$HERE/binaries/ffprobe-$TRIPLE"
+"$NODE" "$HERE/../tools/check/sidecar-minimum.mjs" "$HERE/binaries/ffmpeg-$TRIPLE" "$HERE/binaries/ffprobe-$TRIPLE"
 # Corresponding source of the LGPL and BSD components, shipped with each release.
 cp "$OPUS_TAR" "$LAME_TAR" "$FFMPEG_TAR" "$HERE/binaries/source/"
 "$HERE/binaries/ffmpeg-$TRIPLE" -hide_banner -buildconf | sed -n '1,3p'

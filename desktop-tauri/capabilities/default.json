@@ -9,6 +9,7 @@
     "permissions": [
         "allow-prefs-get",
         "allow-prefs-set",
+        "allow-set-locale",
         "allow-open-plaud-browser",
         "allow-pick-folder",
         "allow-save-text-file",

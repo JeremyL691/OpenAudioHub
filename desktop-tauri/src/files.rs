@@ -25,14 +25,17 @@ const LOG_MAX_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Holds an exclusive lock on `<data>/.instance.lock` for the life of the process, or `None`
 /// when another copy of the app already holds it.
-pub fn instance_lock(dir: &Path) -> Option<std::fs::File> {
+pub fn instance_lock(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
     let file = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(dir.join(".instance.lock"))
-        .ok()?;
-    file.try_lock().ok().map(|()| file)
+        .open(dir.join(".instance.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(error)) => Err(error),
+    }
 }
 
 /// Appends one UTC-stamped line to `main.log`. Logging never stops the app.
@@ -347,6 +350,23 @@ fn parse_value(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn instance_locks_distinguish_contention_and_release() {
+        let dir = tempfile::tempdir().unwrap();
+        let lock = instance_lock(dir.path()).unwrap().expect("first copy");
+        assert!(instance_lock(dir.path()).unwrap().is_none());
+        drop(lock);
+        assert!(instance_lock(dir.path()).unwrap().is_some());
+    }
+
+    #[test]
+    fn instance_lock_errors_are_not_contention() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(instance_lock(&dir.path().join("missing")).is_err());
+        std::fs::create_dir(dir.path().join(".instance.lock")).unwrap();
+        assert!(instance_lock(dir.path()).is_err());
+    }
 
     #[test]
     fn versions_compare_as_numbers() {

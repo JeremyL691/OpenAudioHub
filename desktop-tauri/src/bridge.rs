@@ -200,6 +200,7 @@ pub fn prefs_set(
         config.locale = Some(chosen.to_owned());
     }
     config.save(&shared.data_dir);
+    drop(config);
     if let Some(chosen) = locale
         && chosen != crate::i18n::current()
     {
@@ -212,6 +213,7 @@ pub fn prefs_set(
             );
         }
     }
+    let config = shared.config.lock().unwrap_or_else(|e| e.into_inner());
     Ok(prefs_json(&app, &config))
 }
 
@@ -653,6 +655,14 @@ mod tests {
 #[tauri::command]
 pub fn selftest_report(shared: State<'_, Shared>, value: String) {
     files::log(&shared.data_dir, &format!("selftest: {value}"));
+    files::log(
+        &shared.data_dir,
+        &format!(
+            "selftest native locale: {} ({})",
+            crate::i18n::current(),
+            crate::i18n::t("menu.open")
+        ),
+    );
 }
 
 #[cfg(test)]
