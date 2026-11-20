@@ -160,5 +160,6 @@ The window uses port `38400` by default. If another program uses it, the app use
 ## Problems
 
 - **The app does not start and shows "OpenAudioHub could not start".** The dialog gives the reason. Open the data folder and read `main.log` for more detail.
+- **The app cannot lock the data folder.** Check that `.instance.lock` is a regular file and that your account can write to the data folder. A second running copy exits quietly; a filesystem or locking error shows the startup-error dialog instead.
 - **The app says the disk is full.** Free at least 200 MB on the disk that holds your data folder, then open the app again.
 - **The app says config.json was written by a newer OpenAudioHub.** Install the newer version of the app.

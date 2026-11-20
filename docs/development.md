@@ -145,7 +145,7 @@ Tests create their own data. Do not depend on counts or on data from another tes
 
 ## Desktop app
 
-Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options. A download is retried with a connection and a transfer deadline, and a download failure is reported apart from a checksum mismatch:
+Build the bundled ffmpeg and ffprobe first. The script downloads pinned source archives, checks their SHA-256 sums, and builds them with LGPL-only options. It reads the minimum macOS version from `desktop-tauri/tauri.conf.json`, uses it for the sidecars and their C dependencies, and checks the resulting executables with `vtool`. Node.js is needed to read the configuration and run that check. A download is retried with a connection and a transfer deadline, and a download failure is reported apart from a checksum mismatch:
 
 ```sh
 cd desktop-tauri
@@ -163,7 +163,7 @@ npx @tauri-apps/cli@2 build
 
 The bundle is written under `target/release/bundle/` in the repository root.
 
-To run the Mac app from a development build without touching your real data, point it at a test folder:
+To run the Mac app from a development build without touching your real data, point it at a test folder. Set `OAH_DESKTOP_SELFTEST=1` on a debug build to exercise both locale bridge commands and restore the original language; `main.log` records the native labels and `localeFlow: "ok"` on completion:
 
 ```sh
 cd desktop-tauri

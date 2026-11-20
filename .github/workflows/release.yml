@@ -92,7 +92,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: desktop-tauri/.cache/ffmpeg-*
-          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh') }}
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop-tauri/scripts/build-ffmpeg.sh', 'desktop-tauri/tauri.conf.json') }}
 
       - name: Build ffmpeg and ffprobe sidecars
         working-directory: desktop-tauri

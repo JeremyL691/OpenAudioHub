@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -23,7 +24,7 @@ const KEYS_FILE_NAME: &str = "openaudiohub-keys.json";
 const TRAY_ICON: &[u8] = include_bytes!("../icons/trayTemplate@2x.png");
 
 /// The Launch at Login item, kept in app state so the preferences bridge can update its check mark.
-pub struct LoginItem(pub CheckMenuItem<Wry>);
+pub struct LoginItem(pub Mutex<CheckMenuItem<Wry>>);
 
 /// The tray and its menu, so a language change can rebuild the labels in place.
 pub struct TrayMenu {
@@ -71,7 +72,7 @@ pub fn install_tray(
             &labels.quit,
         ],
     )?;
-    app.manage(LoginItem(labels.login));
+    app.manage(LoginItem(Mutex::new(labels.login)));
 
     let mut tray = TrayIconBuilder::with_id("tray")
         .menu(&menu)
@@ -191,7 +192,9 @@ fn relabel(app: &AppHandle, locale: &str) -> tauri::Result<()> {
     if let Some(tray_state) = app.try_state::<TrayMenu>() {
         tray_state.tray.set_menu(Some(menu))?;
     }
-    app.manage(LoginItem(labels.login));
+    if let Some(item) = app.try_state::<LoginItem>() {
+        *item.0.lock().unwrap_or_else(|e| e.into_inner()) = labels.login;
+    }
     if let Some(tray_state) = app.try_state::<TrayMenu>() {
         let _ = tray_state.tray.set_visible(show_tray);
     }
@@ -201,7 +204,11 @@ fn relabel(app: &AppHandle, locale: &str) -> tauri::Result<()> {
 /// Keeps the Launch at Login check mark in step with the saved and system setting.
 pub fn set_login_checked(app: &AppHandle, on: bool) {
     if let Some(item) = app.try_state::<LoginItem>() {
-        let _ = item.0.set_checked(on);
+        let _ = item
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .set_checked(on);
     }
 }
 
