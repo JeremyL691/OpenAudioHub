@@ -219,6 +219,7 @@ Response:
   ```
 
   Poll `GET /api/recordings/{id}/audio-pipeline` until the job reaches a final state. See `audio-pipeline.md`.
+  The web client polls active jobs every two seconds. Failed polls double the delay up to 30 seconds; a successful poll resets it to two seconds. Polling stops when the job is inactive or the view unmounts.
 
 Errors:
 

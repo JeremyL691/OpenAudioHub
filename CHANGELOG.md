@@ -6,11 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-### Security
-
-- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
-
 ### Fixed
+
+- Failed and stopped Ask AI answers save their final status before notifying clients, so reloading an ended stream cannot leave the answer busy.
+- Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
+- Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
 
 - A failure to open or lock the Mac app's instance-lock file now shows a startup error instead of silently exiting as if another copy were running.
 - Launch at Login keeps its tray check mark in sync after an interface-language change rebuilds the menu.
@@ -18,6 +18,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Native Mac menu labels and dialogs now change language immediately instead of keeping the language selected at startup.
 - The Mac app grants its own page permission to save an interface-language choice through the desktop bridge.
 - The Mac app builds its bundled ffmpeg, ffprobe and their C dependencies for the app's minimum macOS version, and rejects sidecars that require a newer system.
+
+### Security
+
+- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
 
 ## [1.6.0] - 2026-11-06
 

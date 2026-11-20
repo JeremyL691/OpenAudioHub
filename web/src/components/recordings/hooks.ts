@@ -126,7 +126,7 @@ export function useTranscriptSearch(items: Recording[], needle: string): {
     // A search is about the library as it is now: a recording that was just transcribed, renamed
     // or deleted has to be asked about again, which is what this signature changes on.
     const library = items
-        .map((r) => `${r.id}:${r.hasTranscript ? 1 : 0}:${r.filename}`)
+        .map((r) => `${r.id}:${r.hasTranscript ? 1 : 0}:${r.filename}:${r.updatedAt}`)
         .sort()
         .join("|");
 
