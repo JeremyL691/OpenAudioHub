@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
 - Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
 
+### Security
+
+- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
+
 ## [1.6.0] - 2026-11-06
 
 ### Added
