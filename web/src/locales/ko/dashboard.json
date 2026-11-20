@@ -33,6 +33,7 @@
     "showAll": "모두 보기",
     "setUp": "설정",
     "connectPlaud": "Plaud 연결",
+    "plaudSkipped": "Plaud 연결 — 로컬 전용 모드에서는 건너뜀",
     "addAiProvider": "AI 제공자 추가",
     "done": "완료",
     "sourcePlaud": "Plaud",

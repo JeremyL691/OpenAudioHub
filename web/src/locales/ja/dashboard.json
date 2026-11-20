@@ -33,6 +33,7 @@
     "showAll": "すべて表示",
     "setUp": "セットアップ",
     "connectPlaud": "Plaud を接続",
+    "plaudSkipped": "Plaud を接続 — ローカル専用モードではスキップ",
     "addAiProvider": "AI プロバイダーを追加",
     "done": "完了",
     "sourcePlaud": "Plaud",

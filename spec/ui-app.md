@@ -153,7 +153,7 @@ When the account has no recordings, the page shows, after the header:
 - An empty state with the title "No recordings yet". In default mode, the description is "Sync from your Plaud account, or upload an audio file to start your library.". In local-only mode (`plaudEnabled: false`), the description is "Upload audio files or place them into your local storage folder to start your library.".
 - Buttons: `overview-upload`, "Upload audio" (opens the file picker), and, when `plaudEnabled` is true, `overview-sync`, "Sync now" (or "Syncing…" while busy).
 - A link "Add an AI provider" to `/settings/providers`, shown only when the account has no AI provider.
-- The Set up section (3.6), where Plaud setup is treated as completed when local-only mode is active.
+- The Set up section (3.7), where Plaud setup is skipped when local-only mode is active.
 
 ### 3.3 Library present
 
@@ -192,7 +192,8 @@ A region named "At a glance" with three tiles. Each tile is a link, shows its la
 
 - A section labelled "Set up" with two rows, in this order: "Connect Plaud" (to `/settings/plaud-account`) and "Add an AI provider" (to `/settings/providers`).
 - A row that is not done is a link. A done row shows a check, the text "Done" for screen readers, and no link.
-- The whole section is hidden once Plaud is connected and at least one AI provider exists.
+- In local-only mode the Plaud row instead shows "Connect Plaud — skipped in local-only mode", a neutral circle and no link or "Done" label. Its accessible status name matches the visible translated text.
+- The whole section is hidden once Plaud is connected or skipped and at least one AI provider exists.
 
 ### 3.8 Data
 
@@ -200,6 +201,8 @@ A region named "At a glance" with three tiles. Each tile is a link, shows its la
 - Titles are shown decrypted, for the viewer only.
 
 ## 4. Settings
+
+Successful preference saves notify the mounted shell immediately, without navigation or a reload. Auto-play, recording date formatting and visibility sync use the saved values; failed saves do not change the shell. A shell settings request already in flight cannot overwrite a newer successful save.
 
 ### 4.1 Structure
 

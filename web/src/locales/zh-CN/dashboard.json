@@ -33,6 +33,7 @@
     "showAll": "查看全部",
     "setUp": "设置",
     "connectPlaud": "连接 Plaud",
+    "plaudSkipped": "连接 Plaud — 仅本地模式下已跳过",
     "addAiProvider": "添加 AI 服务商",
     "done": "完成",
     "sourcePlaud": "Plaud",

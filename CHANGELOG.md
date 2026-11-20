@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The Dashboard marks Plaud setup as skipped in local-only mode instead of incorrectly showing it as completed.
+- Saved playback, date/time and sync-on-return preferences take effect immediately without navigating away from Settings.
+
 - Auto-play next starts the next recording in the current library order and stops at the end. Recording dates now follow the selected relative, absolute or ISO format across library rows, detail and player views.
 - Returning to the app tab syncs a connected Plaud account when enabled, with a one-minute throttle to avoid repeated syncs during rapid tab switches.
 

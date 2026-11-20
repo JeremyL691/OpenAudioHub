@@ -33,6 +33,7 @@
     "showAll": "Show all",
     "setUp": "Set up",
     "connectPlaud": "Connect Plaud",
+    "plaudSkipped": "Connect Plaud — skipped in local-only mode",
     "addAiProvider": "Add an AI provider",
     "done": "Done",
     "sourcePlaud": "Plaud",
