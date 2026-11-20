@@ -73,6 +73,13 @@
         "defaultModel": "the provider's default model"
     },
     "browser": {
+        "decode": "Decoding audio…",
+        "model": "Loading model… {percent}%",
+        "transcribe": "Transcribing…",
+        "save": "Saving…",
+        "loading": "Transcribing in browser…",
+        "success": "Transcribed in browser",
+        "failed": "Browser transcription failed",
         "action": "Transcribe in browser",
         "title": "Run Whisper right here in your browser. No API key needed, and the audio never leaves your device."
     },

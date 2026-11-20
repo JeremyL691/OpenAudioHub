@@ -2,17 +2,19 @@ import { useCallback, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { type BrowserAsrStage, transcribeRecordingInBrowser } from "@/lib/browser-asr";
+import { t } from "@/lib/i18n";
+import { RECORDINGS_CHANGED } from "@/lib/recordings";
 
 function stageLabel(s: BrowserAsrStage): string {
     switch (s.stage) {
         case "decode":
-            return "Decoding audio…";
+            return t("recording.browser.decode");
         case "model":
-            return `Loading model… ${s.percent}%`;
+            return t("recording.browser.model", { percent: s.percent });
         case "transcribe":
-            return "Transcribing…";
+            return t("recording.browser.transcribe");
         case "save":
-            return "Saving…";
+            return t("recording.browser.save");
     }
 }
 
@@ -55,7 +57,7 @@ export async function transcribeInBrowser(
     if (inFlight.has(recordingId)) return;
     const first = stageLabel({ stage: "decode" });
     setInFlight(recordingId, first);
-    const toastId = toast.loading("Transcribing in browser…");
+    const toastId = toast.loading(t("recording.browser.loading"));
     try {
         const language = await defaultLanguage();
         await transcribeRecordingInBrowser(recordingId, language, (s) => {
@@ -63,10 +65,11 @@ export async function transcribeInBrowser(
             setInFlight(recordingId, label);
             onStage(label);
         });
-        toast.success("Transcribed in browser", { id: toastId });
+        toast.success(t("recording.browser.success"), { id: toastId });
+        window.dispatchEvent(new Event(RECORDINGS_CHANGED));
         onDone();
     } catch (error) {
-        const message = error instanceof Error && error.message ? error.message : "Browser transcription failed";
+        const message = error instanceof Error && error.message ? error.message : t("recording.browser.failed");
         toast.error(message, { id: toastId });
     } finally {
         setInFlight(recordingId, null);

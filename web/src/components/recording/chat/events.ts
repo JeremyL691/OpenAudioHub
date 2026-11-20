@@ -4,7 +4,7 @@
  * The first event is the whole turn and later events are changes, so a stream that drops is
  * reopened and the answer it already had is kept: nothing here asks a provider for anything.
  */
-import { chatEventsPath, type ChatTurn, type ChatTurnEvent } from "./types";
+import { chatEventsPath, isFinalStatus, type ChatTurn, type ChatTurnEvent } from "./types";
 
 export interface StreamHandlers {
     onSnapshot(event: Extract<ChatTurnEvent, { type: "snapshot" }>): void;
@@ -23,18 +23,42 @@ export function openTurnStream(recordingId: string, turnId: string, handlers: St
 }
 
 async function read(recordingId: string, turnId: string, handlers: StreamHandlers, signal: AbortSignal): Promise<void> {
-    let closed = false;
-    try {
-        const response = await fetch(chatEventsPath(recordingId, turnId), {
-            credentials: "same-origin",
-            headers: { accept: "text/event-stream" },
-            signal,
-        });
-        if (!response.ok || !response.body) {
-            handlers.onError(`Request failed (${response.status})`);
+    for (let attempt = 0; attempt < 5 && !signal.aborted; attempt++) {
+        try {
+            await readOnce(recordingId, turnId, handlers, signal);
             return;
+        } catch {
+            if (signal.aborted) return;
+            if (attempt === 4) {
+                handlers.onError("The connection to the answer was lost.");
+                return;
+            }
+            await new Promise<void>((resolve) => {
+                const finish = () => {
+                    clearTimeout(timer);
+                    signal.removeEventListener("abort", finish);
+                    resolve();
+                };
+                const timer = setTimeout(finish, Math.min(500 * 2 ** attempt, 8000));
+                signal.addEventListener("abort", finish, { once: true });
+            });
         }
-        const reader = response.body.getReader();
+    }
+}
+
+async function readOnce(recordingId: string, turnId: string, handlers: StreamHandlers, signal: AbortSignal): Promise<void> {
+    let closed = false;
+    const response = await fetch(chatEventsPath(recordingId, turnId), {
+        credentials: "same-origin",
+        headers: { accept: "text/event-stream" },
+        signal,
+    });
+    if (!response.ok || !response.body) {
+        handlers.onError(`Request failed (${response.status})`);
+        return;
+    }
+    const reader = response.body.getReader();
+    try {
         const decoder = new TextDecoder();
         let buffer = "";
         for (;;) {
@@ -46,18 +70,20 @@ async function read(recordingId: string, turnId: string, handlers: StreamHandler
             while (boundary >= 0) {
                 const frame = buffer.slice(0, boundary);
                 buffer = buffer.slice(boundary + 2);
-                if (handle(frame, handlers)) closed = true;
+                if (handle(frame, handlers)) {
+                    closed = true;
+                    break;
+                }
                 boundary = buffer.indexOf("\n\n");
             }
             if (closed) break;
         }
         if (!closed && buffer.trim()) {
-            handle(buffer, handlers);
+            closed = handle(buffer, handlers);
         }
+        if (!closed) throw new Error("Incomplete answer stream");
+    } finally {
         reader.cancel().catch(() => undefined);
-    } catch (err) {
-        if (signal.aborted) return;
-        handlers.onError(err instanceof Error ? err.message : "The connection to the answer was lost.");
     }
 }
 
@@ -86,12 +112,20 @@ function handle(frame: string, handlers: StreamHandlers): boolean {
                 provider: nullableString(payload.provider),
                 error: errorOf(payload.error),
             });
+            if (isFinalStatus(String(payload.status ?? ""))) {
+                handlers.onDone();
+                return true;
+            }
             break;
         case "delta":
             handlers.onDelta({ type: "delta", version, text: String(payload.text ?? "") });
             break;
         case "state":
             handlers.onState({ type: "state", version, status: String(payload.status ?? "") });
+            if (isFinalStatus(String(payload.status ?? ""))) {
+                handlers.onDone();
+                return true;
+            }
             break;
         case "citations":
             handlers.onCitations({ type: "citations", version, citations: Array.isArray(payload.citations) ? payload.citations : [] });
@@ -101,7 +135,7 @@ function handle(frame: string, handlers: StreamHandlers): boolean {
             return true;
         case "error":
             handlers.onError(String(payload.message ?? "The answer failed."));
-            break;
+            return true;
         default:
             break;
     }
