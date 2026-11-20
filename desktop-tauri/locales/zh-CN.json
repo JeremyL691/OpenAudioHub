@@ -23,6 +23,7 @@
         "startFailedTitle": "OpenAudioHub 无法启动"
     },
     "error": {
+        "instanceLockFailed": "无法锁定数据文件夹：{reason}",
         "downloadInProgress": "已有下载正在进行",
         "formatInvalid": "format 必须是 mp3 或 original",
         "idsInvalid": "ids 必须是 1 到 100 个录音 ID",
