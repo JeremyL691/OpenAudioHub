@@ -91,9 +91,22 @@ export function usePipelineWatch(id: string, onSettled: () => void) {
 
     useEffect(() => {
         if (!active) return;
-        const timer = window.setTimeout(() => void refresh(), 2000);
-        return () => window.clearTimeout(timer);
-    }, [active, pipeline, refresh]);
+        let stopped = false;
+        let delay = 2000;
+        let timer: number;
+        const poll = async () => {
+            const next = await refresh();
+            if (stopped) return;
+            if (next?.job && !isActiveStatus(next.job.status)) return;
+            delay = next ? 2000 : Math.min(delay * 2, 30000);
+            timer = window.setTimeout(() => void poll(), delay);
+        };
+        timer = window.setTimeout(() => void poll(), delay);
+        return () => {
+            stopped = true;
+            window.clearTimeout(timer);
+        };
+    }, [active, refresh]);
 
     const queue = useCallback(() => {
         setQueuedLocally(true);
