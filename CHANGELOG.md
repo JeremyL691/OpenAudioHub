@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
+
 ## [1.6.0] - 2026-11-06
 
 ### Added
