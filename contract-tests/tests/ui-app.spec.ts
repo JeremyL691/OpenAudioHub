@@ -247,6 +247,25 @@ test.describe("shell: account menu", () => {
 });
 
 test.describe("dashboard", () => {
+    test("local-only mode marks Plaud setup as skipped rather than completed", async ({ browser }) => {
+        const { api, page, close } = await freshPage(browser);
+        try {
+            expect((await api.put("/api/settings/user", { data: { plaudEnabled: false } })).status()).toBe(200);
+            await page.goto("/dashboard");
+            const setup = page.getByRole("region", { name: "Set up" });
+            const skipped = setup.getByRole("status", { name: "Connect Plaud — skipped in local-only mode", exact: true });
+            await expect(skipped).toBeVisible();
+            await expect(skipped).toHaveText("Connect Plaud — skipped in local-only mode");
+            await expect(skipped.locator(".text-success")).toHaveCount(0);
+            await expect(skipped.getByText("Done", { exact: true })).toHaveCount(0);
+            await expect(setup.getByRole("link", { name: /Connect Plaud/ })).toHaveCount(0);
+            await expect(setup.getByRole("link", { name: "Add an AI provider" })).toBeVisible();
+            expect(await (await api.get("/api/plaud/connection")).json()).toMatchObject({ connected: false });
+        } finally {
+            await close();
+        }
+    });
+
     test("a new account sees the empty state and the set up list", async ({ browser }) => {
         const { page, close } = await freshPage(browser);
         try {

@@ -27,6 +27,8 @@ import { downloadRecordings } from "@/lib/downloads";
 import { deleteRecording, type Recording } from "@/lib/recordings";
 import { transcribeInBrowser as runBrowserTranscription } from "@/components/recording/browser-transcribe";
 import { PreviewPane } from "./preview-pane";
+import { usePlayer } from "@/components/player/player-context";
+import { useShellData } from "@/components/shell/shell-data";
 
 /** The Library page at /recordings: the list, the detail pane beside it, and the bulk and row actions. */
 export default function LibraryPage() {
@@ -41,6 +43,8 @@ export default function LibraryPage() {
     const prefs = useLibraryPrefs();
     const isDesktop = useIsDesktop();
     const uploads = useUploads();
+    const player = usePlayer();
+    const { settings } = useShellData();
 
     const [query, setQuery] = useState(() => seedQuery(qParam));
     const [filter, setFilter] = useState<StatusFilter>(() => parseFilter(filterParam));
@@ -111,6 +115,21 @@ export default function LibraryPage() {
         },
         [setParams],
     );
+
+    const onEnded = player?.onEnded;
+    const load = player?.load;
+    const playingId = player?.current?.id;
+    useEffect(() => {
+        if (!settings?.autoPlayNext || !onEnded || !load) return;
+        return onEnded(() => {
+            const index = visible.findIndex((r) => r.id === playingId);
+            const next = index >= 0 ? visible[index + 1] : undefined;
+            if (!next) return;
+            setLimit((current) => Math.max(current, index + 2));
+            select(next.id);
+            load({ id: next.id, title: next.filename }, true);
+        });
+    }, [settings?.autoPlayNext, onEnded, load, playingId, visible, select]);
 
     function toggle(id: string) {
         setSelected((prev) => {

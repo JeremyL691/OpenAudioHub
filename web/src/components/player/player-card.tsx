@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
 import { downloadRecordings } from "@/lib/downloads";
-import { formatBytes, formatClock } from "@/lib/format";
-import { intlLocale, useI18n } from "@/lib/i18n";
+import { formatBytes, formatClock, formatRecordingDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
+import { useShellData } from "@/components/shell/shell-data";
 import { cn } from "@/lib/cn";
 import { RECORDINGS_CHANGED } from "@/lib/recordings";
 import { PLAYBACK_RATES, usePlayer } from "./player-context";
@@ -68,18 +69,18 @@ export function PlayerCard({ recording, onChanged, sectionRef, className, showHe
     );
 }
 
-/** "Oct 16, 2026 · 11:02 PM–11:02 PM", the start and end of the recording. */
-function recordedRange(startIso: string, durationMs: number): string {
+/** The recording's start and end in the preferred date/time format. */
+function recordedRange(startIso: string, durationMs: number, dateTimeFormat: unknown): string {
     const start = new Date(startIso);
     const end = new Date(start.getTime() + durationMs);
-    const date = new Intl.DateTimeFormat(intlLocale(), { month: "short", day: "numeric", year: "numeric" }).format(start);
-    const time = new Intl.DateTimeFormat(intlLocale(), { hour: "numeric", minute: "2-digit" });
-    return `${date} · ${time.format(start)}–${time.format(end)}`;
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return "";
+    return `${formatRecordingDate(start, dateTimeFormat)}–${formatRecordingDate(end, dateTimeFormat)}`;
 }
 
 /** Title, recorded range, length and size, with the audio download on the right. */
 function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
     const { t } = useI18n();
+    const { settings } = useShellData();
     const { id, filename, duration, startTime, filesize } = recording;
     const facts: string[] = [formatClock(duration / 1000)];
     if (filesize) facts.push(formatBytes(filesize));
@@ -90,7 +91,7 @@ function PlayerHeader({ recording }: { recording: PlayerCardRecording }) {
                 <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
                     {startTime ? (
                         <span>
-                            {t("library.player.recorded")} <time dateTime={startTime}>{recordedRange(startTime, duration)}</time>
+                            {t("library.player.recorded")} <time dateTime={startTime}>{recordedRange(startTime, duration, settings?.dateTimeFormat)}</time>
                         </span>
                     ) : null}
                     {facts.map((fact) => (

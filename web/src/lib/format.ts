@@ -62,6 +62,15 @@ export function formatDateTime(value: DateInput, locale: string = intlLocale()):
     return toDate(value).toLocaleString(locale);
 }
 
+/** Recording dates follow the account's date/time display preference. */
+export function formatRecordingDate(value: DateInput, preference: unknown = "relative", now: Date = new Date()): string {
+    const date = toDate(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    if (preference === "iso") return date.toISOString();
+    if (preference === "absolute") return formatDateTime(date);
+    return formatRelative(date, now);
+}
+
 /** Relative time, for example "5 minutes ago", "yesterday" or "in 2 hours". */
 export function formatRelative(value: DateInput, now: Date = new Date(), locale: string = intlLocale()): string {
     const diffSeconds = (toDate(value).getTime() - now.getTime()) / 1000;

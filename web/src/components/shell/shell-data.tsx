@@ -6,6 +6,7 @@ import { api, errorMessage } from "@/lib/api";
 import { listRecordings, RECORDINGS_CHANGED, sourceOf, type Recording } from "@/lib/recordings";
 import { startUploads } from "@/components/recordings/uploads";
 import { setTheme, type ThemeChoice } from "@/lib/theme";
+import { notifySettingsChanged, observeSettingsChanges } from "@/lib/settings-events";
 
 /** GET /api/plaud/connection (spec/plaud.md). */
 export interface PlaudConnection {
@@ -113,6 +114,9 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
     const settingsRef = useRef<UserSettings | null>(null);
     settingsRef.current = settings;
     const mountSyncDone = useRef(false);
+    const lastVisibilitySync = useRef<number | null>(null);
+    const settingsVersion = useRef(0);
+    const settingsChanges = useRef(new Map<string, { version: number; value: unknown }>());
     const { pathname } = useLocation();
 
     const refreshRecordings = useCallback(async () => {
@@ -132,6 +136,7 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const reload = useCallback(async () => {
+        const version = settingsVersion.current;
         const [recs, providers, prefs] = await Promise.all([
             listRecordings().catch(() => null),
             api<{ providers: unknown[] }>("/api/settings/ai/providers").then(
@@ -142,9 +147,18 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
         ]);
         if (recs) setRecordings(recs);
         setProviderCount(providers);
+        for (const [key, change] of settingsChanges.current) {
+            if (change.version > version) prefs[key] = change.value;
+        }
         setSettings(prefs);
         await refreshConnection();
     }, [refreshConnection]);
+
+    useEffect(() => observeSettingsChanges((patch) => {
+        const version = ++settingsVersion.current;
+        for (const [key, value] of Object.entries(patch)) settingsChanges.current.set(key, { version, value });
+        setSettings((current) => current ? { ...current, ...patch } : current);
+    }), []);
 
     // Reload on every route change, so Set up and counts follow the last change made elsewhere.
     useEffect(() => {
@@ -227,9 +241,23 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
         return () => window.clearInterval(id);
     }, [plaudEnabled, connected, autoSync, interval, syncNow]);
 
+    const syncOnVisible = settings !== null && settings.syncOnVisibilityChange !== false;
+    useEffect(() => {
+        if (!plaudEnabled || !connected || !syncOnVisible) return;
+        const onVisibilityChange = () => {
+            if (document.visibilityState !== "visible" || syncLock.current) return;
+            const now = Date.now();
+            if (lastVisibilitySync.current !== null && now - lastVisibilitySync.current < ONE_MINUTE) return;
+            lastVisibilitySync.current = now;
+            void syncNow({ quiet: true });
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+    }, [plaudEnabled, connected, syncOnVisible, syncNow]);
+
     const updateSettings = useCallback(async (patch: Record<string, unknown>) => {
         await api("/api/settings/user", { method: "PUT", json: patch });
-        setSettings((s) => ({ ...(s ?? {}), ...patch }));
+        notifySettingsChanged(patch);
     }, []);
 
     const openUploadPicker = useCallback(() => inputRef.current?.click(), []);

@@ -6,9 +6,10 @@ import { RecordingStatusBadge } from "@/components/ui/status-badge";
 import { recordingStage } from "@/components/recording/pipeline-labels";
 import { cn } from "@/lib/cn";
 import { downloadRecordings } from "@/lib/downloads";
-import { formatClock } from "@/lib/format";
+import { formatClock, formatRecordingDate } from "@/lib/format";
+import { useShellData } from "@/components/shell/shell-data";
 import type { Recording } from "@/lib/recordings";
-import { formatAgo, rowLabel, sourceLabel } from "./library-model";
+import { rowLabel, sourceLabel } from "./library-model";
 import { useI18n } from "@/lib/i18n";
 
 export interface RowActions {
@@ -40,7 +41,8 @@ export interface RecordingRowProps {
  */
 export function RecordingRow({ recording: r, selected, selectMode, checked, compact, transcribing, onActivate, actions }: RecordingRowProps) {
     const stage = recordingStage(r);
-    const ago = formatAgo(r.startTime);
+    const { settings } = useShellData();
+    const ago = formatRecordingDate(r.startTime, settings?.dateTimeFormat);
     const meta = ago ? `${ago} · ${sourceLabel(r)}` : sourceLabel(r);
     const onSelected = selected && !selectMode;
 
@@ -48,7 +50,7 @@ export function RecordingRow({ recording: r, selected, selectMode, checked, comp
         <div data-testid="recording-row" data-id={r.id} data-selected={selected ? "true" : "false"} className="group relative">
             <button
                 type="button"
-                aria-label={rowLabel(r)}
+                aria-label={rowLabel(r, settings?.dateTimeFormat)}
                 aria-pressed={selectMode ? checked : undefined}
                 aria-current={!selectMode && selected ? "true" : undefined}
                 onClick={() => onActivate(r.id)}

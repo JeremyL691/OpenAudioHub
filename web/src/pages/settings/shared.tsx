@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { type ThemeChoice } from "@/lib/theme";
 import { type SectionDef } from "./nav";
 import { t, useI18n } from "@/lib/i18n";
+import { notifySettingsChanged } from "@/lib/settings-events";
 
 // ---------- settings record ----------
 
@@ -154,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setSaving((s) => new Set([...s, ...keys]));
         try {
             await api("/api/settings/user", { method: "PUT", json: patch });
+            notifySettingsChanged(patch);
             return true;
         } catch {
             if (!keepOnFailure) {

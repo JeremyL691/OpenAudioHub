@@ -485,10 +485,11 @@ The web app's shell calls `POST /api/plaud/sync` while a page is open and the co
 | sync on mount | on | One quiet sync when the app shell loads. Off when `syncOnMount` is `false`. |
 | interval | 5 minutes | Sync at this interval. The settings offer 1, 2, 5, 10, 15 and 30 minutes. The value is never less than 1 minute. Ticks are skipped while the page is hidden. |
 | enabled | on | Off when `autoSyncEnabled` is `false`. |
+| sync on return | on | On `visibilitychange` to `visible`, sync quietly when `syncOnVisibilityChange` is not `false`, Plaud is enabled and connected without a reconnect requirement. At most one visibility-triggered sync per minute; events during an existing sync are skipped. This setting is independent of interval sync. |
 
 Quiet syncs show no toast on success or failure. A sync is not started while another sync from the same page is running.
 
-The interval and on/off are saved as user settings: `syncInterval` (milliseconds), `autoSyncEnabled`, `syncOnMount`, `syncOnVisibilityChange`, `syncNotifications`. The client does not act on `syncOnVisibilityChange`; it is stored only. Browser storage is not used for these settings.
+The interval and on/off are saved as user settings: `syncInterval` (milliseconds), `autoSyncEnabled`, `syncOnMount`, `syncOnVisibilityChange`, `syncNotifications`. Browser storage is not used for these settings. The visibility listener is removed when the shell unmounts or the setting or connection no longer permits sync.
 
 The worker skips users synced in the last 4 minutes, so a recent browser sync also keeps the worker from running for that user.
 

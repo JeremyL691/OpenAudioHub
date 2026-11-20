@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { errorMessage } from "@/lib/api";
 import { downloadRecordings } from "@/lib/downloads";
-import { formatClock, formatDateTime } from "@/lib/format";
+import { formatClock, formatRecordingDate } from "@/lib/format";
+import { useShellData } from "@/components/shell/shell-data";
 import { cn } from "@/lib/cn";
 import { deleteRecording, type Recording, renameRecording, setStarred, sourceOf } from "@/lib/recordings";
 import { buildSrt, buildTranscriptJson, buildVtt, downloadText, safeFileName } from "./exports";
@@ -90,8 +91,9 @@ export function RecordingHeader({ variant, recording, transcript, busy, onTransc
 
     const Heading = variant === "page" ? "h1" : "h2";
     const hasTimeline = Boolean(transcript?.timeline?.length);
+    const { settings } = useShellData();
     const meta = [
-        formatDateTime(recording.startTime),
+        formatRecordingDate(recording.startTime, settings?.dateTimeFormat),
         formatClock(recording.duration / 1000),
         sourceOf(recording) === "upload" ? t("dashboard.sourceUpload") : t("dashboard.sourcePlaud"),
     ];

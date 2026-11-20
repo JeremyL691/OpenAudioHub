@@ -126,14 +126,14 @@ function DashboardContent() {
                             </>
                         }
                     />
-                    <SetUp plaudDone={!plaudEnabled || connected} providerDone={(providerCount ?? 0) > 0} />
+                    <SetUp plaudDone={connected} plaudSkipped={!plaudEnabled} providerDone={(providerCount ?? 0) > 0} />
                 </div>
             ) : (
                 <>
                     <AtAGlance recordings={recordings} />
                     <LatestRecording recording={newestFirst(recordings)[0]} />
                     <RecentRecordings recordings={newestFirst(recordings).slice(0, RECENT_LIMIT)} />
-                    <SetUp plaudDone={!plaudEnabled || connected} providerDone={(providerCount ?? 0) > 0} />
+                    <SetUp plaudDone={connected} plaudSkipped={!plaudEnabled} providerDone={(providerCount ?? 0) > 0} />
                 </>
             )}
         </div>
@@ -257,23 +257,28 @@ function RowStatus({ recording }: { recording: Recording }) {
     return <RecordingStatusBadge stage={recordingStage(recording)} className="hidden sm:inline-flex" />;
 }
 
-function SetUp({ plaudDone, providerDone }: { plaudDone: boolean; providerDone: boolean }) {
-    if (plaudDone && providerDone) return null;
+function SetUp({ plaudDone, plaudSkipped, providerDone }: { plaudDone: boolean; plaudSkipped: boolean; providerDone: boolean }) {
+    if ((plaudDone || plaudSkipped) && providerDone) return null;
     return (
         <section aria-labelledby="set-up-heading" className="flex flex-col gap-2.5">
             <h2 id="set-up-heading" className="text-[17px] font-semibold">
                 {t("dashboard.setUp")}
             </h2>
             <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-card shadow-card">
-                <SetUpRow done={plaudDone} title={t("dashboard.connectPlaud")} to="/settings/plaud-account" />
+                <SetUpRow done={plaudDone} skipped={plaudSkipped} title={t(plaudSkipped ? "dashboard.plaudSkipped" : "dashboard.connectPlaud")} to="/settings/plaud-account" />
                 <SetUpRow done={providerDone} title={t("dashboard.addAiProvider")} to="/settings/providers" />
             </ul>
         </section>
     );
 }
 
-function SetUpRow({ done, title, to }: { done: boolean; title: string; to: string }): ReactNode {
-    const body = done ? (
+function SetUpRow({ done, skipped = false, title, to }: { done: boolean; skipped?: boolean; title: string; to: string }): ReactNode {
+    const body = skipped ? (
+        <>
+            <Circle aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1">{title}</span>
+        </>
+    ) : done ? (
         <>
             <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />
             <span className="flex-1">{title}</span>
@@ -288,8 +293,8 @@ function SetUpRow({ done, title, to }: { done: boolean; title: string; to: strin
     );
     return (
         <li>
-            {done ? (
-                <div className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground">{body}</div>
+            {done || skipped ? (
+                <div role={skipped ? "status" : undefined} aria-label={skipped ? title : undefined} className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground">{body}</div>
             ) : (
                 <Link
                     to={to}
