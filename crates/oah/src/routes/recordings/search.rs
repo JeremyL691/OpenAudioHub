@@ -78,28 +78,16 @@ pub async fn search(
         }
     }
 
-    // A recording's own transcript is the one the detail page shows: the newest one for the
-    // recording. Matching any older transcript would show a recording that no longer contains
-    // the text the user searched for.
-    // The transcript a search is about is the one the detail page shows: the newest for the
-    // recording, with the same tie-break so two rows of one timestamp cannot disagree. Grouping
-    // keeps it to one row per recording.
     let transcripts: Vec<(String, String)> = sqlx::query_as(
-        "SELECT recording_id, text FROM (
-             SELECT recording_id, text,
-                    ROW_NUMBER() OVER (PARTITION BY recording_id ORDER BY created_at DESC, id DESC) AS rank
-             FROM transcriptions WHERE user_id = ?
-         ) WHERE rank = 1
-           AND EXISTS (SELECT 1 FROM recordings r WHERE r.id = recording_id AND r.user_id = ? AND r.deleted_at IS NULL)",
+        "SELECT t.recording_id, t.text FROM transcriptions t
+         JOIN recordings r ON r.id = t.recording_id
+         WHERE t.user_id = ? AND r.user_id = ? AND r.deleted_at IS NULL",
     )
     .bind(&user.id)
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
     for (recording_id, text) in transcripts {
-        if matched.contains(&recording_id) {
-            continue;
-        }
         let plain = state
             .config
             .field_key
@@ -305,11 +293,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn only_the_newest_transcript_is_searched() {
+    async fn all_transcript_sources_are_searched_once_per_recording() {
         let (state, _dir) = state().await;
         recording(&state, "r1", "u", "name").await;
-        // Two transcripts of different sources: the newest one is what the detail page shows, so
-        // it is the text a search is about.
         sqlx::query(
             "INSERT INTO transcriptions (id, recording_id, user_id, text, transcription_type, provider, model, source, created_at)
              VALUES ('old', 'r1', 'u', ?, 'server', 'Plaud', 'plaud-native', 'plaud', 0)",
@@ -326,11 +312,25 @@ mod tests {
         .execute(&state.db)
         .await
         .unwrap();
-        assert!(
-            ids_for(&state, "u", "old words").await.unwrap().is_empty(),
-            "an older transcript is not what a search is about"
-        );
+        transcript(&state, "r1", "other", "foreign secret").await;
+        assert_eq!(ids_for(&state, "u", "old words").await.unwrap(), ["r1"]);
         assert_eq!(ids_for(&state, "u", "new words").await.unwrap(), ["r1"]);
+        assert_eq!(ids_for(&state, "u", "words").await.unwrap(), ["r1"]);
+        assert!(
+            ids_for(&state, "u", "foreign secret")
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(ids_for(&state, "u", "absent").await.unwrap().is_empty());
+        sqlx::query("UPDATE transcriptions SET text = 'v1:invalid' WHERE id = 'old'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(
+            ids_for(&state, "u", "new words").await.unwrap_err().code,
+            "SEARCH_FAILED"
+        );
     }
 
     /// A stored value that cannot be read makes the search an error. Reporting it as a complete

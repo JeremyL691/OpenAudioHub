@@ -12,6 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
 - Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
 
+- Recordings with multiple transcript sources show every source in the transcript switcher, with the preferred source first. The detail API includes all transcripts while keeping the singular `transcription` field for existing clients.
+- Library text search matches every transcript source available for a recording, including older sources, without duplicate results.
+
 - A failure to open or lock the Mac app's instance-lock file now shows a startup error instead of silently exiting as if another copy were running.
 - Launch at Login keeps its tray check mark in sync after an interface-language change rebuilds the menu.
 - Changing the Mac app's locale through desktop preferences no longer hangs while rebuilding the tray menu.
