@@ -557,22 +557,28 @@ async fn detail(
     UrlPath(id): UrlPath<String>,
 ) -> ApiResult<Json<Value>> {
     let row = find(&state, &user.id, &id).await?;
-    let transcript = sqlx::query_as::<_, TranscriptRow>(
+    let settings = crate::routes::settings::effective(&state, &user.id).await?;
+    let preferred = settings["preferredTranscriptSource"]
+        .as_str()
+        .unwrap_or("plaud");
+    let transcripts = sqlx::query_as::<_, TranscriptRow>(
         "SELECT id, recording_id, user_id, text, detected_language, transcription_type, provider, model, timeline, timeline_source, \
          source, created_at FROM transcriptions WHERE recording_id = ? AND user_id = ? \
-         ORDER BY created_at DESC LIMIT 1",
+         ORDER BY CASE WHEN source = ? THEN 0 ELSE 1 END, created_at DESC, id DESC",
     )
     .bind(id.as_str())
     .bind(user.id.as_str())
-    .fetch_optional(&state.db)
+    .bind(preferred)
+    .fetch_all(&state.db)
     .await?;
-    let transcription = match transcript {
-        Some(t) => transcript_json(&state.config.field_key, t)?,
-        None => Value::Null,
-    };
+    let transcriptions = transcripts
+        .into_iter()
+        .map(|t| transcript_json(&state.config.field_key, t))
+        .collect::<ApiResult<Vec<_>>>()?;
+    let transcription = transcriptions.first().cloned().unwrap_or(Value::Null);
     let recording = row_json(&state.config.field_key, row)?;
     Ok(Json(
-        json!({ "recording": recording, "transcription": transcription }),
+        json!({ "recording": recording, "transcription": transcription, "transcriptions": transcriptions }),
     ))
 }
 
@@ -2014,6 +2020,136 @@ mod tests {
             .await
             .unwrap()
             .to_vec()
+    }
+
+    #[tokio::test]
+    async fn detail_returns_all_sources_in_preferred_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::Config::for_tests(dir.path());
+        let state = AppState::new(config, crate::db::open_memory().await.unwrap());
+        for id in ["u1", "u2"] {
+            sqlx::query(
+                "INSERT INTO users (id, email, created_at, updated_at) VALUES (?, ?, 0, 0)",
+            )
+            .bind(id)
+            .bind(format!("{id}@example.test"))
+            .execute(&state.db)
+            .await
+            .unwrap();
+        }
+        insert(
+            &state.db,
+            &state.config.field_key,
+            NewRecording {
+                id: "rec",
+                user_id: "u1",
+                plaud_file_id: "rec",
+                title: "Meeting",
+                duration: 3_000,
+                start: 0,
+                filesize: 10,
+                file_md5: "00000000000000000000000000000000",
+                storage_type: "local",
+                storage_path: "u1/rec.mp3",
+                title_source: "original",
+                auto_export_eligible: false,
+                waveform_peaks: None,
+            },
+        )
+        .await
+        .unwrap();
+        let user = |id: &str| CurrentUser {
+            id: id.into(),
+            email: format!("{id}@example.test"),
+            name: None,
+            session_id: "session".into(),
+        };
+        let read = || detail(State(state.clone()), user("u1"), UrlPath("rec".into()));
+        let Json(empty) = read().await.unwrap();
+        assert_eq!(empty["transcriptions"], json!([]));
+        assert_eq!(empty["transcription"], Value::Null);
+
+        let timeline = json!([{ "start_ms": 0, "end_ms": 1000, "text": "Hello" }]);
+        for (id, owner, source, created) in [
+            ("p", "u1", "plaud", 10),
+            ("a", "u1", "openaudiohub", 20),
+            ("m", "u1", "mixed", 20),
+            ("foreign", "u2", "plaud", 100),
+        ] {
+            sqlx::query(
+                "INSERT INTO transcriptions (id, recording_id, user_id, text, provider, model, timeline, timeline_source, source, created_at) \
+                 VALUES (?, 'rec', ?, ?, 'provider', 'model', ?, 'native', ?, ?)",
+            )
+            .bind(id)
+            .bind(owner)
+            .bind(state.config.field_key.encrypt(&format!("Text from {source}")))
+            .bind(state.config.field_key.encrypt_json(&timeline).to_string())
+            .bind(source)
+            .bind(created)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        }
+        let sources = |data: &Value| -> Vec<String> {
+            data["transcriptions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["source"].as_str().unwrap().to_owned())
+                .collect()
+        };
+        let Json(default) = read().await.unwrap();
+        assert_eq!(sources(&default), ["plaud", "mixed", "openaudiohub"]);
+        assert_eq!(default["transcription"], default["transcriptions"][0]);
+        assert_eq!(default["transcription"]["text"], "Text from plaud");
+        assert_eq!(default["transcription"]["timeline"], timeline);
+        for row in default["transcriptions"].as_array().unwrap() {
+            assert_eq!(row["userId"], "u1");
+            assert_eq!(row["timeline"], timeline);
+        }
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u1', ?, 0)")
+            .bind(json!({ "preferredTranscriptSource": "openaudiohub" }).to_string())
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let Json(preferred) = read().await.unwrap();
+        assert_eq!(sources(&preferred), ["openaudiohub", "mixed", "plaud"]);
+        assert_eq!(preferred["transcription"], preferred["transcriptions"][0]);
+
+        sqlx::query("DELETE FROM transcriptions WHERE id = 'a'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let Json(absent) = read().await.unwrap();
+        assert_eq!(sources(&absent), ["mixed", "plaud"]);
+        assert_eq!(absent["transcription"]["source"], "mixed");
+        sqlx::query("DELETE FROM transcriptions WHERE id = 'm'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let Json(single) = read().await.unwrap();
+        assert_eq!(sources(&single), ["plaud"]);
+        assert_eq!(single["transcription"], single["transcriptions"][0]);
+
+        for (owner, id) in [("u2", "rec"), ("u1", "missing")] {
+            let error = detail(State(state.clone()), user(owner), UrlPath(id.into()))
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, "RECORDING_NOT_FOUND");
+        }
+        sqlx::query("UPDATE transcriptions SET text = 'v1:invalid' WHERE id = 'p'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(
+            read().await.unwrap_err().status,
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        sqlx::query("UPDATE recordings SET deleted_at = 1 WHERE id = 'rec'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        assert_eq!(read().await.unwrap_err().code, "RECORDING_NOT_FOUND");
     }
 
     #[tokio::test]
