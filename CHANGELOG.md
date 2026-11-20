@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Update `zip` and `lettre` to fix archive-reading and SMTP security advisories.
+
 ### Fixed
 
 - A failure to open or lock the Mac app's instance-lock file now shows a startup error instead of silently exiting as if another copy were running.
