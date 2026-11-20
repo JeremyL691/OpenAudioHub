@@ -23,6 +23,7 @@
         "startFailedTitle": "OpenAudioHub를 시작하지 못했습니다"
     },
     "error": {
+        "instanceLockFailed": "데이터 폴더를 잠글 수 없습니다: {reason}",
         "downloadInProgress": "이미 다운로드가 진행 중입니다",
         "formatInvalid": "format은 mp3 또는 original이어야 합니다",
         "idsInvalid": "ids는 1~100개의 녹음 ID여야 합니다",

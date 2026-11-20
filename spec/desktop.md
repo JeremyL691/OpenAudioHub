@@ -9,6 +9,7 @@ This file specifies the macOS desktop app: what it does at start and quit, what 
 - One copy of the app runs at a time, on one data folder. It signs in as one local account (section 4).
 - The server listens on 127.0.0.1 only. The app has no automatic update check.
 - The app bundles two programs, `ffmpeg` and `ffprobe`, placed next to the app executable. The server uses them to decode and convert audio, compute waveforms and prepare files for transcription. They are built with GPL, nonfree and version 3 components disabled (`desktop-tauri/scripts/build-ffmpeg.sh`).
+- The sidecars and their C dependencies use `MACOSX_DEPLOYMENT_TARGET` from `bundle.macOS.minimumSystemVersion` in `tauri.conf.json`. The build and CI caches include that setting. The sidecar build checks each executable's minimum macOS version and fails if it exceeds the app's minimum.
 
 ## 2. Data folder and files
 
@@ -145,6 +146,7 @@ A start that fails at any step logs `could not start: <reason>` (or `not started
 
 - The first copy takes an exclusive lock on `.instance.lock` in the data folder and keeps it until it exits.
 - A second copy started from a shell ends at once with code 0 and prints nothing. It does not signal the first copy.
+- A failure to open or acquire the lock other than contention follows the startup-error path: log the reason, show the start-failure dialog, and exit with code 1.
 - On macOS, a Finder or Dock launch of a running app activates the running copy. The reopen event shows its window (section 5).
 
 ### 3.4 Disk space
