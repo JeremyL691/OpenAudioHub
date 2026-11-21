@@ -65,6 +65,7 @@ impl From<sqlx::Error> for Stop {
 }
 
 /// A failure of one recording.
+#[derive(Debug)]
 pub enum ItemError {
     Rejected,
     Failed(String),
@@ -351,12 +352,16 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
     match existing {
         // Deleted here: never imported again, no download.
         Some((_, Some(_), _, _, _, _)) => Ok(Outcome::Skipped),
-        Some((id, None, prev, _, _, _)) if prev == version => {
+        Some((id, None, prev, _, _, _)) if r.version_ms.is_some() && prev == version => {
             let imported = import_for(state, ctx, &id, &r.id).await;
             Ok(Outcome::Unchanged { imported })
         }
-        Some((id, None, _, prev_type, prev_key, prev_source)) => {
+        Some((id, None, prev, prev_type, prev_key, prev_source)) => {
             let hydrated = ctx.client.hydrate_recording(r).await?;
+            if prev == version_text(&hydrated) {
+                let imported = import_for(state, ctx, &id, &hydrated.id).await;
+                return Ok(Outcome::Unchanged { imported });
+            }
             // A stored file is kept: a changed Plaud version only refreshes metadata, so a rename
             // or an edit in Plaud never replaces a file the user may be playing. The exception is a
             // missing object, which would leave the recording unplayable for good.
@@ -575,32 +580,48 @@ async fn update_row_with_audio(
     let peaks = storage
         .and_then(|s| s.peaks.as_ref())
         .and_then(|p| serde_json::to_string(p).ok());
-    let done = sqlx::query(
+    let device_sn = if r.is_v4 {
+        r.serial_number
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    } else {
+        Some(r.serial_number.as_deref().unwrap_or_default())
+    };
+    let sql = if r.is_v4 {
+        "UPDATE recordings SET device_sn = COALESCE(?, device_sn), filename = COALESCE(?, filename), duration = ?, start_time = ?, end_time = ?, \
+         filesize = COALESCE(?, filesize), file_md5 = COALESCE(?, file_md5), plaud_version = ?, timezone = COALESCE(?, timezone), \
+         zonemins = COALESCE(?, zonemins), scene = COALESCE(?, scene), is_trash = 0, updated_at = ?, \
+         storage_type = COALESCE(?, storage_type), storage_path = COALESCE(?, storage_path), \
+         downloaded_at = COALESCE(?, downloaded_at), waveform_peaks = COALESCE(?, waveform_peaks) \
+         WHERE id = ? AND deleted_at IS NULL"
+    } else {
         "UPDATE recordings SET device_sn = ?, filename = COALESCE(?, filename), duration = ?, start_time = ?, end_time = ?, \
          filesize = COALESCE(?, filesize), file_md5 = COALESCE(?, file_md5), plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ?, \
          storage_type = COALESCE(?, storage_type), storage_path = COALESCE(?, storage_path), \
          downloaded_at = COALESCE(?, downloaded_at), waveform_peaks = COALESCE(?, waveform_peaks) \
-         WHERE id = ? AND deleted_at IS NULL",
-    )
-    .bind(r.serial_number.clone().unwrap_or_default())
-    .bind(new_name)
-    .bind(r.duration.unwrap_or(0))
-    .bind(r.start_time.unwrap_or(0))
-    .bind(r.end_time.unwrap_or(0))
-    .bind(filesize)
-    .bind(file_md5)
-    .bind(version_text(r))
-    .bind(r.timezone)
-    .bind(r.zonemins)
-    .bind(r.scene)
-    .bind(now)
-    .bind(storage.map(|s| s.storage_type))
-    .bind(storage.map(|s| s.key.as_str()))
-    .bind(storage.map(|_| now))
-    .bind(peaks)
-    .bind(id)
-    .execute(&state.db)
-    .await?;
+         WHERE id = ? AND deleted_at IS NULL"
+    };
+    let done = sqlx::query(sql)
+        .bind(device_sn)
+        .bind(new_name)
+        .bind(r.duration.unwrap_or(0))
+        .bind(r.start_time.unwrap_or(0))
+        .bind(r.end_time.unwrap_or(0))
+        .bind(filesize)
+        .bind(file_md5)
+        .bind(version_text(r))
+        .bind(r.timezone)
+        .bind(r.zonemins)
+        .bind(r.scene)
+        .bind(now)
+        .bind(storage.map(|s| s.storage_type))
+        .bind(storage.map(|s| s.key.as_str()))
+        .bind(storage.map(|_| now))
+        .bind(peaks)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
     Ok(done.rows_affected() == 1)
 }
 
@@ -883,5 +904,134 @@ mod title_tests {
         assert!(repair_candidate(&day, start, offset).is_none());
         assert!(repair_candidate("Team sync", start, offset).is_none());
         assert!(repair_candidate("2026-10-19 09:00", start, offset).is_none());
+    }
+
+    #[tokio::test]
+    async fn v4_update_preserves_saved_metadata_when_detail_omits_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::Config::for_tests(dir.path());
+        let state = crate::AppState::new(config, crate::db::open_memory().await.unwrap());
+        let now = crate::db::now_ms();
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, plaud_version, timezone, zonemins, scene, is_trash, created_at, updated_at, title_source) \
+             VALUES ('r1', 'u1', 'SN-ORIG', 'legacy-1', ?, 3000, 1000, 4000, 5120, 'deadbeef', 'local', 'u1/legacy-1.mp3', '100', -8, 0, 2, 0, ?, ?, 'original')",
+        )
+        .bind(state.config.field_key.encrypt("Old Title"))
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        let mut v4_rec = recording(Some("Renamed in 4.0"), Some(1000));
+        v4_rec.id = "legacy-1".into();
+        v4_rec.version_ms = Some(200);
+        v4_rec.is_v4 = true;
+        assert!(update_row(&state, &v4_rec, "r1", true).await.unwrap());
+
+        let row: (
+            String,
+            i64,
+            String,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            String,
+        ) = sqlx::query_as(
+            "SELECT device_sn, filesize, file_md5, timezone, zonemins, scene, plaud_version \
+                 FROM recordings WHERE id = 'r1'",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(row.0, "SN-ORIG");
+        assert_eq!(row.1, 5120);
+        assert_eq!(row.2, "deadbeef");
+        assert_eq!(row.3, Some(-8));
+        assert_eq!(row.4, Some(0));
+        assert_eq!(row.5, Some(2));
+        assert_eq!(row.6, "200");
+    }
+
+    #[tokio::test]
+    async fn detail_only_v4_version_does_not_repeat_updates() {
+        use axum::routing::get;
+        use axum::{Json, Router};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let app = Router::new().route(
+            "/file-app/v4/files/detail/f_nodate",
+            get(|| async {
+                Json(json!({
+                    "status": 0,
+                    "data": {
+                        "node": { "node_id": "n1", "name": "Detail Only", "version_ms": 42 },
+                        "meta": { "file_id": "f_nodate", "duration": 3000, "start_time": 1000, "version_ms": 42 },
+                        "objects": []
+                    }
+                }))
+            }),
+        );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::Config::for_tests(dir.path());
+        config.storage_root = dir.path().join("storage");
+        tokio::fs::create_dir_all(config.storage_root.join("u1"))
+            .await
+            .unwrap();
+        tokio::fs::write(config.storage_root.join("u1/f_nodate.mp3"), b"ID3")
+            .await
+            .unwrap();
+        let state = crate::AppState::new(config, crate::db::open_memory().await.unwrap());
+        let now = crate::db::now_ms();
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('r1', 'u1', '', 'f_nodate', ?, 3000, 1000, 4000, 3, 'abc', 'local', 'u1/f_nodate.mp3', '42', 0, ?, ?, 'original')",
+        )
+        .bind(state.config.field_key.encrypt("Detail Only"))
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        let ctx = Ctx {
+            user_id: "u1".into(),
+            client: Client::with_workspace(
+                &format!("http://{addr}"),
+                "wt",
+                Some("ws".into()),
+                None,
+            ),
+            import_content: false,
+            title_mode: "original".into(),
+            content_stopped: AtomicBool::new(false),
+            errors: Mutex::new(Vec::new()),
+        };
+        let mut r = recording(Some("Detail Only"), None);
+        r.id = "f_nodate".into();
+        r.version_ms = None;
+        r.is_v4 = true;
+
+        let outcome = process(&state, &ctx, &r).await.unwrap();
+        assert!(matches!(outcome, Outcome::Unchanged { imported: false }));
     }
 }

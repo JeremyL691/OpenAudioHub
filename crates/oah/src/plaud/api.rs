@@ -383,6 +383,12 @@ impl Client {
 
     pub async fn devices(&self) -> Result<Vec<Device>, PlaudError> {
         let v = self.api(Method::GET, "/device/list", None).await?;
+        if v4::is_migrated_payload(&v) {
+            return Err(PlaudError::Api {
+                status: v4::MIGRATED_STATUS,
+                message: message_of(&v, "Account migrated to 4.0"),
+            });
+        }
         let list = v
             .get("data_devices")
             .and_then(Value::as_array)
@@ -1334,5 +1340,17 @@ mod tests {
         assert_eq!(*st.node_version.lock().unwrap(), 12);
         assert_eq!(st.folder_name.lock().unwrap().as_str(), "New Title");
         assert_eq!(*st.folder_version.lock().unwrap(), 22);
+    }
+
+    #[tokio::test]
+    async fn devices_surfaces_message_only_migration_payload() {
+        let app = Router::new().route(
+            "/device/list",
+            get(|| async { Json(json!({ "msg": "Account migrated to 4.0" })) }),
+        );
+        let base = spawn_mock(app).await;
+        let client = Client::new(&base, "wt");
+        let err = client.devices().await.unwrap_err();
+        assert!(v4::is_migrated_error(&err), "{err:?}");
     }
 }
