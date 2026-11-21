@@ -126,8 +126,6 @@ pub struct V4FileMeta {
     #[serde(default)]
     pub duration: Option<i64>,
     #[serde(default)]
-    pub size_bytes: Option<i64>,
-    #[serde(default)]
     pub timezone_iana: Option<String>,
     #[serde(default)]
     pub start_time: Option<i64>,
@@ -150,8 +148,6 @@ pub struct V4FileObject {
     #[allow(dead_code)]
     #[serde(default)]
     pub mime_type: Option<String>,
-    #[serde(default)]
-    pub object_size: Option<i64>,
     #[serde(default)]
     pub task_status: Option<i64>,
 }
@@ -315,19 +311,6 @@ pub fn apply_detail(base: &Recording, detail: &V4FileDetail) -> Recording {
         }
     }
 
-    let audio_size = select_audio_candidates(detail)
-        .first()
-        .and_then(|o| o.object_size)
-        .filter(|&s| s > 0);
-    let meta_size = detail
-        .meta
-        .as_ref()
-        .and_then(|m| m.size_bytes)
-        .filter(|&s| s > 0);
-    if let Some(size) = audio_size.or(meta_size) {
-        out.filesize = Some(size);
-    }
-
     if let Some(start) = out.start_time {
         out.end_time = Some(start.saturating_add(out.duration.unwrap_or(0)));
     }
@@ -402,7 +385,6 @@ mod tests {
             content_id: content_id.map(str::to_owned),
             content_url: content_url.map(str::to_owned),
             mime_type: None,
-            object_size: None,
             task_status,
         }
     }
@@ -589,7 +571,6 @@ mod tests {
             meta: Some(V4FileMeta {
                 file_id: Some("f_1".into()),
                 duration: Some(12_000),
-                size_bytes: Some(8_192),
                 timezone_iana: Some("Asia/Kolkata".into()),
                 start_time: Some(1_768_478_400_000),
                 serial_number: Some("SN-400".into()),
@@ -606,24 +587,12 @@ mod tests {
         assert_eq!(hydrated.serial_number.as_deref(), Some("SN-400"));
         assert_eq!(hydrated.duration, Some(12_000));
         assert_eq!(hydrated.end_time, Some(1_768_478_412_000));
-        assert_eq!(hydrated.filesize, Some(8_192));
+        // Size and MD5 come from the downloaded bytes, never from Plaud's metadata.
+        assert_eq!(hydrated.filesize, None);
         assert_eq!(hydrated.timezone, Some(5));
         assert_eq!(hydrated.zonemins, Some(30));
         // Preserves list version_ms so sync change detection matches next pass.
         assert_eq!(hydrated.version_ms, Some(42));
-
-        let mut detail_with_transcoded = detail.clone();
-        detail_with_transcoded.objects.push(V4FileObject {
-            object_id: Some("obj_tr_audio".into()),
-            object_type: Some("AUDIO_TRANSCODED".into()),
-            content_id: Some("cid_tr_audio".into()),
-            content_url: Some("https://audio.mp3".into()),
-            mime_type: Some("audio/mpeg".into()),
-            object_size: Some(4_096),
-            task_status: Some(1),
-        });
-        let hydrated_transcoded = apply_detail(&base, &detail_with_transcoded);
-        assert_eq!(hydrated_transcoded.filesize, Some(4_096));
 
         let legacy = detail_to_legacy_content(&detail);
         let items = legacy["content_list"].as_array().unwrap();

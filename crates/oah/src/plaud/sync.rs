@@ -280,8 +280,18 @@ async fn sync_pages(
 ) -> Result<(), Stop> {
     let mut page = 0;
     let mut idle = 0;
+    let mut listed_v4 = ctx.client.is_v4_mode();
     loop {
         let rows = ctx.client.recordings(page).await?;
+        if !listed_v4 && ctx.client.is_v4_mode() {
+            listed_v4 = true;
+            // Plaud 4.0 lists in another order, so a legacy page offset would skip recordings.
+            if page > 0 {
+                page = 0;
+                idle = 0;
+                continue;
+            }
+        }
         let mut changed = false;
         for chunk in rows.chunks(BATCH) {
             let results = join_all(chunk.iter().map(|r| process(state, ctx, r))).await;
@@ -1033,5 +1043,69 @@ mod title_tests {
 
         let outcome = process(&state, &ctx, &r).await.unwrap();
         assert!(matches!(outcome, Outcome::Unchanged { imported: false }));
+    }
+
+    #[tokio::test]
+    async fn a_switch_to_v4_mid_listing_restarts_from_the_first_v4_page() {
+        use axum::Router;
+        use axum::extract::Query;
+        use axum::routing::get;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let failure = || async { Json(json!({ "status": -7, "msg": "not in this test" })) };
+        let app = Router::new()
+            .route(
+                "/file/simple/web",
+                get(|Query(q): Query<HashMap<String, String>>| async move {
+                    if q.get("skip").map(String::as_str) != Some("0") {
+                        return Json(json!({ "status": crate::plaud::v4::MIGRATED_STATUS, "msg": "migrated to 4.0" }));
+                    }
+                    let list: Vec<Value> = (0..api::PAGE_SIZE)
+                        .map(|i| json!({ "id": format!("legacy{i}"), "filename": format!("legacy-{i}"), "version_ms": 1 }))
+                        .collect();
+                    Json(json!({ "status": 0, "data_file_list": list }))
+                }),
+            )
+            .route(
+                "/file-app/v4/recordings/all",
+                get(|| async {
+                    let items: Vec<Value> = (0..60)
+                        .map(|i| json!({ "file_id": format!("f_v4n{i}"), "name": format!("v4-{i}"), "version_ms": 1000 - i }))
+                        .collect();
+                    Json(json!({ "status": 0, "data": { "items": items, "next_cursor": null } }))
+                }),
+            )
+            .route("/file/temp-url/{id}", get(failure))
+            .route("/file-app/v4/files/detail/{id}", get(failure));
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::Config::for_tests(dir.path());
+        let state = crate::AppState::new(config, crate::db::open_memory().await.unwrap());
+        let ctx = Ctx {
+            user_id: "u1".into(),
+            client: Client::new(&format!("http://{addr}"), "tok"),
+            import_content: false,
+            title_mode: "original".into(),
+            content_stopped: AtomicBool::new(false),
+            errors: Mutex::new(Vec::new()),
+        };
+        let mut report = Report::default();
+        let (mut new_ids, mut new_titles) = (Vec::new(), Vec::new());
+        sync_pages(&state, &ctx, &mut report, &mut new_ids, &mut new_titles)
+            .await
+            .map_err(|_| "sync stopped")
+            .unwrap();
+
+        for i in 0..60 {
+            let name = format!("Failed to sync v4-{i}:");
+            assert!(
+                report.errors.iter().any(|e| e.starts_with(&name)),
+                "{name} was never synced"
+            );
+        }
     }
 }

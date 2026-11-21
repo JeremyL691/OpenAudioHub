@@ -143,6 +143,8 @@ struct V4Runtime {
     v4_mode: AtomicBool,
     active_token: RwLock<String>,
     remint_lock: tokio::sync::Mutex<()>,
+    /// The token whose re-mint already failed, so later calls do not ask again.
+    remint_failed_for: RwLock<Option<String>>,
     list_cache: tokio::sync::Mutex<Option<Vec<Recording>>>,
     detail_cache: tokio::sync::Mutex<HashMap<String, V4FileDetail>>,
 }
@@ -175,6 +177,7 @@ impl Client {
                 v4_mode: AtomicBool::new(false),
                 active_token: RwLock::new(workspace_token.to_owned()),
                 remint_lock: tokio::sync::Mutex::new(()),
+                remint_failed_for: RwLock::new(None),
                 list_cache: tokio::sync::Mutex::new(None),
                 detail_cache: tokio::sync::Mutex::new(HashMap::new()),
             }),
@@ -189,7 +192,7 @@ impl Client {
             .clone()
     }
 
-    fn is_v4_mode(&self) -> bool {
+    pub fn is_v4_mode(&self) -> bool {
         self.runtime.v4_mode.load(Ordering::Acquire)
     }
 
@@ -253,7 +256,27 @@ impl Client {
         if self.current_token() != failed_token {
             return Ok(());
         }
-        let fresh = Client::new(&self.base, acct).workspace_token(ws).await?;
+        let already_failed = self
+            .runtime
+            .remint_failed_for
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_deref()
+            == Some(failed_token);
+        if already_failed {
+            return Err(unexpected("Plaud workspace token could not be refreshed"));
+        }
+        let fresh = match Client::new(&self.base, acct).workspace_token(ws).await {
+            Ok(token) => token,
+            Err(e) => {
+                *self
+                    .runtime
+                    .remint_failed_for
+                    .write()
+                    .unwrap_or_else(|e| e.into_inner()) = Some(failed_token.to_owned());
+                return Err(e);
+            }
+        };
         let mut active = self
             .runtime
             .active_token
@@ -750,6 +773,16 @@ impl Client {
         else {
             return;
         };
+        // When the parent is also the folder Plaud shows, it is a folder the user made, not a
+        // per-file container, so it keeps its name.
+        let shown_folder_id = node
+            .display_folder
+            .as_ref()
+            .and_then(|f| f.folder_id.as_deref())
+            .map(str::trim);
+        if shown_folder_id == Some(folder_id) {
+            return;
+        }
         let parent_folder_id = node
             .display_folder
             .as_ref()
@@ -1132,6 +1165,90 @@ mod tests {
             client2.validate_v4_session().await,
             Err(PlaudError::Rejected { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn a_failed_workspace_remint_is_not_repeated_for_the_same_token() {
+        let remints = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route(
+                "/file-app/v4/recordings/all",
+                get(|| async { Json(json!({ "status": -419, "msg": "workspace token revoked" })) }),
+            )
+            .route(
+                "/user-app/auth/workspace/token/{ws}",
+                post(|State(n): State<Arc<AtomicUsize>>| async move {
+                    n.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({ "status": -5, "msg": "workspace unavailable" }))
+                }),
+            )
+            .with_state(remints.clone());
+        let base = spawn_mock(app).await;
+        let client = Client::with_workspace(
+            &base,
+            "stale-wt",
+            Some("ws-9".into()),
+            Some("acct-tok".into()),
+        );
+        let (c1, c2) = (client.clone(), client.clone());
+        let (r1, r2) = tokio::join!(c1.validate_v4_session(), c2.validate_v4_session());
+        let r3 = client.validate_v4_session().await;
+        for r in [r1, r2, r3] {
+            assert!(
+                matches!(r, Err(PlaudError::Api { status: -419, .. })),
+                "{r:?}"
+            );
+        }
+        assert_eq!(remints.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn rename_file_v4_keeps_the_name_of_a_folder_the_user_sees() {
+        let folder_renamed = Arc::new(AtomicBool::new(false));
+        let app = Router::new()
+            .route(
+                "/file-app/v4/files/detail/{file_id}",
+                get(|| async {
+                    Json(json!({
+                        "status": 0,
+                        "data": {
+                            "node": {
+                                "node_id": "node_1",
+                                "parent_id": "meetings",
+                                "name": "Meetings",
+                                "version_ms": 10,
+                                "folder": { "folder_id": "meetings", "name": "Meetings", "version_ms": 5 },
+                                "display_folder": { "folder_id": "meetings", "name": "Meetings" },
+                                "breadcrumbs": [{ "node_id": "meetings", "name": "Meetings" }]
+                            },
+                            "objects": []
+                        }
+                    }))
+                }),
+            )
+            .route(
+                "/file-app/v4/nodes/rename/{node_id}",
+                patch(
+                    |State(flag): State<Arc<AtomicBool>>, Path(node_id): Path<String>| async move {
+                        if node_id != "node_1" {
+                            flag.store(true, Ordering::SeqCst);
+                        }
+                        Json(json!({
+                            "status": 0,
+                            "data": {
+                                "items": [{ "node_id": "node_1", "name": "Weekly sync", "version_ms": 11 }],
+                                "parent_items": [{ "node_id": "meetings", "name": "Meetings", "version_ms": 5 }]
+                            }
+                        }))
+                    },
+                ),
+            )
+            .with_state(folder_renamed.clone());
+        let base = spawn_mock(app).await;
+        let client = Client::with_workspace(&base, "wt", Some("ws".into()), None);
+        client.enable_v4_mode();
+        client.rename_file("1", "Weekly sync").await.unwrap();
+        assert!(!folder_renamed.load(Ordering::SeqCst));
     }
 
     #[tokio::test]

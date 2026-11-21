@@ -560,7 +560,7 @@ Most JSON responses carry a `status` field alongside HTTP 200. `status: 0` means
 
 - `status: -302` on the OTP send, which means "try this regional base" (see below).
 - `status: -1800907` (or a message containing `migrated to 4.0`) on a legacy `/file/...` call or `/device/list`, which means the account has migrated to Plaud 4.0. The client switches to `/file-app/v4/` routes for the rest of the run. Non-migrated accounts keep using legacy routes unchanged.
-- `status: -419` or `status: -420` mid-sync, which means the workspace token needs to be re-minted once from the account token and the call retried.
+- `status: -419` or `status: -420` mid-sync, which means the workspace token needs to be re-minted once from the account token and the call retried. When the re-mint fails, later calls in the same run that hold the same token fail at once instead of asking again.
 
 HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limited, 5xx means upstream, other 4xx means an API error with Plaud's `msg`. A body that is not JSON is mapped the same way by status.
 
@@ -655,11 +655,11 @@ HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limit
 Used when a legacy `/file/...` call or `/device/list` returns `status: -1800907` (or a message containing `migrated to 4.0`).
 
 - **ID mapping.** Pre-migration ids (`of_<legacy_id>`) strip `of_` to match existing `plaudFileId` rows and tombstones. New v4 ids (`f_<id>`) are kept as-is. When calling v4 endpoints for a bare legacy id, the client prepends `of_`.
-- **Listing.** `GET {base}/file-app/v4/recordings/all?sort_by=created&sort_order=desc&page_size=50[&cursor=]` fetches up to 400 pages with cursor cycle protection. Items are sorted in memory by edit time descending and served in 50-item pages.
-- **Detail and lazy hydration.** `GET {base}/file-app/v4/files/detail/{file_id}` is called only for new or changed recordings. It hydrates `serial_number`, `start_time`, `duration`, `filesize`, and IANA `timezone_iana` (converted to `timezone` and `zonemins` offsets). When `filesize` or `file_md5` is omitted, the downloaded audio byte size and MD5 are used as fallback.
+- **Listing.** `GET {base}/file-app/v4/recordings/all?sort_by=created&sort_order=desc&page_size=50[&cursor=]` fetches up to 400 pages with cursor cycle protection. Items are sorted in memory by edit time descending and served in 50-item pages. Because Plaud sorts this list only by creation time, every run reads the whole list (one request per 50 recordings) before it can stop at unchanged pages. When an account switches to 4.0 in the middle of a run, the run restarts from the first 4.0 page, so the different order skips nothing.
+- **Detail and lazy hydration.** `GET {base}/file-app/v4/files/detail/{file_id}` is called only for new or changed recordings. It hydrates `serial_number`, `start_time`, `duration`, and IANA `timezone_iana` (converted to `timezone` and `zonemins` offsets). `filesize` and `file_md5` always come from the downloaded audio, so both describe the same bytes even when the transcoded file is downloaded.
 - **Audio selection.** Selects `AUDIO_TRANSCODED` first, then `AUDIO`. If `content_url` is missing on the selected item, it is resolved via `POST {base}/file-app/v4/files/content/url`.
 - **Content import.** `TRANSCRIPT` and `SUMMARY` items are ready when `task_status` is `1` or `null` with `content_url`. Summary payloads may be JSON or plain Markdown. Transcript payloads may be wrapped segment arrays.
-- **Title push.** `PATCH {base}/file-app/v4/nodes/rename/{node_id}` sends `origin_version` and retries once on `status: -1800313`. When the container folder's name still matches the file's previous name, the client also renames the folder best-effort.
+- **Title push.** `PATCH {base}/file-app/v4/nodes/rename/{node_id}` sends `origin_version` and retries once on `status: -1800313`. When the container folder's name still matches the file's previous name, the client also renames the folder best-effort. A parent folder that is also the node's `display_folder` is a folder the user sees, and it keeps its name. UNVERIFIED: that a per-file container differs from `display_folder` is inferred from the detail fields, not from Plaud documentation or a live response.
 
 ### Direct calls
 

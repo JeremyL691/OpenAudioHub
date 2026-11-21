@@ -124,6 +124,10 @@ This builds the server and the web app into `.dev-artifacts/`, starts the server
 contract-tests/run.sh server tests/recordings.spec.ts
 ```
 
+Set `LANG=C.UTF-8` when the shell has no UTF-8 locale, for example in a bare Docker container. CI sets it. Without it Chromium saves exports with non-ASCII titles as `download`, and `exports-ui.spec.ts` fails.
+
+On Ubuntu 22.04 the server does not link: the bundled ONNX Runtime needs the GCC 14 C++ library and glibc 2.38. Run the build and the suite in the `rust:1.94.1-trixie` image that CI uses instead.
+
 The long-recording pipeline is off in that run. To exercise it end to end over HTTP, run the pipeline suite:
 
 ```sh
