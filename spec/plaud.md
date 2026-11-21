@@ -319,7 +319,7 @@ The page does not talk to the extension directly. The extension posts the messag
 Run by every sign-in path before anything is saved.
 
 1. Find the personal workspace: list workspaces and pick the one with type `"0"`, falling back to the first. If listing fails or the account has no workspace, continue without a workspace id.
-2. Validate the account: when a workspace was found, mint a workspace token for it and fetch the device list with that token. Otherwise fetch the device list with the account token. If minting the workspace token fails, the request fails with `PLAUD_WORKSPACE_UNAVAILABLE`. A refusal of the device list is returned to the caller (`PLAUD_INVALID_TOKEN` when Plaud rejects the token). Nothing is saved.
+2. Validate the account: when a workspace was found, mint a workspace token for it and fetch the device list with that token. Otherwise fetch the device list with the account token. If minting the workspace token fails, the request fails with `PLAUD_WORKSPACE_UNAVAILABLE`. If `/device/list` returns HTTP 200 with `status: -1800907` (or a message containing `migrated to 4.0`), the check falls back to `GET /file-app/v4/recordings/all?page_size=1` and returns an empty device list on success. Any other refusal of the device list is returned to the caller (`PLAUD_INVALID_TOKEN` when Plaud rejects the token). Nothing is saved.
 3. Save the connection and upsert devices in one transaction.
 
 ## Manual sync
@@ -370,7 +370,7 @@ Exporting is not part of the run. Recordings added by the run are marked for the
 
 ### Listing recordings
 
-- Plaud's recording list is requested sorted by edit time, newest first, with trashed recordings excluded.
+- Plaud's recording list is requested sorted by edit time, newest first, with trashed recordings excluded. On Plaud 4.0 accounts, the client fetches `GET /file-app/v4/recordings/all` (up to 400 pages with cursor cycle protection), sorts the collected items in memory by edit time descending, and serves them in 50-item pages.
 - Pages of 50 recordings. Stop when a page has fewer than 50 recordings, or a page is empty.
 - Stop after two consecutive pages that have no new recording, no updated recording and no imported content.
 - A failure to read a page stops the run with the error text in `errors`. The last sync time is not updated in that case.
@@ -381,7 +381,7 @@ Plaud recording to the OpenAudioHub recording row:
 
 | Plaud field | Recording field | Notes |
 | --- | --- | --- |
-| `id` | `plaudFileId` | Unique per user. |
+| `id` | `plaudFileId` | Unique per user. On Plaud 4.0, pre-migration ids (`of_<legacy_id>`) strip `of_` to match existing rows and tombstones, and new v4 ids (`f_<id>`) are kept as-is. |
 | `filename` | `filename` | Stored encrypted, returned decrypted. On insert, replaced by `YYYY-MM-DD` (server local time) when `recordingTitleMode` is `date`, and kept as Plaud's name when the recording has no start time. On update, set to Plaud's name only while the stored title is still the original one; a date, generated, hand-edited or unknown title is kept. |
 | `duration` (ms) | `duration` | Milliseconds. |
 | `start_time` (epoch ms) | `startTime` | |
@@ -429,7 +429,7 @@ When `importPlaudContent` is on, sync also fills gaps from Plaud's own transcrip
 
 - A transcript is imported when the recording has no Plaud transcript yet. It is stored with source `plaud`, provider `plaud`, model `plaud-native`. No webhook event is sent for it. When the import adds a transcript and auto-summarize is on with no summary yet, an automatic summary job is queued once (`workers.md`, section 5). A repeated sync does not queue another.
 - A summary is imported when the recording has no summary with content yet. It is stored with source `plaud`. The inline copy is preferred over the presigned link.
-- Items must be ready (`task_status` equal to 1) and have a link.
+- Items must be ready (`task_status` equal to `1`, or `null` with `content_url` on Plaud 4.0) and have a link.
 - If the account token is refused during this pass, the pass stops. Other failures skip one item. Audio already synced is kept.
 
 ### Sync errors
@@ -552,10 +552,15 @@ The app calls Plaud over HTTPS. Plaud is the third-party service. Hosts are the 
 - `User-Agent`: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36`. Set on API calls. Presigned downloads and content links send no User-Agent from the app.
 - `Content-Type: application/json` on JSON API calls.
 - `Authorization: Bearer <token>` on calls that need auth. The token is the workspace token when one is in use, otherwise the account token. Sign-in calls and presigned downloads have no `Authorization` header.
+- On Plaud 4.0 calls (`/file-app/v4/...`): `app-platform: web`, `edit-from: web`, and `x-scope-type: workspace` with `x-scope-id: <workspace_id>` when a workspace id is known.
 
 ### Plaud status convention
 
-Most JSON responses carry a `status` field alongside HTTP 200. `status: 0` means success. Any other value is a business error with a `msg`. The one exception is `status: -302` on the OTP send, which means "try this regional base" (see below).
+Most JSON responses carry a `status` field alongside HTTP 200. `status: 0` means success. Any other value is a business error with a `msg`. The exceptions are:
+
+- `status: -302` on the OTP send, which means "try this regional base" (see below).
+- `status: -1800907` (or a message containing `migrated to 4.0`) on a legacy `/file/...` call or `/device/list`, which means the account has migrated to Plaud 4.0. The client switches to `/file-app/v4/` routes for the rest of the run. Non-migrated accounts keep using legacy routes unchanged.
+- `status: -419` or `status: -420` mid-sync, which means the workspace token needs to be re-minted once from the account token and the call retried.
 
 HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limited, 5xx means upstream, other 4xx means an API error with Plaud's `msg`. A body that is not JSON is mapped the same way by status.
 
@@ -600,7 +605,7 @@ HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limit
 
 - Auth: workspace token when one is in use, otherwise the account token.
 - Reads: `status`, `msg`, `data_devices[]` with `sn`, `name`, `model`, `version_number`.
-- Validation: `status` must be 0 and `data_devices` must be an array. Otherwise `PLAUD_API_ERROR`.
+- Validation: `status` must be 0 and `data_devices` must be an array. If `status` is `-1800907` (or the message contains `migrated to 4.0`), connect checks fall back to `GET {base}/file-app/v4/recordings/all?page_size=1` and return an empty device list on success. Otherwise `PLAUD_API_ERROR`.
 - Used at connect time to validate the token.
 
 ### 7. GET {base}/file/simple/web?skip={n}&limit={n}&is_trash=0&sort_by=edit_time&is_desc=true
@@ -644,6 +649,17 @@ HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limit
 - Body: `{"filename": "<title>"}`
 - Used only when the user chooses to send an AI-generated title back to Plaud. Failure is logged and does not change the local title.
 - Reads: `status`.
+
+### Plaud 4.0 (/file-app/v4/)
+
+Used when a legacy `/file/...` call or `/device/list` returns `status: -1800907` (or a message containing `migrated to 4.0`).
+
+- **ID mapping.** Pre-migration ids (`of_<legacy_id>`) strip `of_` to match existing `plaudFileId` rows and tombstones. New v4 ids (`f_<id>`) are kept as-is. When calling v4 endpoints for a bare legacy id, the client prepends `of_`.
+- **Listing.** `GET {base}/file-app/v4/recordings/all?sort_by=created&sort_order=desc&page_size=50[&cursor=]` fetches up to 400 pages with cursor cycle protection. Items are sorted in memory by edit time descending and served in 50-item pages.
+- **Detail and lazy hydration.** `GET {base}/file-app/v4/files/detail/{file_id}` is called only for new or changed recordings. It hydrates `serial_number`, `start_time`, `duration`, `filesize`, and IANA `timezone_iana` (converted to `timezone` and `zonemins` offsets). When `filesize` or `file_md5` is omitted, the downloaded audio byte size and MD5 are used as fallback.
+- **Audio selection.** Selects `AUDIO_TRANSCODED` first, then `AUDIO`. If `content_url` is missing on the selected item, it is resolved via `POST {base}/file-app/v4/files/content/url`.
+- **Content import.** `TRANSCRIPT` and `SUMMARY` items are ready when `task_status` is `1` or `null` with `content_url`. Summary payloads may be JSON or plain Markdown. Transcript payloads may be wrapped segment arrays.
+- **Title push.** `PATCH {base}/file-app/v4/nodes/rename/{node_id}` sends `origin_version` and retries once on `status: -1800313`. When the container folder's name still matches the file's previous name, the client also renames the folder best-effort.
 
 ### Direct calls
 
