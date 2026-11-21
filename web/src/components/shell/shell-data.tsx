@@ -199,7 +199,8 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
                 if (failed) {
                     const message = problem ?? "Sync failed";
                     setSync((s) => ({ status: "failed", lastSyncAt: s.lastSyncAt, error: message }));
-                    if (!options.quiet) toast.error(`Sync failed: ${message}`);
+                    const toastMessage = message.startsWith("Sync failed:") ? message : `Sync failed: ${message}`;
+                    if (!options.quiet) toast.error(toastMessage);
                 } else {
                     setSync({ status: "ok", lastSyncAt: Date.now(), error: null });
                     if (!options.quiet && result.newRecordings === 0) toast.success("Plaud is up to date");
