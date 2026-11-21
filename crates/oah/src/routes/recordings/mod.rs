@@ -1763,38 +1763,43 @@ async fn merge(
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))).into_response())
 }
 
+/// Computes and stores missing waveform peaks for live recordings.
+pub async fn backfill_waveforms(state: &AppState) {
+    let rows: Vec<(String, String, String)> = match sqlx::query_as(
+        "SELECT id, storage_path, storage_type FROM recordings WHERE waveform_peaks IS NULL AND storage_path != '' AND deleted_at IS NULL",
+    )
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+
+    for (id, storage_path, storage_type) in rows {
+        if let Ok(source) = state
+            .storage
+            .materialize(&storage_type, &storage_path)
+            .await
+            && let Some(peaks) =
+                media::compute_peaks(&state.config.ffmpeg, source.path(), 256).await
+            && let Ok(json_str) = serde_json::to_string(&peaks)
+        {
+            let _ = sqlx::query(
+                "UPDATE recordings SET waveform_peaks = ? WHERE id = ? AND waveform_peaks IS NULL",
+            )
+            .bind(json_str)
+            .bind(&id)
+            .execute(&state.db)
+            .await;
+        }
+    }
+}
+
 /// Starts the background waveform backfill for recordings missing peaks.
 pub fn spawn_waveform_backfill(state: &AppState) {
     let state = state.clone();
     tokio::spawn(async move {
-        let rows: Vec<(String, String, String)> = match sqlx::query_as(
-            "SELECT id, storage_path, storage_type FROM recordings WHERE waveform_peaks IS NULL AND storage_path != '' AND deleted_at IS NULL",
-        )
-        .fetch_all(&state.db)
-        .await
-        {
-            Ok(r) => r,
-            Err(_) => return,
-        };
-
-        for (id, storage_path, storage_type) in rows {
-            if let Ok(source) = state
-                .storage
-                .materialize(&storage_type, &storage_path)
-                .await
-                && let Some(peaks) =
-                    media::compute_peaks(&state.config.ffmpeg, source.path(), 256).await
-                && let Ok(json_str) = serde_json::to_string(&peaks)
-            {
-                let _ = sqlx::query(
-                            "UPDATE recordings SET waveform_peaks = ? WHERE id = ? AND waveform_peaks IS NULL",
-                        )
-                        .bind(json_str)
-                        .bind(&id)
-                        .execute(&state.db)
-                        .await;
-            }
-        }
+        backfill_waveforms(&state).await;
     });
 }
 

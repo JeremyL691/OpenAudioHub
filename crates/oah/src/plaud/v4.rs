@@ -215,29 +215,39 @@ pub fn iana_offset_parts(iana: &str, at_ms: i64) -> Option<(i64, i64)> {
     Some((total_mins / 60, total_mins % 60))
 }
 
-/// Ranks playable audio objects: `AUDIO_TRANSCODED` first, then `AUDIO`,
-/// preferring objects with a direct `content_url` over `content_id`-only entries.
+/// Ranks playable audio objects: ready `AUDIO_TRANSCODED` first, then `AUDIO`,
+/// preferring direct `content_url` over `content_id`-only entries.
+/// Unready `AUDIO_TRANSCODED` tasks (`task_status` other than `1`) are skipped.
 pub fn select_audio_candidates(detail: &V4FileDetail) -> Vec<&V4FileObject> {
-    let mut ranked: Vec<(u8, u8, &V4FileObject)> = detail
+    let mut ranked: Vec<(u8, u8, u8, &V4FileObject)> = detail
         .objects
         .iter()
         .filter_map(|obj| {
-            let type_rank = match obj.object_type.as_deref()?.to_ascii_uppercase().as_str() {
-                "AUDIO_TRANSCODED" => 0,
-                "AUDIO" => 1,
-                _ => return None,
-            };
+            let kind = obj.object_type.as_deref()?.to_ascii_uppercase();
             let has_url = has_non_empty(&obj.content_url);
             let has_id = has_non_empty(&obj.content_id);
             if !has_url && !has_id {
                 return None;
             }
+            let (ready_rank, type_rank) = match kind.as_str() {
+                "AUDIO_TRANSCODED" => match obj.task_status {
+                    Some(1) => (0, 0),
+                    None if has_url => (0, 0),
+                    None => (1, 0),
+                    Some(_) => return None,
+                },
+                "AUDIO" => match obj.task_status {
+                    Some(1) | None => (0, 1),
+                    Some(_) => (1, 1),
+                },
+                _ => return None,
+            };
             let source_rank = if has_url { 0 } else { 1 };
-            Some((type_rank, source_rank, obj))
+            Some((ready_rank, type_rank, source_rank, obj))
         })
         .collect();
-    ranked.sort_by_key(|&(t, s, _)| (t, s));
-    ranked.into_iter().map(|(_, _, obj)| obj).collect()
+    ranked.sort_by_key(|&(r, t, s, _)| (r, t, s));
+    ranked.into_iter().map(|(_, _, _, obj)| obj).collect()
 }
 
 pub fn is_content_object(obj: &V4FileObject) -> bool {
@@ -501,6 +511,7 @@ mod tests {
                 object("AUDIO", Some("https://raw"), None, Some(1)),
                 object("AUDIO_TRANSCODED", None, Some("cid_tr"), Some(1)),
                 object("AUDIO_TRANSCODED", Some("https://tr"), None, Some(1)),
+                object("AUDIO_TRANSCODED", Some("https://pending"), None, Some(0)),
                 object("AUDIO", None, None, Some(0)),
             ],
         };
@@ -509,6 +520,22 @@ mod tests {
         assert_eq!(ranked[0].content_url.as_deref(), Some("https://tr"));
         assert_eq!(ranked[1].content_id.as_deref(), Some("cid_tr"));
         assert_eq!(ranked[2].content_url.as_deref(), Some("https://raw"));
+
+        // Unready AUDIO_TRANSCODED is skipped so ready AUDIO wins.
+        let pending_detail = V4FileDetail {
+            node: None,
+            meta: None,
+            objects: vec![
+                object("AUDIO_TRANSCODED", None, Some("cid_pending"), Some(0)),
+                object("AUDIO", Some("https://raw-ready"), None, None),
+            ],
+        };
+        let pending_ranked = select_audio_candidates(&pending_detail);
+        assert_eq!(pending_ranked.len(), 1);
+        assert_eq!(
+            pending_ranked[0].content_url.as_deref(),
+            Some("https://raw-ready")
+        );
     }
 
     #[test]

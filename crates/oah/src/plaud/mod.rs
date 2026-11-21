@@ -3,6 +3,7 @@
 mod api;
 mod connect;
 mod import;
+pub(crate) mod raw_opus;
 pub(crate) mod sync;
 mod v4;
 
