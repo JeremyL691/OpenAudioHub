@@ -6,6 +6,7 @@ use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::api::{self, Client};
+use super::raw_opus;
 use super::sync::ItemError;
 use crate::{AppState, ids};
 
@@ -16,6 +17,7 @@ pub struct Stored {
     pub peaks: Option<Vec<f64>>,
     pub byte_len: i64,
     pub file_md5: String,
+    pub remuxed: bool,
 }
 
 /// Downloads a recording's original audio to the active storage backend and returns where it went.
@@ -60,22 +62,68 @@ async fn stage_downloaded(
     file_md5: String,
 ) -> Result<Stored, ItemError> {
     let head = read_head(temp).await?;
-    let ext = sniff_ext(&head);
-    let key = free_key(state, user_id, file_id, ext).await?;
+    let mut ext = sniff_ext(&head);
+    let mut final_temp = temp.to_path_buf();
+    let mut final_len = byte_len;
+    let mut final_md5 = file_md5;
+    let mut remuxed = false;
+    let mut wrapped_temp: Option<std::path::PathBuf> = None;
+
+    if !raw_opus::is_known_container(&head) {
+        let dir = temp.parent().unwrap_or(&state.config.storage_root);
+        let muxed = dir.join(format!(".plaud-ogg-{}.partial", ids::token_hex(8)));
+        match raw_opus::wrap_if_raw_opus(&state.config.ffprobe, temp, &muxed).await {
+            Ok(Some((ogg_len, ogg_md5))) => {
+                wrapped_temp = Some(muxed.clone());
+                final_temp = muxed;
+                final_len = ogg_len;
+                final_md5 = ogg_md5;
+                ext = "ogg";
+                remuxed = true;
+            }
+            Ok(None) => {
+                let _ = tokio::fs::remove_file(&muxed).await;
+            }
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&muxed).await;
+                tracing::warn!(file_id, error = %e, "wrapping raw Opus audio into Ogg failed");
+            }
+        }
+    }
+
+    let key = match free_key(state, user_id, file_id, ext).await {
+        Ok(k) => k,
+        Err(e) => {
+            if let Some(p) = &wrapped_temp {
+                let _ = tokio::fs::remove_file(p).await;
+            }
+            return Err(e);
+        }
+    };
     let mime = crate::routes::recordings::mime_for(ext);
     let peaks =
-        crate::routes::recordings::media::compute_peaks(&state.config.ffmpeg, temp, 256).await;
-    state
+        crate::routes::recordings::media::compute_peaks(&state.config.ffmpeg, &final_temp, 256)
+            .await;
+    if let Err(e) = state
         .storage
-        .store_staged(&key, temp, Some(mime))
+        .store_staged(&key, &final_temp, Some(mime))
         .await
-        .map_err(|e| ItemError::Failed(format!("could not store the audio: {e}")))?;
+    {
+        if let Some(p) = &wrapped_temp {
+            let _ = tokio::fs::remove_file(p).await;
+        }
+        return Err(ItemError::Failed(format!("could not store the audio: {e}")));
+    }
+    if wrapped_temp.is_some() {
+        let _ = tokio::fs::remove_file(temp).await;
+    }
     Ok(Stored {
         storage_type: state.storage.active_type(),
         key,
         peaks,
-        byte_len,
-        file_md5,
+        byte_len: final_len,
+        file_md5: final_md5,
+        remuxed,
     })
 }
 

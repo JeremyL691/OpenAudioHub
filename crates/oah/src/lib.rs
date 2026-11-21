@@ -85,10 +85,14 @@ pub fn start_workers(state: &AppState) {
     summary::spawn(state);
     webhooks::spawn(state);
     plaud::spawn(state);
-    export::spawn(state);
     zip_merge::spawn(state);
     local_folder::spawn(state);
-    routes::recordings::spawn_waveform_backfill(state);
+    let startup_media = state.clone();
+    tokio::spawn(async move {
+        plaud::raw_opus::repair_stored_raw_opus(&startup_media).await;
+        export::spawn(&startup_media);
+        routes::recordings::backfill_waveforms(&startup_media).await;
+    });
 }
 
 /// The full HTTP application.

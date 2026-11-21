@@ -377,7 +377,8 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
             // missing object, which would leave the recording unplayable for good.
             if audio_present(state, &prev_type, &prev_key).await {
                 let follow = may_follow_plaud(&prev_source);
-                match update_row(state, &hydrated, &id, follow).await {
+                let preserve_audio_meta = prev_key.to_ascii_lowercase().ends_with(".ogg");
+                match update_row(state, &hydrated, &id, follow, preserve_audio_meta).await {
                     Ok(true) => {}
                     Ok(false) => return Ok(Outcome::Skipped),
                     Err(e) => return Err(e),
@@ -385,7 +386,9 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
             } else {
                 let storage =
                     import::store_audio(state, &ctx.user_id, &ctx.client, &hydrated.id).await?;
-                match update_row_with_audio(state, &hydrated, &id, Some(&storage), true).await {
+                match update_row_with_audio(state, &hydrated, &id, Some(&storage), true, false)
+                    .await
+                {
                     Ok(true) => {}
                     Ok(false) => {
                         delete_audio(state, storage.storage_type, &storage.key).await;
@@ -500,13 +503,20 @@ async fn insert_row(
     let now = now_ms();
     let start = r.start_time.unwrap_or(0);
     let (title, title_source) = title_for(&ctx.title_mode, r).await;
-    let filesize = r.filesize.filter(|&n| n > 0).unwrap_or(storage.byte_len);
-    let file_md5 = r
-        .file_md5
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(&storage.file_md5);
+    let filesize = if storage.remuxed {
+        storage.byte_len
+    } else {
+        r.filesize.filter(|&n| n > 0).unwrap_or(storage.byte_len)
+    };
+    let file_md5 = if storage.remuxed {
+        storage.file_md5.as_str()
+    } else {
+        r.file_md5
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&storage.file_md5)
+    };
     let peaks_json = storage
         .peaks
         .as_ref()
@@ -554,8 +564,9 @@ async fn update_row(
     r: &Recording,
     id: &str,
     follow_name: bool,
+    preserve_audio_meta: bool,
 ) -> Result<bool, ItemError> {
-    update_row_with_audio(state, r, id, None, follow_name).await
+    update_row_with_audio(state, r, id, None, follow_name, preserve_audio_meta).await
 }
 
 /// The same update, optionally replacing the stored audio. Used when the object was missing.
@@ -565,6 +576,7 @@ async fn update_row_with_audio(
     id: &str,
     storage: Option<&import::Stored>,
     follow_name: bool,
+    preserve_audio_meta: bool,
 ) -> Result<bool, ItemError> {
     let now = now_ms();
     // NULL leaves the stored value alone, so a title the user owns survives the update.
@@ -576,17 +588,27 @@ async fn update_row_with_audio(
                 .unwrap_or_else(|| r.id.clone()),
         )
     });
-    let filesize = r
-        .filesize
-        .filter(|&n| n > 0)
-        .or_else(|| storage.map(|s| s.byte_len));
-    let file_md5 = r
-        .file_md5
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .or_else(|| storage.map(|s| s.file_md5.clone()));
+    let filesize = if preserve_audio_meta && storage.is_none() {
+        None
+    } else if let Some(s) = storage.filter(|s| s.remuxed) {
+        Some(s.byte_len)
+    } else {
+        r.filesize
+            .filter(|&n| n > 0)
+            .or_else(|| storage.map(|s| s.byte_len))
+    };
+    let file_md5 = if preserve_audio_meta && storage.is_none() {
+        None
+    } else if let Some(s) = storage.filter(|s| s.remuxed) {
+        Some(s.file_md5.clone())
+    } else {
+        r.file_md5
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .or_else(|| storage.map(|s| s.file_md5.clone()))
+    };
     let peaks = storage
         .and_then(|s| s.peaks.as_ref())
         .and_then(|p| serde_json::to_string(p).ok());
@@ -944,7 +966,21 @@ mod title_tests {
         v4_rec.id = "legacy-1".into();
         v4_rec.version_ms = Some(200);
         v4_rec.is_v4 = true;
-        assert!(update_row(&state, &v4_rec, "r1", true).await.unwrap());
+        assert!(
+            update_row(&state, &v4_rec, "r1", true, false)
+                .await
+                .unwrap()
+        );
+
+        // Wrapped .ogg recordings keep their stored filesize and file_md5 when Plaud sends a new version.
+        sqlx::query("UPDATE recordings SET storage_path = 'u1/legacy-1.ogg' WHERE id = 'r1'")
+            .execute(&state.db)
+            .await
+            .unwrap();
+        v4_rec.version_ms = Some(300);
+        v4_rec.filesize = Some(999_999);
+        v4_rec.file_md5 = Some("clobbermd5".into());
+        assert!(update_row(&state, &v4_rec, "r1", true, true).await.unwrap());
 
         let row: (
             String,
@@ -967,7 +1003,7 @@ mod title_tests {
         assert_eq!(row.3, Some(-8));
         assert_eq!(row.4, Some(0));
         assert_eq!(row.5, Some(2));
-        assert_eq!(row.6, "200");
+        assert_eq!(row.6, "300");
     }
 
     #[tokio::test]
