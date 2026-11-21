@@ -1381,4 +1381,99 @@ test.describe("plaud: 4.0 migrated accounts", () => {
         expect(status).toMatchObject({ connected: true, needsReconnect: false });
         await api.dispose();
     });
+
+    test("raw headerless Opus AUDIO streams are wrapped into playable .ogg and transcribe cleanly", async () => {
+        const api = await freshUser("plaud-v4-raw-opus");
+        const email = uniq("v4-raw-opus");
+        const id = `f_raw_opus_${Date.now()}`;
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id,
+                    isV4New: true,
+                    filename: "Long raw Opus recording",
+                    audioMode: "raw_opus",
+                    duration: 3000,
+                    version_ms: 6100,
+                },
+            ],
+        });
+        await signInV4(api, email);
+        expect(
+            (
+                await api.post("/api/settings/ai/providers", {
+                    data: {
+                        provider: "Custom",
+                        apiKey: "plaud-v4-raw-opus-key",
+                        baseUrl: fakeAiBaseUrl,
+                        defaultModel: "fake-chat-1",
+                        isDefaultTranscription: true,
+                        isDefaultEnhancement: true,
+                    },
+                })
+            ).status(),
+        ).toBe(200);
+
+        const before = (await v4FakeRequests()).length;
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 1, updatedRecordings: 0, errors: [] });
+
+        const requests = (await v4FakeRequests()).slice(before);
+        expect(requests.some((q) => q.path === `/audio-raw/${id}.mp3`)).toBe(true);
+        expect(requests.some((q) => q.path === "/file-app/v4/files/content/url")).toBe(false);
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const row = list.find((x) => x.plaudFileId === id);
+        expect(row, `recording ${id}`).toBeTruthy();
+        expect(String(row!.storagePath)).toMatch(/\.ogg$/);
+        expect(Number(row!.filesize)).toBeGreaterThan(12_000);
+        expect(Array.isArray(row!.waveformPeaks)).toBe(true);
+        expect((row!.waveformPeaks as number[]).length).toBe(256);
+
+        const audioRes = await api.get(`/api/recordings/${row!.id as string}/audio`);
+        expect(audioRes.status()).toBe(200);
+        expect(audioRes.headers()["content-type"]).toBe("audio/ogg");
+        const audioBuf = await audioRes.body();
+        expect(audioBuf.subarray(0, 4).toString("ascii")).toBe("OggS");
+        expect(audioBuf.includes(Buffer.from("OpusHead"))).toBe(true);
+
+        // A later Plaud version bump updates metadata without clobbering wrapped .ogg size or MD5.
+        const wrappedSize = row!.filesize;
+        const wrappedMd5 = row!.fileMd5;
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                {
+                    id,
+                    filename: "Long raw Opus renamed",
+                    version_ms: 6200,
+                    filesize: 12_000,
+                },
+            ],
+        });
+        const resync = await (await api.post("/api/plaud/sync")).json();
+        expect(resync).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 1, errors: [] });
+        const after = ((await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>).find(
+            (x) => x.plaudFileId === id,
+        );
+        expect(after).toMatchObject({
+            filename: "Long raw Opus renamed",
+            plaudVersion: "6200",
+            filesize: wrappedSize,
+            fileMd5: wrappedMd5,
+            storagePath: row!.storagePath,
+        });
+
+        const tr = await api.post(`/api/recordings/${row!.id as string}/transcribe`);
+        expect(tr.status()).toBe(200);
+        const detail = await waitFor(async () => {
+            const d = await (await api.get(`/api/recordings/${row!.id as string}`)).json();
+            return d.transcription ? d : undefined;
+        });
+        expect(detail.transcription.text.length).toBeGreaterThan(0);
+        await api.dispose();
+    });
 });
