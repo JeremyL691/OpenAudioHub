@@ -92,7 +92,7 @@ impl From<sqlx::Error> for ItemError {
 }
 
 enum Outcome {
-    New(String),
+    New(String, String),
     Updated(String),
     Unchanged { imported: bool },
     Skipped,
@@ -286,11 +286,11 @@ async fn sync_pages(
             let results = join_all(chunk.iter().map(|r| process(state, ctx, r))).await;
             for (r, result) in chunk.iter().zip(results) {
                 match result {
-                    Ok(Outcome::New(id)) => {
+                    Ok(Outcome::New(id, title)) => {
                         report.new += 1;
                         webhooks::emit_soft(state, &ctx.user_id, &id, "recording.synced", None)
                             .await;
-                        new_titles.push(title_for(&ctx.title_mode, r).await.0);
+                        new_titles.push(title);
                         new_ids.push(id);
                         changed = true;
                     }
@@ -356,19 +356,21 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
             Ok(Outcome::Unchanged { imported })
         }
         Some((id, None, _, prev_type, prev_key, prev_source)) => {
+            let hydrated = ctx.client.hydrate_recording(r).await?;
             // A stored file is kept: a changed Plaud version only refreshes metadata, so a rename
             // or an edit in Plaud never replaces a file the user may be playing. The exception is a
             // missing object, which would leave the recording unplayable for good.
             if audio_present(state, &prev_type, &prev_key).await {
                 let follow = may_follow_plaud(&prev_source);
-                match update_row(state, r, &id, follow).await {
+                match update_row(state, &hydrated, &id, follow).await {
                     Ok(true) => {}
                     Ok(false) => return Ok(Outcome::Skipped),
                     Err(e) => return Err(e),
                 }
             } else {
-                let storage = import::store_audio(state, &ctx.user_id, &ctx.client, &r.id).await?;
-                match update_row_with_audio(state, r, &id, Some(&storage), true).await {
+                let storage =
+                    import::store_audio(state, &ctx.user_id, &ctx.client, &hydrated.id).await?;
+                match update_row_with_audio(state, &hydrated, &id, Some(&storage), true).await {
                     Ok(true) => {}
                     Ok(false) => {
                         delete_audio(state, storage.storage_type, &storage.key).await;
@@ -380,20 +382,22 @@ async fn process(state: &AppState, ctx: &Ctx, r: &Recording) -> Result<Outcome, 
                     }
                 }
             }
-            import_for(state, ctx, &id, &r.id).await;
+            import_for(state, ctx, &id, &hydrated.id).await;
             Ok(Outcome::Updated(id))
         }
         None => {
-            let storage = import::store_audio(state, &ctx.user_id, &ctx.client, &r.id).await?;
-            let id = match insert_row(state, ctx, r, &storage).await {
-                Ok(id) => id,
+            let hydrated = ctx.client.hydrate_recording(r).await?;
+            let storage =
+                import::store_audio(state, &ctx.user_id, &ctx.client, &hydrated.id).await?;
+            let (id, title) = match insert_row(state, ctx, &hydrated, &storage).await {
+                Ok(pair) => pair,
                 Err(e) => {
                     delete_audio(state, storage.storage_type, &storage.key).await;
                     return Err(e);
                 }
             };
-            import_for(state, ctx, &id, &r.id).await;
-            Ok(Outcome::New(id))
+            import_for(state, ctx, &id, &hydrated.id).await;
+            Ok(Outcome::New(id, title))
         }
     }
 }
@@ -476,11 +480,18 @@ async fn insert_row(
     ctx: &Ctx,
     r: &Recording,
     storage: &import::Stored,
-) -> Result<String, ItemError> {
+) -> Result<(String, String), ItemError> {
     let id = ids::new_id();
     let now = now_ms();
     let start = r.start_time.unwrap_or(0);
     let (title, title_source) = title_for(&ctx.title_mode, r).await;
+    let filesize = r.filesize.filter(|&n| n > 0).unwrap_or(storage.byte_len);
+    let file_md5 = r
+        .file_md5
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&storage.file_md5);
     let peaks_json = storage
         .peaks
         .as_ref()
@@ -499,8 +510,8 @@ async fn insert_row(
     .bind(r.duration.unwrap_or(0))
     .bind(start)
     .bind(r.end_time.unwrap_or(start))
-    .bind(r.filesize.unwrap_or(0))
-    .bind(r.file_md5.clone().unwrap_or_default())
+    .bind(filesize)
+    .bind(file_md5)
     .bind(storage.storage_type)
     .bind(storage.key.as_str())
     .bind(now)
@@ -515,7 +526,7 @@ async fn insert_row(
     .bind(crate::export::auto::auto_export_eligible(state, &ctx.user_id).await)
     .execute(&state.db)
     .await?;
-    Ok(id)
+    Ok((id, title))
 }
 
 /// Overwrites a row with Plaud's values, keeping the stored audio. False when the row was deleted
@@ -550,12 +561,23 @@ async fn update_row_with_audio(
                 .unwrap_or_else(|| r.id.clone()),
         )
     });
+    let filesize = r
+        .filesize
+        .filter(|&n| n > 0)
+        .or_else(|| storage.map(|s| s.byte_len));
+    let file_md5 = r
+        .file_md5
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .or_else(|| storage.map(|s| s.file_md5.clone()));
     let peaks = storage
         .and_then(|s| s.peaks.as_ref())
         .and_then(|p| serde_json::to_string(p).ok());
     let done = sqlx::query(
         "UPDATE recordings SET device_sn = ?, filename = COALESCE(?, filename), duration = ?, start_time = ?, end_time = ?, \
-         filesize = ?, file_md5 = ?, plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ?, \
+         filesize = COALESCE(?, filesize), file_md5 = COALESCE(?, file_md5), plaud_version = ?, timezone = ?, zonemins = ?, scene = ?, is_trash = 0, updated_at = ?, \
          storage_type = COALESCE(?, storage_type), storage_path = COALESCE(?, storage_path), \
          downloaded_at = COALESCE(?, downloaded_at), waveform_peaks = COALESCE(?, waveform_peaks) \
          WHERE id = ? AND deleted_at IS NULL",
@@ -565,8 +587,8 @@ async fn update_row_with_audio(
     .bind(r.duration.unwrap_or(0))
     .bind(r.start_time.unwrap_or(0))
     .bind(r.end_time.unwrap_or(0))
-    .bind(r.filesize.unwrap_or(0))
-    .bind(r.file_md5.clone().unwrap_or_default())
+    .bind(filesize)
+    .bind(file_md5)
     .bind(version_text(r))
     .bind(r.timezone)
     .bind(r.zonemins)
@@ -629,8 +651,13 @@ async fn client_for(state: &AppState, conn: &ConnRow) -> Result<(Client, Option<
     };
     let client = match &workspace {
         Some(ws) => match account.workspace_token(ws).await {
-            Ok(wt) => Client::new(&conn.api_base, &wt),
-            Err(_) => account,
+            Ok(wt) => Client::with_workspace(&conn.api_base, &wt, Some(ws.clone()), Some(token)),
+            Err(_) => Client::with_workspace(
+                &conn.api_base,
+                &token,
+                Some(ws.clone()),
+                Some(token.clone()),
+            ),
         },
         None => account,
     };
@@ -673,13 +700,8 @@ pub async fn push_title(state: &AppState, user_id: &str, recording_id: &str, tit
             .await
             .map_err(|_| "no usable Plaud token".to_owned())?;
         client
-            .api(
-                reqwest::Method::PATCH,
-                &format!("/file/{file_id}"),
-                Some(serde_json::json!({ "filename": title })),
-            )
+            .rename_file(&file_id, title)
             .await
-            .map(|_| ())
             .map_err(|e| super::api::describe(&e))
     }
     .await;
@@ -767,6 +789,8 @@ mod title_tests {
             timezone: None,
             zonemins: None,
             scene: None,
+            edit_time: None,
+            is_v4: false,
         }
     }
 

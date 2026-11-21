@@ -189,7 +189,7 @@ pub(super) async fn connect(
     let workspace = account.personal_workspace().await.ok().flatten();
     let checker = match &workspace {
         Some(ws) => match account.workspace_token(ws).await {
-            Ok(wt) => Client::new(base, &wt),
+            Ok(wt) => Client::with_workspace(base, &wt, Some(ws.clone()), Some(token.to_owned())),
             Err(PlaudError::Api { status, message }) => {
                 return Err(
                     AppError::bad_request("PLAUD_WORKSPACE_UNAVAILABLE", message)
@@ -200,7 +200,14 @@ pub(super) async fn connect(
         },
         None => account,
     };
-    let devices = checker.devices().await.map_err(generic)?;
+    let devices = match checker.devices().await {
+        Ok(devices) => devices,
+        Err(ref e) if super::v4::is_migrated_error(e) => {
+            checker.validate_v4_session().await.map_err(generic)?;
+            Vec::new()
+        }
+        Err(e) => return Err(generic(e)),
+    };
 
     let now = now_ms();
     let mut tx = crate::db::begin_write(&state.db).await?;

@@ -4,6 +4,7 @@ mod api;
 mod connect;
 mod import;
 pub(crate) mod sync;
+mod v4;
 
 pub use sync::push_title;
 pub mod token;
