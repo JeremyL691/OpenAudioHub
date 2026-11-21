@@ -10,6 +10,16 @@ import { gzipSync } from "node:zlib";
 const port = Number(process.argv[2] ?? process.env.FAKE_PLAUD_PORT ?? 3298);
 const origin = `http://127.0.0.1:${port}`;
 const AUDIO = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/tone-3s.mp3"));
+// 150 frames * 80 bytes = 3.0s of headerless CBR CELT WB 20ms mono Opus frames (TOC 0xB8).
+const RAW_OPUS_AUDIO = (() => {
+    const buf = Buffer.alloc(150 * 80);
+    for (let i = 0; i < 150; i++) {
+        buf[i * 80] = 0xb8;
+        buf[i * 80 + 1] = 0xff;
+        buf[i * 80 + 2] = 0xfe;
+    }
+    return buf;
+})();
 const DAY = 24 * 3600;
 
 const accounts = new Map(); // email -> { recordings: Map<id, record>, devices: [], revoked: boolean, migratedV4: boolean }
@@ -193,6 +203,12 @@ const server = createServer(async (req, res) => {
         logRequest(req, url.pathname, "");
         res.writeHead(200, { "content-type": "audio/mpeg", "content-length": AUDIO.length });
         return res.end(AUDIO);
+    }
+    const rawAudio = url.pathname.match(/^\/audio-raw\/[^/]+$/);
+    if (req.method === "GET" && rawAudio) {
+        logRequest(req, url.pathname, "");
+        res.writeHead(200, { "content-type": "application/octet-stream", "content-length": RAW_OPUS_AUDIO.length });
+        return res.end(RAW_OPUS_AUDIO);
     }
     const content = url.pathname.match(/^\/content\/([^/]+)\/(transcript|summary)\.json$/);
     if (req.method === "GET" && content) {
@@ -458,6 +474,26 @@ const server = createServer(async (req, res) => {
                 mime_type: "audio/mpeg",
                 object_size: rec.filesize,
                 task_status: 1,
+            });
+        } else if (audioMode === "raw_opus") {
+            const rawUrl = `${origin}/audio-raw/${rec.id}.mp3`;
+            objects.push({
+                object_id: `obj_at_${fileId}`,
+                object_type: "AUDIO_TRANSCODED",
+                content_id: cidTranscoded,
+                content_url: null,
+                mime_type: "audio/mpeg",
+                object_size: rec.filesize,
+                task_status: 0,
+            });
+            objects.push({
+                object_id: `obj_a_${fileId}`,
+                object_type: "AUDIO",
+                content_id: cidAudio,
+                content_url: rawUrl,
+                mime_type: "audio/opus",
+                object_size: RAW_OPUS_AUDIO.length,
+                task_status: null,
             });
         }
 
