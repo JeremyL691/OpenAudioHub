@@ -5,8 +5,9 @@ use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use md5::Digest;
+use md5::Digest as _;
 use serde_json::Value;
+use sha2::Sha256;
 
 use crate::AppState;
 use crate::db::now_ms;
@@ -66,14 +67,22 @@ pub fn is_known_container(head: &[u8]) -> bool {
         || head.starts_with(b"#!AMR")
 }
 
-/// Parses an RFC 6716 single-frame Opus TOC byte into `(channels, samples_per_frame_48k, input_sample_rate)`.
-/// Rejects `0x00` (all-zero guard) and multi-frame packets (`code != 0`).
-fn parse_single_frame_toc(toc: u8) -> Option<(u8, u32, u32)> {
-    if toc == 0x00 || (toc & 0x03) != 0 {
+/// Parses an RFC 6716 single-frame Opus packet header `(b0, b1)` into
+/// `(channels, samples_per_frame_48k, input_sample_rate)`.
+/// Accepts standard single-frame packets (`code == 0`, rejecting `0x00` as an all-zero guard) and
+/// CBR single-frame packets using `code == 3` padding (`b1` has `v=0, M=1`, such as `0x41`), which
+/// Opus encoders emit when padding low-entropy frames to the constant CBR packet size.
+fn parse_single_frame_header(b0: u8, b1: u8) -> Option<(u8, u32, u32)> {
+    let valid_single = match b0 & 0x03 {
+        0 => b0 != 0x00,
+        3 => b1 == 0x41 || b1 == 0x01,
+        _ => false,
+    };
+    if !valid_single {
         return None;
     }
-    let cfg = toc >> 3;
-    let channels = if (toc & 0x04) != 0 { 2 } else { 1 };
+    let cfg = b0 >> 3;
+    let channels = if (b0 & 0x04) != 0 { 2 } else { 1 };
     let samples_per_frame = match cfg {
         0..=11 => match cfg % 4 {
             0 => 480,
@@ -115,12 +124,14 @@ pub fn detect_file(path: &Path) -> io::Result<Option<RawOpusSpec>> {
     let mut head = [0u8; 64];
     let head_len = file.read(&mut head)?;
     let head = &head[..head_len];
-    if head.is_empty() || is_known_container(head) {
+    if head.len() < 2 || is_known_container(head) {
         return Ok(None);
     }
 
     let toc = head[0];
-    let Some((channels, samples_per_frame, input_sample_rate)) = parse_single_frame_toc(toc) else {
+    let Some((channels, samples_per_frame, input_sample_rate)) =
+        parse_single_frame_header(head[0], head[1])
+    else {
         return Ok(None);
     };
 
@@ -140,21 +151,28 @@ pub fn detect_file(path: &Path) -> io::Result<Option<RawOpusSpec>> {
 
     for &stride in strides {
         let Some(frame_count) =
-            usable_frames(file_len, stride as u64, &tail, toc, samples_per_frame)
+            usable_frames(file_len, stride as u64, &tail, channels, samples_per_frame)
         else {
             continue;
         };
         if frame_count < MIN_FRAMES {
             continue;
         }
-        if matches_stride(&mut file, frame_count, stride, toc, samples_per_frame)? {
+        if let Some(detected_rate) = matches_stride(
+            &mut file,
+            frame_count,
+            stride,
+            toc,
+            channels,
+            samples_per_frame,
+        )? {
             return Ok(Some(RawOpusSpec {
                 frame_size: stride,
                 frame_count,
                 toc,
                 channels,
                 samples_per_frame,
-                input_sample_rate,
+                input_sample_rate: input_sample_rate.max(detected_rate),
             }));
         }
     }
@@ -168,7 +186,7 @@ fn usable_frames(
     file_len: u64,
     stride: u64,
     tail: &[u8],
-    toc: u8,
+    channels: u8,
     samples_per_frame: u32,
 ) -> Option<u64> {
     let rem = file_len % stride;
@@ -195,10 +213,9 @@ fn usable_frames(
         if frame.iter().all(|&b| b == 0) {
             usable_bytes -= stride;
         } else {
-            // Confirm the last non-zero frame starts with a compatible TOC byte.
-            let b = frame[0];
-            let compatible = (b & 0x07) == (toc & 0x07)
-                && parse_single_frame_toc(b).is_some_and(|(_, spf, _)| spf == samples_per_frame);
+            // Confirm the last non-zero frame starts with a compatible Opus packet header.
+            let compatible = parse_single_frame_header(frame[0], frame[1])
+                .is_some_and(|(ch, spf, _)| ch == channels && spf == samples_per_frame);
             if !compatible {
                 return None;
             }
@@ -214,15 +231,16 @@ fn matches_stride(
     frame_count: u64,
     stride: usize,
     toc: u8,
+    channels: u8,
     samples_per_frame: u32,
-) -> io::Result<bool> {
+) -> io::Result<Option<u32>> {
     // Guard against constant-byte fill files (for example every byte equal to `toc`).
     let check_frames = frame_count.min(8) as usize;
     let mut prefix = vec![0u8; check_frames * stride];
     file.seek(SeekFrom::Start(0))?;
     file.read_exact(&mut prefix)?;
     if prefix.iter().all(|&b| b == toc) {
-        return Ok(false);
+        return Ok(None);
     }
 
     let mut indices = Vec::with_capacity(140);
@@ -241,31 +259,121 @@ fn matches_stride(
     indices.sort_unstable();
     indices.dedup();
 
-    let mut exact = 0usize;
-    let mut byte = [0u8; 1];
+    let mut seen_tocs = [false; 256];
+    let mut distinct_tocs = 0usize;
+    let mut max_rate = 0u32;
+    let mut hdr = [0u8; 2];
     for &idx in &indices {
         file.seek(SeekFrom::Start(idx * stride as u64))?;
-        file.read_exact(&mut byte)?;
-        let b = byte[0];
-        if (b & 0x07) != (toc & 0x07) {
-            return Ok(false);
-        }
-        let Some((_, spf, _)) = parse_single_frame_toc(b) else {
-            return Ok(false);
+        file.read_exact(&mut hdr)?;
+        let Some((ch, spf, sr)) = parse_single_frame_header(hdr[0], hdr[1]) else {
+            return Ok(None);
         };
-        if spf != samples_per_frame {
-            return Ok(false);
+        if ch != channels || spf != samples_per_frame {
+            return Ok(None);
         }
-        if b == toc {
-            exact += 1;
+        if !seen_tocs[usize::from(hdr[0])] {
+            seen_tocs[usize::from(hdr[0])] = true;
+            distinct_tocs += 1;
+        }
+        if sr > max_rate {
+            max_rate = sr;
         }
     }
 
-    if frame_count < 32 {
-        Ok(exact == indices.len())
-    } else {
-        Ok(exact * 100 >= indices.len() * 95)
+    // For tiny files (<12 frames), cap TOC variety so random bytes cannot satisfy multiple configs.
+    // For longer files, all >=12..=133 sampled boundaries must match (channels, single-frame, duration),
+    // allowing Opus encoders to switch bandwidth or emit CBR-padded code-3 single frames across packets.
+    if frame_count < 12 && distinct_tocs > 2 {
+        return Ok(None);
     }
+    Ok(Some(max_rate))
+}
+
+/// SHA-256 over the exact `spec.frame_count * spec.frame_size` raw Opus packet bytes.
+fn hash_raw_opus_packets(path: &Path, spec: RawOpusSpec) -> io::Result<[u8; 32]> {
+    let mut reader = BufReader::with_capacity(64 * 1024, File::open(path)?);
+    let mut hasher = Sha256::new();
+    let mut remaining = spec.frame_count.saturating_mul(spec.frame_size as u64);
+    let mut buf = [0u8; 64 * 1024];
+    while remaining > 0 {
+        let want = remaining.min(buf.len() as u64) as usize;
+        reader.read_exact(&mut buf[..want])?;
+        hasher.update(&buf[..want]);
+        remaining -= want as u64;
+    }
+    Ok(hasher.finalize().into())
+}
+
+/// SHA-256 over the concatenated audio packet payloads inside an Ogg/Opus file, skipping
+/// `OpusHead` and `OpusTags`. Matches `hash_raw_opus_packets` when the Ogg wraps those frames losslessly.
+fn hash_ogg_opus_packets(path: &Path) -> io::Result<Option<[u8; 32]>> {
+    let mut reader = BufReader::with_capacity(64 * 1024, File::open(path)?);
+    let mut hasher = Sha256::new();
+    let mut hdr = [0u8; 27];
+    let mut lacing = [0u8; 255];
+    let mut seg_buf = [0u8; 255];
+    let mut current_pkt = Vec::new();
+    let mut packet_idx = 0u64;
+    let mut audio_packets = 0u64;
+
+    loop {
+        let mut filled = 0;
+        while filled < hdr.len() {
+            let n = reader.read(&mut hdr[filled..])?;
+            if n == 0 {
+                if filled == 0 {
+                    return Ok(
+                        (packet_idx >= 3 && audio_packets > 0 && current_pkt.is_empty())
+                            .then(|| hasher.finalize().into()),
+                    );
+                }
+                return Ok(None);
+            }
+            filled += n;
+        }
+        if &hdr[0..4] != b"OggS" {
+            return Ok(None);
+        }
+        let nseg = usize::from(hdr[26]);
+        reader.read_exact(&mut lacing[..nseg])?;
+        for &seg_len_u8 in &lacing[..nseg] {
+            let seg_len = usize::from(seg_len_u8);
+            if seg_len > 0 {
+                reader.read_exact(&mut seg_buf[..seg_len])?;
+                current_pkt.extend_from_slice(&seg_buf[..seg_len]);
+            }
+            if seg_len < 255 {
+                match packet_idx {
+                    0 => {
+                        if !current_pkt.starts_with(b"OpusHead") {
+                            return Ok(None);
+                        }
+                    }
+                    1 => {
+                        if !current_pkt.starts_with(b"OpusTags") {
+                            return Ok(None);
+                        }
+                    }
+                    _ => {
+                        hasher.update(&current_pkt);
+                        audio_packets += 1;
+                    }
+                }
+                packet_idx += 1;
+                current_pkt.clear();
+            }
+        }
+    }
+}
+
+/// True when `raw_path` is a headerless raw Opus stream whose packet stream hash matches `expected`.
+fn raw_file_matches_packet_hash(raw_path: &Path, expected: &[u8; 32]) -> io::Result<bool> {
+    let Some(spec) = detect_file(raw_path)? else {
+        return Ok(false);
+    };
+    let actual = hash_raw_opus_packets(raw_path, spec)?;
+    Ok(&actual == expected)
 }
 
 fn ogg_crc(data: &[u8]) -> u32 {
@@ -488,11 +596,12 @@ pub async fn repair_stored_raw_opus(state: &AppState) {
         }
     }
 
-    // Second pass: heal any desktop auto-export that remained a raw Opus `.mp3` after a previous
-    // crash between updating `storage_path` and repairing `auto_export_path`.
+    // Second pass: heal any desktop auto-export or unfinished `.mp3` export reservation left
+    // behind after a crash between updating `storage_path` and repairing the export state.
     let exported_rows: Vec<(String, String, String, String)> = match sqlx::query_as(
         "SELECT id, user_id, storage_type, storage_path FROM recordings \
-         WHERE deleted_at IS NULL AND auto_export_path IS NOT NULL \
+         WHERE deleted_at IS NULL \
+         AND (auto_export_path IS NOT NULL OR auto_export_target IS NOT NULL) \
          AND storage_type IN ('local', 'local_folder') AND lower(storage_path) LIKE '%.ogg'",
     )
     .fetch_all(&state.db)
@@ -511,6 +620,9 @@ pub async fn repair_stored_raw_opus(state: &AppState) {
         }
         if let Err(e) = repair_auto_export(state, &user_id, &id, &repaired_ogg).await {
             tracing::warn!(recording = %id, error = %e, "raw Opus auto-export repair failed");
+        }
+        if let Err(e) = repair_auto_export_reservation(state, &user_id, &id, &repaired_ogg).await {
+            tracing::warn!(recording = %id, error = %e, "raw Opus export reservation repair failed");
         }
     }
 }
@@ -636,13 +748,16 @@ async fn repair_one_recording(
     if let Err(e) = repair_auto_export(state, user_id, id, &dest_path).await {
         tracing::warn!(recording = %id, error = %e, "raw Opus auto-export repair failed");
     }
+    if let Err(e) = repair_auto_export_reservation(state, user_id, id, &dest_path).await {
+        tracing::warn!(recording = %id, error = %e, "raw Opus export reservation repair failed");
+    }
 
     Ok(())
 }
 
-/// Repairs a desktop auto-exported `.mp3` when the exported file is still raw Plaud Opus bytes.
-/// Stages any copy or MP3 transcode outside `local_folder::lock()`, then acquires the lock only
-/// to re-verify state, rename into place, and commit the DB path.
+/// Repairs a desktop auto-exported `.mp3` only when the file on disk is still the exact raw Opus
+/// packet stream of `repaired_ogg`. Stages copy/transcode outside `local_folder::lock()`, then
+/// acquires the lock only to re-verify DB state and packet identity, rename, and commit.
 async fn repair_auto_export(
     state: &AppState,
     user_id: &str,
@@ -675,14 +790,23 @@ async fn repair_auto_export(
         return Ok(());
     }
 
-    // Only touch the exported file if its bytes are still raw Plaud Opus; a file the user replaced stays untouched.
-    let probe_path = export_path.clone();
-    let is_raw = tokio::task::spawn_blocking(move || detect_file(&probe_path))
+    // Verify that the exported `.mp3` holds this recording's exact raw Opus packets, not another file.
+    let ogg_for_hash = repaired_ogg.to_path_buf();
+    let expected_hash = tokio::task::spawn_blocking(move || hash_ogg_opus_packets(&ogg_for_hash))
         .await
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?
-        .is_some();
-    if !is_raw {
+        .map_err(|e| e.to_string())?;
+    let Some(expected_hash) = expected_hash else {
+        return Ok(());
+    };
+    let probe_path = export_path.clone();
+    let matches_recording = tokio::task::spawn_blocking(move || {
+        raw_file_matches_packet_hash(&probe_path, &expected_hash)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    if !matches_recording {
         return Ok(());
     }
 
@@ -731,6 +855,19 @@ async fn repair_auto_export(
         if current_export.as_deref() != Some(encrypted_export.as_str())
             || !tokio::fs::try_exists(&export_path).await.unwrap_or(false)
         {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return Ok(());
+        }
+
+        let recheck_path = export_path.clone();
+        let still_matches = matches!(
+            tokio::task::spawn_blocking(move || {
+                raw_file_matches_packet_hash(&recheck_path, &expected_hash)
+            })
+            .await,
+            Ok(Ok(true))
+        );
+        if !still_matches {
             let _ = tokio::fs::remove_file(&tmp).await;
             return Ok(());
         }
@@ -796,11 +933,14 @@ async fn repair_auto_export(
         }
 
         let recheck_path = export_path.clone();
-        let still_raw = matches!(
-            tokio::task::spawn_blocking(move || detect_file(&recheck_path)).await,
-            Ok(Ok(Some(_)))
+        let still_matches = matches!(
+            tokio::task::spawn_blocking(move || {
+                raw_file_matches_packet_hash(&recheck_path, &expected_hash)
+            })
+            .await,
+            Ok(Ok(true))
         );
-        if !still_raw {
+        if !still_matches {
             let _ = tokio::fs::remove_file(&tmp).await;
             return Ok(());
         }
@@ -814,6 +954,124 @@ async fn repair_auto_export(
             export_path = %export_path.display(),
             "repaired auto-exported raw Opus file as valid .mp3"
         );
+    }
+
+    Ok(())
+}
+
+/// Validates an unfinished `.mp3` `auto_export_target` reservation after the stored recording became `.ogg`.
+/// - Missing target under `original`/`ogg`: clears the stale `.mp3` reservation so retry picks `.ogg`.
+/// - Existing target matching this recording's raw Opus packets: promotes and repairs it cleanly.
+/// - Existing target that does not match this recording under `original`/`ogg`: clears the incompatible
+///   reservation so `export_pending` neither adopts nor overwrites an unrelated file.
+async fn repair_auto_export_reservation(
+    state: &AppState,
+    user_id: &str,
+    recording_id: &str,
+    repaired_ogg: &Path,
+) -> Result<(), String> {
+    let row: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT auto_export_path, auto_export_target FROM recordings WHERE id = ? AND deleted_at IS NULL",
+    )
+    .bind(recording_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some((None, Some(encrypted_target))) = row else {
+        return Ok(());
+    };
+    let Ok(target_str) = state.config.field_key.decrypt(&encrypted_target) else {
+        return Ok(());
+    };
+    if target_str.is_empty() {
+        return Ok(());
+    }
+    let target_path = PathBuf::from(&target_str);
+    let is_mp3 = target_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("mp3"));
+    if !is_mp3 {
+        return Ok(());
+    }
+
+    let format = settings::effective(state, user_id)
+        .await
+        .ok()
+        .and_then(|s| {
+            s.get("autoExportFormat")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "mp3".to_owned());
+    let expects_ogg = format == "original" || format == "ogg";
+
+    if !tokio::fs::try_exists(&target_path).await.unwrap_or(false) {
+        if expects_ogg {
+            let _folder_guard = crate::local_folder::lock().await;
+            let _ = sqlx::query(
+                "UPDATE recordings SET auto_export_target = NULL, updated_at = ? \
+                 WHERE id = ? AND auto_export_path IS NULL AND auto_export_target = ? AND deleted_at IS NULL",
+            )
+            .bind(now_ms())
+            .bind(recording_id)
+            .bind(&encrypted_target)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    let ogg_for_hash = repaired_ogg.to_path_buf();
+    let expected_hash = tokio::task::spawn_blocking(move || hash_ogg_opus_packets(&ogg_for_hash))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let matches_recording = match expected_hash {
+        Some(expected) => {
+            let probe = target_path.clone();
+            tokio::task::spawn_blocking(move || raw_file_matches_packet_hash(&probe, &expected))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?
+        }
+        None => false,
+    };
+
+    if matches_recording {
+        // An interrupted export left this recording's raw Opus `.mp3` on disk; promote it to
+        // `auto_export_path` and run the standard verified export repair.
+        let promoted = {
+            let _folder_guard = crate::local_folder::lock().await;
+            sqlx::query(
+                "UPDATE recordings SET auto_export_path = ?, auto_export_target = NULL, \
+                 auto_export_attempts = 0, updated_at = ? \
+                 WHERE id = ? AND auto_export_path IS NULL AND auto_export_target = ? AND deleted_at IS NULL",
+            )
+            .bind(&encrypted_target)
+            .bind(now_ms())
+            .bind(recording_id)
+            .bind(&encrypted_target)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?
+        };
+        if promoted.rows_affected() == 1 {
+            repair_auto_export(state, user_id, recording_id, repaired_ogg).await?;
+        }
+    } else if expects_ogg {
+        let _folder_guard = crate::local_folder::lock().await;
+        let _ = sqlx::query(
+            "UPDATE recordings SET auto_export_target = NULL, updated_at = ? \
+             WHERE id = ? AND auto_export_path IS NULL AND auto_export_target = ? AND deleted_at IS NULL",
+        )
+        .bind(now_ms())
+        .bind(recording_id)
+        .bind(&encrypted_target)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -1157,5 +1415,198 @@ mod tests {
             .expect("repaired mp3 export plays");
         assert_eq!(probe.codec, "mp3");
         assert!(probe.duration_ms >= 900);
+    }
+
+    #[tokio::test]
+    async fn detects_variable_bandwidth_cbr_opus_and_real_libopus_stream() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::Config::for_tests(dir.path());
+
+        // Mixed-bandwidth 80-byte mono 20ms CBR frames: 9x 0xF8 (FB), 123x 0xB8 (WB), 1x 0xD8 (SWB).
+        let mut mixed = Vec::new();
+        for (toc, count) in [(0xF8u8, 9usize), (0xB8, 123), (0xD8, 1)] {
+            mixed.extend(raw_opus_bytes(toc, 80, count));
+        }
+        let mixed_src = dir.path().join("mixed_bw.raw");
+        let mixed_dst = dir.path().join("mixed_bw.ogg");
+        std::fs::write(&mixed_src, &mixed).unwrap();
+        let spec = detect_file(&mixed_src)
+            .unwrap()
+            .expect("mixed bandwidth raw opus");
+        assert_eq!(spec.frame_size, 80);
+        assert_eq!(spec.frame_count, 133);
+        assert_eq!(spec.input_sample_rate, 48_000);
+        wrap_if_raw_opus(&config.ffprobe, &mixed_src, &mixed_dst)
+            .await
+            .unwrap()
+            .expect("wrapped mixed bandwidth");
+        let probe = media::probe(&config.ffprobe, &mixed_dst)
+            .await
+            .expect("probe mixed bandwidth");
+        assert_eq!(probe.codec, "opus");
+        assert_eq!(probe.duration_ms, 2_660);
+
+        // Real libopus CBR 32 kbps mono 20ms encoded audio extracted from Ogg into a headerless stream.
+        let encoded_ogg = dir.path().join("encoded.ogg");
+        let mut cmd = tokio::process::Command::new(&config.ffmpeg);
+        cmd.args([
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:duration=2",
+            "-ac",
+            "1",
+            "-c:a",
+            "libopus",
+            "-vbr",
+            "off",
+            "-b:a",
+            "32k",
+            "-frame_duration",
+            "20",
+            "-f",
+            "ogg",
+        ])
+        .arg(&encoded_ogg);
+        assert!(media::run(&mut cmd).await, "ffmpeg libopus encode");
+
+        // Extract raw 80-byte Opus audio packets from the Ogg container.
+        let ogg_bytes = std::fs::read(&encoded_ogg).unwrap();
+        let mut raw_packets = Vec::new();
+        let mut pos = 0usize;
+        let mut cur = Vec::new();
+        while pos + 27 <= ogg_bytes.len() && &ogg_bytes[pos..pos + 4] == b"OggS" {
+            let nseg = usize::from(ogg_bytes[pos + 26]);
+            let lacing = &ogg_bytes[pos + 27..pos + 27 + nseg];
+            let mut body_pos = pos + 27 + nseg;
+            for &seg in lacing {
+                let len = usize::from(seg);
+                cur.extend_from_slice(&ogg_bytes[body_pos..body_pos + len]);
+                body_pos += len;
+                if len < 255 {
+                    if !cur.starts_with(b"OpusHead") && !cur.starts_with(b"OpusTags") {
+                        assert_eq!(cur.len(), 80);
+                        raw_packets.extend_from_slice(&cur);
+                    }
+                    cur.clear();
+                }
+            }
+            pos = body_pos;
+        }
+        assert!(raw_packets.len() >= 80 * 50);
+
+        let real_raw = dir.path().join("real_libopus.raw");
+        let real_rewrapped = dir.path().join("real_libopus.ogg");
+        std::fs::write(&real_raw, &raw_packets).unwrap();
+        let real_spec = detect_file(&real_raw)
+            .unwrap()
+            .expect("real libopus CBR raw stream");
+        assert_eq!(real_spec.frame_size, 80);
+        wrap_if_raw_opus(&config.ffprobe, &real_raw, &real_rewrapped)
+            .await
+            .unwrap()
+            .expect("rewrapped real libopus");
+        let real_probe = media::probe(&config.ffprobe, &real_rewrapped)
+            .await
+            .expect("probe rewrapped real libopus");
+        assert_eq!(real_probe.codec, "opus");
+        assert!(real_probe.duration_ms >= 1_900);
+        assert_eq!(
+            hash_ogg_opus_packets(&real_rewrapped).unwrap(),
+            Some(hash_raw_opus_packets(&real_raw, real_spec).unwrap())
+        );
+    }
+
+    #[tokio::test]
+    async fn startup_repair_leaves_unrelated_raw_opus_export_alone_and_clears_stale_mp3_reservation()
+     {
+        let dir = tempfile::tempdir().unwrap();
+        let export_dir = dir.path().join("exports");
+        tokio::fs::create_dir_all(&export_dir).await.unwrap();
+        let mut config = crate::Config::for_tests(dir.path());
+        config.storage_root = dir.path().join("storage");
+        tokio::fs::create_dir_all(config.storage_root.join("u1"))
+            .await
+            .unwrap();
+        let state = AppState::new(config, crate::db::open_memory().await.unwrap());
+        let now = now_ms();
+
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u1', ?, ?)")
+            .bind(json!({ "autoExport": true, "autoExportFormat": "original" }).to_string())
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        let rec_a_raw = raw_opus_bytes(0xB8, 80, 50);
+        // Different raw Opus recording B sitting at recording A's export path.
+        let mut rec_b_raw = raw_opus_bytes(0xB8, 80, 50);
+        rec_b_raw[10] = 0xAA;
+
+        let storage_a = state.config.storage_root.join("u1/f_rec_a.mp3");
+        let export_b_at_a = export_dir.join("2026-11-20.mp3");
+        tokio::fs::write(&storage_a, &rec_a_raw).await.unwrap();
+        tokio::fs::write(&export_b_at_a, &rec_b_raw).await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, auto_export_path, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('r_a', 'u1', '', 'f_rec_a', ?, 1000, ?, ?, ?, 'oldmd5', 'local', 'u1/f_rec_a.mp3', ?, '1', 0, ?, ?, 'date')",
+        )
+        .bind(state.config.field_key.encrypt("2026-11-20"))
+        .bind(now)
+        .bind(now + 1000)
+        .bind(rec_a_raw.len() as i64)
+        .bind(state.config.field_key.encrypt(&export_b_at_a.to_string_lossy()))
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        // Recording C failed export with a missing `.mp3` reservation.
+        let storage_c = state.config.storage_root.join("u1/f_rec_c.mp3");
+        let stale_target = export_dir.join("Meeting.mp3");
+        tokio::fs::write(&storage_c, &rec_a_raw).await.unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, auto_export_path, auto_export_target, auto_export_attempts, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('r_c', 'u1', '', 'f_rec_c', ?, 1000, ?, ?, ?, 'oldmd5', 'local', 'u1/f_rec_c.mp3', NULL, ?, 3, '1', 0, ?, ?, 'original')",
+        )
+        .bind(state.config.field_key.encrypt("Meeting"))
+        .bind(now)
+        .bind(now + 1000)
+        .bind(rec_a_raw.len() as i64)
+        .bind(state.config.field_key.encrypt(&stale_target.to_string_lossy()))
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        repair_stored_raw_opus(&state).await;
+
+        // Recording B occupying A's export path must remain completely untouched.
+        assert_eq!(tokio::fs::read(&export_b_at_a).await.unwrap(), rec_b_raw);
+        assert!(!export_dir.join("2026-11-20.ogg").exists());
+
+        // Recording C's stale `.mp3` reservation is cleared and attempts reset to 0.
+        let (sp_c, target_c, attempts_c): (String, Option<String>, i64) = sqlx::query_as(
+            "SELECT storage_path, auto_export_target, auto_export_attempts FROM recordings WHERE id = 'r_c'",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(sp_c, "u1/f_rec_c.ogg");
+        assert!(target_c.is_none());
+        assert_eq!(attempts_c, 0);
     }
 }
