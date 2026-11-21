@@ -6,8 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-20
+
+### Added
+
+- Plaud 4.0 sync support (`/file-app/v4/`). Accounts migrated to Plaud 4.0 are detected automatically on `-1800907` and switch to the v4 listing, detail, audio download, content import, and title push routes without changing settings or reconnecting, while non-migrated accounts keep using the existing routes unchanged.
+- Pre-migration recording ids (`of_<id>`) map back to their stored library ids so previously synced recordings and locally deleted tombstones stay matched without duplicates or re-downloads, and new Plaud 4.0 recordings (`f_<id>`) hydrate device serial, file size, and IANA timezone offsets on import.
+- Mid-sync workspace token revocations (`-419` and `-420`) re-mint a fresh workspace token once automatically, and connect validation falls back to the v4 listing endpoint if `/device/list` reports a migrated account.
+
 ### Fixed
 
+- Syncing a custom local storage folder (`localStorageFolder`) alongside ZIP auto-merge export no longer creates duplicate library recordings when both folders point to the same directory. File writes, renames, and database commits serialize under a shared folder lock, and existing duplicate pairs self-heal while preserving transcripts, summaries, Ask AI chats, and titles.
+- ZIP audio merge now detects and repairs unfinalized `.m4a` and `.mp4` segments missing a `moov` atom, and skips empty or unreadable entries when other valid audio segments exist in the archive.
+- Manual Plaud sync error toasts no longer repeat the "Sync failed:" prefix when the server error already includes it.
 - Failed and stopped Ask AI answers save their final status before notifying clients, so reloading an ended stream cannot leave the answer busy.
 - Audio pipeline progress keeps updating after temporary network failures, and interrupted Ask AI answers reconnect without duplicating text.
 - Transcript searches refresh after re-transcription, and browser transcription progress and notifications follow the interface language.
@@ -202,7 +213,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.3.2...v1.4.0
