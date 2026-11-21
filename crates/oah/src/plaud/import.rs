@@ -14,6 +14,8 @@ pub struct Stored {
     pub storage_type: &'static str,
     pub key: String,
     pub peaks: Option<Vec<f64>>,
+    pub byte_len: i64,
+    pub file_md5: String,
 }
 
 /// Downloads a recording's original audio to the active storage backend and returns where it went.
@@ -31,11 +33,14 @@ pub async fn store_audio(
         .await
         .map_err(|_| ItemError::Failed("could not create the storage folder".into()))?;
     let temp = dir.join(format!(".plaud-{}.partial", ids::token_hex(8)));
-    if let Err(e) = write_stream(&mut resp, &temp).await {
-        let _ = tokio::fs::remove_file(&temp).await;
-        return Err(e);
-    }
-    match stage_downloaded(state, user_id, file_id, &temp).await {
+    let (byte_len, file_md5) = match write_stream(&mut resp, &temp).await {
+        Ok(meta) => meta,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp).await;
+            return Err(e);
+        }
+    };
+    match stage_downloaded(state, user_id, file_id, &temp, byte_len, file_md5).await {
         Ok(stored) => Ok(stored),
         Err(e) => {
             // Every failure after the download leaves no temporary file behind.
@@ -51,6 +56,8 @@ async fn stage_downloaded(
     user_id: &str,
     file_id: &str,
     temp: &Path,
+    byte_len: i64,
+    file_md5: String,
 ) -> Result<Stored, ItemError> {
     let head = read_head(temp).await?;
     let ext = sniff_ext(&head);
@@ -67,13 +74,21 @@ async fn stage_downloaded(
         storage_type: state.storage.active_type(),
         key,
         peaks,
+        byte_len,
+        file_md5,
     })
 }
 
-async fn write_stream(resp: &mut reqwest::Response, path: &Path) -> Result<(), ItemError> {
+async fn write_stream(
+    resp: &mut reqwest::Response,
+    path: &Path,
+) -> Result<(i64, String), ItemError> {
+    use md5::Digest;
     let mut file = tokio::fs::File::create(path)
         .await
         .map_err(|_| ItemError::Failed("could not write the audio".into()))?;
+    let mut hasher = md5::Md5::new();
+    let mut byte_len: i64 = 0;
     while let Some(chunk) = resp
         .chunk()
         .await
@@ -82,6 +97,8 @@ async fn write_stream(resp: &mut reqwest::Response, path: &Path) -> Result<(), I
         file.write_all(&chunk)
             .await
             .map_err(|_| ItemError::Failed("could not write the audio".into()))?;
+        hasher.update(&chunk);
+        byte_len = byte_len.saturating_add(i64::try_from(chunk.len()).unwrap_or(i64::MAX));
     }
     file.flush()
         .await
@@ -89,7 +106,7 @@ async fn write_stream(resp: &mut reqwest::Response, path: &Path) -> Result<(), I
     file.sync_all()
         .await
         .map_err(|_| ItemError::Failed("could not write the audio".into()))?;
-    Ok(())
+    Ok((byte_len, hex::encode(hasher.finalize())))
 }
 
 async fn read_head(path: &Path) -> Result<Vec<u8>, ItemError> {
@@ -262,22 +279,17 @@ pub async fn import_content(
     }
 
     if !has_summary {
-        let is_summary = |item: &Value| {
-            item.get("data_id")
-                .and_then(Value::as_str)
-                .is_some_and(|id| id.starts_with("auto_sum:"))
-        };
         let inline = detail
             .get("pre_download_content_list")
             .and_then(Value::as_array)
-            .and_then(|list| list.iter().find(|i| is_summary(i)))
+            .and_then(|list| list.iter().find(|i| is_summary_item(i)))
             .and_then(|i| i.get("data_content"))
             .and_then(Value::as_str)
-            .and_then(|s| serde_json::from_str::<Value>(s).ok());
+            .and_then(|s| parse_summary_body(s.as_bytes()));
         let summary = match inline {
             Some(v) => Some(v),
-            None => match ready_link(&items, is_summary) {
-                Some(link) => serde_json::from_slice::<Value>(&fetch_body(&link).await?).ok(),
+            None => match ready_link(&items, is_summary_item) {
+                Some(link) => parse_summary_body(&fetch_body(&link).await?),
                 None => None,
             },
         };
@@ -349,17 +361,60 @@ fn gunzip(body: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
+fn is_summary_item(item: &Value) -> bool {
+    item.get("data_id")
+        .and_then(Value::as_str)
+        .is_some_and(|id| id.starts_with("auto_sum:"))
+        || item.get("data_type").and_then(Value::as_str) == Some("auto_sum_note")
+}
+
+fn parse_summary_body(body: &[u8]) -> Option<Value> {
+    match serde_json::from_slice::<Value>(body) {
+        Ok(v) if v.is_object() => Some(v),
+        Ok(Value::String(s)) => {
+            let trimmed = s.trim();
+            (!trimmed.is_empty()).then(|| serde_json::json!({ "ai_content": trimmed }))
+        }
+        Ok(_) => None,
+        Err(_) => {
+            let text = std::str::from_utf8(body).ok()?.trim();
+            (!text.is_empty()).then(|| serde_json::json!({ "ai_content": text }))
+        }
+    }
+}
+
+fn transcript_segments(body: &[u8]) -> Option<Vec<Value>> {
+    let parsed: Value = serde_json::from_slice(body).ok()?;
+    if let Some(arr) = parsed.as_array() {
+        return Some(arr.clone());
+    }
+    parsed
+        .get("trans_result")
+        .or_else(|| parsed.get("segments"))
+        .or_else(|| parsed.pointer("/data/trans_result"))
+        .or_else(|| parsed.pointer("/data/segments"))
+        .and_then(Value::as_array)
+        .cloned()
+}
+
 fn speaker_number(v: &Value) -> Option<i64> {
     v.as_i64().or_else(|| v.as_str()?.parse().ok())
 }
 
 /// Each segment becomes a line, prefixed with `Speaker <n>:` when the speaker is a number.
 fn transcript_text(body: &[u8]) -> Option<String> {
-    let segments: Vec<Value> = serde_json::from_slice(body).ok()?;
+    let segments = transcript_segments(body)?;
     let lines: Vec<String> = segments
         .iter()
         .filter_map(|s| {
-            let content = s.get("content")?.as_str()?.trim();
+            let content = s
+                .get("content")
+                .or_else(|| s.get("text"))
+                .and_then(Value::as_str)?
+                .trim();
+            if content.is_empty() {
+                return None;
+            }
             Some(match s.get("speaker").and_then(speaker_number) {
                 Some(n) => format!("Speaker {n}: {content}"),
                 None => content.to_owned(),
@@ -382,7 +437,7 @@ fn segment_ms(v: &Value) -> Option<i64> {
 
 /// Timed lines for the timeline. A segment without text or a usable start is skipped, not fatal.
 fn transcript_timeline(body: &[u8]) -> Option<Vec<Value>> {
-    let segments: Vec<Value> = serde_json::from_slice(body).ok()?;
+    let segments = transcript_segments(body)?;
     let mut timeline = Vec::new();
     for s in &segments {
         let Some(content) = s
@@ -490,5 +545,52 @@ mod tests {
             Some("Speaker 1: hi")
         );
         assert!(super::gunzip(b"not gzip").is_none());
+    }
+
+    #[test]
+    fn summary_parser_accepts_json_and_plain_markdown() {
+        let json_val = parse_summary_body(br#"{"ai_content":"Summary","key_points":["a"]}"#)
+            .expect("json summary");
+        assert_eq!(json_val["ai_content"], "Summary");
+
+        let md_val =
+            parse_summary_body(b"# Summary\nFake v4 markdown summary\n").expect("markdown summary");
+        assert_eq!(md_val["ai_content"], "# Summary\nFake v4 markdown summary");
+
+        assert!(parse_summary_body(b"   \n\t ").is_none());
+        assert!(parse_summary_body(b"null").is_none());
+        assert!(parse_summary_body(b"[]").is_none());
+    }
+
+    #[test]
+    fn summary_matcher_accepts_prefix_and_data_type() {
+        assert!(is_summary_item(
+            &serde_json::json!({ "data_id": "auto_sum:1" })
+        ));
+        assert!(is_summary_item(
+            &serde_json::json!({ "data_id": "other", "data_type": "auto_sum_note" })
+        ));
+        assert!(!is_summary_item(
+            &serde_json::json!({ "data_id": "source_transaction:1", "data_type": "transaction" })
+        ));
+    }
+
+    #[test]
+    fn transcript_unwraps_trans_result_and_segments_objects() {
+        let wrapped_tr =
+            br#"{"trans_result":[{"start_time":100,"end_time":500,"speaker":1,"content":"Hello"}]}"#;
+        assert_eq!(
+            transcript_text(wrapped_tr).as_deref(),
+            Some("Speaker 1: Hello")
+        );
+        let tl = transcript_timeline(wrapped_tr).unwrap();
+        assert_eq!(tl.len(), 1);
+        assert_eq!(tl[0]["start_ms"], 100);
+
+        let wrapped_seg = br#"{"segments":[{"start_ms":200,"end_ms":400,"text":"World"}]}"#;
+        assert_eq!(transcript_text(wrapped_seg).as_deref(), Some("World"));
+        let tl2 = transcript_timeline(wrapped_seg).unwrap();
+        assert_eq!(tl2.len(), 1);
+        assert_eq!(tl2[0]["start_ms"], 200);
     }
 }
