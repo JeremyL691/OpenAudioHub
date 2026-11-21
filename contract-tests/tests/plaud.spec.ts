@@ -2,12 +2,13 @@ import { type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { type APIRequestContext } from "@playwright/test";
-import { anonymousContext, baseURL } from "../helpers/api";
+import { anonymousContext, baseURL, fakeAiBaseUrl } from "../helpers/api";
 import {
     ensureFakePlaud,
     freshUser,
     mainUser,
     FAKE_PLAUD_URL,
+    type FakeRequest,
     fakeControl,
     fakeRequests,
     jwt,
@@ -888,6 +889,496 @@ test.describe("plaud: sign-in and sync against the fake Plaud API", () => {
             (x) => x.id === shapedRow.id,
         );
         expect(after!.filename).toBe(candidate.suggestedFilename);
+        await api.dispose();
+    });
+});
+
+// ---------------------------------------------------------------- Plaud 4.0
+
+type V4FakeRequest = FakeRequest & {
+    "x-scope-type"?: string | null;
+    "x-scope-id"?: string | null;
+};
+
+async function v4FakeRequests(): Promise<V4FakeRequest[]> {
+    return (await fakeRequests()) as V4FakeRequest[];
+}
+
+test.describe("plaud: 4.0 migrated accounts", () => {
+    test.describe.configure({ timeout: 300_000 });
+
+    let fake: ChildProcess | null = null;
+
+    test.beforeAll(async () => {
+        fake = await ensureFakePlaud();
+        await fakeControl("/reset");
+    });
+
+    test.afterAll(() => {
+        fake?.kill();
+    });
+
+    async function signInV4(api: APIRequestContext, email: string) {
+        const sent = await api.post("/api/plaud/auth/send-code", { data: { email } });
+        expect(sent.status()).toBe(200);
+        const { otpToken, apiBase } = await sent.json();
+        const res = await api.post("/api/plaud/auth/verify", {
+            data: { code: "123456", otpToken, apiBase, email },
+        });
+        expect(res.status()).toBe(200);
+        return (await res.json()) as { success: boolean; devices: { sn: string }[] };
+    }
+
+    async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 20_000): Promise<T> {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+            const value = await read();
+            if (value !== undefined) return value;
+            if (Date.now() > deadline) throw new Error("timed out waiting for expected state");
+            await new Promise((r) => setTimeout(r, 300));
+        }
+    }
+
+    test("mid-life migration preserves existing rows and tombstones without duplicates or re-downloads", async () => {
+        const api = await freshUser("plaud-v4-migration");
+        const email = uniq("v4-mig");
+        const base = Date.now() - 2 * DAY * 1000;
+        const tag = `${Date.now()}`;
+        const keepId = `mig-keep-${tag}`;
+        const editId = `mig-edit-${tag}`;
+        const tombId = `mig-tomb-${tag}`;
+        const newV4Id = `f_new_${tag}`;
+
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                {
+                    id: keepId,
+                    filename: "Keep unchanged",
+                    start_time: base - 300_000,
+                    edit_time: base - 300_000,
+                    version_ms: 1000,
+                },
+                {
+                    id: editId,
+                    filename: "Before v4 edit",
+                    start_time: base - 200_000,
+                    edit_time: base - 200_000,
+                    version_ms: 1000,
+                },
+                {
+                    id: tombId,
+                    filename: "Deleted before v4",
+                    start_time: base - 100_000,
+                    edit_time: base - 100_000,
+                    version_ms: 1000,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const initial = await (await api.post("/api/plaud/sync")).json();
+        expect(initial).toMatchObject({ success: true, newRecordings: 3, updatedRecordings: 0, errors: [] });
+
+        const listBefore = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const tombRow = listBefore.find((x) => x.plaudFileId === tombId);
+        expect(tombRow).toBeTruthy();
+        expect((await api.delete(`/api/recordings/${tombRow!.id as string}`)).status()).toBe(200);
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: editId,
+                    filename: "Edited after v4",
+                    version_ms: 2000,
+                    edit_time: base + 10_000,
+                    updated_at_show_ms: base + 10_000,
+                },
+                {
+                    id: tombId,
+                    version_ms: 2500,
+                    edit_time: base + 15_000,
+                    updated_at_show_ms: base + 15_000,
+                },
+                {
+                    id: newV4Id,
+                    isV4New: true,
+                    filename: "New v4 recording",
+                    start_time: Date.UTC(2026, 6, 15, 12, 0, 0),
+                    created_at_show_ms: base + 20_000,
+                    updated_at_show_ms: base + 20_000,
+                    duration: 3000,
+                    version_ms: 3000,
+                    serial_number: "SN-V4-99",
+                    timezone_iana: "Asia/Kolkata",
+                },
+            ],
+        });
+
+        const before = (await v4FakeRequests()).length;
+        const migrated = await (await api.post("/api/plaud/sync")).json();
+        expect(migrated).toMatchObject({
+            success: true,
+            newRecordings: 1,
+            updatedRecordings: 1,
+            errors: [],
+            needsReconnect: false,
+        });
+
+        const listAfter = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(listAfter).toHaveLength(3);
+        expect(listAfter.some((x) => x.plaudFileId === tombId)).toBe(false);
+
+        const keepRow = listAfter.find((x) => x.plaudFileId === keepId);
+        const editRow = listAfter.find((x) => x.plaudFileId === editId);
+        const newRow = listAfter.find((x) => x.plaudFileId === newV4Id);
+        expect(keepRow).toMatchObject({ filename: "Keep unchanged", plaudVersion: "1000" });
+        expect(editRow).toMatchObject({ filename: "Edited after v4", plaudVersion: "2000" });
+        expect(newRow).toMatchObject({
+            filename: "New v4 recording",
+            deviceSn: "SN-V4-99",
+            plaudVersion: "3000",
+            timezone: 5,
+            zonemins: 30,
+        });
+        expect(Number(newRow!.filesize)).toBeGreaterThan(0);
+        expect((await api.get(`/api/recordings/${newRow!.id as string}/audio`)).status()).toBe(200);
+        expect((await api.get(`/api/recordings/${editRow!.id as string}/audio`)).status()).toBe(200);
+
+        const requests = (await v4FakeRequests()).slice(before);
+        const audioDownloads = requests.filter((q) => q.path.startsWith("/audio/"));
+        expect(audioDownloads).toHaveLength(1);
+        expect(audioDownloads[0].path).toBe(`/audio/${newV4Id}.mp3`);
+        expect(audioDownloads[0].auth).toBe("none");
+        expect(audioDownloads[0]["x-scope-type"]).toBeNull();
+
+        expect(requests.some((q) => q.path === `/file-app/v4/files/detail/of_${keepId}`)).toBe(false);
+        expect(requests.some((q) => q.path === `/file-app/v4/files/detail/of_${tombId}`)).toBe(false);
+
+        const v4Calls = requests.filter((q) => q.path.startsWith("/file-app/v4/"));
+        expect(v4Calls.length).toBeGreaterThan(0);
+        expect(v4Calls.every((q) => q["x-scope-type"] === "workspace")).toBe(true);
+        expect(v4Calls.every((q) => typeof q["x-scope-id"] === "string" && q["x-scope-id"].length > 0)).toBe(true);
+        expect(v4Calls.every((q) => q.auth === "wt")).toBe(true);
+        await api.dispose();
+    });
+
+    test("multi-page cursor pagination and out-of-order edit sorting surface older edited items", async () => {
+        const api = await freshUser("plaud-v4-pages");
+        const email = uniq("v4-pages");
+        const base = Date.now() - DAY * 1000;
+        const tag = `${Date.now()}`;
+        const total = 52;
+        const recordings = Array.from({ length: total }, (_, i) => ({
+            id: `f_pg_${tag}_${i}`,
+            isV4New: true,
+            filename: `Page item ${i}`,
+            start_time: base - i * 60_000,
+            created_at_show_ms: base - i * 60_000,
+            updated_at_show_ms: base - i * 60_000,
+            edit_time: base - i * 60_000,
+            version_ms: 1000,
+        }));
+        await fakeControl("/account", { email, migratedV4: true, recordings });
+        await signInV4(api, email);
+
+        const beforeFirst = (await v4FakeRequests()).length;
+        const first = await (await api.post("/api/plaud/sync")).json();
+        expect(first).toMatchObject({ success: true, newRecordings: total, updatedRecordings: 0, errors: [] });
+
+        const firstRequests = (await v4FakeRequests()).slice(beforeFirst);
+        const listCalls = firstRequests.filter((q) => q.path === "/file-app/v4/recordings/all");
+        expect(listCalls.length).toBeGreaterThanOrEqual(2);
+        expect(listCalls.some((q) => q.query.includes("cursor=50"))).toBe(true);
+
+        const oldestId = `f_pg_${tag}_${total - 1}`;
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                {
+                    id: oldestId,
+                    filename: "Oldest item edited",
+                    version_ms: 9999,
+                    updated_at_show_ms: base + 100_000,
+                    edit_time: base + 100_000,
+                },
+            ],
+        });
+
+        const beforeSecond = (await v4FakeRequests()).length;
+        const second = await (await api.post("/api/plaud/sync")).json();
+        expect(second).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 1, errors: [] });
+
+        const secondRequests = (await v4FakeRequests()).slice(beforeSecond);
+        expect(secondRequests.filter((q) => q.path.startsWith("/audio/"))).toEqual([]);
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list).toHaveLength(total);
+        const edited = list.find((x) => x.plaudFileId === oldestId);
+        expect(edited).toMatchObject({ filename: "Oldest item edited", plaudVersion: "9999" });
+        await api.dispose();
+    });
+
+    test("audio fallback supports AUDIO-only objects and content_id resolution", async () => {
+        const api = await freshUser("plaud-v4-audio-fallback");
+        const email = uniq("v4-audio");
+        const tag = `${Date.now()}`;
+        const audioOnlyId = `f_audio_only_${tag}`;
+        const cidOnlyId = `f_cid_only_${tag}`;
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: audioOnlyId,
+                    isV4New: true,
+                    filename: "Audio only item",
+                    audioMode: "audio_only",
+                    filesize: 0,
+                    file_md5: "",
+                    version_ms: 1500,
+                },
+                {
+                    id: cidOnlyId,
+                    isV4New: true,
+                    filename: "Content id only item",
+                    audioMode: "content_id_only",
+                    version_ms: 1600,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const before = (await v4FakeRequests()).length;
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        for (const id of [audioOnlyId, cidOnlyId]) {
+            const row = list.find((x) => x.plaudFileId === id);
+            expect(row, `recording ${id}`).toBeTruthy();
+            expect(Number(row!.filesize)).toBeGreaterThan(0);
+            expect(String(row!.fileMd5)).toMatch(/^[a-f0-9]{32}$/);
+            expect((await api.get(`/api/recordings/${row!.id as string}/audio`)).status()).toBe(200);
+        }
+
+        const requests = (await v4FakeRequests()).slice(before);
+        const contentUrlCalls = requests.filter(
+            (q) => q.method === "POST" && q.path === "/file-app/v4/files/content/url",
+        );
+        expect(contentUrlCalls.length).toBeGreaterThanOrEqual(1);
+        await api.dispose();
+    });
+
+    test("importPlaudContent imports v4 gzipped transcripts and Markdown summaries including migrated null status", async () => {
+        const api = await freshUser("plaud-v4-content");
+        const email = uniq("v4-content");
+        const tag = `${Date.now()}`;
+        const v4MdId = `f_content_md_${tag}`;
+        const migratedNullId = `mig_content_null_${tag}`;
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: v4MdId,
+                    isV4New: true,
+                    filename: "V4 content recording",
+                    is_trans: true,
+                    is_summary: true,
+                    summaryMarkdown: true,
+                    migratedContentStatusNull: false,
+                    version_ms: 2100,
+                },
+                {
+                    id: migratedNullId,
+                    filename: "Migrated null-status content",
+                    is_trans: true,
+                    is_summary: true,
+                    summaryMarkdown: true,
+                    migratedContentStatusNull: true,
+                    version_ms: 2200,
+                },
+            ],
+        });
+        await signInV4(api, email);
+        expect((await api.put("/api/settings/user", { data: { importPlaudContent: true } })).status()).toBe(200);
+
+        const before = (await v4FakeRequests()).length;
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        for (const id of [v4MdId, migratedNullId]) {
+            const row = list.find((x) => x.plaudFileId === id);
+            expect(row, `recording ${id}`).toBeTruthy();
+
+            const detail = await (await api.get(`/api/recordings/${row!.id as string}`)).json();
+            expect(detail.transcription).toBeTruthy();
+            expect(detail.transcription.source).toBe("plaud");
+            expect(detail.transcription.text).toContain(`Fake transcript line for ${id}`);
+
+            const summary = await (await api.get(`/api/recordings/${row!.id as string}/summary`)).json();
+            expect(summary.summary).toContain("Fake v4 markdown summary");
+        }
+
+        const requests = (await v4FakeRequests()).slice(before);
+        expect(requests.some((q) => q.path === `/content/${v4MdId}/summary.md`)).toBe(true);
+        expect(requests.some((q) => q.path === `/content/${migratedNullId}/summary.md`)).toBe(true);
+        await api.dispose();
+    });
+
+    test("mid-sync -419 workspace token revocation re-mints once and completes sync", async () => {
+        const api = await freshUser("plaud-v4-remint");
+        const email = uniq("v4-remint");
+        const id = `f_remint_${Date.now()}`;
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [{ id, isV4New: true, filename: "After remint", version_ms: 3100 }],
+        });
+        await signInV4(api, email);
+        await fakeControl("/fail", {
+            path: "/file-app/v4/recordings/all",
+            status: 200,
+            plaudStatus: -419,
+            msg: "Workspace token revoked",
+            times: 1,
+            email,
+        });
+
+        const before = (await v4FakeRequests()).length;
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({
+            success: true,
+            newRecordings: 1,
+            updatedRecordings: 0,
+            errors: [],
+            needsReconnect: false,
+        });
+
+        const requests = (await v4FakeRequests()).slice(before);
+        const mintCalls = requests.filter(
+            (q) => q.method === "POST" && q.path.startsWith("/user-app/auth/workspace/token/"),
+        );
+        expect(mintCalls.length).toBeGreaterThanOrEqual(2);
+        const listCalls = requests.filter((q) => q.path === "/file-app/v4/recordings/all");
+        expect(listCalls.length).toBeGreaterThanOrEqual(2);
+
+        const status = await (await api.get("/api/plaud/connection")).json();
+        expect(status).toMatchObject({ connected: true, needsReconnect: false });
+        await api.dispose();
+    });
+
+    test("title push on v4 retries -1800313 version conflicts and renames matching container folders", async () => {
+        const api = await freshUser("plaud-v4-rename");
+        const email = uniq("v4-rename");
+        const id = `f_rename_${Date.now()}`;
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id,
+                    isV4New: true,
+                    filename: "Initial Plaud Title",
+                    folderName: "Initial Plaud Title",
+                    renameConflictOnce: true,
+                    version_ms: 5000,
+                },
+            ],
+        });
+        await signInV4(api, email);
+        expect(
+            (
+                await api.put("/api/settings/user", {
+                    data: {
+                        autoGenerateTitle: true,
+                        syncTitleToPlaud: true,
+                        recordingTitleMode: "ai",
+                        autoSummarize: false,
+                    },
+                })
+            ).status(),
+        ).toBe(200);
+        expect(
+            (
+                await api.post("/api/settings/ai/providers", {
+                    data: {
+                        provider: "Custom",
+                        apiKey: "plaud-v4-title-test-key",
+                        baseUrl: fakeAiBaseUrl,
+                        defaultModel: "fake-chat-1",
+                        isDefaultTranscription: true,
+                        isDefaultEnhancement: true,
+                    },
+                })
+            ).status(),
+        ).toBe(200);
+
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 1, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        const row = list.find((x) => x.plaudFileId === id);
+        expect(row).toBeTruthy();
+
+        const before = (await v4FakeRequests()).length;
+        const transcribed = await api.post(`/api/recordings/${row!.id as string}/transcribe`);
+        expect(transcribed.status()).toBe(200);
+
+        const renameCalls = await waitFor(async () => {
+            const reqs = (await v4FakeRequests()).slice(before);
+            const nodeRenames = reqs.filter(
+                (q) => q.method === "PATCH" && q.path === `/file-app/v4/nodes/rename/node_${id}`,
+            );
+            const folderRenames = reqs.filter(
+                (q) => q.method === "PATCH" && q.path === `/file-app/v4/nodes/rename/wrap_${id}`,
+            );
+            return nodeRenames.length >= 2 && folderRenames.length >= 1
+                ? { nodeRenames, folderRenames }
+                : undefined;
+        });
+
+        expect(renameCalls.nodeRenames).toHaveLength(2);
+        expect(renameCalls.folderRenames).toHaveLength(1);
+        expect(renameCalls.nodeRenames.every((q) => q["x-scope-type"] === "workspace" && q.auth === "wt")).toBe(true);
+        expect(renameCalls.folderRenames.every((q) => q["x-scope-type"] === "workspace" && q.auth === "wt")).toBe(true);
+
+        const after = await (await api.get(`/api/recordings/${row!.id as string}`)).json();
+        expect(after.recording.filename).toBe("Contract Title");
+        await api.dispose();
+    });
+
+    test("connect falls back to v4 listing when /device/list returns -1800907", async () => {
+        const api = await freshUser("plaud-v4-connect-fallback");
+        const email = uniq("v4-connect");
+
+        await fakeControl("/account", { email, migratedV4: true });
+        await fakeControl("/fail", {
+            path: "/device/list",
+            status: 200,
+            plaudStatus: -1800907,
+            msg: "Account migrated to 4.0. Please update and reinitialize.",
+            times: 1,
+            email,
+        });
+
+        const before = (await v4FakeRequests()).length;
+        const verified = await signInV4(api, email);
+        expect(verified.success).toBe(true);
+        expect(verified.devices).toEqual([]);
+
+        const requests = (await v4FakeRequests()).slice(before);
+        expect(requests.some((q) => q.path === "/file-app/v4/recordings/all")).toBe(true);
+        const status = await (await api.get("/api/plaud/connection")).json();
+        expect(status).toMatchObject({ connected: true, needsReconnect: false });
         await api.dispose();
     });
 });
