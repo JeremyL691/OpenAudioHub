@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-21
+
+### Fixed
+
+- Plaud 4.0 recordings delivered as headerless constant-frame-size raw Opus streams (such as long hardware recordings whose `AUDIO_TRANSCODED` task is absent or still pending) are detected automatically and wrapped losslessly into standard Ogg/Opus `.ogg` containers before storage, so playback, waveform generation, and transcription work without re-encoding.
+- Plaud 4.0 audio selection skips unready `AUDIO_TRANSCODED` entries (`task_status` other than `1`) and falls back cleanly to `AUDIO`, while later metadata-only sync updates preserve the wrapped `.ogg` file size and MD5.
+- On startup, the server repairs previously synced local `.mp3` recordings that contain headerless raw Opus bytes into `.ogg`, resets failed auto-export attempts, backfills missing waveform peaks, and repairs matching raw Opus desktop auto-export files without creating duplicate library entries.
+- Plaud 4.0 sync now remembers a failed workspace token re-mint for the rest of the run instead of repeating it per recording, restarts listing from the first 4.0 page if an account switches to 4.0 mid-run, keeps user-visible display folder names untouched during title push, and always records `filesize` and `file_md5` from the downloaded audio bytes.
+
 ## [1.7.0] - 2026-11-20
 
 ### Added
@@ -213,7 +222,8 @@ Initial release.
 - **Self-hosting.** A single container image for linux/amd64 and linux/arm64, a Docker Compose file, a one-line installer, a health endpoint, and a single SQLite data volume.
 - **Mac app.** A desktop app for Apple Silicon Macs that runs the server locally, with a menu bar item, launch at login, and a local data folder.
 
-[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/JeremyL691/OpenAudioHub/compare/v1.4.0...v1.5.0
