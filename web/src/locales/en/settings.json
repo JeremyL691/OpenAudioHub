@@ -11,6 +11,8 @@
         "notificationsGroup": "Notifications",
         "showSync": "Show sync notifications",
         "showSyncHint": "Display notifications when sync completes.",
+        "mergeSplitRecordings": "Merge 5-hour split recordings",
+        "mergeSplitRecordingsHint": "Automatically merge consecutive 5-hour Plaud split recordings into one recording without re-encoding.",
         "minutes": "{count} minutes",
         "minute": "1 minute"
     },
