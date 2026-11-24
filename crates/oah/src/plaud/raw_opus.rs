@@ -460,11 +460,42 @@ fn write_ogg_page<W: Write>(
     writer.write_all(page_buf)
 }
 
-/// Losslessly wraps a raw Opus stream into a standard RFC 7845 Ogg/Opus file.
-/// Streams frame-by-frame in constant memory and returns `(byte_len, md5_hex)`.
-pub fn mux_to_ogg(src: &Path, dst: &Path, spec: RawOpusSpec) -> io::Result<(i64, String)> {
+/// Output metadata produced when muxing one or more raw Opus streams into a single Ogg/Opus file.
+#[derive(Debug, Clone)]
+pub struct MuxedMany {
+    pub byte_len: i64,
+    pub file_md5: String,
+    pub part_durations_ms: Vec<i64>,
+}
+
+/// Losslessly muxes one or more raw Opus streams into a single-BOS RFC 7845 Ogg/Opus file.
+/// Streams each part frame-by-frame in constant memory and syncs the output file to disk.
+pub fn mux_many_to_ogg(parts: &[(&Path, RawOpusSpec)], dst: &Path) -> io::Result<MuxedMany> {
     const SERIAL: u32 = 1;
-    let mut reader = BufReader::with_capacity(64 * 1024, File::open(src)?);
+    if parts.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "at least one raw Opus part is required",
+        ));
+    }
+    let channels = parts[0].1.channels;
+    let mut input_sample_rate = 0u32;
+    for &(_, spec) in parts {
+        if spec.channels != channels {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "raw Opus parts have mismatched channel counts",
+            ));
+        }
+        if spec.frame_size == 0 || spec.frame_count == 0 || spec.samples_per_frame == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "raw Opus part has invalid frame geometry",
+            ));
+        }
+        input_sample_rate = input_sample_rate.max(spec.input_sample_rate);
+    }
+
     let out_file = File::create(dst)?;
     let mut writer = HashingWriter::new(BufWriter::with_capacity(64 * 1024, out_file));
     let mut page_buf = Vec::with_capacity(16 * 1024);
@@ -473,9 +504,9 @@ pub fn mux_to_ogg(src: &Path, dst: &Path, spec: RawOpusSpec) -> io::Result<(i64,
     let mut opus_head = Vec::with_capacity(19);
     opus_head.extend_from_slice(b"OpusHead");
     opus_head.push(1); // version
-    opus_head.push(spec.channels);
+    opus_head.push(channels);
     opus_head.extend_from_slice(&0u16.to_le_bytes()); // pre_skip
-    opus_head.extend_from_slice(&spec.input_sample_rate.to_le_bytes());
+    opus_head.extend_from_slice(&input_sample_rate.to_le_bytes());
     opus_head.extend_from_slice(&0i16.to_le_bytes()); // output gain
     opus_head.push(0); // channel mapping family
     write_ogg_page(
@@ -505,32 +536,48 @@ pub fn mux_to_ogg(src: &Path, dst: &Path, spec: RawOpusSpec) -> io::Result<(i64,
         &[&opus_tags],
     )?;
 
-    // Audio pages: ~1 second per page (up to 50 frames) while staying within the 255-segment Ogg limit.
-    let segs_per_packet = (spec.frame_size / 255) + 1;
-    let packets_per_page = (255 / segs_per_packet).clamp(1, 50);
-    let mut chunk_buf = vec![0u8; packets_per_page * spec.frame_size];
-
-    let mut remaining = spec.frame_count;
+    let mut chunk_buf = Vec::new();
     let mut granule = 0u64;
     let mut seq = 2u32;
-    while remaining > 0 {
-        let take = remaining.min(packets_per_page as u64) as usize;
-        let bytes = take * spec.frame_size;
-        reader.read_exact(&mut chunk_buf[..bytes])?;
-        let packet_refs: Vec<&[u8]> = chunk_buf[..bytes].chunks_exact(spec.frame_size).collect();
-        remaining -= take as u64;
-        granule = granule.saturating_add(take as u64 * u64::from(spec.samples_per_frame));
-        let header_type = if remaining == 0 { 0x04 } else { 0x00 };
-        write_ogg_page(
-            &mut writer,
-            &mut page_buf,
-            header_type,
-            granule,
-            SERIAL,
-            seq,
-            &packet_refs,
-        )?;
-        seq = seq.wrapping_add(1);
+    let mut part_durations_ms = Vec::with_capacity(parts.len());
+
+    for (part_idx, &(src, spec)) in parts.iter().enumerate() {
+        let mut reader = BufReader::with_capacity(64 * 1024, File::open(src)?);
+        // Audio pages: ~1 second per page (up to 50 frames) while staying within the 255-segment Ogg limit.
+        let segs_per_packet = (spec.frame_size / 255) + 1;
+        let packets_per_page = (255 / segs_per_packet).clamp(1, 50);
+        chunk_buf.resize(packets_per_page * spec.frame_size, 0);
+
+        let is_last_part = part_idx + 1 == parts.len();
+        let mut remaining = spec.frame_count;
+        while remaining > 0 {
+            let take = remaining.min(packets_per_page as u64) as usize;
+            let bytes = take * spec.frame_size;
+            reader.read_exact(&mut chunk_buf[..bytes])?;
+            let packet_refs: Vec<&[u8]> =
+                chunk_buf[..bytes].chunks_exact(spec.frame_size).collect();
+            remaining -= take as u64;
+            granule = granule.saturating_add(take as u64 * u64::from(spec.samples_per_frame));
+            let header_type = if is_last_part && remaining == 0 {
+                0x04
+            } else {
+                0x00
+            };
+            write_ogg_page(
+                &mut writer,
+                &mut page_buf,
+                header_type,
+                granule,
+                SERIAL,
+                seq,
+                &packet_refs,
+            )?;
+            seq = seq.wrapping_add(1);
+        }
+
+        let samples = u128::from(spec.frame_count) * u128::from(spec.samples_per_frame);
+        let duration_ms = i64::try_from((samples * 1000 + 24_000) / 48_000).unwrap_or(i64::MAX);
+        part_durations_ms.push(duration_ms);
     }
 
     writer.flush()?;
@@ -538,7 +585,80 @@ pub fn mux_to_ogg(src: &Path, dst: &Path, spec: RawOpusSpec) -> io::Result<(i64,
     let file_md5 = hex::encode(writer.hasher.finalize());
     let file = writer.inner.into_inner().map_err(|e| e.into_error())?;
     file.sync_all()?;
-    Ok((byte_len, file_md5))
+    Ok(MuxedMany {
+        byte_len,
+        file_md5,
+        part_durations_ms,
+    })
+}
+
+/// Losslessly wraps a raw Opus stream into a standard RFC 7845 Ogg/Opus file.
+/// Streams frame-by-frame in constant memory and returns `(byte_len, md5_hex)`.
+pub fn mux_to_ogg(src: &Path, dst: &Path, spec: RawOpusSpec) -> io::Result<(i64, String)> {
+    let muxed = mux_many_to_ogg(&[(src, spec)], dst)?;
+    Ok((muxed.byte_len, muxed.file_md5))
+}
+
+/// Wraps all `srcs` into one Ogg/Opus file at `dst` when every input is a headerless raw Opus
+/// stream with matching channel count and `ffprobe` confirms the output is readable.
+/// Returns `Ok(None)` without leaving `dst` behind if inputs are empty, incompatible, or fail probe.
+pub async fn wrap_many_if_raw_opus(
+    ffprobe: &Path,
+    srcs: &[PathBuf],
+    dst: &Path,
+) -> io::Result<Option<MuxedMany>> {
+    if srcs.is_empty() {
+        return Ok(None);
+    }
+
+    let srcs_owned = srcs.to_vec();
+    let detected =
+        tokio::task::spawn_blocking(move || -> io::Result<Option<Vec<(PathBuf, RawOpusSpec)>>> {
+            let mut parts = Vec::with_capacity(srcs_owned.len());
+            let mut expected_channels = None;
+            for src in srcs_owned {
+                let Some(spec) = detect_file(&src)? else {
+                    return Ok(None);
+                };
+                match expected_channels {
+                    Some(ch) if spec.channels != ch => return Ok(None),
+                    None => expected_channels = Some(spec.channels),
+                    Some(_) => {}
+                }
+                parts.push((src, spec));
+            }
+            Ok(Some(parts))
+        })
+        .await
+        .map_err(io::Error::other)??;
+
+    let Some(parts_owned) = detected else {
+        return Ok(None);
+    };
+
+    let dst_owned = dst.to_path_buf();
+    let muxed = match tokio::task::spawn_blocking(move || {
+        let refs: Vec<(&Path, RawOpusSpec)> = parts_owned
+            .iter()
+            .map(|(path, spec)| (path.as_path(), *spec))
+            .collect();
+        mux_many_to_ogg(&refs, &dst_owned)
+    })
+    .await
+    .map_err(io::Error::other)?
+    {
+        Ok(muxed) => muxed,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(dst).await;
+            return Err(e);
+        }
+    };
+
+    if media::probe(ffprobe, dst).await.is_none() {
+        let _ = tokio::fs::remove_file(dst).await;
+        return Ok(None);
+    }
+    Ok(Some(muxed))
 }
 
 /// Wraps `src` into `dst` as Ogg/Opus when `src` is a headerless raw Opus stream and `ffprobe`
@@ -548,26 +668,9 @@ pub async fn wrap_if_raw_opus(
     src: &Path,
     dst: &Path,
 ) -> io::Result<Option<(i64, String)>> {
-    let src_owned = src.to_path_buf();
-    let Some(spec) = tokio::task::spawn_blocking(move || detect_file(&src_owned))
-        .await
-        .map_err(io::Error::other)??
-    else {
-        return Ok(None);
-    };
-
-    let src_owned = src.to_path_buf();
-    let dst_owned = dst.to_path_buf();
-    let (byte_len, file_md5) =
-        tokio::task::spawn_blocking(move || mux_to_ogg(&src_owned, &dst_owned, spec))
-            .await
-            .map_err(io::Error::other)??;
-
-    if media::probe(ffprobe, dst).await.is_none() {
-        let _ = tokio::fs::remove_file(dst).await;
-        return Ok(None);
-    }
-    Ok(Some((byte_len, file_md5)))
+    Ok(wrap_many_if_raw_opus(ffprobe, &[src.to_path_buf()], dst)
+        .await?
+        .map(|muxed| (muxed.byte_len, muxed.file_md5)))
 }
 
 /// Repairs already-synced local `.mp3` recordings whose bytes are headerless raw Opus streams,
@@ -1608,5 +1711,235 @@ mod tests {
         assert_eq!(sp_c, "u1/f_rec_c.ogg");
         assert!(target_c.is_none());
         assert_eq!(attempts_c, 0);
+    }
+
+    struct ParsedOggPage {
+        header_type: u8,
+        granule: u64,
+        serial: u32,
+        seq: u32,
+        body: Vec<u8>,
+    }
+
+    fn parse_ogg_pages(bytes: &[u8]) -> Vec<ParsedOggPage> {
+        let mut pages = Vec::new();
+        let mut pos = 0usize;
+        while pos < bytes.len() {
+            assert!(pos + 27 <= bytes.len(), "truncated Ogg header at {pos}");
+            assert_eq!(&bytes[pos..pos + 4], b"OggS");
+            let header_type = bytes[pos + 5];
+            let granule = u64::from_le_bytes(bytes[pos + 6..pos + 14].try_into().unwrap());
+            let serial = u32::from_le_bytes(bytes[pos + 14..pos + 18].try_into().unwrap());
+            let seq = u32::from_le_bytes(bytes[pos + 18..pos + 22].try_into().unwrap());
+            let stored_crc = u32::from_le_bytes(bytes[pos + 22..pos + 26].try_into().unwrap());
+            let nseg = usize::from(bytes[pos + 26]);
+            let body_start = pos + 27 + nseg;
+            let body_len: usize = bytes[pos + 27..body_start]
+                .iter()
+                .map(|&s| usize::from(s))
+                .sum();
+            let page_end = body_start + body_len;
+            assert!(page_end <= bytes.len(), "truncated Ogg page body at {pos}");
+
+            let mut page_copy = bytes[pos..page_end].to_vec();
+            page_copy[22..26].fill(0);
+            assert_eq!(
+                ogg_crc(&page_copy),
+                stored_crc,
+                "CRC mismatch on page {seq}"
+            );
+
+            pages.push(ParsedOggPage {
+                header_type,
+                granule,
+                serial,
+                seq,
+                body: bytes[body_start..page_end].to_vec(),
+            });
+            pos = page_end;
+        }
+        pages
+    }
+
+    #[test]
+    fn mux_many_produces_single_bos_eos_monotonic_granule_and_accurate_durations() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Three mono 20ms raw Opus parts with different bandwidths (16 kHz, 48 kHz, 24 kHz).
+        let p0_bytes = raw_opus_bytes(0xB8, 80, 75); // 1500 ms, 16 kHz
+        let p1_bytes = raw_opus_bytes(0xF8, 80, 60); // 1200 ms, 48 kHz
+        let p2_bytes = raw_opus_bytes(0xD8, 80, 15); // 300 ms, 24 kHz
+        let p0 = dir.path().join("part0.raw");
+        let p1 = dir.path().join("part1.raw");
+        let p2 = dir.path().join("part2.raw");
+        std::fs::write(&p0, &p0_bytes).unwrap();
+        std::fs::write(&p1, &p1_bytes).unwrap();
+        std::fs::write(&p2, &p2_bytes).unwrap();
+
+        let s0 = detect_file(&p0).unwrap().expect("part0 raw opus");
+        let s1 = detect_file(&p1).unwrap().expect("part1 raw opus");
+        let s2 = detect_file(&p2).unwrap().expect("part2 raw opus");
+        assert_eq!(s0.input_sample_rate, 16_000);
+        assert_eq!(s1.input_sample_rate, 48_000);
+        assert_eq!(s2.input_sample_rate, 24_000);
+
+        let dst = dir.path().join("merged.ogg");
+        let muxed = mux_many_to_ogg(&[(&p0, s0), (&p1, s1), (&p2, s2)], &dst).unwrap();
+        assert_eq!(muxed.part_durations_ms, vec![1_500, 1_200, 300]);
+
+        let out_bytes = std::fs::read(&dst).unwrap();
+        assert_eq!(muxed.byte_len, out_bytes.len() as i64);
+        assert_eq!(muxed.file_md5, hex::encode(md5::Md5::digest(&out_bytes)));
+
+        let pages = parse_ogg_pages(&out_bytes);
+        assert!(pages.len() >= 5, "expected header + multi-part audio pages");
+
+        // Exactly one BOS (page 0) and one EOS (last page), all on serial 1 with sequential page numbers.
+        assert_eq!(
+            pages.iter().filter(|p| (p.header_type & 0x02) != 0).count(),
+            1
+        );
+        assert_eq!(
+            pages.iter().filter(|p| (p.header_type & 0x04) != 0).count(),
+            1
+        );
+        assert_eq!(pages[0].header_type, 0x02);
+        assert_eq!(pages.last().unwrap().header_type, 0x04);
+        for (idx, page) in pages.iter().enumerate() {
+            assert_eq!(page.serial, 1);
+            assert_eq!(page.seq, idx as u32);
+        }
+
+        // OpusHead carries channels = 1 and input_sample_rate = max(16_000, 48_000, 24_000) = 48_000.
+        assert!(pages[0].body.starts_with(b"OpusHead"));
+        assert_eq!(pages[0].body[9], 1);
+        let head_rate = u32::from_le_bytes(pages[0].body[12..16].try_into().unwrap());
+        assert_eq!(head_rate, 48_000);
+        assert!(pages[1].body.starts_with(b"OpusTags"));
+        assert_eq!(pages[0].granule, 0);
+        assert_eq!(pages[1].granule, 0);
+
+        // Audio pages have strictly monotonic granule reaching exact total sample count.
+        let mut prev_granule = 0u64;
+        for page in &pages[2..] {
+            assert!(
+                page.granule > prev_granule,
+                "non-monotonic granule {} after {}",
+                page.granule,
+                prev_granule
+            );
+            prev_granule = page.granule;
+        }
+        assert_eq!(prev_granule, (75 + 60 + 15) * 960);
+
+        // Lossless audio packet payload matches concatenated raw parts byte-for-byte.
+        let mut expected_hasher = Sha256::new();
+        expected_hasher.update(&p0_bytes);
+        expected_hasher.update(&p1_bytes);
+        expected_hasher.update(&p2_bytes);
+        let expected_hash: [u8; 32] = expected_hasher.finalize().into();
+        assert_eq!(hash_ogg_opus_packets(&dst).unwrap(), Some(expected_hash));
+
+        // Verify half-up rounding on 2.5ms frames (cfg=16 -> TOC 0x80, 120 samples/frame).
+        let short_a = dir.path().join("short_a.raw");
+        let short_b = dir.path().join("short_b.raw");
+        std::fs::write(&short_a, raw_opus_bytes(0x80, 40, 5)).unwrap(); // 12.5 ms -> 13 ms
+        std::fs::write(&short_b, raw_opus_bytes(0x80, 40, 6)).unwrap(); // 15.0 ms -> 15 ms
+        let sa = detect_file(&short_a).unwrap().expect("2.5ms part a");
+        let sb = detect_file(&short_b).unwrap().expect("2.5ms part b");
+        assert_eq!(sa.samples_per_frame, 120);
+        let short_dst = dir.path().join("short_merged.ogg");
+        let short_muxed = mux_many_to_ogg(&[(&short_a, sa), (&short_b, sb)], &short_dst).unwrap();
+        assert_eq!(short_muxed.part_durations_ms, vec![13, 15]);
+    }
+
+    #[tokio::test]
+    async fn wrap_many_merges_valid_parts_and_rejects_empty_mismatch_or_non_opus() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::Config::for_tests(dir.path());
+
+        let mono_a = dir.path().join("mono_a.raw");
+        let mono_b = dir.path().join("mono_b.raw");
+        let stereo = dir.path().join("stereo.raw");
+        let fake_mp3 = dir.path().join("fake.mp3");
+        std::fs::write(&mono_a, raw_opus_bytes(0xB8, 80, 75)).unwrap(); // 1.5s
+        std::fs::write(&mono_b, raw_opus_bytes(0xB8, 80, 50)).unwrap(); // 1.0s
+        std::fs::write(&stereo, raw_opus_bytes(0xBC, 160, 50)).unwrap();
+        std::fs::write(
+            &fake_mp3,
+            [b"ID3\x04\0\0\0\0\0\0".as_slice(), &vec![0u8; 800]].concat(),
+        )
+        .unwrap();
+
+        let mono_spec = detect_file(&mono_a).unwrap().unwrap();
+        let stereo_spec = detect_file(&stereo).unwrap().unwrap();
+
+        // Empty parts rejected by both mux_many_to_ogg and wrap_many_if_raw_opus.
+        let empty_dst = dir.path().join("empty.ogg");
+        assert_eq!(
+            mux_many_to_ogg(&[], &empty_dst).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(
+            wrap_many_if_raw_opus(&config.ffprobe, &[], &empty_dst)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(!empty_dst.exists());
+
+        // Channel mismatch rejected by both mux_many_to_ogg and wrap_many_if_raw_opus.
+        let mismatch_dst = dir.path().join("mismatch.ogg");
+        assert_eq!(
+            mux_many_to_ogg(
+                &[(&mono_a, mono_spec), (&stereo, stereo_spec)],
+                &mismatch_dst
+            )
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(
+            wrap_many_if_raw_opus(
+                &config.ffprobe,
+                &[mono_a.clone(), stereo.clone()],
+                &mismatch_dst,
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        assert!(!mismatch_dst.exists());
+
+        // Mixed raw Opus + container file returns Ok(None) and creates no output.
+        let mixed_dst = dir.path().join("mixed.ogg");
+        assert!(
+            wrap_many_if_raw_opus(&config.ffprobe, &[mono_a.clone(), fake_mp3], &mixed_dst)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(!mixed_dst.exists());
+
+        // Matching mono parts merge cleanly and pass ffprobe verification.
+        let merged_dst = dir.path().join("wrapped_many.ogg");
+        let muxed = wrap_many_if_raw_opus(
+            &config.ffprobe,
+            &[mono_a.clone(), mono_b.clone()],
+            &merged_dst,
+        )
+        .await
+        .unwrap()
+        .expect("wrapped multi-part raw opus");
+        assert_eq!(muxed.part_durations_ms, vec![1_500, 1_000]);
+        assert!(muxed.byte_len > 10_000);
+        assert_eq!(muxed.file_md5.len(), 32);
+
+        let probe = media::probe(&config.ffprobe, &merged_dst)
+            .await
+            .expect("ffprobe merged ogg");
+        assert_eq!(probe.codec, "opus");
+        assert_eq!(probe.duration_ms, 2_500);
+        assert_eq!(probe.format, "\"48000\" 1");
     }
 }

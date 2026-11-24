@@ -110,6 +110,7 @@ const RULES: &[(&str, Rule)] = &[
     ("zipTitleMode", Rule::OneOf(&["original", "date", "ai"])),
     ("zipDeleteAfterMerge", Rule::Bool),
     ("plaudEnabled", Rule::Bool),
+    ("mergePlaudSplitRecordings", Rule::Bool),
     ("localStorageFolder", Rule::StringOrNull),
 ];
 
@@ -165,6 +166,7 @@ const DEFAULTS_JSON: &str = r#"{
         "zipTitleMode": "original",
         "zipDeleteAfterMerge": false,
         "plaudEnabled": true,
+        "mergePlaudSplitRecordings": true,
         "localStorageFolder": null
 }"#;
 
@@ -603,8 +605,30 @@ mod tests {
         assert_eq!(d["syncInterval"], json!(300000));
         assert_eq!(d["theme"], json!("system"));
         assert_eq!(d["autoGenerateTitle"], json!(true));
+        assert_eq!(d["mergePlaudSplitRecordings"], json!(true));
         assert!(!d.contains_key("summaryPrompt"));
         assert!(!d.contains_key("barkPushUrl"));
+    }
+
+    #[test]
+    fn merge_plaud_split_recordings_accepts_only_bool() {
+        let mut stored = Map::new();
+        apply(
+            &key(),
+            &mut stored,
+            "mergePlaudSplitRecordings",
+            &json!(false),
+        )
+        .unwrap();
+        assert_eq!(stored["mergePlaudSplitRecordings"], json!(false));
+        let err = apply(
+            &key(),
+            &mut stored,
+            "mergePlaudSplitRecordings",
+            &json!("true"),
+        )
+        .unwrap_err();
+        assert_eq!(err.details["field"], json!("mergePlaudSplitRecordings"));
     }
 
     #[test]

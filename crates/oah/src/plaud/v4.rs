@@ -215,10 +215,23 @@ pub fn iana_offset_parts(iana: &str, at_ms: i64) -> Option<(i64, i64)> {
     Some((total_mins / 60, total_mins % 60))
 }
 
-/// Ranks playable audio objects: ready `AUDIO_TRANSCODED` first, then `AUDIO`,
-/// preferring direct `content_url` over `content_id`-only entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioPreference {
+    Default,
+    PreferRawAudio,
+}
+
+/// Ranks playable audio objects according to `pref`, preferring ready entries first
+/// and direct `content_url` over `content_id`-only entries.
 /// Unready `AUDIO_TRANSCODED` tasks (`task_status` other than `1`) are skipped.
-pub fn select_audio_candidates(detail: &V4FileDetail) -> Vec<&V4FileObject> {
+pub fn select_audio_candidates_with(
+    detail: &V4FileDetail,
+    pref: AudioPreference,
+) -> Vec<&V4FileObject> {
+    let (transcoded_rank, raw_rank) = match pref {
+        AudioPreference::Default => (0, 1),
+        AudioPreference::PreferRawAudio => (1, 0),
+    };
     let mut ranked: Vec<(u8, u8, u8, &V4FileObject)> = detail
         .objects
         .iter()
@@ -231,14 +244,14 @@ pub fn select_audio_candidates(detail: &V4FileDetail) -> Vec<&V4FileObject> {
             }
             let (ready_rank, type_rank) = match kind.as_str() {
                 "AUDIO_TRANSCODED" => match obj.task_status {
-                    Some(1) => (0, 0),
-                    None if has_url => (0, 0),
-                    None => (1, 0),
+                    Some(1) => (0, transcoded_rank),
+                    None if has_url => (0, transcoded_rank),
+                    None => (1, transcoded_rank),
                     Some(_) => return None,
                 },
                 "AUDIO" => match obj.task_status {
-                    Some(1) | None => (0, 1),
-                    Some(_) => (1, 1),
+                    Some(1) | None => (0, raw_rank),
+                    Some(_) => (1, raw_rank),
                 },
                 _ => return None,
             };
@@ -248,6 +261,34 @@ pub fn select_audio_candidates(detail: &V4FileDetail) -> Vec<&V4FileObject> {
         .collect();
     ranked.sort_by_key(|&(r, t, s, _)| (r, t, s));
     ranked.into_iter().map(|(_, _, _, obj)| obj).collect()
+}
+
+/// Ranks playable audio objects: ready `AUDIO_TRANSCODED` first, then `AUDIO`,
+/// preferring direct `content_url` over `content_id`-only entries.
+/// Unready `AUDIO_TRANSCODED` tasks (`task_status` other than `1`) are skipped.
+pub fn select_audio_candidates(detail: &V4FileDetail) -> Vec<&V4FileObject> {
+    select_audio_candidates_with(detail, AudioPreference::Default)
+}
+
+/// True when `detail` contains at least one ready `AUDIO_TRANSCODED` object.
+pub fn has_ready_transcoded_audio(detail: &V4FileDetail) -> bool {
+    detail.objects.iter().any(|obj| {
+        obj.object_type
+            .as_deref()
+            .is_some_and(|t| t.eq_ignore_ascii_case("AUDIO_TRANSCODED"))
+            && is_object_ready(obj)
+    })
+}
+
+/// True when `detail` contains at least one ready `AUDIO` object.
+pub fn has_ready_raw_audio(detail: &V4FileDetail) -> bool {
+    detail.objects.iter().any(|obj| {
+        obj.object_type
+            .as_deref()
+            .is_some_and(|t| t.eq_ignore_ascii_case("AUDIO"))
+            && (has_non_empty(&obj.content_url) || has_non_empty(&obj.content_id))
+            && matches!(obj.task_status, Some(1) | None)
+    })
 }
 
 pub fn is_content_object(obj: &V4FileObject) -> bool {
@@ -536,6 +577,84 @@ mod tests {
             pending_ranked[0].content_url.as_deref(),
             Some("https://raw-ready")
         );
+    }
+
+    #[test]
+    fn audio_candidates_prefer_raw_audio_and_readiness_helpers() {
+        let detail = V4FileDetail {
+            node: None,
+            meta: None,
+            objects: vec![
+                object("TRANSCRIPT", Some("https://t"), None, Some(1)),
+                object("AUDIO", None, Some("cid_raw"), Some(1)),
+                object("AUDIO", Some("https://raw"), None, None),
+                object("AUDIO", Some("https://raw-pending"), None, Some(0)),
+                object("AUDIO_TRANSCODED", None, Some("cid_tr"), Some(1)),
+                object("AUDIO_TRANSCODED", Some("https://tr"), None, Some(1)),
+                object(
+                    "AUDIO_TRANSCODED",
+                    Some("https://tr-pending"),
+                    None,
+                    Some(0),
+                ),
+            ],
+        };
+
+        let default_ranked = select_audio_candidates_with(&detail, AudioPreference::Default);
+        let legacy_ranked = select_audio_candidates(&detail);
+        assert_eq!(default_ranked.len(), legacy_ranked.len());
+        assert_eq!(default_ranked[0].content_url.as_deref(), Some("https://tr"));
+        assert_eq!(default_ranked[1].content_id.as_deref(), Some("cid_tr"));
+        assert_eq!(
+            default_ranked[2].content_url.as_deref(),
+            Some("https://raw")
+        );
+
+        let raw_ranked = select_audio_candidates_with(&detail, AudioPreference::PreferRawAudio);
+        assert_eq!(raw_ranked.len(), 5);
+        assert_eq!(raw_ranked[0].content_url.as_deref(), Some("https://raw"));
+        assert_eq!(raw_ranked[1].content_id.as_deref(), Some("cid_raw"));
+        assert_eq!(raw_ranked[2].content_url.as_deref(), Some("https://tr"));
+        assert_eq!(raw_ranked[3].content_id.as_deref(), Some("cid_tr"));
+        assert_eq!(
+            raw_ranked[4].content_url.as_deref(),
+            Some("https://raw-pending")
+        );
+
+        assert!(has_ready_transcoded_audio(&detail));
+        assert!(has_ready_raw_audio(&detail));
+
+        let transcoded_unready = V4FileDetail {
+            node: None,
+            meta: None,
+            objects: vec![
+                object("AUDIO_TRANSCODED", Some("https://pending"), None, Some(0)),
+                object("AUDIO_TRANSCODED", None, Some("cid_null"), None),
+                object("AUDIO", None, Some("cid_raw_null"), None),
+            ],
+        };
+        assert!(!has_ready_transcoded_audio(&transcoded_unready));
+        assert!(has_ready_raw_audio(&transcoded_unready));
+
+        let transcoded_migrated = V4FileDetail {
+            node: None,
+            meta: None,
+            objects: vec![
+                object("AUDIO_TRANSCODED", Some("https://migrated"), None, None),
+                object("AUDIO", Some("https://raw-pending"), None, Some(0)),
+                object("AUDIO", None, None, Some(1)),
+            ],
+        };
+        assert!(has_ready_transcoded_audio(&transcoded_migrated));
+        assert!(!has_ready_raw_audio(&transcoded_migrated));
+
+        let transcript_only = V4FileDetail {
+            node: None,
+            meta: None,
+            objects: vec![object("TRANSCRIPT", Some("https://t"), None, Some(1))],
+        };
+        assert!(!has_ready_transcoded_audio(&transcript_only));
+        assert!(!has_ready_raw_audio(&transcript_only));
     }
 
     #[test]
