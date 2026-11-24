@@ -569,8 +569,28 @@ impl Client {
         Ok(v4::apply_detail(r, &detail))
     }
 
+    /// Returns cached or freshly fetched Plaud 4.0 detail when the client is in 4.0 mode.
+    pub async fn peek_v4_detail(&self, file_id: &str) -> Result<Option<V4FileDetail>, PlaudError> {
+        if !self.is_v4_mode() {
+            let v4_id = v4::local_id_to_v4_file_id(file_id);
+            let cached = self.runtime.detail_cache.lock().await.get(&v4_id).cloned();
+            return Ok(cached);
+        }
+        self.fetch_v4_detail(file_id, false).await.map(Some)
+    }
+
     /// Presigned link to the original audio (never Opus).
     pub async fn audio_url(&self, file_id: &str) -> Result<String, PlaudError> {
+        self.audio_url_with(file_id, v4::AudioPreference::Default)
+            .await
+    }
+
+    /// Presigned audio download link honoring a Plaud 4.0 object preference.
+    pub async fn audio_url_with(
+        &self,
+        file_id: &str,
+        pref: v4::AudioPreference,
+    ) -> Result<String, PlaudError> {
         if !self.is_v4_mode() {
             match self
                 .api(
@@ -592,12 +612,19 @@ impl Client {
                 Err(e) => return Err(e),
             }
         }
-        self.audio_url_v4(file_id).await
+        self.audio_url_v4_with(file_id, pref).await
     }
 
-    async fn audio_url_v4(&self, file_id: &str) -> Result<String, PlaudError> {
+    async fn audio_url_v4_with(
+        &self,
+        file_id: &str,
+        pref: v4::AudioPreference,
+    ) -> Result<String, PlaudError> {
         let detail = self.fetch_v4_detail(file_id, false).await?;
-        let candidates = v4::select_audio_candidates(&detail);
+        let candidates = match pref {
+            v4::AudioPreference::Default => v4::select_audio_candidates(&detail),
+            other => v4::select_audio_candidates_with(&detail, other),
+        };
         let mut last_err = None;
         for obj in candidates {
             if let Some(url) = obj
@@ -1469,5 +1496,65 @@ mod tests {
         let client = Client::new(&base, "wt");
         let err = client.devices().await.unwrap_err();
         assert!(v4::is_migrated_error(&err), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn audio_url_with_and_peek_v4_detail_honor_preference_and_cache() {
+        let detail_hits = Arc::new(AtomicUsize::new(0));
+        let hits = detail_hits.clone();
+        let app = Router::new().route(
+            "/file-app/v4/files/detail/{file_id}",
+            get(move || {
+                let hits = hits.clone();
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({
+                        "status": 0,
+                        "data": {
+                            "node": { "node_id": "n1", "name": "Split", "version_ms": 10 },
+                            "meta": { "file_id": "f_split", "duration": 18000000 },
+                            "objects": [
+                                {
+                                    "object_id": "o_tr",
+                                    "object_type": "AUDIO_TRANSCODED",
+                                    "content_url": "https://cdn.example/tr.mp3",
+                                    "task_status": 1
+                                },
+                                {
+                                    "object_id": "o_raw",
+                                    "object_type": "AUDIO",
+                                    "content_url": "https://cdn.example/raw.opus",
+                                    "mime_type": "audio/opus",
+                                    "task_status": 1
+                                }
+                            ]
+                        }
+                    }))
+                }
+            }),
+        );
+        let base = spawn_mock(app).await;
+        let client = Client::with_workspace(&base, "wt", Some("ws".into()), None);
+        assert!(client.peek_v4_detail("f_split").await.unwrap().is_none());
+
+        client.enable_v4_mode();
+        let detail = client.peek_v4_detail("f_split").await.unwrap().unwrap();
+        assert!(v4::has_ready_transcoded_audio(&detail));
+        assert!(v4::has_ready_raw_audio(&detail));
+        assert_eq!(
+            client
+                .audio_url_with("f_split", v4::AudioPreference::Default)
+                .await
+                .unwrap(),
+            "https://cdn.example/tr.mp3"
+        );
+        assert_eq!(
+            client
+                .audio_url_with("f_split", v4::AudioPreference::PreferRawAudio)
+                .await
+                .unwrap(),
+            "https://cdn.example/raw.opus"
+        );
+        assert_eq!(detail_hits.load(Ordering::SeqCst), 1);
     }
 }
