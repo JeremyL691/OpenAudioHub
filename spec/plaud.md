@@ -328,7 +328,11 @@ Run by every sign-in path before anything is saved.
 
 Auth: session
 
-Request: none
+Request body: optional JSON object.
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `quiet` | boolean | Optional. Default `false`. When `true`, fresh 5-hour split tips wait up to `PLAUD_SPLIT_SETTLE_MS` (default `270000` ms) before import so late-arriving follow-up parts can merge in one pass. An empty body or `quiet: false` flushes waiting tips at once. |
 
 Rate limit: per user, fixed window of 60 seconds. Default 10 calls per window. The server setting `PLAUD_SYNC_RATE_LIMIT_PER_MINUTE` changes it. Every call counts, including calls for users with no connection. The count is kept in process memory.
 
@@ -358,9 +362,9 @@ Errors:
 ### What a sync run does
 
 1. Load the connection. If there is none, stop with `"No Plaud connection found"`.
-2. Load the user's sync settings. Defaults: `autoTranscribe` false, `importPlaudContent` false, `transcriptMode` `plaud_only`, `recordingTitleMode` `ai`, email and Bark notifications off.
+2. Load the user's sync settings. Defaults: `autoTranscribe` false, `importPlaudContent` false, `transcriptMode` `plaud_only`, `recordingTitleMode` `ai`, `mergePlaudSplitRecordings` true, email and Bark notifications off.
 3. Open a client to the stored base with the stored workspace id, or look up the personal workspace when none is stored. Mint a workspace token, or use the account token if minting fails.
-4. Page through the recording list (see "Listing recordings"). Process each recording in batches of five at once. A failure on one recording does not stop the others. Each recording is deduplicated and written (see "Matching and dedupe"), and Plaud content is imported for it when `importPlaudContent` is on (see "Plaud content import").
+4. Page through the recording list (see "Listing recordings"). When `mergePlaudSplitRecordings` is on, candidate split chains are grouped across pages before downloading (see "Split-recording auto-merge"). Standalone recordings are processed in batches of five at once. A failure on one recording does not stop the others. Each recording is deduplicated and written (see "Matching and dedupe"), and Plaud content is imported for it when `importPlaudContent` is on (see "Plaud content import").
 5. Send notifications when new recordings arrived, if the user turned them on (see "Notifications").
 6. If `autoTranscribe` is on, queue a transcription job for each new recording. Under `plaud_only`, recordings that already have a Plaud transcript are not queued. A job also skips any recording that already has a transcript of any source when it runs (`workers.md`, section 4).
 7. Set the connection's last sync time to now, clear the "needs reconnect" flag, and update the stored workspace id if one was found. This step runs only when the list was read without a failure. Failed recordings do not prevent it.
@@ -419,6 +423,22 @@ A concurrent delete during a download wins. The row is not revived, and the down
 
 Sync never deletes rows and never deletes audio. A recording removed or trashed in Plaud stays in the library.
 
+### Split-recording auto-merge
+
+Plaud recorders split continuous sessions at about 5 hours into sequential Plaud files. When `mergePlaudSplitRecordings` is `true` (default), sync detects these split chains before downloading and stores each chain as one recording.
+
+- **Chain matching rules.** Two Plaud items `A` and `B` link when all of these hold:
+  - `A` has duration between 4 hours 55 minutes and 5 hours 5 minutes (`17700000` to `18300000` ms). `B` may have any positive duration.
+  - `A` and `B` have positive start times with `B.start_time > A.start_time`, and the gap `B.start_time - A.end_time` is between `-15000` ms and `+60000` ms (-15 seconds to +60 seconds).
+  - `A` and `B` share the same non-empty device serial number (never `"local"`). An item with a serial number never merges with an item without one. When both serial numbers are empty after detail hydration, they link only if `A` and `B` are a unique 1-to-1 predecessor and successor in the gap window.
+  - Predecessor and successor links must be 1-to-1 unique; ambiguous forks are not merged.
+  - Total merged duration is capped at 24 hours (`86400000` ms). If adding the next part would exceed 24 hours, the current chain closes and a new chain starts at that part.
+- **Settle window.** Background worker ticks and `POST /api/plaud/sync` calls with `{ "quiet": true }` defer a fresh chain whose last part is still in the 5-hour ceiling band (4h55m to 5h05m) and whose total duration is under 24 hours. First-seen timestamps are kept in `plaud_split_settle`. The tip waits up to `PLAUD_SPLIT_SETTLE_MS` (default `270000` ms, range `0` to `3600000` ms) so a follow-up part can finish uploading and merge in one pass. Chains ending with a shorter tail merge at once. Manual `POST /api/plaud/sync` calls (empty body or `quiet: false`) flush waiting tips immediately.
+- **Lossless concatenation.** On Plaud 4.0, audio selection is kept consistent across a chain: when any part lacks a ready `AUDIO_TRANSCODED` object, or when appending to an `.ogg`/`.opus` recording, the client selects `AUDIO` across the chain. Matching headerless raw Opus streams are muxed directly into one RFC 7845 Ogg/Opus `.ogg` file in pure Rust without intermediate re-encoding. Matching containers are concatenated with `ffmpeg -c copy`. Genuine codec or channel mismatches fall back to Ogg/Opus re-encoding.
+- **Parts table and tombstones.** Every merged recording keeps the first part's `plaudFileId` on `recordings` and records all parts in `plaud_recording_parts` keyed by `(user_id, plaud_file_id)` with per-part `part_index`, `start_time`, `end_time`, `plaud_duration_ms`, `audio_duration_ms`, and `plaud_version`. Deleting the merged recording soft-deletes the row and tombstones all of its parts, so no part is imported again on later syncs.
+- **Incremental late-part append.** If a follow-up part arrives on a later sync after an open 5-hour recording was already imported (for example after a manual flush or an upload delay longer than the settle window), sync appends the new part's audio in place onto the existing recording, keeps the same recording id, updates `duration`, `endTime`, `filesize`, `fileMd5`, and `storagePath`, removes the previous audio object, updates an existing desktop auto-export file in place when present, clears stale partial transcripts and summaries, supersedes any active transcription job, re-queues transcription when needed, and counts the recording under `updatedRecordings`. A concurrent delete of the anchor recording during append wins and tombstones the late part under the deleted recording.
+- **Multi-part metadata updates.** When Plaud bumps `version_ms` on any part of an already merged recording, sync updates that part's stored `plaud_version` in `plaud_recording_parts`. It updates `recordings.filename` only for part 0 when the stored title is still the original title. Merged `duration`, `endTime`, `filesize`, and `fileMd5` are never overwritten by a single part's metadata.
+
 ### Devices
 
 Devices are written when the account is connected (every sign-in path). Sync does not change them. Disconnect removes them. The device list is not refreshed during sync.
@@ -430,6 +450,7 @@ When `importPlaudContent` is on, sync also fills gaps from Plaud's own transcrip
 - A transcript is imported when the recording has no Plaud transcript yet. It is stored with source `plaud`, provider `plaud`, model `plaud-native`. No webhook event is sent for it. When the import adds a transcript and auto-summarize is on with no summary yet, an automatic summary job is queued once (`workers.md`, section 5). A repeated sync does not queue another.
 - A summary is imported when the recording has no summary with content yet. It is stored with source `plaud`. The inline copy is preferred over the presigned link.
 - Items must be ready (`task_status` equal to `1`, or `null` with `content_url` on Plaud 4.0) and have a link.
+- For a merged multi-part recording, the stitched Plaud transcript is written only once every part has a ready Plaud transcript. Each part's timeline timestamps are offset by the sum of the preceding parts' `audio_duration_ms`, and part texts are joined with a blank line. Stitched Plaud summaries follow the same all-parts rule.
 - If the account token is refused during this pass, the pass stops. Other failures skip one item. Audio already synced is kept.
 
 ### Sync errors
@@ -471,7 +492,7 @@ Two mechanisms run the same routine as manual sync.
 - Starts with the server. The first tick runs 30 seconds after start. Later ticks run every `BACKGROUND_SYNC_INTERVAL_MS` (default 300000, allowed range 60000 to 3600000).
 - Turned off by `BACKGROUND_SYNC_ENABLED=false`. Default on.
 - Each tick claims up to 20 users. A user is claimed when they have a connection, the account is not suspended, and their last sync is null or more than 4 minutes old. The oldest last sync goes first, and never-synced users come first.
-- Each claimed user is synced one after another. A run for one user that takes longer than 10 minutes is abandoned, and an error for one user is logged. The tick then continues. A tick never overlaps the previous one in the same process.
+- Each claimed user is synced one after another with the split-recording settle window enabled. A run for one user that takes longer than 10 minutes is abandoned, and an error for one user is logged. The tick then continues. A tick never overlaps the previous one in the same process.
 - The worker skips users whose connection needs reconnect. They are picked up again once a reconnect clears the flag. A manual sync for such a user still runs. If Plaud still rejects the token, the response is `200` with the rejection text in `errors` and `needsReconnect` true.
 
 Unattended sync works without any browser open.
@@ -487,7 +508,7 @@ The web app's shell calls `POST /api/plaud/sync` while a page is open and the co
 | enabled | on | Off when `autoSyncEnabled` is `false`. |
 | sync on return | on | On `visibilitychange` to `visible`, sync quietly when `syncOnVisibilityChange` is not `false`, Plaud is enabled and connected without a reconnect requirement. At most one visibility-triggered sync per minute; events during an existing sync are skipped. This setting is independent of interval sync. |
 
-Quiet syncs show no toast on success or failure. A sync is not started while another sync from the same page is running.
+Quiet syncs send `{ "quiet": true }` in the JSON body so fresh 5-hour split tips use the settle window, and show no toast on success or failure. A sync is not started while another sync from the same page is running.
 
 The interval and on/off are saved as user settings: `syncInterval` (milliseconds), `autoSyncEnabled`, `syncOnMount`, `syncOnVisibilityChange`, `syncNotifications`. Browser storage is not used for these settings. The visibility listener is removed when the shell unmounts or the setting or connection no longer permits sync.
 
@@ -647,7 +668,7 @@ HTTP errors are mapped as: 401 means the token is rejected, 429 means rate limit
 
 - Auth: workspace token when one is in use.
 - Body: `{"filename": "<title>"}`
-- Used only when the user chooses to send an AI-generated title back to Plaud. Failure is logged and does not change the local title.
+- Used only when the user chooses to send an AI-generated title back to Plaud. For a merged recording with `n >= 2` parts, each part `i` is renamed best-effort to `<title> (<i+1>/<n>)`. Failure is logged and does not change the local title.
 - Reads: `status`.
 
 ### Plaud 4.0 (/file-app/v4/)
@@ -659,7 +680,7 @@ Used when a legacy `/file/...` call or `/device/list` returns `status: -1800907`
 - **Detail and lazy hydration.** `GET {base}/file-app/v4/files/detail/{file_id}` is called only for new or changed recordings. It hydrates `serial_number`, `start_time`, `duration`, and IANA `timezone_iana` (converted to `timezone` and `zonemins` offsets). `filesize` and `file_md5` always come from the downloaded audio, so both describe the same bytes even when the transcoded file is downloaded.
 - **Audio selection.** Selects ready `AUDIO_TRANSCODED` first (skipping transcode items whose `task_status` is present and not `1`), then `AUDIO`. If `content_url` is missing on the selected item, it is resolved via `POST {base}/file-app/v4/files/content/url`. If the downloaded `AUDIO` payload is a headerless raw Opus stream, it is wrapped losslessly into an Ogg/Opus `.ogg` file before storage.
 - **Content import.** `TRANSCRIPT` and `SUMMARY` items are ready when `task_status` is `1` or `null` with `content_url`. Summary payloads may be JSON or plain Markdown. Transcript payloads may be wrapped segment arrays.
-- **Title push.** `PATCH {base}/file-app/v4/nodes/rename/{node_id}` sends `origin_version` and retries once on `status: -1800313`. When the container folder's name still matches the file's previous name, the client also renames the folder best-effort. A parent folder that is also the node's `display_folder` is a folder the user sees, and it keeps its name. UNVERIFIED: that a per-file container differs from `display_folder` is inferred from the detail fields, not from Plaud documentation or a live response.
+- **Title push.** `PATCH {base}/file-app/v4/nodes/rename/{node_id}` sends `origin_version` and retries once on `status: -1800313`. When the container folder's name still matches the file's previous name, the client also renames the folder best-effort. A parent folder that is also the node's `display_folder` is a folder the user sees, and it keeps its name. For a merged recording with `n >= 2` parts, each part `i` is renamed to `<title> (<i+1>/<n>)`. UNVERIFIED: that a per-file container differs from `display_folder` is inferred from the detail fields, not from Plaud documentation or a live response.
 
 ### Direct calls
 

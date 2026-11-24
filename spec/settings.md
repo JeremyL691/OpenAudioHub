@@ -89,6 +89,7 @@ as sent, without a check.
 | `syncOnMount` | boolean | `true` | |
 | `syncOnVisibilityChange` | boolean | `true` | |
 | `syncNotifications` | boolean | `true` | |
+| `mergePlaudSplitRecordings` | boolean | `true` | automatically merges consecutive 5-hour split Plaud recordings into one recording (see [plaud.md](plaud.md)) |
 | `defaultPlaybackSpeed` | number | `1` | must be a number |
 | `defaultVolume` | number | `75` | must be a number |
 | `autoPlayNext` | boolean | `false` | |
