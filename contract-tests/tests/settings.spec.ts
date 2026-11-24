@@ -69,6 +69,7 @@ const DEFAULTS: Record<string, unknown> = {
     syncOnMount: true,
     syncOnVisibilityChange: true,
     syncNotifications: true,
+    mergePlaudSplitRecordings: true,
     defaultPlaybackSpeed: 1,
     defaultVolume: 75,
     autoPlayNext: false,
@@ -199,6 +200,32 @@ test("user settings: speakerDiarization must be a boolean", async () => {
     });
     expect(res.status()).toBe(400);
     expect((await res.json()).details.field).toBe("speakerDiarization");
+    await api.dispose();
+});
+
+test("user settings: mergePlaudSplitRecordings toggles and rejects non-booleans", async () => {
+    const api = await newUserContext("settings-merge-splits");
+    const bad = await api.put("/api/settings/user", {
+        data: { mergePlaudSplitRecordings: "yes" },
+    });
+    expect(bad.status()).toBe(400);
+    const badBody = (await bad.json()) as { code: string; details: { field: string } };
+    expect(badBody.code).toBe("INVALID_INPUT");
+    expect(badBody.details.field).toBe("mergePlaudSplitRecordings");
+
+    const off = await api.put("/api/settings/user", {
+        data: { mergePlaudSplitRecordings: false },
+    });
+    expect(off.status()).toBe(200);
+    let body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
+    expect(body.mergePlaudSplitRecordings).toBe(false);
+
+    const on = await api.put("/api/settings/user", {
+        data: { mergePlaudSplitRecordings: true },
+    });
+    expect(on.status()).toBe(200);
+    body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
+    expect(body.mergePlaudSplitRecordings).toBe(true);
     await api.dispose();
 });
 

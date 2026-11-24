@@ -11,15 +11,19 @@ const port = Number(process.argv[2] ?? process.env.FAKE_PLAUD_PORT ?? 3298);
 const origin = `http://127.0.0.1:${port}`;
 const AUDIO = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/tone-3s.mp3"));
 // 150 frames * 80 bytes = 3.0s of headerless CBR CELT WB 20ms mono Opus frames (TOC 0xB8).
-const RAW_OPUS_AUDIO = (() => {
-    const buf = Buffer.alloc(150 * 80);
-    for (let i = 0; i < 150; i++) {
+function makeRawOpus(frames = 150, variant = 0) {
+    const count = Math.max(10, Number(frames) || 150);
+    const buf = Buffer.alloc(count * 80);
+    const byte3 = variant & 0x7f;
+    for (let i = 0; i < count; i++) {
         buf[i * 80] = 0xb8;
         buf[i * 80 + 1] = 0xff;
         buf[i * 80 + 2] = 0xfe;
+        if (byte3 !== 0) buf[i * 80 + 3] = byte3;
     }
     return buf;
-})();
+}
+const RAW_OPUS_AUDIO = makeRawOpus(150, 0);
 const DAY = 24 * 3600;
 
 const accounts = new Map(); // email -> { recordings: Map<id, record>, devices: [], revoked: boolean, migratedV4: boolean }
@@ -70,8 +74,24 @@ function findByV4FileId(acct, fileId) {
     return null;
 }
 
+function findRecordingById(rawId) {
+    for (const acct of accounts.values()) {
+        const rec = findByV4FileId(acct, rawId);
+        if (rec) return rec;
+    }
+    return null;
+}
+
+function rawOpusFor(rec) {
+    if (!rec || (rec.rawOpusFrames === undefined && rec.audioVariant === undefined)) {
+        return RAW_OPUS_AUDIO;
+    }
+    return makeRawOpus(rec.rawOpusFrames ?? 150, rec.audioVariant ?? 0);
+}
+
 function recordingDefaults(partial) {
-    const start = Date.now() - 3600_000;
+    const start = partial.start_time ?? Date.now() - 3600_000;
+    const duration = partial.duration ?? 3000;
     const id = partial.id ?? `rec-${++seq}`;
     const filename = partial.filename ?? `Fake recording ${id}`;
     const versionMs = partial.version_ms ?? 1000;
@@ -86,12 +106,12 @@ function recordingDefaults(partial) {
         ori_ready: true,
         version: 1,
         version_ms: versionMs,
-        edit_time: start,
+        edit_time: partial.edit_time ?? start,
         edit_from: "web",
         is_trash: false,
         start_time: start,
-        end_time: start + 3000,
-        duration: 3000,
+        end_time: partial.end_time ?? start + duration,
+        duration,
         timezone: 0,
         zonemins: 0,
         scene: 0,
@@ -164,7 +184,7 @@ async function control(req, res, url, body) {
         log.length = 0;
         return send(res, 200, { ok: true });
     }
-    if (url.pathname === "/__control/account") {
+    if (url.pathname === "/__control/account" || url.pathname === "/__test/seed") {
         const acct = account(data.email);
         if (typeof data.revoked === "boolean") acct.revoked = data.revoked;
         if (typeof data.migratedV4 === "boolean") acct.migratedV4 = data.migratedV4;
@@ -172,6 +192,9 @@ async function control(req, res, url, body) {
         for (const partial of data.recordings ?? []) {
             const prev = acct.recordings.get(partial.id);
             const next = prev ? { ...prev, ...partial } : { ...recordingDefaults(partial), ...partial };
+            if (partial.end_time === undefined && (partial.start_time !== undefined || partial.duration !== undefined)) {
+                next.end_time = next.start_time + next.duration;
+            }
             acct.recordings.set(next.id, next);
         }
         return send(res, 200, { ok: true, recordings: acct.recordings.size });
@@ -196,37 +219,55 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, origin);
     let body = "";
     for await (const chunk of req) body += chunk;
-    if (url.pathname.startsWith("/__control/")) return control(req, res, url, body);
+    if (url.pathname.startsWith("/__control/") || url.pathname === "/__test/seed") return control(req, res, url, body);
     // Audio and content links are presigned in production, so these routes take no bearer token.
-    const audio = url.pathname.match(/^\/audio\/[^/]+$/);
+    const audio = url.pathname.match(/^\/audio\/([^/]+)$/);
     if (req.method === "GET" && audio) {
         logRequest(req, url.pathname, "");
-        res.writeHead(200, { "content-type": "audio/mpeg", "content-length": AUDIO.length });
-        return res.end(AUDIO);
+        const recId = decodeURIComponent(audio[1]).replace(/\.(mp3|opus|ogg)$/i, "");
+        const rec = findRecordingById(recId);
+        const bytes = typeof rec?.audioBase64 === "string" ? Buffer.from(rec.audioBase64, "base64") : AUDIO;
+        res.writeHead(200, { "content-type": "audio/mpeg", "content-length": bytes.length });
+        return res.end(bytes);
     }
-    const rawAudio = url.pathname.match(/^\/audio-raw\/[^/]+$/);
+    const rawAudio = url.pathname.match(/^\/audio-raw\/([^/]+)$/);
     if (req.method === "GET" && rawAudio) {
         logRequest(req, url.pathname, "");
-        res.writeHead(200, { "content-type": "application/octet-stream", "content-length": RAW_OPUS_AUDIO.length });
-        return res.end(RAW_OPUS_AUDIO);
+        const recId = decodeURIComponent(rawAudio[1]).replace(/\.(mp3|opus|raw)$/i, "");
+        const rec = findRecordingById(recId);
+        const bytes = rawOpusFor(rec);
+        res.writeHead(200, { "content-type": "application/octet-stream", "content-length": bytes.length });
+        return res.end(bytes);
     }
     const content = url.pathname.match(/^\/content\/([^/]+)\/(transcript|summary)\.json$/);
     if (req.method === "GET" && content) {
         logRequest(req, url.pathname, "");
         const [, id, kind] = content;
+        const rec = findRecordingById(decodeURIComponent(id));
         if (kind === "transcript") {
-            const segments = [{ start_time: 0, end_time: 1000, speaker: "1", content: `Fake transcript line for ${id}` }];
+            const segments = Array.isArray(rec?.transcript)
+                ? rec.transcript
+                : typeof rec?.transcript === "string"
+                    ? [{ start_time: 0, end_time: 1000, speaker: "1", content: rec.transcript }]
+                    : [{ start_time: 0, end_time: 1000, speaker: "1", content: `Fake transcript line for ${id}` }];
             res.writeHead(200, { "content-type": "application/octet-stream" });
             return res.end(gzipSync(Buffer.from(JSON.stringify(segments))));
         }
+        const summaryBody = rec?.summary && typeof rec.summary === "object"
+            ? rec.summary
+            : typeof rec?.summary === "string"
+                ? { ai_content: rec.summary, key_points: ["Key point"] }
+                : { ai_content: "Fake summary from Plaud", key_points: ["Key point"] };
         res.writeHead(200, { "content-type": "application/json" });
-        return res.end(JSON.stringify({ ai_content: "Fake summary from Plaud", key_points: ["Key point"] }));
+        return res.end(JSON.stringify(summaryBody));
     }
     const mdSummary = url.pathname.match(/^\/content\/([^/]+)\/summary\.md$/);
     if (req.method === "GET" && mdSummary) {
         logRequest(req, url.pathname, "");
+        const rec = findRecordingById(decodeURIComponent(mdSummary[1]));
+        const md = typeof rec?.summary === "string" ? rec.summary : "# Summary\nFake v4 markdown summary";
         res.writeHead(200, { "content-type": "application/octet-stream" });
-        return res.end(gzipSync(Buffer.from("# Summary\nFake v4 markdown summary")));
+        return res.end(gzipSync(Buffer.from(md)));
     }
 
 
@@ -476,7 +517,9 @@ const server = createServer(async (req, res) => {
                 task_status: 1,
             });
         } else if (audioMode === "raw_opus") {
+            const rawBuf = rawOpusFor(rec);
             const rawUrl = `${origin}/audio-raw/${rec.id}.mp3`;
+            contentUrls.set(cidAudio, rawUrl);
             objects.push({
                 object_id: `obj_at_${fileId}`,
                 object_type: "AUDIO_TRANSCODED",
@@ -492,7 +535,7 @@ const server = createServer(async (req, res) => {
                 content_id: cidAudio,
                 content_url: rawUrl,
                 mime_type: "audio/opus",
-                object_size: RAW_OPUS_AUDIO.length,
+                object_size: rawBuf.length,
                 task_status: null,
             });
         }
