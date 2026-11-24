@@ -1,5 +1,8 @@
-import { type ChildProcess } from "node:child_process";
+import { type ChildProcess, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { type APIRequestContext } from "@playwright/test";
 import { anonymousContext, baseURL, fakeAiBaseUrl } from "../helpers/api";
@@ -1474,6 +1477,408 @@ test.describe("plaud: 4.0 migrated accounts", () => {
             return d.transcription ? d : undefined;
         });
         expect(detail.transcription.text.length).toBeGreaterThan(0);
+        await api.dispose();
+    });
+
+    const FIVE_HOURS_MS = 5 * 3600 * 1000;
+    const TWO_HOURS_MS = 2 * 3600 * 1000;
+    const ONE_HOUR_MS = 3600 * 1000;
+
+    function probeAudioDurationSec(buf: Buffer, ext: string): number {
+        const tmp = join(tmpdir(), `oah-probe-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`);
+        writeFileSync(tmp, buf);
+        try {
+            const out = execFileSync(
+                process.env.FFPROBE_PATH ?? "ffprobe",
+                ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", tmp],
+                { encoding: "utf8" },
+            ).trim();
+            return Number.parseFloat(out);
+        } finally {
+            rmSync(tmp, { force: true });
+        }
+    }
+
+    test("3-part 5h + 5h + 2h raw Opus chain merges into one playable .ogg and tombstones all parts on delete", async () => {
+        const api = await freshUser("plaud-v4-split-3part");
+        const email = uniq("v4-split-3part");
+        const tag = `${Date.now()}`;
+        const p1 = `f_sp3_1_${tag}`;
+        const p2 = `f_sp3_2_${tag}`;
+        const p3 = `f_sp3_3_${tag}`;
+        const base = Date.UTC(2026, 7, 10, 8, 0, 0);
+        const sn = "SN-PIN-S-3PART";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: p1,
+                    isV4New: true,
+                    filename: "All-day conference",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS,
+                    version_ms: 1001,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 150,
+                    audioVariant: 1,
+                },
+                {
+                    id: p2,
+                    isV4New: true,
+                    filename: "All-day conference (2)",
+                    serial_number: sn,
+                    start_time: base + FIVE_HOURS_MS + 5_000,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + 2 * FIVE_HOURS_MS + 5_000,
+                    edit_time: base + 2 * FIVE_HOURS_MS + 5_000,
+                    version_ms: 1002,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 150,
+                    audioVariant: 2,
+                },
+                {
+                    id: p3,
+                    isV4New: true,
+                    filename: "All-day conference (3)",
+                    serial_number: sn,
+                    start_time: base + 2 * FIVE_HOURS_MS + 10_000,
+                    duration: TWO_HOURS_MS,
+                    end_time: base + 2 * FIVE_HOURS_MS + 10_000 + TWO_HOURS_MS,
+                    edit_time: base + 2 * FIVE_HOURS_MS + 10_000 + TWO_HOURS_MS,
+                    version_ms: 1003,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 100,
+                    audioVariant: 3,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const first = await (await api.post("/api/plaud/sync")).json();
+        expect(first).toMatchObject({ success: true, newRecordings: 1, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list).toHaveLength(1);
+        const row = list[0];
+        expect(row.plaudFileId).toBe(p1);
+        expect(row.filename).toBe("All-day conference");
+        expect(row.duration).toBe(FIVE_HOURS_MS + FIVE_HOURS_MS + TWO_HOURS_MS);
+        expect(new Date(row.startTime as string).getTime()).toBe(base);
+        expect(new Date(row.endTime as string).getTime()).toBe(base + 2 * FIVE_HOURS_MS + 10_000 + TWO_HOURS_MS);
+        expect(String(row.storagePath)).toMatch(/\.ogg$/);
+
+        const audioRes = await api.get(`/api/recordings/${row.id as string}/audio`);
+        expect(audioRes.status()).toBe(200);
+        expect(audioRes.headers()["content-type"]).toBe("audio/ogg");
+        const audioBuf = await audioRes.body();
+        expect(audioBuf.subarray(0, 4).toString("ascii")).toBe("OggS");
+        expect(audioBuf.includes(Buffer.from("OpusHead"))).toBe(true);
+        const probedSec = probeAudioDurationSec(audioBuf, "ogg");
+        expect(probedSec).toBeGreaterThan(7.5);
+        expect(probedSec).toBeLessThan(8.5);
+
+        // Second sync does not re-download any of the three parts.
+        const beforeSecond = (await v4FakeRequests()).length;
+        const second = await (await api.post("/api/plaud/sync")).json();
+        expect(second).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        const secondDownloads = (await v4FakeRequests())
+            .slice(beforeSecond)
+            .filter((q) => q.path.startsWith("/audio/") || q.path.startsWith("/audio-raw/"));
+        expect(secondDownloads).toEqual([]);
+
+        // Deleting the merged recording tombstones all 3 parts, even after version bumps.
+        expect((await api.delete(`/api/recordings/${row.id as string}`)).status()).toBe(200);
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                { id: p1, version_ms: 2001 },
+                { id: p2, version_ms: 2002 },
+                { id: p3, version_ms: 2003 },
+            ],
+        });
+        const beforeThird = (await v4FakeRequests()).length;
+        const third = await (await api.post("/api/plaud/sync")).json();
+        expect(third).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        const thirdDownloads = (await v4FakeRequests())
+            .slice(beforeThird)
+            .filter((q) => q.path.startsWith("/audio/") || q.path.startsWith("/audio-raw/"));
+        expect(thirdDownloads).toEqual([]);
+        const listAfterDelete = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(listAfterDelete).toEqual([]);
+        await api.dispose();
+    });
+
+    test("quiet sync defers a fresh 5h tip, manual sync flushes immediately, and a late part appends in place", async () => {
+        const api = await freshUser("plaud-v4-split-late");
+        const email = uniq("v4-split-late");
+        const tag = `${Date.now()}`;
+        const p1 = `f_splate_1_${tag}`;
+        const p2 = `f_splate_2_${tag}`;
+        const base = Date.UTC(2026, 7, 11, 9, 0, 0);
+        const sn = "SN-PIN-S-LATE";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: p1,
+                    isV4New: true,
+                    filename: "Long workshop",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS,
+                    version_ms: 2001,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 150,
+                    audioVariant: 1,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const quietRes = await api.post("/api/plaud/sync", { data: { quiet: true } });
+        expect(quietRes.status()).toBe(200);
+        expect(await quietRes.json()).toMatchObject({
+            success: true,
+            newRecordings: 0,
+            updatedRecordings: 0,
+            errors: [],
+        });
+        expect(((await (await api.get("/api/recordings")).json()).recordings as unknown[]).length).toBe(0);
+
+        const manualRes = await api.post("/api/plaud/sync");
+        expect(manualRes.status()).toBe(200);
+        expect(await manualRes.json()).toMatchObject({
+            success: true,
+            newRecordings: 1,
+            updatedRecordings: 0,
+            errors: [],
+        });
+        const listBefore = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(listBefore).toHaveLength(1);
+        const recordingId = listBefore[0].id as string;
+        expect(listBefore[0].plaudFileId).toBe(p1);
+        expect(listBefore[0].duration).toBe(FIVE_HOURS_MS);
+
+        await fakeControl("/account", {
+            email,
+            recordings: [
+                {
+                    id: p2,
+                    isV4New: true,
+                    filename: "Long workshop (2)",
+                    serial_number: sn,
+                    start_time: base + FIVE_HOURS_MS + 8_000,
+                    duration: TWO_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS + 8_000 + TWO_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS + 8_000 + TWO_HOURS_MS,
+                    version_ms: 2002,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 100,
+                    audioVariant: 2,
+                },
+            ],
+        });
+
+        const appendSync = await (await api.post("/api/plaud/sync")).json();
+        expect(appendSync).toMatchObject({
+            success: true,
+            newRecordings: 0,
+            updatedRecordings: 1,
+            errors: [],
+        });
+
+        const listAfter = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(listAfter).toHaveLength(1);
+        expect(listAfter[0].id).toBe(recordingId);
+        expect(listAfter[0].plaudFileId).toBe(p1);
+        expect(listAfter[0].duration).toBe(FIVE_HOURS_MS + TWO_HOURS_MS);
+        expect(new Date(listAfter[0].endTime as string).getTime()).toBe(base + FIVE_HOURS_MS + 8_000 + TWO_HOURS_MS);
+
+        const audioRes = await api.get(`/api/recordings/${recordingId}/audio`);
+        expect(audioRes.status()).toBe(200);
+        expect(audioRes.headers()["content-type"]).toBe("audio/ogg");
+        const audioBuf = await audioRes.body();
+        expect(audioBuf.subarray(0, 4).toString("ascii")).toBe("OggS");
+        expect(audioBuf.includes(Buffer.from("OpusHead"))).toBe(true);
+        const probedSec = probeAudioDurationSec(audioBuf, "ogg");
+        expect(probedSec).toBeGreaterThan(4.5);
+        expect(probedSec).toBeLessThan(5.5);
+        await api.dispose();
+    });
+
+    test("mixed-format chain (transcoded MP3 + raw_opus) merges cleanly into one playable recording", async () => {
+        const api = await freshUser("plaud-v4-split-mixed");
+        const email = uniq("v4-split-mixed");
+        const tag = `${Date.now()}`;
+        const p1 = `f_spmix_1_${tag}`;
+        const p2 = `f_spmix_2_${tag}`;
+        const base = Date.UTC(2026, 7, 12, 10, 0, 0);
+        const sn = "SN-PIN-S-MIXED";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: p1,
+                    isV4New: true,
+                    filename: "Mixed session",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS,
+                    version_ms: 3001,
+                    audioMode: "transcoded",
+                },
+                {
+                    id: p2,
+                    isV4New: true,
+                    filename: "Mixed session (2)",
+                    serial_number: sn,
+                    start_time: base + FIVE_HOURS_MS + 4_000,
+                    duration: TWO_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS + 4_000 + TWO_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS + 4_000 + TWO_HOURS_MS,
+                    version_ms: 3002,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 150,
+                    audioVariant: 2,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 1, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list).toHaveLength(1);
+        const row = list[0];
+        expect(row.plaudFileId).toBe(p1);
+        expect(row.duration).toBe(FIVE_HOURS_MS + TWO_HOURS_MS);
+
+        const audioRes = await api.get(`/api/recordings/${row.id as string}/audio`);
+        expect(audioRes.status()).toBe(200);
+        const audioBuf = await audioRes.body();
+        expect(audioBuf.length).toBeGreaterThan(0);
+        const ext = String(row.storagePath).split(".").pop() || "ogg";
+        const probedSec = probeAudioDurationSec(audioBuf, ext);
+        expect(probedSec).toBeGreaterThan(5.5);
+        expect(probedSec).toBeLessThan(6.8);
+        await api.dispose();
+    });
+
+    test("mergePlaudSplitRecordings false keeps 5h and 2h parts as separate recordings", async () => {
+        const api = await freshUser("plaud-v4-split-off");
+        const email = uniq("v4-split-off");
+        const tag = `${Date.now()}`;
+        const p1 = `f_spoff_1_${tag}`;
+        const p2 = `f_spoff_2_${tag}`;
+        const base = Date.UTC(2026, 7, 13, 11, 0, 0);
+        const sn = "SN-PIN-S-OFF";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: p1,
+                    isV4New: true,
+                    filename: "Separate part 1",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS,
+                    version_ms: 4001,
+                    audioMode: "raw_opus",
+                },
+                {
+                    id: p2,
+                    isV4New: true,
+                    filename: "Separate part 2",
+                    serial_number: sn,
+                    start_time: base + FIVE_HOURS_MS + 5_000,
+                    duration: TWO_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS + 5_000 + TWO_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS + 5_000 + TWO_HOURS_MS,
+                    version_ms: 4002,
+                    audioMode: "raw_opus",
+                },
+            ],
+        });
+        await signInV4(api, email);
+        expect((await api.put("/api/settings/user", { data: { mergePlaudSplitRecordings: false } })).status()).toBe(200);
+
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list).toHaveLength(2);
+        const ids = list.map((r) => r.plaudFileId).sort();
+        expect(ids).toEqual([p1, p2].sort());
+        await api.dispose();
+    });
+
+    test("non-ceiling consecutive recordings (1h + 1h, 5s gap) are not merged", async () => {
+        const api = await freshUser("plaud-v4-split-short");
+        const email = uniq("v4-split-short");
+        const tag = `${Date.now()}`;
+        const r1 = `f_spshort_1_${tag}`;
+        const r2 = `f_spshort_2_${tag}`;
+        const base = Date.UTC(2026, 7, 14, 12, 0, 0);
+        const sn = "SN-PIN-S-SHORT";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: r1,
+                    isV4New: true,
+                    filename: "Morning standup",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: ONE_HOUR_MS,
+                    end_time: base + ONE_HOUR_MS,
+                    edit_time: base + ONE_HOUR_MS,
+                    version_ms: 5001,
+                    audioMode: "raw_opus",
+                },
+                {
+                    id: r2,
+                    isV4New: true,
+                    filename: "Design review",
+                    serial_number: sn,
+                    start_time: base + ONE_HOUR_MS + 5_000,
+                    duration: ONE_HOUR_MS,
+                    end_time: base + 2 * ONE_HOUR_MS + 5_000,
+                    edit_time: base + 2 * ONE_HOUR_MS + 5_000,
+                    version_ms: 5002,
+                    audioMode: "raw_opus",
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        const sync = await (await api.post("/api/plaud/sync")).json();
+        expect(sync).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+
+        const list = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list).toHaveLength(2);
+        const ids = list.map((r) => r.plaudFileId).sort();
+        expect(ids).toEqual([r1, r2].sort());
+        expect(list.every((r) => r.duration === ONE_HOUR_MS)).toBe(true);
         await api.dispose();
     });
 });
