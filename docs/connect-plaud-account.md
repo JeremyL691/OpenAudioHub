@@ -77,6 +77,10 @@ Recordings you delete in OpenAudioHub are not sent back to Plaud, and the Plaud 
 
 If a sync adds new recordings, the server sends the notifications you turned on. See [Notifications](notifications.md). Transcription runs for new recordings only if you turned on **Auto-transcribe new recordings**.
 
+### Merging 5-hour split recordings
+
+Plaud devices split long continuous recordings at about 5 hours into consecutive files. By default, OpenAudioHub automatically merges consecutive split parts into a single library recording and a single lossless audio file. Background syncs wait briefly for fresh 5-hour parts to settle before merging, while **Sync now** merges them immediately. If another part arrives later, it appends to the existing recording. All parts are tracked so deleting the merged recording does not re-import its parts. You can turn this off in **Settings**, then **Sync** (`mergePlaudSplitRecordings`). See [Plaud sync specification](../spec/plaud.md) for matching rules.
+
 ## Tokens and sign-in expiry
 
 OpenAudioHub stores your Plaud token encrypted in the database. The token is never shown again, and it is never written to the log.

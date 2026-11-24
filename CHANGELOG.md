@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Automatic lossless merging of consecutive 5-hour Plaud split recordings (`mergePlaudSplitRecordings`, enabled by default in **Settings > Sync**). Background syncs hold fresh 5-hour parts for a short settle window before merging, manual syncs flush immediately, and late-arriving parts append in place to the existing recording. Merged recordings are stored as a single audio file, and all constituent parts are tracked for deduplication and deletion tombstones.
+
 ## [1.7.1] - 2026-11-21
 
 ### Fixed
