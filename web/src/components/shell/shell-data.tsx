@@ -193,7 +193,10 @@ export function ShellDataProvider({ children }: { children: ReactNode }) {
             syncLock.current = true;
             setSync((s) => ({ ...s, status: "syncing" }));
             try {
-                const result = await api<SyncResult>("/api/plaud/sync", { method: "POST" });
+                const result = await api<SyncResult>(
+                    "/api/plaud/sync",
+                    options.quiet ? { method: "POST", json: { quiet: true } } : { method: "POST" },
+                );
                 const problem = result.errors?.[0] ?? null;
                 const failed = !result.success || problem !== null;
                 if (failed) {

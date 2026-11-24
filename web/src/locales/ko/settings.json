@@ -11,6 +11,8 @@
         "notificationsGroup": "알림",
         "showSync": "동기화 알림 표시",
         "showSyncHint": "동기화가 끝나면 알림을 표시합니다.",
+        "mergeSplitRecordings": "5시간 분할 녹음 병합",
+        "mergeSplitRecordingsHint": "Plaud에서 연속으로 5시간마다 분할된 녹음을 재인코딩 없이 하나의 녹음으로 자동 병합합니다.",
         "minutes": "{count}분",
         "minute": "1분"
     },

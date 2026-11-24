@@ -47,6 +47,7 @@ export interface UserSettings {
     syncOnMount: boolean;
     syncOnVisibilityChange: boolean;
     syncNotifications: boolean;
+    mergePlaudSplitRecordings: boolean;
     defaultPlaybackSpeed: number;
     defaultVolume: number;
     autoPlayNext: boolean;
@@ -300,12 +301,14 @@ export function ToggleRow({
     field,
     label,
     hint,
+    testId,
     className,
 }: {
     id: string;
     field: BoolSettingKey;
     label: string;
     hint?: string;
+    testId?: string;
     className?: string;
 }) {
     const { settings, save, isSaving } = useSettings();
@@ -313,6 +316,7 @@ export function ToggleRow({
         <Row htmlFor={id} label={label} hint={hint} className={className}>
             <Switch
                 id={id}
+                data-testid={testId}
                 className="h-[22px] w-[38px] p-px"
                 checked={Boolean(settings[field])}
                 disabled={isSaving(field)}

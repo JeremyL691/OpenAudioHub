@@ -49,6 +49,13 @@ export function SyncSection() {
                     label={t("settings.sync.onVisibility")}
                     hint={t("settings.sync.onVisibilityHint")}
                 />
+                <ToggleRow
+                    id="merge-plaud-splits"
+                    testId="merge-plaud-splits-switch"
+                    field="mergePlaudSplitRecordings"
+                    label={t("settings.sync.mergeSplitRecordings")}
+                    hint={t("settings.sync.mergeSplitRecordingsHint")}
+                />
             </Group>
 
             <Group label={t("settings.sync.notificationsGroup")}>
