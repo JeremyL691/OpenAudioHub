@@ -70,6 +70,7 @@ const DEFAULTS: Record<string, unknown> = {
     syncOnVisibilityChange: true,
     syncNotifications: true,
     mergePlaudSplitRecordings: true,
+    mergePlaudByDay: false,
     defaultPlaybackSpeed: 1,
     defaultVolume: 75,
     autoPlayNext: false,
@@ -203,29 +204,34 @@ test("user settings: speakerDiarization must be a boolean", async () => {
     await api.dispose();
 });
 
-test("user settings: mergePlaudSplitRecordings toggles and rejects non-booleans", async () => {
+test("user settings: mergePlaudSplitRecordings and mergePlaudByDay toggle and reject non-booleans", async () => {
     const api = await newUserContext("settings-merge-splits");
-    const bad = await api.put("/api/settings/user", {
-        data: { mergePlaudSplitRecordings: "yes" },
-    });
-    expect(bad.status()).toBe(400);
-    const badBody = (await bad.json()) as { code: string; details: { field: string } };
-    expect(badBody.code).toBe("INVALID_INPUT");
-    expect(badBody.details.field).toBe("mergePlaudSplitRecordings");
+    for (const [field, first, second] of [
+        ["mergePlaudSplitRecordings", false, true],
+        ["mergePlaudByDay", true, false],
+    ] as const) {
+        const bad = await api.put("/api/settings/user", {
+            data: { [field]: "yes" },
+        });
+        expect(bad.status(), field).toBe(400);
+        const badBody = (await bad.json()) as { code: string; details: { field: string } };
+        expect(badBody.code, field).toBe("INVALID_INPUT");
+        expect(badBody.details.field, field).toBe(field);
 
-    const off = await api.put("/api/settings/user", {
-        data: { mergePlaudSplitRecordings: false },
-    });
-    expect(off.status()).toBe(200);
-    let body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
-    expect(body.mergePlaudSplitRecordings).toBe(false);
+        const putFirst = await api.put("/api/settings/user", {
+            data: { [field]: first },
+        });
+        expect(putFirst.status(), field).toBe(200);
+        let body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
+        expect(body[field], field).toBe(first);
 
-    const on = await api.put("/api/settings/user", {
-        data: { mergePlaudSplitRecordings: true },
-    });
-    expect(on.status()).toBe(200);
-    body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
-    expect(body.mergePlaudSplitRecordings).toBe(true);
+        const putSecond = await api.put("/api/settings/user", {
+            data: { [field]: second },
+        });
+        expect(putSecond.status(), field).toBe(200);
+        body = (await (await api.get("/api/settings/user")).json()) as Record<string, unknown>;
+        expect(body[field], field).toBe(second);
+    }
     await api.dispose();
 });
 
