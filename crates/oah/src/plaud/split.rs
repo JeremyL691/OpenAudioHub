@@ -648,8 +648,15 @@ where
                 }
             }
         }
+        let mut start_order: Vec<usize> = (0..total_nodes).collect();
+        start_order.sort_by(|&a, &b| {
+            head_metas[a]
+                .start_time
+                .cmp(&head_metas[b].start_time)
+                .then_with(|| a.cmp(&b))
+        });
         let mut visited = vec![false; total_nodes];
-        for start in 0..total_nodes {
+        for start in start_order {
             if visited[start] || has_prev[start] {
                 continue;
             }
@@ -662,10 +669,13 @@ where
                     break;
                 }
                 if bucket_days[idx] != lead_day && is_multipart[idx] {
+                    // Release `idx` so it can still lead any outgoing midnight split from its own day.
+                    has_prev[idx] = false;
                     break;
                 }
                 let next_ms = chain_ms.saturating_add(node_durations[idx]);
                 if next_ms > MAX_CHAIN_DURATION_MS {
+                    has_prev[idx] = false;
                     break;
                 }
                 visited[idx] = true;
@@ -1703,8 +1713,9 @@ impl InterleavedSource {
 }
 
 /// Fallback used during interleaved re-assembly when an already-merged part is no longer
-/// downloadable from Plaud (e.g., deleted in Plaud cloud): slices that part out of the local
-/// merged recording at its stored `audio_duration_ms` offset.
+/// downloadable from Plaud (e.g., deleted in Plaud cloud): performs sample-accurate decoded
+/// trimming out of the local merged recording at its stored `audio_duration_ms` offset so no
+/// pre-boundary audio from an earlier part is repeated.
 async fn extract_local_audio_slice(
     state: &AppState,
     user_id: &str,
@@ -1723,49 +1734,19 @@ async fn extract_local_audio_slice(
         .map_err(|_| ItemError::Failed("could not create the storage folder".into()))?;
     let start_sec = format!("{:.3}", (offset_ms.max(0) as f64) / 1000.0);
     let dur_sec = format!("{:.3}", (duration_ms as f64) / 1000.0);
-    let src_ext = path_ext_lower(src_path);
-    let (copy_ext, copy_muxer) = match src_ext.as_str() {
-        "ogg" | "opus" => ("ogg", "ogg"),
-        "mp3" => ("mp3", "mp3"),
-        "m4a" | "mp4" => ("m4a", "mp4"),
-        "flac" => ("flac", "flac"),
-        "wav" => ("wav", "wav"),
-        _ => ("ogg", "ogg"),
-    };
-
-    let copy_dst = TempPath::new(dir.join(format!(
-        ".plaud-slice-{}.{copy_ext}.partial",
-        ids::token_hex(8)
-    )));
-    let mut cmd = Command::new(&state.config.ffmpeg);
-    cmd.args(["-v", "error", "-y", "-ss", &start_sec, "-i"])
-        .arg(src_path)
-        .args(["-t", &dur_sec, "-vn", "-c", "copy"]);
-    if copy_muxer == "mp4" {
-        cmd.args(["-movflags", "+faststart"]);
-    }
-    cmd.args(["-f", copy_muxer]).arg(copy_dst.path());
-    if media::run(&mut cmd).await
-        && media::probe(&state.config.ffprobe, copy_dst.path())
-            .await
-            .is_some()
-    {
-        return Ok(copy_dst);
-    }
 
     let enc_dst =
         TempPath::new(dir.join(format!(".plaud-slice-{}.ogg.partial", ids::token_hex(8))));
     let mut enc = Command::new(&state.config.ffmpeg);
-    enc.args(["-v", "error", "-y", "-ss", &start_sec, "-i"])
+    enc.args(["-v", "error", "-y", "-i"])
         .arg(src_path)
         .args([
-            "-t", &dur_sec, "-vn", "-c:a", "libopus", "-b:a", "64k", "-f", "ogg",
+            "-ss", &start_sec, "-t", &dur_sec, "-vn", "-c:a", "libopus", "-b:a", "64k", "-f", "ogg",
         ])
         .arg(enc_dst.path());
     if media::run(&mut enc).await
-        && media::probe(&state.config.ffprobe, enc_dst.path())
-            .await
-            .is_some()
+        && let Some(probed) = media::probe(&state.config.ffprobe, enc_dst.path()).await
+        && probed.duration_ms > 0
     {
         return Ok(enc_dst);
     }
@@ -2876,42 +2857,31 @@ pub(crate) async fn execute_consolidate(
                 .storage
                 .delete(new_storage.storage_type, &new_storage.key)
                 .await;
-            // Tombstone only genuine 5-hour forced-split continuations/predecessors of the deleted
-            // anchor. Unrelated same-day recordings stay un-tombstoned so they import on the next sync.
-            let survivor_head = LinkMeta {
-                device_sn: survivor.device_sn.as_str(),
-                start_time: survivor.first_start_time,
-                end_time: effective_end(
-                    survivor.first_start_time,
-                    survivor.first_end_time,
-                    survivor.first_plaud_duration_ms,
-                ),
-                duration_ms: survivor.first_plaud_duration_ms,
-            };
-            let survivor_tail = LinkMeta {
-                device_sn: survivor.device_sn.as_str(),
-                start_time: survivor.last_start_time,
-                end_time: effective_end(
-                    survivor.last_start_time,
-                    survivor.last_end_time,
-                    survivor.last_plaud_duration_ms,
-                ),
-                duration_ms: survivor.last_plaud_duration_ms,
-            };
-            let mut split_related: Vec<&Recording> = Vec::new();
-            for part in &new_parts {
-                let p_start = part.start_time.unwrap_or(0);
-                let p_dur = part.duration.unwrap_or(0);
-                let p_meta = LinkMeta {
-                    device_sn: part.serial_number.as_deref().unwrap_or(""),
-                    start_time: p_start,
-                    end_time: effective_end(p_start, part.end_time.unwrap_or(0), p_dur),
-                    duration_ms: p_dur,
-                };
-                if can_link(survivor_tail, p_meta) || can_link(p_meta, survivor_head) {
-                    split_related.push(part);
-                }
-            }
+            // Tombstone the full contiguous unique forced-split chain connected to the deleted
+            // anchor (e.g., 5h A + 5h B + 2h C). Unrelated same-day recordings stay un-tombstoned
+            // so they import cleanly on the next sync.
+            let split_plans = plan_chains(std::slice::from_ref(survivor), new_parts.clone());
+            let split_related: Vec<Recording> = split_plans
+                .into_iter()
+                .find_map(|plan| match plan {
+                    ChainPlan::Consolidate(chain)
+                        if chain.iter().any(
+                            |s| matches!(s, ChainSegment::Existing(a) if a.id == survivor.id),
+                        ) =>
+                    {
+                        Some(
+                            chain
+                                .into_iter()
+                                .filter_map(|s| match s {
+                                    ChainSegment::New(r) => Some(r),
+                                    ChainSegment::Existing(_) => None,
+                                })
+                                .collect(),
+                        )
+                    }
+                    _ => None,
+                })
+                .unwrap_or_default();
             if !split_related.is_empty() {
                 let mut tx = crate::db::begin_write(&state.db).await?;
                 let max_idx: i64 = sqlx::query_scalar(

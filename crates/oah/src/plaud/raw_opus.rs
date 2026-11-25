@@ -975,16 +975,18 @@ async fn repair_auto_export(
             return Ok(());
         }
 
+        let sha = crate::export::auto::file_sha256(&tmp).await;
         let dest = unique_ogg_path(folder, stem).await;
         if let Err(e) = tokio::fs::rename(&tmp, &dest).await {
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(format!("could not move repaired Ogg/Opus export: {e}"));
         }
         let updated = match sqlx::query(
-            "UPDATE recordings SET auto_export_path = ?, updated_at = ? \
+            "UPDATE recordings SET auto_export_path = ?, auto_export_sha256 = ?, updated_at = ? \
              WHERE id = ? AND auto_export_path = ? AND deleted_at IS NULL",
         )
         .bind(state.config.field_key.encrypt(&dest.to_string_lossy()))
+        .bind(sha)
         .bind(now_ms())
         .bind(recording_id)
         .bind(&encrypted_export)
@@ -1048,10 +1050,21 @@ async fn repair_auto_export(
             return Ok(());
         }
 
+        let sha = crate::export::auto::file_sha256(&tmp).await;
         if let Err(e) = tokio::fs::rename(&tmp, &export_path).await {
             let _ = tokio::fs::remove_file(&tmp).await;
             return Err(format!("could not replace repaired mp3 export: {e}"));
         }
+        let _ = sqlx::query(
+            "UPDATE recordings SET auto_export_sha256 = ?, updated_at = ? \
+             WHERE id = ? AND auto_export_path = ? AND deleted_at IS NULL",
+        )
+        .bind(sha)
+        .bind(now_ms())
+        .bind(recording_id)
+        .bind(&encrypted_export)
+        .execute(&state.db)
+        .await;
         tracing::info!(
             recording = %recording_id,
             export_path = %export_path.display(),

@@ -253,7 +253,8 @@ async fn normalize_opus_exports(
         }
         // The row points at the new name first, so a failure between the steps cannot leave an
         // unrecorded file behind.
-        finish(state, &id, &dest).await?;
+        let sha = file_sha256(&dest).await;
+        finish(state, &id, &dest, sha).await?;
         let _ = tokio::fs::remove_file(&path).await;
     }
     Ok(())
@@ -362,8 +363,10 @@ async fn export_pending(
                 .flatten();
         let dest = match reserved.as_deref().and_then(|p| decrypt_path(state, p)) {
             Some(path) if Path::new(&path).exists() => {
-                // The interrupted pass had already written this file, so record it and move on.
-                finish(state, &id, Path::new(&path)).await?;
+                // The interrupted pass may have already written this file, or the user may have
+                // placed a different file at the reserved path. Adopt the path without minting a
+                // trusted SHA-256 fingerprint for unverified pre-existing bytes.
+                finish(state, &id, Path::new(&path), None).await?;
                 continue;
             }
             Some(path) => PathBuf::from(path),
@@ -394,13 +397,14 @@ async fn export_pending(
             tracing::warn!(recording = id, "auto export could not write the file");
             continue;
         }
+        let sha = file_sha256(&tmp).await;
         if let Err(e) = tokio::fs::rename(&tmp, &dest).await {
             let _ = tokio::fs::remove_file(&tmp).await;
             count_failure(state, &id).await;
             tracing::warn!(recording = id, error = %e, "auto export could not rename the file");
             continue;
         }
-        finish(state, &id, &dest).await?;
+        finish(state, &id, &dest, sha).await?;
     }
     Ok(())
 }
@@ -436,9 +440,14 @@ pub(crate) async fn file_sha256(path: &Path) -> Option<String> {
     Some(hex::encode(hasher.finalize()))
 }
 
-/// Records a finished export: the path, its SHA-256 digest, a cleared reservation and a cleared retry count.
-async fn finish(state: &AppState, id: &str, dest: &Path) -> Result<(), String> {
-    let sha256 = file_sha256(dest).await;
+/// Records a finished export: the path, an optional trusted SHA-256 digest of app-written bytes,
+/// a cleared reservation and a cleared retry count.
+async fn finish(
+    state: &AppState,
+    id: &str,
+    dest: &Path,
+    sha256: Option<String>,
+) -> Result<(), String> {
     sqlx::query(
         "UPDATE recordings SET auto_export_path = ?, auto_export_sha256 = ?, auto_export_target = NULL, auto_export_attempts = 0 WHERE id = ?",
     )
@@ -525,6 +534,7 @@ async fn reexport_outdated(
             count_failure(state, &id).await;
             continue;
         }
+        let sha = file_sha256(&tmp).await;
         if tokio::fs::rename(&tmp, &dest).await.is_err() {
             let _ = tokio::fs::remove_file(&tmp).await;
             count_failure(state, &id).await;
@@ -532,7 +542,7 @@ async fn reexport_outdated(
         }
         // The row points at the new file first, so a failed write of the marker cannot leave an
         // unrecorded export behind.
-        finish(state, &id, &dest).await?;
+        finish(state, &id, &dest, sha).await?;
         let _ = tokio::fs::remove_file(&path).await;
     }
     Ok(())
