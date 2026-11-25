@@ -1881,4 +1881,299 @@ test.describe("plaud: 4.0 migrated accounts", () => {
         expect(list.every((r) => r.duration === ONE_HOUR_MS)).toBe(true);
         await api.dispose();
     });
+
+    test("out-of-order upload: shorter Part 2 arrives first, then 5h Part 1 prepends into one recording", async () => {
+        const api = await freshUser("plaud-v4-split-prepend");
+        const email = uniq("v4-split-prepend");
+        const tag = `${Date.now()}`;
+        const p1 = `f_sppre_1_${tag}`;
+        const p2 = `f_sppre_2_${tag}`;
+        const base = Date.UTC(2026, 7, 15, 9, 0, 0);
+        const sn = "SN-PIN-S-PREPEND";
+
+        const recP2 = {
+            id: p2,
+            isV4New: true,
+            filename: "Out-of-order Part 2",
+            serial_number: sn,
+            start_time: base + FIVE_HOURS_MS + 960,
+            duration: TWO_HOURS_MS,
+            end_time: base + FIVE_HOURS_MS + 960 + TWO_HOURS_MS,
+            edit_time: base + FIVE_HOURS_MS + 960 + TWO_HOURS_MS,
+            version_ms: 6002,
+            audioMode: "raw_opus",
+            rawOpusFrames: 75,
+        };
+        const recP1 = {
+            id: p1,
+            isV4New: true,
+            filename: "Out-of-order Part 1",
+            serial_number: sn,
+            start_time: base,
+            duration: FIVE_HOURS_MS,
+            end_time: base + FIVE_HOURS_MS,
+            edit_time: base + FIVE_HOURS_MS + 960 + TWO_HOURS_MS + 600_000,
+            version_ms: 6001,
+            audioMode: "raw_opus",
+            rawOpusFrames: 100,
+        };
+
+        // Sync 1: Plaud uploads smaller Part 2 first; Part 1 is still uploading.
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [recP2],
+        });
+        await signInV4(api, email);
+
+        const sync1 = await (await api.post("/api/plaud/sync", { data: { quiet: true } })).json();
+        expect(sync1).toMatchObject({ success: true, newRecordings: 1, updatedRecordings: 0, errors: [] });
+
+        const list1 = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list1).toHaveLength(1);
+        const existingId = list1[0].id as string;
+        expect(list1[0].plaudFileId).toBe(p2);
+        expect(list1[0].duration).toBe(TWO_HOURS_MS);
+
+        // Sync 2: Part 1 (5h) finishes uploading later; even on a quiet sync, because Part 2 is
+        // already in DB as the tail, Part 1 prepends immediately into the same recording.
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [recP2, recP1],
+        });
+        const sync2 = await (await api.post("/api/plaud/sync", { data: { quiet: true } })).json();
+        expect(sync2).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 1, errors: [] });
+
+        const list2 = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list2).toHaveLength(1);
+        expect(list2[0].id).toBe(existingId);
+        expect(list2[0].plaudFileId).toBe(p1);
+        expect(list2[0].duration).toBe(FIVE_HOURS_MS + TWO_HOURS_MS);
+
+        const audioRes = await api.get(`/api/recordings/${existingId}/audio`);
+        expect(audioRes.status()).toBe(200);
+        const probedSec = probeAudioDurationSec(await audioRes.body(), "ogg");
+        // 100 frames (2.0s) + 75 frames (1.5s) = 3.5s
+        expect(probedSec).toBeGreaterThan(3.0);
+        expect(probedSec).toBeLessThan(4.2);
+
+        // Deleting the merged recording tombstones both Part 1 and Part 2.
+        expect((await api.delete(`/api/recordings/${existingId}`)).status()).toBe(200);
+        const sync3 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync3).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        expect((await (await api.get("/api/recordings")).json()).recordings).toHaveLength(0);
+        await api.dispose();
+    });
+
+    test("already-imported adjacent 5h and 2h recordings consolidate automatically when merge is enabled", async () => {
+        const api = await freshUser("plaud-v4-split-heal");
+        const email = uniq("v4-split-heal");
+        const tag = `${Date.now()}`;
+        const p1 = `f_spheal_1_${tag}`;
+        const p2 = `f_spheal_2_${tag}`;
+        const base = Date.UTC(2026, 7, 16, 8, 0, 0);
+        const sn = "SN-PIN-S-HEAL";
+
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [
+                {
+                    id: p1,
+                    isV4New: true,
+                    filename: "Heal part 1",
+                    serial_number: sn,
+                    start_time: base,
+                    duration: FIVE_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS,
+                    version_ms: 7001,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 100,
+                },
+                {
+                    id: p2,
+                    isV4New: true,
+                    filename: "Heal part 2",
+                    serial_number: sn,
+                    start_time: base + FIVE_HOURS_MS + 960,
+                    duration: TWO_HOURS_MS,
+                    end_time: base + FIVE_HOURS_MS + 960 + TWO_HOURS_MS,
+                    edit_time: base + FIVE_HOURS_MS + 960 + TWO_HOURS_MS,
+                    version_ms: 7002,
+                    audioMode: "raw_opus",
+                    rawOpusFrames: 75,
+                },
+            ],
+        });
+        await signInV4(api, email);
+
+        // Import separately first while split merging is disabled.
+        expect((await api.put("/api/settings/user", { data: { mergePlaudSplitRecordings: false } })).status()).toBe(200);
+        const sync1 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync1).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+        expect((await (await api.get("/api/recordings")).json()).recordings).toHaveLength(2);
+
+        // Re-enable split merging: next sync consolidates the existing pair into one recording with no new downloads.
+        expect((await api.put("/api/settings/user", { data: { mergePlaudSplitRecordings: true } })).status()).toBe(200);
+        const before = (await v4FakeRequests()).length;
+        const sync2 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync2).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 1, errors: [] });
+        const afterReqs = (await v4FakeRequests()).slice(before);
+        expect(afterReqs.filter((r) => r.path.startsWith("/audio"))).toHaveLength(0);
+
+        const list2 = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list2).toHaveLength(1);
+        const mergedId = list2[0].id as string;
+        expect(list2[0].plaudFileId).toBe(p1);
+        expect(list2[0].duration).toBe(FIVE_HOURS_MS + TWO_HOURS_MS);
+
+        const audioRes = await api.get(`/api/recordings/${mergedId}/audio`);
+        expect(audioRes.status()).toBe(200);
+        const probedSec = probeAudioDurationSec(await audioRes.body(), "ogg");
+        expect(probedSec).toBeGreaterThan(3.0);
+        expect(probedSec).toBeLessThan(4.2);
+
+        // Deleting the healed recording tombstones both original parts.
+        expect((await api.delete(`/api/recordings/${mergedId}`)).status()).toBe(200);
+        const sync3 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync3).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        expect((await (await api.get("/api/recordings")).json()).recordings).toHaveLength(0);
+        await api.dispose();
+    });
+
+    test("mergePlaudByDay merges all same-day recordings chronologically across gaps and interleaved arrivals", async () => {
+        const api = await freshUser("plaud-v4-daily-merge");
+        const email = uniq("v4-daily-merge");
+        const tag = `${Date.now()}`;
+        const morningId = `f_day_1_${tag}`;
+        const noonId = `f_day_2_${tag}`;
+        const eveningId = `f_day_3_${tag}`;
+        const nextDayId = `f_day_next_${tag}`;
+        // Use local-noon-anchored timestamps so morning/noon/evening fall in the same local calendar day
+        // across every host timezone, and nextDay is strictly the following local day.
+        const day1Start = new Date(2026, 7, 17, 9, 0, 0, 0).getTime();
+        const day1Noon = new Date(2026, 7, 17, 13, 0, 0, 0).getTime();
+        const day1Evening = new Date(2026, 7, 17, 17, 0, 0, 0).getTime();
+        const day2Morning = new Date(2026, 7, 18, 10, 0, 0, 0).getTime();
+        const sn = "SN-PIN-S-DAILY";
+
+        const recMorning = {
+            id: morningId,
+            isV4New: true,
+            filename: "Day 1 Morning",
+            serial_number: sn,
+            start_time: day1Start,
+            duration: TWO_HOURS_MS,
+            end_time: day1Start + TWO_HOURS_MS,
+            edit_time: day1Start + TWO_HOURS_MS,
+            version_ms: 8001,
+            audioMode: "raw_opus",
+            rawOpusFrames: 75,
+        };
+        const recNoon = {
+            id: noonId,
+            isV4New: true,
+            filename: "Day 1 Noon",
+            serial_number: sn,
+            start_time: day1Noon,
+            duration: ONE_HOUR_MS,
+            end_time: day1Noon + ONE_HOUR_MS,
+            edit_time: day1Evening + 600_000,
+            version_ms: 8002,
+            audioMode: "raw_opus",
+            rawOpusFrames: 100,
+        };
+        const recEvening = {
+            id: eveningId,
+            isV4New: true,
+            filename: "Day 1 Evening",
+            serial_number: sn,
+            start_time: day1Evening,
+            duration: ONE_HOUR_MS,
+            end_time: day1Evening + ONE_HOUR_MS,
+            edit_time: day1Evening + ONE_HOUR_MS,
+            version_ms: 8003,
+            audioMode: "raw_opus",
+            rawOpusFrames: 75,
+        };
+        const recNextDay = {
+            id: nextDayId,
+            isV4New: true,
+            filename: "Day 2 Morning",
+            serial_number: sn,
+            start_time: day2Morning,
+            duration: ONE_HOUR_MS,
+            end_time: day2Morning + ONE_HOUR_MS,
+            edit_time: day2Morning + ONE_HOUR_MS,
+            version_ms: 8004,
+            audioMode: "raw_opus",
+            rawOpusFrames: 50,
+        };
+
+        // Sync 1: Morning (09:00) + Evening (17:00) + Day 2 (next day) arrive; Noon (13:00) has not uploaded yet.
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [recEvening, recMorning, recNextDay],
+        });
+        await signInV4(api, email);
+        expect((await api.put("/api/settings/user", { data: { mergePlaudByDay: true } })).status()).toBe(200);
+
+        const sync1 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync1).toMatchObject({ success: true, newRecordings: 2, updatedRecordings: 0, errors: [] });
+
+        const list1 = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list1).toHaveLength(2);
+        const day1Row = list1.find((r) => r.plaudFileId === morningId)!;
+        const day2Row = list1.find((r) => r.plaudFileId === nextDayId)!;
+        expect(day1Row).toBeTruthy();
+        expect(day2Row).toBeTruthy();
+        expect(day1Row.duration).toBe(TWO_HOURS_MS + ONE_HOUR_MS);
+        expect(day2Row.duration).toBe(ONE_HOUR_MS);
+
+        // Sync 2: Noon (13:00) arrives late strictly between Morning and Evening -> interleaved re-assembly
+        // merges all three into the same Day 1 recording in chronological order, leaving Day 2 untouched.
+        await fakeControl("/account", {
+            email,
+            migratedV4: true,
+            recordings: [recNoon, recEvening, recMorning, recNextDay],
+        });
+        const sync2 = await (await api.post("/api/plaud/sync")).json();
+        expect(sync2).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 1, errors: [] });
+
+        const list2 = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(list2).toHaveLength(2);
+        const day1After = list2.find((r) => r.id === day1Row.id)!;
+        expect(day1After.plaudFileId).toBe(morningId);
+        expect(day1After.duration).toBe(TWO_HOURS_MS + ONE_HOUR_MS + ONE_HOUR_MS);
+        expect(new Date(day1After.startTime as string).getTime()).toBe(day1Start);
+        expect(new Date(day1After.endTime as string).getTime()).toBe(day1Evening + ONE_HOUR_MS);
+
+        // Combined Day 1 audio: 75 + 100 + 75 = 250 frames = 5.0s.
+        const audioRes = await api.get(`/api/recordings/${day1Row.id as string}/audio`);
+        expect(audioRes.status()).toBe(200);
+        const probedSec = probeAudioDurationSec(await audioRes.body(), "ogg");
+        expect(probedSec).toBeGreaterThan(4.5);
+        expect(probedSec).toBeLessThan(5.6);
+
+        // Sync 3 (idle): zero new/updated recordings and zero audio downloads.
+        const beforeIdle = (await v4FakeRequests()).length;
+        const idle = await (await api.post("/api/plaud/sync")).json();
+        expect(idle).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        const idleAudioReqs = (await v4FakeRequests())
+            .slice(beforeIdle)
+            .filter((r) => r.path.startsWith("/audio"));
+        expect(idleAudioReqs).toHaveLength(0);
+
+        // Deleting Day 1's merged recording tombstones Morning, Noon, and Evening so none re-import.
+        expect((await api.delete(`/api/recordings/${day1Row.id as string}`)).status()).toBe(200);
+        const afterDel = await (await api.post("/api/plaud/sync")).json();
+        expect(afterDel).toMatchObject({ success: true, newRecordings: 0, updatedRecordings: 0, errors: [] });
+        const remaining = (await (await api.get("/api/recordings")).json()).recordings as Array<Record<string, unknown>>;
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0].id).toBe(day2Row.id);
+        await api.dispose();
+    });
 });
