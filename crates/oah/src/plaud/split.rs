@@ -578,6 +578,7 @@ where
     let mut head_metas = Vec::with_capacity(total_nodes);
     let mut tail_metas = Vec::with_capacity(total_nodes);
     let mut node_durations = Vec::with_capacity(total_nodes);
+    let mut is_multipart = Vec::with_capacity(total_nodes);
     let mut bucket_days: Vec<String> = Vec::with_capacity(total_nodes);
     let mut sort_keys: Vec<(i64, bool, String)> = Vec::with_capacity(total_nodes);
 
@@ -599,6 +600,7 @@ where
             duration_ms: a.last_plaud_duration_ms,
         });
         node_durations.push(a.duration.max(0));
+        is_multipart.push(a.last_start_time > a.first_start_time);
         bucket_days.push(day.clone());
         sort_keys.push((a.first_start_time, false, a.id.clone()));
     }
@@ -615,11 +617,14 @@ where
         head_metas.push(meta);
         tail_metas.push(meta);
         node_durations.push(dur.max(0));
+        is_multipart.push(false);
         bucket_days.push(day.clone());
         sort_keys.push((start, true, r.id.clone()));
     }
 
     // Preserve midnight-crossing 5-hour forced splits in the predecessor's local day bucket.
+    // Never pull an already-merged multi-part recording from another day into the previous day,
+    // because it may contain unrelated later clips from that next day.
     if merge_splits && total_nodes >= 2 {
         let mut outgoing: Vec<Vec<usize>> = vec![Vec::new(); total_nodes];
         let mut incoming: Vec<Vec<usize>> = vec![Vec::new(); total_nodes];
@@ -653,6 +658,9 @@ where
             let mut cur = next_node[start];
             while let Some(idx) = cur {
                 if visited[idx] {
+                    break;
+                }
+                if bucket_days[idx] != lead_day && is_multipart[idx] {
                     break;
                 }
                 let next_ms = chain_ms.saturating_add(node_durations[idx]);
@@ -1167,7 +1175,6 @@ pub(crate) async fn execute_new_multi(
     drop(downloaded);
 
     let first = &parts[0];
-    let last = parts.last().expect("non-empty parts");
     let storage = import::stage_prepared_audio(
         state,
         user_id,
@@ -1199,12 +1206,7 @@ pub(crate) async fn execute_new_multi(
         total_duration_ms = total_duration_ms.saturating_add(p_dur);
         part_rows.push((idx as i64, part, p_start, p_end, p_dur, audio_ms));
     }
-    let last_plaud_ms = part_rows.last().map(|r| r.4).unwrap_or(0);
-    let end_time = effective_end(
-        last.start_time.unwrap_or(start),
-        last.end_time.unwrap_or(0),
-        last_plaud_ms,
-    );
+    let end_time = part_rows.iter().map(|r| r.3).max().unwrap_or(start);
     let peaks_json = storage
         .peaks
         .as_ref()
@@ -1357,18 +1359,6 @@ fn path_ext_lower(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-fn export_codec_matches_ext(ext: &str, codec: &str) -> bool {
-    match ext {
-        "mp3" => codec == "mp3",
-        "ogg" | "opus" => matches!(codec, "opus" | "vorbis"),
-        "m4a" | "mp4" | "aac" => codec == "aac",
-        "flac" => codec == "flac",
-        "wav" => codec.starts_with("pcm_"),
-        "webm" => matches!(codec, "opus" | "vorbis"),
-        _ => true,
-    }
-}
-
 async fn same_file_bytes(a: &Path, b: &Path) -> bool {
     let (Ok(ma), Ok(mb)) = (tokio::fs::metadata(a).await, tokio::fs::metadata(b).await) else {
         return false;
@@ -1473,7 +1463,6 @@ async fn verify_anchor_export(
     excluded_ids: &HashSet<&str>,
     anchor: &DbAnchor,
     existing_audio_path: &Path,
-    existing_audio_ms: i64,
 ) -> Option<VerifiedExport> {
     let orig_enc = anchor.auto_export_path.as_deref()?;
     let orig_str = state.config.field_key.decrypt(orig_enc).ok()?;
@@ -1497,22 +1486,16 @@ async fn verify_anchor_export(
         return None;
     }
 
+    // Require exact byte-for-byte identity against the anchor's stored audio before overwriting
+    // or unlinking any desktop auto-export file. Transcoded exports have no stored digest and are
+    // left untouched so user edits are never lost.
     let orig_ext = path_ext_lower(&orig_path);
     let anchor_ext = path_ext_lower(Path::new(&anchor.storage_path));
     let is_lossless_copy = orig_ext == anchor_ext
         || (matches!(orig_ext.as_str(), "ogg" | "opus")
             && matches!(anchor_ext.as_str(), "ogg" | "opus"));
-    if is_lossless_copy {
-        if !same_file_bytes(&orig_path, existing_audio_path).await {
-            return None;
-        }
-    } else {
-        let probe = media::probe(&state.config.ffprobe, &orig_path).await?;
-        if !export_codec_matches_ext(&orig_ext, &probe.codec)
-            || (probe.duration_ms - existing_audio_ms).abs() > 2_500
-        {
-            return None;
-        }
+    if !is_lossless_copy || !same_file_bytes(&orig_path, existing_audio_path).await {
+        return None;
     }
 
     Some(VerifiedExport {
@@ -1529,7 +1512,7 @@ async fn prepare_desktop_export_consolidation(
     state: &AppState,
     user_id: &str,
     survivor_id: &str,
-    anchor_inputs: &[(&DbAnchor, &Path, i64)],
+    anchor_inputs: &[(&DbAnchor, &Path)],
     new_storage: &import::Stored,
     new_stored_ext: &str,
 ) -> Option<PreparedExportConsolidation> {
@@ -1545,24 +1528,13 @@ async fn prepare_desktop_export_consolidation(
         .filter(|s| !s.is_empty())?;
     let folder = PathBuf::from(folder_str);
 
-    let excluded_ids: HashSet<&str> = anchor_inputs
-        .iter()
-        .map(|(a, _, _)| a.id.as_str())
-        .collect();
+    let excluded_ids: HashSet<&str> = anchor_inputs.iter().map(|(a, _)| a.id.as_str()).collect();
 
     let mut verified = Vec::new();
     let mut seen_paths = HashSet::new();
-    for &(anchor, audio_path, audio_ms) in anchor_inputs {
-        if let Some(v) = verify_anchor_export(
-            state,
-            user_id,
-            &folder,
-            &excluded_ids,
-            anchor,
-            audio_path,
-            audio_ms,
-        )
-        .await
+    for &(anchor, audio_path) in anchor_inputs {
+        if let Some(v) =
+            verify_anchor_export(state, user_id, &folder, &excluded_ids, anchor, audio_path).await
         {
             let norm = crate::local_folder::normalize_path(&v.orig_path);
             if seen_paths.insert(norm) {
@@ -1682,15 +1654,22 @@ fn needs_interleaved_reassembly(segs: &[ChainSegment]) -> bool {
 }
 
 enum InterleavedSource {
-    LocalSingleAnchor { pos: usize, part: StoredPartRow },
-    DownloadExisting(StoredPartRow),
+    LocalSingleAnchor {
+        pos: usize,
+        part: StoredPartRow,
+    },
+    DownloadExisting {
+        anchor_pos: usize,
+        offset_ms: i64,
+        part: StoredPartRow,
+    },
     DownloadNew(Recording),
 }
 
 impl InterleavedSource {
     fn plaud_file_id(&self) -> &str {
         match self {
-            Self::LocalSingleAnchor { part, .. } | Self::DownloadExisting(part) => {
+            Self::LocalSingleAnchor { part, .. } | Self::DownloadExisting { part, .. } => {
                 part.plaud_file_id.as_str()
             }
             Self::DownloadNew(r) => r.id.as_str(),
@@ -1699,10 +1678,84 @@ impl InterleavedSource {
 
     fn start_time(&self) -> i64 {
         match self {
-            Self::LocalSingleAnchor { part, .. } | Self::DownloadExisting(part) => part.start_time,
+            Self::LocalSingleAnchor { part, .. } | Self::DownloadExisting { part, .. } => {
+                part.start_time
+            }
             Self::DownloadNew(r) => r.start_time.unwrap_or(0),
         }
     }
+}
+
+/// Fallback used during interleaved re-assembly when an already-merged part is no longer
+/// downloadable from Plaud (e.g., deleted in Plaud cloud): slices that part out of the local
+/// merged recording at its stored `audio_duration_ms` offset.
+async fn extract_local_audio_slice(
+    state: &AppState,
+    user_id: &str,
+    src_path: &Path,
+    offset_ms: i64,
+    duration_ms: i64,
+) -> Result<TempPath, ItemError> {
+    if duration_ms <= 0 {
+        return Err(ItemError::Failed(
+            "existing part has no known duration for local slice fallback".into(),
+        ));
+    }
+    let dir = state.config.storage_root.join(user_id);
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|_| ItemError::Failed("could not create the storage folder".into()))?;
+    let start_sec = format!("{:.3}", (offset_ms.max(0) as f64) / 1000.0);
+    let dur_sec = format!("{:.3}", (duration_ms as f64) / 1000.0);
+    let src_ext = path_ext_lower(src_path);
+    let (copy_ext, copy_muxer) = match src_ext.as_str() {
+        "ogg" | "opus" => ("ogg", "ogg"),
+        "mp3" => ("mp3", "mp3"),
+        "m4a" | "mp4" => ("m4a", "mp4"),
+        "flac" => ("flac", "flac"),
+        "wav" => ("wav", "wav"),
+        _ => ("ogg", "ogg"),
+    };
+
+    let copy_dst = TempPath::new(dir.join(format!(
+        ".plaud-slice-{}.{copy_ext}.partial",
+        ids::token_hex(8)
+    )));
+    let mut cmd = Command::new(&state.config.ffmpeg);
+    cmd.args(["-v", "error", "-y", "-ss", &start_sec, "-i"])
+        .arg(src_path)
+        .args(["-t", &dur_sec, "-vn", "-c", "copy"]);
+    if copy_muxer == "mp4" {
+        cmd.args(["-movflags", "+faststart"]);
+    }
+    cmd.args(["-f", copy_muxer]).arg(copy_dst.path());
+    if media::run(&mut cmd).await
+        && media::probe(&state.config.ffprobe, copy_dst.path())
+            .await
+            .is_some()
+    {
+        return Ok(copy_dst);
+    }
+
+    let enc_dst =
+        TempPath::new(dir.join(format!(".plaud-slice-{}.ogg.partial", ids::token_hex(8))));
+    let mut enc = Command::new(&state.config.ffmpeg);
+    enc.args(["-v", "error", "-y", "-ss", &start_sec, "-i"])
+        .arg(src_path)
+        .args([
+            "-t", &dur_sec, "-vn", "-c:a", "libopus", "-b:a", "64k", "-f", "ogg",
+        ])
+        .arg(enc_dst.path());
+    if media::run(&mut enc).await
+        && media::probe(&state.config.ffprobe, enc_dst.path())
+            .await
+            .is_some()
+    {
+        return Ok(enc_dst);
+    }
+    Err(ItemError::Failed(
+        "could not recover missing split part from local merged audio".into(),
+    ))
 }
 
 /// Consolidates a chronological split or daily chain containing at least one existing live DB
@@ -1783,10 +1836,11 @@ pub(crate) async fn execute_consolidate(
     let mut new_part_audio_ms: HashMap<String, i64> = HashMap::new();
     let mut leading_new_rec: Option<Recording> = None;
 
-    let (concat, anchor_export_durations): (ConcatOutput, HashMap<usize, i64>) = if interleaved {
+    let concat: ConcatOutput = if interleaved {
         // Interleaved middle-insert: expand any multi-part existing anchor into its constituent
         // Plaud parts, reuse single-part existing anchors locally, sort all parts chronologically,
-        // and concatenate in true recording order.
+        // and concatenate in true recording order. If an old part was removed from Plaud cloud,
+        // recover its audio slice from the already-materialized local merged file.
         let mut sources: Vec<InterleavedSource> = Vec::new();
         let mut any_local_ogg_or_opus = false;
         for (pos, seg) in segs.iter().enumerate() {
@@ -1810,8 +1864,15 @@ pub(crate) async fn execute_consolidate(
                                 .map(|p| p.plaud_file_id.clone())
                                 .collect(),
                         );
+                        let mut offset_ms = 0i64;
                         for p in existing_parts {
-                            sources.push(InterleavedSource::DownloadExisting(p));
+                            let part_audio_ms = p.audio_duration_ms.max(0);
+                            sources.push(InterleavedSource::DownloadExisting {
+                                anchor_pos: pos,
+                                offset_ms,
+                                part: p,
+                            });
+                            offset_ms = offset_ms.saturating_add(part_audio_ms);
                         }
                     } else {
                         let lower = anchor.storage_path.to_ascii_lowercase();
@@ -1871,7 +1932,7 @@ pub(crate) async fn execute_consolidate(
             .iter()
             .map(|src| match src {
                 InterleavedSource::LocalSingleAnchor { .. } => 0,
-                InterleavedSource::DownloadExisting(p) => {
+                InterleavedSource::DownloadExisting { part: p, .. } => {
                     ((p.plaud_duration_ms.max(0) as u64) / 1000).saturating_mul(8_000)
                 }
                 InterleavedSource::DownloadNew(r) => {
@@ -1885,7 +1946,9 @@ pub(crate) async fn execute_consolidate(
             .iter()
             .filter_map(|src| match src {
                 InterleavedSource::LocalSingleAnchor { .. } => None,
-                InterleavedSource::DownloadExisting(p) => Some(p.plaud_file_id.as_str()),
+                InterleavedSource::DownloadExisting { part: p, .. } => {
+                    Some(p.plaud_file_id.as_str())
+                }
                 InterleavedSource::DownloadNew(r) => Some(r.id.as_str()),
             })
             .collect();
@@ -1893,10 +1956,15 @@ pub(crate) async fn execute_consolidate(
             .iter()
             .any(|src| matches!(src, InterleavedSource::DownloadNew(r) if r.is_v4));
         let pref =
-            choose_audio_preference_for_ids(client, &dl_ids, any_v4, any_local_ogg_or_opus).await?;
+            match choose_audio_preference_for_ids(client, &dl_ids, any_v4, any_local_ogg_or_opus)
+                .await
+            {
+                Ok(p) => p,
+                Err(ItemError::Rejected) => return Err(ItemError::Rejected),
+                Err(_) => AudioPreference::Default,
+            };
 
-        let mut downloaded_parts: Vec<Option<import::DownloadedTemp>> =
-            (0..deduped.len()).map(|_| None).collect();
+        let mut staged_parts: Vec<Option<TempPath>> = (0..deduped.len()).map(|_| None).collect();
         let mut downloaded_bytes = 0u64;
         let mut all_downloaded = true;
         for (idx, src) in deduped.iter().enumerate() {
@@ -1904,17 +1972,49 @@ pub(crate) async fn execute_consolidate(
                 InterleavedSource::LocalSingleAnchor { .. } => {
                     all_downloaded = false;
                 }
-                InterleavedSource::DownloadExisting(p) => {
-                    let dl =
-                        import::download_to_temp(state, user_id, client, &p.plaud_file_id, pref)
-                            .await?;
-                    downloaded_bytes = downloaded_bytes.saturating_add(dl.byte_len.max(0) as u64);
-                    downloaded_parts[idx] = Some(dl);
-                }
+                InterleavedSource::DownloadExisting {
+                    anchor_pos,
+                    offset_ms,
+                    part: p,
+                } => match import::download_to_temp(state, user_id, client, &p.plaud_file_id, pref)
+                    .await
+                {
+                    Ok(dl) => {
+                        downloaded_bytes =
+                            downloaded_bytes.saturating_add(dl.byte_len.max(0) as u64);
+                        staged_parts[idx] = Some(dl.temp);
+                    }
+                    Err(ItemError::Rejected) => return Err(ItemError::Rejected),
+                    Err(ItemError::Failed(reason)) => {
+                        tracing::warn!(
+                            plaud_file_id = %p.plaud_file_id,
+                            error = %reason,
+                            "re-downloading existing merged part failed; slicing from local merged audio"
+                        );
+                        let local_file = materialized[*anchor_pos].as_ref().ok_or_else(|| {
+                            ItemError::Failed("missing staged audio input".into())
+                        })?;
+                        let sliced = extract_local_audio_slice(
+                            state,
+                            user_id,
+                            local_file.path(),
+                            *offset_ms,
+                            p.audio_duration_ms,
+                        )
+                        .await?;
+                        let slice_len = tokio::fs::metadata(sliced.path())
+                            .await
+                            .map(|m| m.len())
+                            .unwrap_or(0);
+                        downloaded_bytes = downloaded_bytes.saturating_add(slice_len);
+                        all_downloaded = false;
+                        staged_parts[idx] = Some(sliced);
+                    }
+                },
                 InterleavedSource::DownloadNew(r) => {
                     let dl = import::download_to_temp(state, user_id, client, &r.id, pref).await?;
                     downloaded_bytes = downloaded_bytes.saturating_add(dl.byte_len.max(0) as u64);
-                    downloaded_parts[idx] = Some(dl);
+                    staged_parts[idx] = Some(dl.temp);
                 }
             }
         }
@@ -1929,32 +2029,27 @@ pub(crate) async fn execute_consolidate(
                         .ok_or_else(|| ItemError::Failed("missing staged audio input".into()))?;
                     inputs.push(file.path().to_path_buf());
                 }
-                InterleavedSource::DownloadExisting(_) | InterleavedSource::DownloadNew(_) => {
-                    let dl = downloaded_parts[idx]
+                InterleavedSource::DownloadExisting { .. } | InterleavedSource::DownloadNew(_) => {
+                    let temp = staged_parts[idx]
                         .as_ref()
                         .ok_or_else(|| ItemError::Failed("missing staged audio input".into()))?;
-                    inputs.push(dl.temp.path().to_path_buf());
+                    inputs.push(temp.path().to_path_buf());
                 }
             }
         }
         let concat = concat_audio_files(state, user_id, &inputs, all_downloaded).await?;
-        drop(downloaded_parts);
+        drop(staged_parts);
 
         if let Some(InterleavedSource::DownloadNew(r)) = deduped.first() {
             leading_new_rec = Some(r.clone());
         }
 
         let mut parts_out = Vec::with_capacity(deduped.len());
-        let mut export_durs: HashMap<usize, i64> = HashMap::new();
         for (idx, src) in deduped.into_iter().enumerate() {
             let audio_ms = concat.input_durations_ms[idx];
             match src {
-                InterleavedSource::LocalSingleAnchor { pos, mut part } => {
-                    part.audio_duration_ms = audio_ms;
-                    export_durs.insert(pos, audio_ms);
-                    parts_out.push(part);
-                }
-                InterleavedSource::DownloadExisting(mut part) => {
+                InterleavedSource::LocalSingleAnchor { mut part, .. }
+                | InterleavedSource::DownloadExisting { mut part, .. } => {
                     part.audio_duration_ms = audio_ms;
                     parts_out.push(part);
                 }
@@ -1974,26 +2069,8 @@ pub(crate) async fn execute_consolidate(
                 }
             }
         }
-        for &pos in &existing_positions {
-            if export_durs.contains_key(&pos) {
-                continue;
-            }
-            let ChainSegment::Existing(anchor) = &segs[pos] else {
-                unreachable!();
-            };
-            let dur_ms = if anchor.auto_export_path.is_some() {
-                let file = materialized[pos].as_ref().expect("materialized present");
-                media::probe(&state.config.ffprobe, file.path())
-                    .await
-                    .map(|p| p.duration_ms)
-                    .unwrap_or(anchor.duration)
-            } else {
-                anchor.duration
-            };
-            export_durs.insert(pos, dur_ms);
-        }
         preassembled_parts = Some(parts_out);
-        (concat, export_durs)
+        concat
     } else {
         // Non-interleaved fast path: reuse every existing anchor's local file directly with zero
         // re-downloads, downloading only newly arrived segments.
@@ -2036,18 +2113,12 @@ pub(crate) async fn execute_consolidate(
         if let ChainSegment::New(first_new) = &segs[0] {
             leading_new_rec = Some(first_new.clone());
         }
-        let mut export_durs: HashMap<usize, i64> = HashMap::new();
         for (pos, seg) in segs.iter().enumerate() {
-            match seg {
-                ChainSegment::Existing(_) => {
-                    export_durs.insert(pos, concat.input_durations_ms[pos]);
-                }
-                ChainSegment::New(part) => {
-                    new_part_audio_ms.insert(part.id.clone(), concat.input_durations_ms[pos]);
-                }
+            if let ChainSegment::New(part) = seg {
+                new_part_audio_ms.insert(part.id.clone(), concat.input_durations_ms[pos]);
             }
         }
-        (concat, export_durs)
+        concat
     };
 
     let key_stem = preassembled_parts
@@ -2070,18 +2141,14 @@ pub(crate) async fn execute_consolidate(
     .await?;
 
     // Verify authentic desktop auto-exports across all existing anchors before releasing materialized files.
-    let mut anchor_export_inputs: Vec<(&DbAnchor, &Path, i64)> =
+    let mut anchor_export_inputs: Vec<(&DbAnchor, &Path)> =
         Vec::with_capacity(existing_positions.len());
     for &pos in &existing_positions {
         let ChainSegment::Existing(anchor) = &segs[pos] else {
             unreachable!();
         };
         let file = materialized[pos].as_ref().expect("materialized present");
-        let audio_ms = anchor_export_durations
-            .get(&pos)
-            .copied()
-            .unwrap_or(anchor.duration);
-        anchor_export_inputs.push((anchor, file.path(), audio_ms));
+        anchor_export_inputs.push((anchor, file.path()));
     }
     let mut prepared_export = prepare_desktop_export_consolidation(
         state,
@@ -2355,8 +2422,9 @@ pub(crate) async fn execute_consolidate(
             .map(|p| p.start_time)
             .unwrap_or(cur_survivor.start_time);
         let new_end_time = merged_parts
-            .last()
+            .iter()
             .map(|p| p.end_time)
+            .max()
             .unwrap_or(cur_survivor.end_time);
         let new_total_duration: i64 = merged_parts
             .iter()
@@ -2451,6 +2519,129 @@ pub(crate) async fn execute_consolidate(
             .fetch_all(&mut *tx)
             .await?;
             superseded_pipeline_ids.extend(ids_for_anchor);
+        }
+
+        // Preserve Ask AI chat history from absorbed recordings before hard-deleting them.
+        if !absorbed_anchors.is_empty() {
+            let mut survivor_chat: Option<(String, i64)> = sqlx::query_as(
+                "SELECT c.id, COALESCE((SELECT MAX(t.seq) FROM recording_chat_turns t WHERE t.chat_id = c.id), 0) \
+                 FROM recording_chats c WHERE c.recording_id = ? AND c.user_id = ?",
+            )
+            .bind(&survivor.id)
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            for absorbed in &absorbed_anchors {
+                let absorbed_chat: Option<String> = sqlx::query_scalar(
+                    "SELECT id FROM recording_chats WHERE recording_id = ? AND user_id = ?",
+                )
+                .bind(&absorbed.id)
+                .bind(user_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+                let Some(abs_chat_id) = absorbed_chat else {
+                    continue;
+                };
+
+                sqlx::query(
+                    "UPDATE recording_chat_turns SET status = 'cancelled', lease_owner = NULL, lease_until = NULL, \
+                            finished_at = COALESCE(finished_at, ?), updated_at = ? \
+                     WHERE chat_id = ? AND status IN ('pending', 'running')",
+                )
+                .bind(now)
+                .bind(now)
+                .bind(&abs_chat_id)
+                .execute(&mut *tx)
+                .await?;
+
+                if let Some((ref surv_chat_id, ref mut max_seq)) = survivor_chat {
+                    let turn_rows: Vec<(String, String)> = sqlx::query_as(
+                        "SELECT id, request_id FROM recording_chat_turns WHERE chat_id = ? ORDER BY seq ASC, created_at ASC",
+                    )
+                    .bind(&abs_chat_id)
+                    .fetch_all(&mut *tx)
+                    .await?;
+                    for (turn_id, req_id) in turn_rows {
+                        *max_seq += 1;
+                        let conflict: bool = sqlx::query_scalar(
+                            "SELECT EXISTS (SELECT 1 FROM recording_chat_turns WHERE chat_id = ? AND request_id = ?)",
+                        )
+                        .bind(surv_chat_id)
+                        .bind(&req_id)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                        let final_req_id = if conflict {
+                            format!("{req_id}-merged-{}", ids::token_hex(4))
+                        } else {
+                            req_id
+                        };
+                        sqlx::query(
+                            "UPDATE recording_chat_turns \
+                             SET chat_id = ?, recording_id = ?, seq = ?, request_id = ?, updated_at = ? \
+                             WHERE id = ?",
+                        )
+                        .bind(surv_chat_id)
+                        .bind(&survivor.id)
+                        .bind(*max_seq)
+                        .bind(&final_req_id)
+                        .bind(now)
+                        .bind(&turn_id)
+                        .execute(&mut *tx)
+                        .await?;
+                    }
+                    sqlx::query(
+                        "UPDATE OR IGNORE recording_chat_chunks SET recording_id = ? \
+                         WHERE recording_id = ? AND user_id = ?",
+                    )
+                    .bind(&survivor.id)
+                    .bind(&absorbed.id)
+                    .bind(user_id)
+                    .execute(&mut *tx)
+                    .await?;
+                    sqlx::query(
+                        "UPDATE recording_chats SET generation = generation + 1, updated_at = ? WHERE id = ?",
+                    )
+                    .bind(now)
+                    .bind(surv_chat_id)
+                    .execute(&mut *tx)
+                    .await?;
+                } else {
+                    sqlx::query(
+                        "UPDATE recording_chats SET recording_id = ?, generation = generation + 1, updated_at = ? \
+                         WHERE id = ?",
+                    )
+                    .bind(&survivor.id)
+                    .bind(now)
+                    .bind(&abs_chat_id)
+                    .execute(&mut *tx)
+                    .await?;
+                    sqlx::query(
+                        "UPDATE recording_chat_turns SET recording_id = ?, updated_at = ? WHERE chat_id = ?",
+                    )
+                    .bind(&survivor.id)
+                    .bind(now)
+                    .bind(&abs_chat_id)
+                    .execute(&mut *tx)
+                    .await?;
+                    sqlx::query(
+                        "UPDATE OR IGNORE recording_chat_chunks SET recording_id = ? \
+                         WHERE recording_id = ? AND user_id = ?",
+                    )
+                    .bind(&survivor.id)
+                    .bind(&absorbed.id)
+                    .bind(user_id)
+                    .execute(&mut *tx)
+                    .await?;
+                    let new_max: i64 = sqlx::query_scalar(
+                        "SELECT COALESCE(MAX(seq), 0) FROM recording_chat_turns WHERE chat_id = ?",
+                    )
+                    .bind(&abs_chat_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+                    survivor_chat = Some((abs_chat_id, new_max));
+                }
+            }
         }
 
         // Hard-delete absorbed secondary recording rows BEFORE updating survivor so no duplicate
@@ -2663,44 +2854,81 @@ pub(crate) async fn execute_consolidate(
                 .storage
                 .delete(new_storage.storage_type, &new_storage.key)
                 .await;
-            // Record late parts as tombstones under the deleted recording so they never resurrect.
-            let mut tx = crate::db::begin_write(&state.db).await?;
-            let max_idx: i64 = sqlx::query_scalar(
-                "SELECT COALESCE(MAX(part_index), 0) FROM plaud_recording_parts WHERE recording_id = ?",
-            )
-            .bind(&survivor.id)
-            .fetch_one(&mut *tx)
-            .await?;
-            for (next_idx, part) in (max_idx + 1..).zip(new_parts.iter()) {
-                let audio_ms = new_part_audio_ms
-                    .get(&part.id)
-                    .copied()
-                    .unwrap_or_else(|| part.duration.unwrap_or(0));
-                let p_dur = part_effective_plaud_ms(part, audio_ms);
+            // Tombstone only genuine 5-hour forced-split continuations/predecessors of the deleted
+            // anchor. Unrelated same-day recordings stay un-tombstoned so they import on the next sync.
+            let survivor_head = LinkMeta {
+                device_sn: survivor.device_sn.as_str(),
+                start_time: survivor.first_start_time,
+                end_time: effective_end(
+                    survivor.first_start_time,
+                    survivor.first_end_time,
+                    survivor.first_plaud_duration_ms,
+                ),
+                duration_ms: survivor.first_plaud_duration_ms,
+            };
+            let survivor_tail = LinkMeta {
+                device_sn: survivor.device_sn.as_str(),
+                start_time: survivor.last_start_time,
+                end_time: effective_end(
+                    survivor.last_start_time,
+                    survivor.last_end_time,
+                    survivor.last_plaud_duration_ms,
+                ),
+                duration_ms: survivor.last_plaud_duration_ms,
+            };
+            let mut split_related: Vec<&Recording> = Vec::new();
+            for part in &new_parts {
                 let p_start = part.start_time.unwrap_or(0);
-                let p_end = effective_end(p_start, part.end_time.unwrap_or(0), p_dur);
-                sqlx::query(
-                    "INSERT OR IGNORE INTO plaud_recording_parts (user_id, plaud_file_id, recording_id, part_index, \
-                     start_time, end_time, plaud_duration_ms, audio_duration_ms, plaud_version, created_at, updated_at) \
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                )
-                .bind(user_id)
-                .bind(&part.id)
-                .bind(&survivor.id)
-                .bind(next_idx)
-                .bind(p_start)
-                .bind(p_end)
-                .bind(p_dur)
-                .bind(audio_ms)
-                .bind(version_text(part))
-                .bind(now)
-                .bind(now)
-                .execute(&mut *tx)
-                .await?;
+                let p_dur = part.duration.unwrap_or(0);
+                let p_meta = LinkMeta {
+                    device_sn: part.serial_number.as_deref().unwrap_or(""),
+                    start_time: p_start,
+                    end_time: effective_end(p_start, part.end_time.unwrap_or(0), p_dur),
+                    duration_ms: p_dur,
+                };
+                if can_link(survivor_tail, p_meta) || can_link(p_meta, survivor_head) {
+                    split_related.push(part);
+                }
             }
-            let settle_ids: Vec<&str> = new_parts.iter().map(|p| p.id.as_str()).collect();
-            clear_settle_ids_in(&mut *tx, user_id, &settle_ids, now).await?;
-            tx.commit().await?;
+            if !split_related.is_empty() {
+                let mut tx = crate::db::begin_write(&state.db).await?;
+                let max_idx: i64 = sqlx::query_scalar(
+                    "SELECT COALESCE(MAX(part_index), 0) FROM plaud_recording_parts WHERE recording_id = ?",
+                )
+                .bind(&survivor.id)
+                .fetch_one(&mut *tx)
+                .await?;
+                for (next_idx, part) in (max_idx + 1..).zip(split_related.iter()) {
+                    let audio_ms = new_part_audio_ms
+                        .get(&part.id)
+                        .copied()
+                        .unwrap_or_else(|| part.duration.unwrap_or(0));
+                    let p_dur = part_effective_plaud_ms(part, audio_ms);
+                    let p_start = part.start_time.unwrap_or(0);
+                    let p_end = effective_end(p_start, part.end_time.unwrap_or(0), p_dur);
+                    sqlx::query(
+                        "INSERT OR IGNORE INTO plaud_recording_parts (user_id, plaud_file_id, recording_id, part_index, \
+                         start_time, end_time, plaud_duration_ms, audio_duration_ms, plaud_version, created_at, updated_at) \
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    )
+                    .bind(user_id)
+                    .bind(&part.id)
+                    .bind(&survivor.id)
+                    .bind(next_idx)
+                    .bind(p_start)
+                    .bind(p_end)
+                    .bind(p_dur)
+                    .bind(audio_ms)
+                    .bind(version_text(part))
+                    .bind(now)
+                    .bind(now)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+                let settle_ids: Vec<&str> = split_related.iter().map(|p| p.id.as_str()).collect();
+                clear_settle_ids_in(&mut *tx, user_id, &settle_ids, now).await?;
+                tx.commit().await?;
+            }
             Ok(AppendOutcome::Tombstoned)
         }
         Ok(CommitAction::MissingOrDeletedAnchor) => {
@@ -3167,7 +3395,7 @@ mod tests {
                 &state,
                 "u1",
                 &open.id,
-                &[(&open, anchor_ogg.as_path(), 1000)],
+                &[(&open, anchor_ogg.as_path())],
                 &dummy_stored,
                 "ogg"
             )
@@ -3195,7 +3423,7 @@ mod tests {
                 &state,
                 "u1",
                 &open.id,
-                &[(&open, anchor_ogg.as_path(), 1000)],
+                &[(&open, anchor_ogg.as_path())],
                 &dummy_stored,
                 "ogg"
             )
@@ -3233,7 +3461,7 @@ mod tests {
                 &state,
                 "u1",
                 &open.id,
-                &[(&open, anchor_ogg.as_path(), 1000)],
+                &[(&open, anchor_ogg.as_path())],
                 &dummy_stored,
                 "ogg"
             )
@@ -3684,6 +3912,406 @@ mod tests {
         assert_eq!(capped.len(), 2);
         assert!(matches!(&capped[0], ChainPlan::Single(r) if r.id == "c1"));
         assert!(matches!(&capped[1], ChainPlan::Single(r) if r.id == "c2"));
+
+        // 4. Midnight split does NOT pull an already-merged multi-part next-day recording
+        //    (containing unrelated Day 2 clips) into Day 1.
+        let mut tue_merged = anchor("rec-tue", "after_mid", "SN1", DAY2_02, TWO_HOURS + HOUR);
+        tue_merged.first_start_time = DAY2_02;
+        tue_merged.first_end_time = DAY2_02 + TWO_HOURS;
+        tue_merged.first_plaud_duration_ms = TWO_HOURS;
+        tue_merged.last_start_time = DAY2_14;
+        tue_merged.last_end_time = DAY2_14 + HOUR;
+        tue_merged.last_plaud_duration_ms = HOUR;
+        let mon_night = rec("mon_night", Some("SN1"), DAY1_21, FIVE_HOURS);
+        let kept_separate = plan_daily_chains(&[tue_merged], vec![mon_night], true, utc_day);
+        assert_eq!(kept_separate.len(), 1);
+        assert!(matches!(&kept_separate[0], ChainPlan::Single(r) if r.id == "mon_night"));
+    }
+
+    #[tokio::test]
+    async fn consolidation_preserves_ask_ai_chat_history_uses_max_end_time_and_skips_unrelated_daily_tombstones()
+     {
+        use axum::routing::get;
+        use axum::{Json, Router};
+
+        const HOUR: i64 = 3_600_000;
+        const DAY_START: i64 = 1_785_661_200_000; // 2026-08-02T09:00:00Z
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = crate::Config::for_tests(dir.path());
+        cfg.storage_root = dir.path().join("storage");
+        tokio::fs::create_dir_all(cfg.storage_root.join("u1"))
+            .await
+            .unwrap();
+
+        let a_ogg = cfg.storage_root.join("u1/f_a.ogg");
+        let b_ogg = cfg.storage_root.join("u1/f_b.ogg");
+        let c_ogg = dir.path().join("c.ogg");
+        for (out, freq) in [(&a_ogg, 440), (&b_ogg, 660), (&c_ogg, 880)] {
+            let mut cmd = Command::new(&cfg.ffmpeg);
+            cmd.args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency={freq}:duration=1"),
+                "-c:a",
+                "libopus",
+                "-f",
+                "ogg",
+            ])
+            .arg(out);
+            assert!(media::run(&mut cmd).await);
+        }
+        let a_len = tokio::fs::metadata(&a_ogg).await.unwrap().len() as i64;
+        let b_len = tokio::fs::metadata(&b_ogg).await.unwrap().len() as i64;
+        let c_bytes = tokio::fs::read(&c_ogg).await.unwrap();
+
+        let state = AppState::new(cfg, crate::db::open_memory().await.unwrap());
+        let now = now_ms();
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        // Overlapping clips: rec-a (09:00-11:00, 2h) and rec-b (10:00-10:10, 10m).
+        // Both have Ask AI chats; rec-b's chat must survive consolidation into rec-a.
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('rec-a', 'u1', 'SN1', 'f_a', 't', ?, ?, ?, ?, 'm1', 'local', 'u1/f_a.ogg', '1', 0, ?, ?, 'original')",
+        )
+        .bind(2 * HOUR)
+        .bind(DAY_START)
+        .bind(DAY_START + 2 * HOUR)
+        .bind(a_len)
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('rec-b', 'u1', 'SN2', 'f_b', 't', 600000, ?, ?, ?, 'm2', 'local', 'u1/f_b.ogg', '1', 0, ?, ?, 'original')",
+        )
+        .bind(DAY_START + HOUR)
+        .bind(DAY_START + HOUR + 600_000)
+        .bind(b_len)
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO recording_chats (id, recording_id, user_id, generation, created_at, updated_at) VALUES ('chat-a', 'rec-a', 'u1', 1, ?, ?), ('chat-b', 'rec-b', 'u1', 1, ?, ?)")
+            .bind(now)
+            .bind(now)
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO recording_chat_turns (id, chat_id, recording_id, user_id, request_id, seq, status, generation, question, answer, revision, created_at, updated_at) \
+             VALUES ('t-a', 'chat-a', 'rec-a', 'u1', 'req-same', 1, 'completed', 1, 'q1', 'a1', 'rev-a', ?, ?), \
+                    ('t-b', 'chat-b', 'rec-b', 'u1', 'req-same', 1, 'completed', 1, 'q2', 'a2', 'rev-b', ?, ?)",
+        )
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        let anchors = load_daily_anchors(&state, "u1").await.unwrap();
+        let plans = plan_daily_chains(&anchors, vec![], false, |ms| {
+            (ms > 0).then(|| crate::time::local_date(ms, ::time::UtcOffset::UTC))
+        });
+        assert_eq!(plans.len(), 1);
+        let ChainPlan::Consolidate(segs) = &plans[0] else {
+            panic!("expected Consolidate");
+        };
+        let client = Client::new("http://127.0.0.1:1", "unused");
+        execute_consolidate(&state, "u1", &client, segs)
+            .await
+            .unwrap();
+
+        // 1. max(end_time) is 11:00 (from rec-a), not 10:10 (from rec-b).
+        let end_time: i64 =
+            sqlx::query_scalar("SELECT end_time FROM recordings WHERE id = 'rec-a'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(end_time, DAY_START + 2 * HOUR);
+
+        // 2. Both Ask AI turns survive on rec-a in order even with colliding request_ids.
+        let turns: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT id, seq FROM recording_chat_turns WHERE recording_id = 'rec-a' ORDER BY seq ASC",
+        )
+        .fetch_all(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(turns, vec![("t-a".into(), 1), ("t-b".into(), 2)]);
+
+        // 3. Concurrent delete of a non-split morning anchor during daily consolidation does NOT
+        //    tombstone an unrelated afternoon recording.
+        sqlx::query("UPDATE recordings SET deleted_at = ? WHERE id = 'rec-a'")
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        let new_path: String =
+            sqlx::query_scalar("SELECT storage_path FROM recordings WHERE id = 'rec-a'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        let mut deleted_anchor = anchor("rec-a", "f_a", "SN1", DAY_START, 2 * HOUR);
+        deleted_anchor.storage_path = new_path;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let base = format!("http://{addr}");
+        let dl_url = format!("{base}/dl/c");
+        let app =
+            Router::new()
+                .route(
+                    "/file/temp-url/f_afternoon",
+                    get({
+                        let dl_url = dl_url.clone();
+                        move || async move {
+                            Json(serde_json::json!({ "status": 0, "temp_url": dl_url }))
+                        }
+                    }),
+                )
+                .route(
+                    "/dl/c",
+                    get({
+                        let c_bytes = c_bytes.clone();
+                        move || async move { c_bytes }
+                    }),
+                );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let mut afternoon = rec("f_afternoon", Some("SN1"), DAY_START + 6 * HOUR, HOUR);
+        afternoon.is_v4 = false;
+        let client2 = Client::new(&base, "tok");
+        let out = execute_consolidate(
+            &state,
+            "u1",
+            &client2,
+            &[
+                ChainSegment::Existing(deleted_anchor),
+                ChainSegment::New(afternoon),
+            ],
+        )
+        .await
+        .unwrap();
+        assert!(matches!(out, AppendOutcome::Tombstoned));
+        let tomb_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM plaud_recording_parts WHERE user_id = 'u1' AND plaud_file_id = 'f_afternoon'",
+        )
+        .fetch_one(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(
+            tomb_count, 0,
+            "unrelated daily recording must NOT be tombstoned when morning anchor was deleted"
+        );
+    }
+
+    #[tokio::test]
+    async fn interleaved_middle_insert_recovers_missing_cloud_part_from_local_merged_audio() {
+        use axum::extract::Path;
+        use axum::http::StatusCode;
+        use axum::routing::get;
+        use axum::{Json, Router};
+
+        const HOUR: i64 = 3_600_000;
+        const DAY_START: i64 = 1_785_661_200_000; // 2026-08-02T09:00:00Z
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = crate::Config::for_tests(dir.path());
+        cfg.storage_root = dir.path().join("storage");
+        tokio::fs::create_dir_all(cfg.storage_root.join("u1"))
+            .await
+            .unwrap();
+
+        // Create local already-merged [P1 (1s) + P3 (1s)] = 2s Ogg/Opus, plus P2 (2s) on cloud.
+        // Plaud cloud returns 404 for P1 (deleted from Plaud cloud), so local slice fallback runs.
+        let p1_path = dir.path().join("p1.ogg");
+        let p2_path = dir.path().join("p2.ogg");
+        let p3_path = dir.path().join("p3.ogg");
+        for (out, freq, secs) in [(&p1_path, 440, 1), (&p2_path, 660, 2), (&p3_path, 880, 1)] {
+            let mut cmd = Command::new(&cfg.ffmpeg);
+            cmd.args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency={freq}:duration={secs}"),
+                "-c:a",
+                "libopus",
+                "-f",
+                "ogg",
+            ])
+            .arg(out);
+            assert!(media::run(&mut cmd).await);
+        }
+        let state = AppState::new(cfg, crate::db::open_memory().await.unwrap());
+        let merged_13 = concat_audio_files(&state, "u1", &[p1_path, p3_path.clone()], false)
+            .await
+            .unwrap();
+        let existing_13 = state.config.storage_root.join("u1/f_p1.ogg");
+        tokio::fs::copy(merged_13.temp.path(), &existing_13)
+            .await
+            .unwrap();
+        let existing_len = tokio::fs::metadata(&existing_13).await.unwrap().len() as i64;
+        let p2_bytes = tokio::fs::read(&p2_path).await.unwrap();
+        let p3_bytes = tokio::fs::read(&p3_path).await.unwrap();
+
+        let now = now_ms();
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('rec-13', 'u1', 'SN1', 'f_p1', ?, ?, ?, ?, ?, 'md513', 'local', 'u1/f_p1.ogg', '1', 0, ?, ?, 'date')",
+        )
+        .bind(state.config.field_key.encrypt("2026-08-02"))
+        .bind(2 * HOUR)
+        .bind(DAY_START)
+        .bind(DAY_START + 9 * HOUR)
+        .bind(existing_len)
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+        for (idx, fid, st, en, aud_ms) in [
+            (
+                0i64,
+                "f_p1",
+                DAY_START,
+                DAY_START + HOUR,
+                merged_13.input_durations_ms[0],
+            ),
+            (
+                1i64,
+                "f_p3",
+                DAY_START + 8 * HOUR,
+                DAY_START + 9 * HOUR,
+                merged_13.input_durations_ms[1],
+            ),
+        ] {
+            sqlx::query(
+                "INSERT INTO plaud_recording_parts (user_id, plaud_file_id, recording_id, part_index, start_time, end_time, \
+                 plaud_duration_ms, audio_duration_ms, plaud_version, created_at, updated_at) \
+                 VALUES ('u1', ?, 'rec-13', ?, ?, ?, ?, ?, '1', ?, ?)",
+            )
+            .bind(fid)
+            .bind(idx)
+            .bind(st)
+            .bind(en)
+            .bind(HOUR)
+            .bind(aud_ms)
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let base = format!("http://{addr}");
+        let base_dl = base.clone();
+        let app = Router::new()
+            .route(
+                "/file/temp-url/{id}",
+                get(move |Path(id): Path<String>| {
+                    let base_dl = base_dl.clone();
+                    async move {
+                        if id == "f_p1" {
+                            return (
+                                StatusCode::NOT_FOUND,
+                                Json(
+                                    serde_json::json!({ "status": -1, "msg": "deleted on Plaud" }),
+                                ),
+                            );
+                        }
+                        (
+                            StatusCode::OK,
+                            Json(serde_json::json!({
+                                "status": 0,
+                                "temp_url": format!("{base_dl}/dl/{id}")
+                            })),
+                        )
+                    }
+                }),
+            )
+            .route(
+                "/dl/{id}",
+                get(move |Path(id): Path<String>| {
+                    let b2 = p2_bytes.clone();
+                    let b3 = p3_bytes.clone();
+                    async move {
+                        match id.as_str() {
+                            "f_p2" => b2,
+                            "f_p3" => b3,
+                            _ => Vec::new(),
+                        }
+                    }
+                }),
+            );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let anchors = load_daily_anchors(&state, "u1").await.unwrap();
+        let mut p2 = rec("f_p2", Some("SN1"), DAY_START + 4 * HOUR, 2 * HOUR);
+        p2.is_v4 = false;
+        let plans = plan_daily_chains(&anchors, vec![p2], false, |ms| {
+            (ms > 0).then(|| crate::time::local_date(ms, ::time::UtcOffset::UTC))
+        });
+        let ChainPlan::Consolidate(segs) = &plans[0] else {
+            panic!("expected Consolidate");
+        };
+        let client = Client::new(&base, "tok");
+        execute_consolidate(&state, "u1", &client, segs)
+            .await
+            .unwrap();
+
+        let part_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT plaud_file_id FROM plaud_recording_parts WHERE recording_id = 'rec-13' ORDER BY part_index ASC",
+        )
+        .fetch_all(&state.db)
+        .await
+        .unwrap();
+        assert_eq!(part_ids, vec!["f_p1", "f_p2", "f_p3"]);
+        let stored_path: String =
+            sqlx::query_scalar("SELECT storage_path FROM recordings WHERE id = 'rec-13'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        let probed = media::probe(
+            &state.config.ffprobe,
+            &state.config.storage_root.join(stored_path),
+        )
+        .await
+        .unwrap();
+        assert!(probed.duration_ms >= 3500, "got {}ms", probed.duration_ms);
     }
 
     #[tokio::test]
