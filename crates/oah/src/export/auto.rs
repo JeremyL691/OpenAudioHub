@@ -419,12 +419,31 @@ async fn count_failure(state: &AppState, id: &str) {
     }
 }
 
-/// Records a finished export: the path, a cleared reservation and a cleared retry count.
+/// Streaming lowercase hex SHA-256 of a local file (64 KiB chunks).
+pub(crate) async fn file_sha256(path: &Path) -> Option<String> {
+    use sha2::Digest;
+    use tokio::io::AsyncReadExt;
+    let mut file = tokio::fs::File::open(path).await.ok()?;
+    let mut hasher = sha2::Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).await.ok()?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Some(hex::encode(hasher.finalize()))
+}
+
+/// Records a finished export: the path, its SHA-256 digest, a cleared reservation and a cleared retry count.
 async fn finish(state: &AppState, id: &str, dest: &Path) -> Result<(), String> {
+    let sha256 = file_sha256(dest).await;
     sqlx::query(
-        "UPDATE recordings SET auto_export_path = ?, auto_export_target = NULL, auto_export_attempts = 0 WHERE id = ?",
+        "UPDATE recordings SET auto_export_path = ?, auto_export_sha256 = ?, auto_export_target = NULL, auto_export_attempts = 0 WHERE id = ?",
     )
     .bind(state.config.field_key.encrypt(&dest.to_string_lossy()))
+    .bind(sha256)
     .bind(id)
     .execute(&state.db)
     .await
