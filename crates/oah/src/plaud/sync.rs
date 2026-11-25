@@ -129,6 +129,7 @@ struct Ctx {
     import_content: bool,
     title_mode: String,
     merge_splits: bool,
+    merge_by_day: bool,
     allow_settle: bool,
     /// Set when Plaud refuses the token during content import; the rest of the run skips content.
     content_stopped: AtomicBool,
@@ -320,6 +321,7 @@ async fn sync_inner(
         import_content: flag("importPlaudContent", false),
         title_mode: text("recordingTitleMode", "ai"),
         merge_splits: flag("mergePlaudSplitRecordings", true),
+        merge_by_day: flag("mergePlaudByDay", false),
         allow_settle,
         content_stopped: AtomicBool::new(false),
         content_checked: Mutex::new(HashSet::new()),
@@ -406,8 +408,8 @@ async fn sync_inner(
     Ok(())
 }
 
-/// Pages through the recording list. When split auto-merge is on, collects candidates across
-/// pages before downloading so chains are never cut at page or batch boundaries.
+/// Pages through the recording list. When split or daily auto-merge is on, collects candidates
+/// across pages before downloading so chains are never cut at page or batch boundaries.
 async fn sync_pages(
     state: &AppState,
     ctx: &Ctx,
@@ -416,11 +418,15 @@ async fn sync_pages(
     new_titles: &mut Vec<String>,
     late_appended: &mut Vec<(String, bool)>,
 ) -> Result<(), Stop> {
-    if !ctx.merge_splits {
+    if !ctx.merge_splits && !ctx.merge_by_day {
         return sync_pages_unmerged(state, ctx, report, new_ids, new_titles).await;
     }
 
-    let open_anchors = split::load_open_anchors(state, &ctx.user_id).await?;
+    let open_tail_anchors = if ctx.merge_splits {
+        split::load_open_tail_anchors(state, &ctx.user_id).await?
+    } else {
+        Vec::new()
+    };
     let mut page = 0;
     let mut idle = 0;
     let mut listed_v4 = ctx.client.is_v4_mode();
@@ -480,7 +486,9 @@ async fn sync_pages(
         }
         idle = if page_active { 0 } else { idle + 1 };
         if idle >= 2 {
-            let need_more = split::has_open_split_head(&open_anchors, &new_items);
+            let need_more = (ctx.merge_splits
+                && split::has_open_split_head(&open_tail_anchors, &new_items))
+                || (ctx.merge_by_day && !new_items.is_empty());
             // In 4.0 mode the entire list is already cached in memory; in legacy mode cap lookahead.
             if !need_more || (!listed_v4 && idle >= 4) {
                 break;
@@ -504,46 +512,76 @@ async fn sync_pages(
         }
     }
 
-    if new_items.is_empty() {
-        return Ok(());
-    }
-
-    // 2. Lazy-hydrate only candidate items when a ~5h recording or open anchor exists.
-    let hydrate_mask = split::needs_hydration_for_split(&new_items, &open_anchors);
-    let mut ready_new = Vec::with_capacity(new_items.len());
-    let mut to_hydrate_indices = Vec::new();
-    let mut slots: Vec<Option<Recording>> = new_items.into_iter().map(Some).collect();
-    for (idx, &need) in hydrate_mask.iter().enumerate() {
-        if need {
-            to_hydrate_indices.push(idx);
+    // Reload live DB anchors after Step 1 so consolidation sees fresh storage paths and metadata.
+    let daily_anchors = if ctx.merge_by_day {
+        let anchors = split::load_daily_anchors(state, &ctx.user_id).await?;
+        if new_items.is_empty() && anchors.len() < 2 {
+            return Ok(());
         }
-    }
-    for idx_chunk in to_hydrate_indices.chunks(BATCH) {
-        let futs = idx_chunk.iter().map(|&idx| {
-            let rec = slots[idx].as_ref().expect("slot present").clone();
-            async move { (idx, ctx.client.hydrate_recording(&rec).await) }
-        });
-        for (idx, res) in join_all(futs).await {
-            match res {
-                Ok(hydrated) => slots[idx] = Some(hydrated),
-                Err(PlaudError::Rejected { .. }) => return Err(Stop::Rejected),
-                Err(e) => {
-                    let failed = slots[idx].take().expect("slot present");
-                    report.errors.push(format!(
-                        "Failed to sync {}: {}",
-                        display_name(&failed),
-                        api::describe(&e)
-                    ));
+        Some(anchors)
+    } else {
+        None
+    };
+    let open_tail_anchors = if ctx.merge_by_day {
+        Vec::new()
+    } else {
+        let anchors = split::load_open_tail_anchors(state, &ctx.user_id).await?;
+        if new_items.is_empty() && anchors.is_empty() {
+            return Ok(());
+        }
+        anchors
+    };
+
+    // 2. Lazy-hydrate new Plaud 4.0 items needed for grouping (all v4 new items in daily mode,
+    //    or only when a ~5h recording / open anchor exists in split-only mode).
+    let mut ready_new = Vec::with_capacity(new_items.len());
+    if !new_items.is_empty() {
+        let hydrate_mask: Vec<bool> = if ctx.merge_by_day {
+            new_items.iter().map(|r| r.is_v4).collect()
+        } else {
+            split::needs_hydration_for_split(&new_items, &open_tail_anchors)
+        };
+        let mut to_hydrate_indices = Vec::new();
+        let mut slots: Vec<Option<Recording>> = new_items.into_iter().map(Some).collect();
+        for (idx, &need) in hydrate_mask.iter().enumerate() {
+            if need {
+                to_hydrate_indices.push(idx);
+            }
+        }
+        for idx_chunk in to_hydrate_indices.chunks(BATCH) {
+            let futs = idx_chunk.iter().map(|&idx| {
+                let rec = slots[idx].as_ref().expect("slot present").clone();
+                async move { (idx, ctx.client.hydrate_recording(&rec).await) }
+            });
+            for (idx, res) in join_all(futs).await {
+                match res {
+                    Ok(hydrated) => slots[idx] = Some(hydrated),
+                    Err(PlaudError::Rejected { .. }) => return Err(Stop::Rejected),
+                    Err(e) => {
+                        let failed = slots[idx].take().expect("slot present");
+                        report.errors.push(format!(
+                            "Failed to sync {}: {}",
+                            display_name(&failed),
+                            api::describe(&e)
+                        ));
+                    }
                 }
             }
         }
-    }
-    for r in slots.into_iter().flatten() {
-        ready_new.push(r);
+        for r in slots.into_iter().flatten() {
+            ready_new.push(r);
+        }
     }
 
-    // 3. Group into chronological <=24h chains and anchor appends.
-    let plans = split::plan_chains(&open_anchors, ready_new);
+    // 3. Group live DB anchors and new recordings chronologically into merge/consolidation plans.
+    let plans = if let Some(daily) = daily_anchors {
+        split::plan_daily_chains(&daily, ready_new, ctx.merge_splits, split::local_day_key)
+    } else {
+        let all_anchors =
+            split::load_candidate_anchors(state, &ctx.user_id, open_tail_anchors, &ready_new)
+                .await?;
+        split::plan_chains(&all_anchors, ready_new)
+    };
 
     // 4. Apply settle window for quiet/background runs on fresh ~5h tips.
     let settle_ms = if ctx.allow_settle {
@@ -552,7 +590,7 @@ async fn sync_pages(
         0
     };
     let mut singles = Vec::new();
-    let mut multi_or_append = Vec::new();
+    let mut multi_or_consolidate = Vec::new();
     for plan in plans {
         if ctx.allow_settle
             && settle_ms > 0
@@ -562,8 +600,8 @@ async fn sync_pages(
             continue;
         }
         match plan {
-            ChainPlan::Single(r) => singles.push(r),
-            other => multi_or_append.push(other),
+            ChainPlan::Single(r) => singles.push(*r),
+            other => multi_or_consolidate.push(other),
         }
     }
 
@@ -582,8 +620,8 @@ async fn sync_pages(
         }
     }
 
-    // 6. Execute multi-part merges and late appends sequentially to bound RAM and disk I/O.
-    for plan in multi_or_append {
+    // 6. Execute multi-part merges and bidirectional consolidations sequentially to bound RAM and disk I/O.
+    for plan in multi_or_consolidate {
         match plan {
             ChainPlan::NewMulti(parts) => {
                 let lead_name = display_name(&parts[0]);
@@ -612,11 +650,9 @@ async fn sync_pages(
                     }
                 }
             }
-            ChainPlan::Append { anchor, parts } => {
-                let lead_name = display_name(&parts[0]);
-                match split::execute_late_append(state, &ctx.user_id, &ctx.client, &anchor, &parts)
-                    .await
-                {
+            ChainPlan::Consolidate(segs) => {
+                let lead_name = segs[0].lead_name();
+                match split::execute_consolidate(state, &ctx.user_id, &ctx.client, &segs).await {
                     Ok(AppendOutcome::Updated {
                         recording_id,
                         had_oah_work,
@@ -1494,6 +1530,7 @@ mod title_tests {
             import_content: false,
             title_mode: "original".into(),
             merge_splits: true,
+            merge_by_day: false,
             allow_settle: false,
             content_stopped: AtomicBool::new(false),
             content_checked: Mutex::new(HashSet::new()),
@@ -2064,7 +2101,7 @@ mod title_tests {
             axum::serve(listener, app).await.unwrap();
         });
 
-        let open = split::OpenAnchor {
+        let open = split::DbAnchor {
             id: "rec-del".into(),
             device_sn: "SN1".into(),
             plaud_file_id: "f_p0".into(),
@@ -2073,11 +2110,12 @@ mod title_tests {
             storage_type: "local".into(),
             storage_path: "u1/f_p0.ogg".into(),
             auto_export_path: None,
-            last_part_index: 0,
+            first_start_time: 1000,
+            first_end_time: 18_001_000,
+            first_plaud_duration_ms: 18_000_000,
             last_start_time: 1000,
             last_end_time: 18_001_000,
             last_plaud_duration_ms: 18_000_000,
-            has_parts: false,
         };
         let mut p1 = recording(Some("Part 2"), Some(18_002_000));
         p1.id = "f_p1".into();
@@ -2086,9 +2124,17 @@ mod title_tests {
         p1.serial_number = Some("SN1".into());
 
         let client = Client::new(&base, "tok");
-        let outcome = split::execute_late_append(&state, "u1", &client, &open, &[p1])
-            .await
-            .unwrap();
+        let outcome = split::execute_consolidate(
+            &state,
+            "u1",
+            &client,
+            &[
+                split::ChainSegment::Existing(open),
+                split::ChainSegment::New(p1),
+            ],
+        )
+        .await
+        .unwrap();
         assert!(matches!(outcome, AppendOutcome::Tombstoned));
 
         // Part 1 is recorded under the deleted recording so subsequent syncs skip it.
