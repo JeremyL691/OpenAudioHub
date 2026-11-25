@@ -48,6 +48,7 @@ export interface UserSettings {
     syncOnVisibilityChange: boolean;
     syncNotifications: boolean;
     mergePlaudSplitRecordings: boolean;
+    mergePlaudByDay: boolean;
     defaultPlaybackSpeed: number;
     defaultVolume: number;
     autoPlayNext: boolean;
