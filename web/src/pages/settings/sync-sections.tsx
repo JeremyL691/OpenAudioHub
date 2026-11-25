@@ -56,6 +56,13 @@ export function SyncSection() {
                     label={t("settings.sync.mergeSplitRecordings")}
                     hint={t("settings.sync.mergeSplitRecordingsHint")}
                 />
+                <ToggleRow
+                    id="merge-plaud-by-day"
+                    testId="merge-plaud-by-day-switch"
+                    field="mergePlaudByDay"
+                    label={t("settings.sync.mergeByDay")}
+                    hint={t("settings.sync.mergeByDayHint")}
+                />
             </Group>
 
             <Group label={t("settings.sync.notificationsGroup")}>

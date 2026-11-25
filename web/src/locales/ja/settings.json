@@ -13,6 +13,8 @@
         "showSyncHint": "同期が完了したときに通知を表示します。",
         "mergeSplitRecordings": "5 時間分割録音を結合",
         "mergeSplitRecordingsHint": "Plaud で連続して 5 時間ごとに分割された録音を、再エンコードなしで 1 つの録音に自動結合します。",
+        "mergeByDay": "Plaud 録音を日ごとにすべて結合",
+        "mergeByDayHint": "同じ日の Plaud 録音をすべて録音時刻順に再エンコードなしで 1 つの録音に自動結合します。",
         "minutes": "{count} 分",
         "minute": "1 分"
     },

@@ -13,6 +13,8 @@
         "showSyncHint": "同步完成时显示通知。",
         "mergeSplitRecordings": "合并 5 小时分段录音",
         "mergeSplitRecordingsHint": "自动将 Plaud 连续录制的 5 小时分段录音无损合并为一条完整录音。",
+        "mergeByDay": "按天合并所有 Plaud 录音",
+        "mergeByDayHint": "自动将同一天的所有 Plaud 录音按真实录制先后顺序无损合并为一条完整录音。",
         "minutes": "{count} 分钟",
         "minute": "1 分钟"
     },
