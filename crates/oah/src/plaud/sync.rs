@@ -2110,6 +2110,7 @@ mod title_tests {
             storage_type: "local".into(),
             storage_path: "u1/f_p0.ogg".into(),
             auto_export_path: None,
+            auto_export_sha256: None,
             first_start_time: 1000,
             first_end_time: 18_001_000,
             first_plaud_duration_ms: 18_000_000,

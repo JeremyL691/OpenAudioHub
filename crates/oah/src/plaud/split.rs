@@ -59,6 +59,7 @@ pub(crate) struct DbAnchor {
     pub storage_type: String,
     pub storage_path: String,
     pub auto_export_path: Option<String>,
+    pub auto_export_sha256: Option<String>,
     pub first_start_time: i64,
     pub first_end_time: i64,
     pub first_plaud_duration_ms: i64,
@@ -120,7 +121,7 @@ pub(crate) struct ConcatOutput {
 const ANCHOR_SELECT_SQL: &str = "\
 SELECT r.id, r.device_sn, r.plaud_file_id, r.duration, \
        r.filesize, r.storage_type, r.storage_path, \
-       r.auto_export_path, \
+       r.auto_export_path, r.auto_export_sha256, \
        COALESCE(fp.start_time, r.start_time) AS first_start_time, \
        COALESCE(fp.end_time, r.end_time) AS first_end_time, \
        COALESCE(fp.plaud_duration_ms, r.duration) AS first_plaud_duration_ms, \
@@ -1329,6 +1330,7 @@ struct VerifiedExport {
     anchor_id: String,
     orig_path: PathBuf,
     orig_enc_path: String,
+    orig_sha256: Option<String>,
     orig_ext: String,
     orig_len: u64,
     orig_mtime: SystemTime,
@@ -1336,6 +1338,7 @@ struct VerifiedExport {
 
 struct PreparedExportConsolidation {
     staged: TempPath,
+    staged_sha256: Option<String>,
     folder: PathBuf,
     target_ext: String,
     /// Verified exports in priority order (preferred target first, then redundant exports to unlink).
@@ -1486,22 +1489,32 @@ async fn verify_anchor_export(
         return None;
     }
 
-    // Require exact byte-for-byte identity against the anchor's stored audio before overwriting
-    // or unlinking any desktop auto-export file. Transcoded exports have no stored digest and are
-    // left untouched so user edits are never lost.
+    // Require exact byte-for-byte proof before overwriting or unlinking any desktop auto-export:
+    // lossless copies compare directly against the stored audio; transcoded exports (e.g. .ogg ->
+    // .mp3) compare against the stored SHA-256 written by auto-export. Legacy transcoded exports
+    // without a stored digest are left untouched so user edits are never lost.
     let orig_ext = path_ext_lower(&orig_path);
     let anchor_ext = path_ext_lower(Path::new(&anchor.storage_path));
     let is_lossless_copy = orig_ext == anchor_ext
         || (matches!(orig_ext.as_str(), "ogg" | "opus")
             && matches!(anchor_ext.as_str(), "ogg" | "opus"));
-    if !is_lossless_copy || !same_file_bytes(&orig_path, existing_audio_path).await {
-        return None;
+    if is_lossless_copy {
+        if !same_file_bytes(&orig_path, existing_audio_path).await {
+            return None;
+        }
+    } else {
+        let expected_sha = anchor.auto_export_sha256.as_deref()?;
+        let actual_sha = crate::export::auto::file_sha256(&orig_path).await?;
+        if actual_sha != expected_sha {
+            return None;
+        }
     }
 
     Some(VerifiedExport {
         anchor_id: anchor.id.clone(),
         orig_path,
         orig_enc_path: orig_enc.to_owned(),
+        orig_sha256: anchor.auto_export_sha256.clone(),
         orig_ext,
         orig_len,
         orig_mtime,
@@ -1591,8 +1604,10 @@ async fn prepare_desktop_export_consolidation(
         return None;
     }
 
+    let staged_sha256 = crate::export::auto::file_sha256(tmp.path()).await;
     Some(PreparedExportConsolidation {
         staged: tmp,
+        staged_sha256,
         folder,
         target_ext,
         verified,
@@ -1614,6 +1629,7 @@ struct CurrentAnchorRow {
     deleted_at: Option<i64>,
     storage_path: String,
     auto_export_path: Option<String>,
+    auto_export_sha256: Option<String>,
     auto_export_eligible: i64,
     filename: String,
     title_source: String,
@@ -2232,7 +2248,7 @@ pub(crate) async fn execute_consolidate(
                 unreachable!();
             };
             let current: Option<CurrentAnchorRow> = sqlx::query_as(
-                "SELECT deleted_at, storage_path, auto_export_path, auto_export_eligible, \
+                "SELECT deleted_at, storage_path, auto_export_path, auto_export_sha256, auto_export_eligible, \
                         filename, title_source, starred_at, duration, start_time, end_time, \
                         plaud_file_id, plaud_version \
                  FROM recordings WHERE id = ? AND user_id = ?",
@@ -2335,6 +2351,7 @@ pub(crate) async fn execute_consolidate(
         // Re-verify export candidates inside the lock before touching disk.
         let mut export_rename_plan: Option<(PathBuf, PathBuf)> = None;
         let mut new_export_enc: Option<String> = None;
+        let mut new_export_sha256: Option<String> = None;
         let mut created_sibling_export: Option<PathBuf> = None;
         let mut paths_to_unlink_in_lock: Vec<PathBuf> = Vec::new();
 
@@ -2344,7 +2361,9 @@ pub(crate) async fn execute_consolidate(
                 let Some(cur) = current_rows.get(&cand.anchor_id) else {
                     continue;
                 };
-                if cur.auto_export_path.as_deref() != Some(cand.orig_enc_path.as_str()) {
+                if cur.auto_export_path.as_deref() != Some(cand.orig_enc_path.as_str())
+                    || cur.auto_export_sha256 != cand.orig_sha256
+                {
                     continue;
                 }
                 if export_path_claimed_by_other(
@@ -2384,6 +2403,7 @@ pub(crate) async fn execute_consolidate(
                         .field_key
                         .encrypt(&dest_path.to_string_lossy()),
                 );
+                new_export_sha256 = prep.staged_sha256.clone();
                 if dest_path != chosen.orig_path {
                     created_sibling_export = Some(dest_path.clone());
                     paths_to_unlink_in_lock.push(chosen.orig_path.clone());
@@ -2726,7 +2746,8 @@ pub(crate) async fn execute_consolidate(
              duration = ?, start_time = ?, end_time = ?, filesize = ?, file_md5 = ?, \
              storage_type = ?, storage_path = ?, downloaded_at = ?, waveform_peaks = ?, \
              starred_at = ?, auto_export_eligible = ?, \
-             auto_export_path = COALESCE(?, auto_export_path), auto_export_target = NULL, \
+             auto_export_path = COALESCE(?, auto_export_path), \
+             auto_export_sha256 = COALESCE(?, auto_export_sha256), auto_export_target = NULL, \
              auto_export_attempts = 0, updated_at = ? \
              WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
         )
@@ -2746,6 +2767,7 @@ pub(crate) async fn execute_consolidate(
         .bind(merged_starred)
         .bind(merged_eligible)
         .bind(new_export_enc)
+        .bind(new_export_sha256)
         .bind(now)
         .bind(&survivor.id)
         .bind(user_id)
@@ -3022,6 +3044,7 @@ mod tests {
             storage_type: "local".into(),
             storage_path: format!("u1/{plaud_id}.ogg"),
             auto_export_path: None,
+            auto_export_sha256: None,
             first_start_time: start,
             first_end_time: start + dur,
             first_plaud_duration_ms: dur,
@@ -4501,5 +4524,166 @@ mod tests {
         .unwrap();
         // Combined duration = 1s + 2s + 1s = ~4s.
         assert!(probed.duration_ms >= 3600, "got {}ms", probed.duration_ms);
+    }
+
+    #[tokio::test]
+    async fn transcoded_mp3_export_requires_matching_sha256_and_protects_edited_or_legacy_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let export_dir = dir.path().join("exports");
+        tokio::fs::create_dir_all(&export_dir).await.unwrap();
+
+        let mut cfg = crate::Config::for_tests(dir.path());
+        cfg.storage_root = dir.path().join("storage");
+        cfg.desktop = Some(crate::config::Desktop {
+            launch_secret: "0123456789abcdef0123456789abcdef-launch".into(),
+            user_id: None,
+        });
+        tokio::fs::create_dir_all(cfg.storage_root.join("u1"))
+            .await
+            .unwrap();
+
+        let p1_ogg = cfg.storage_root.join("u1/f_p1.ogg");
+        let p2_ogg = cfg.storage_root.join("u1/f_p2.ogg");
+        for (out, freq) in [(&p1_ogg, 440), (&p2_ogg, 660)] {
+            let mut cmd = Command::new(&cfg.ffmpeg);
+            cmd.args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("sine=frequency={freq}:duration=1"),
+                "-c:a",
+                "libopus",
+                "-f",
+                "ogg",
+            ])
+            .arg(out);
+            assert!(media::run(&mut cmd).await);
+        }
+
+        // Produce authentic transcoded MP3 exports for p1 and p2.
+        let exp1 = export_dir.join("2026-11-25.mp3");
+        let exp2 = export_dir.join("2026-11-25 (2).mp3");
+        assert!(media::to_mp3(&cfg.ffmpeg, &p1_ogg, &exp1).await);
+        assert!(media::to_mp3(&cfg.ffmpeg, &p2_ogg, &exp2).await);
+        let sha1 = crate::export::auto::file_sha256(&exp1).await.unwrap();
+        let sha2_orig = crate::export::auto::file_sha256(&exp2).await.unwrap();
+
+        let state = AppState::new(cfg, crate::db::open_memory().await.unwrap());
+        let now = now_ms();
+        sqlx::query("INSERT INTO users (id, email, created_at, updated_at) VALUES ('u1', 'u1@example.test', ?, ?)")
+            .bind(now)
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO user_settings (user_id, data, updated_at) VALUES ('u1', ?, ?)")
+            .bind(
+                serde_json::json!({
+                    "autoExport": true,
+                    "autoExportFolder": export_dir.to_string_lossy(),
+                    "autoExportFormat": "mp3",
+                })
+                .to_string(),
+            )
+            .bind(now)
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        let enc1 = state.config.field_key.encrypt(&exp1.to_string_lossy());
+        let enc2 = state.config.field_key.encrypt(&exp2.to_string_lossy());
+        let p1_len = tokio::fs::metadata(&p1_ogg).await.unwrap().len() as i64;
+        let p2_len = tokio::fs::metadata(&p2_ogg).await.unwrap().len() as i64;
+
+        // 1. Legacy transcoded MP3 with NULL auto_export_sha256 -> rejected (kept untouched).
+        let mut legacy_anchor = anchor("rec-1", "f_p1", "SN1", BASE_START, FIVE_HOURS);
+        legacy_anchor.storage_path = "u1/f_p1.ogg".into();
+        legacy_anchor.auto_export_path = Some(enc1.clone());
+        legacy_anchor.auto_export_sha256 = None;
+        let dummy = import::Stored {
+            storage_type: "local",
+            key: "u1/f_p1.ogg".into(),
+            peaks: None,
+            byte_len: p1_len,
+            file_md5: "x".into(),
+            remuxed: true,
+        };
+        assert!(
+            prepare_desktop_export_consolidation(
+                &state,
+                "u1",
+                "rec-1",
+                &[(&legacy_anchor, p1_ogg.as_path())],
+                &dummy,
+                "ogg"
+            )
+            .await
+            .is_none(),
+            "legacy transcoded export without SHA-256 must not be touched"
+        );
+
+        // 2. Seed rec-1 (authentic MP3 matching sha1) and rec-2 (user-edited MP3 -> sha mismatch).
+        let mut edited_bytes = tokio::fs::read(&exp2).await.unwrap();
+        edited_bytes.push(0u8);
+        tokio::fs::write(&exp2, &edited_bytes).await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO recordings (id, user_id, device_sn, plaud_file_id, filename, duration, start_time, end_time, \
+             filesize, file_md5, storage_type, storage_path, auto_export_path, auto_export_sha256, plaud_version, is_trash, created_at, updated_at, title_source) \
+             VALUES ('rec-1', 'u1', 'SN1', 'f_p1', 't', ?, ?, ?, ?, 'm1', 'local', 'u1/f_p1.ogg', ?, ?, '1', 0, ?, ?, 'date'), \
+                    ('rec-2', 'u1', 'SN1', 'f_p2', 't', ?, ?, ?, ?, 'm2', 'local', 'u1/f_p2.ogg', ?, ?, '2', 0, ?, ?, 'date')",
+        )
+        .bind(FIVE_HOURS)
+        .bind(BASE_START)
+        .bind(BASE_START + FIVE_HOURS)
+        .bind(p1_len)
+        .bind(&enc1)
+        .bind(&sha1)
+        .bind(now)
+        .bind(now)
+        .bind(TWO_HOURS)
+        .bind(BASE_START + FIVE_HOURS + 1_000)
+        .bind(BASE_START + FIVE_HOURS + 1_000 + TWO_HOURS)
+        .bind(p2_len)
+        .bind(&enc2)
+        .bind(&sha2_orig)
+        .bind(now)
+        .bind(now)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+        let open_tails = load_open_tail_anchors(&state, "u1").await.unwrap();
+        let all_anchors = load_candidate_anchors(&state, "u1", open_tails, &[])
+            .await
+            .unwrap();
+        let plans = plan_chains(&all_anchors, vec![]);
+        let ChainPlan::Consolidate(segs) = &plans[0] else {
+            panic!("expected Consolidate");
+        };
+        let client = Client::new("http://127.0.0.1:1", "unused");
+        execute_consolidate(&state, "u1", &client, segs)
+            .await
+            .unwrap();
+
+        // exp1 (authentic sha1) was updated to ~2s merged MP3 with fresh SHA-256 in DB.
+        let probed = media::probe(&state.config.ffprobe, &exp1).await.unwrap();
+        assert!(probed.duration_ms >= 1800, "got {}ms", probed.duration_ms);
+        let new_sha: Option<String> =
+            sqlx::query_scalar("SELECT auto_export_sha256 FROM recordings WHERE id = 'rec-1'")
+                .fetch_one(&state.db)
+                .await
+                .unwrap();
+        assert_eq!(new_sha, crate::export::auto::file_sha256(&exp1).await);
+
+        // exp2 (user-edited MP3 whose SHA-256 mismatched) was preserved untouched on disk.
+        assert!(
+            exp2.exists(),
+            "user-edited transcoded MP3 must NOT be deleted"
+        );
+        assert_eq!(tokio::fs::read(&exp2).await.unwrap(), edited_bytes);
     }
 }
